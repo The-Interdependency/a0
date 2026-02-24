@@ -1,0 +1,11 @@
+id,title,description,status,assignee,priority
+T-001,API v2 authentication endpoint migration,Migrate auth endpoints to v2 schema,open,sam,high
+T-002,Dashboard data visualization library selection,Evaluate and select charting library,open,jordan,medium
+T-003,Mobile notification system design doc,Write technical design document for notification system,in_progress,jordan,high
+T-004,Fix production incident CI-2024-003,Root cause analysis and fix for dashboard crash,resolved,casey,critical
+T-005,QA resource allocation Q3,Define QA staffing plan for Q3 deliverables,open,casey,high
+T-006,API v2 rate limiting module,Implement rate limiting for v2 endpoints,open,sam,medium
+T-007,Dashboard widget caching layer,Add caching to reduce dashboard load time,closed,jordan,low
+T-008,Mobile push notification service setup,Configure push notification infrastructure,open,sam,high
+T-009,Update partner API documentation,Document new v2 endpoint contracts for partners,open,sam,medium
+T-010,Contractor onboarding process,Define process for bringing in Q3 contractors,open,alex,medium

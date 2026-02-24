@@ -1,0 +1,55 @@
+Q3 Planning Meeting — Engineering Team
+Date: 2024-01-15
+Attendees: Alex (PM), Sam (Tech Lead), Jordan (Eng), Casey (QA)
+
+Alex: Okay let's get started. We need to finalize the roadmap for Q3. We have three major features to ship: the new dashboard, the API v2 migration, and the mobile notification system.
+
+Sam: I have to be honest — I don't think we can do all three. The API migration alone is going to take at least six weeks if we do it properly.
+
+Alex: The dashboard was promised to sales. There's no way we can delay that.
+
+Sam: I understand, but we cannot promise API v2 and the dashboard in the same quarter. It's impossible given current staffing.
+
+Jordan: What if we scope down API v2? Maybe we only migrate the authentication endpoints first.
+
+Alex: That's not what was committed to partners. We said full migration by Q3.
+
+Sam: I know, but we're not sure how we can hit that deadline. The team is already stretched thin.
+
+Casey: From a QA perspective, I'm worried about rushing. We've had three production incidents this year from insufficient testing time.
+
+Alex: We'll just need to move faster. I'm confident we can make it work if everyone focuses.
+
+Sam: I'm not confident. In fact I think we need to either delay one feature or hire two more engineers.
+
+Alex: Hiring takes months. That's not an option.
+
+Jordan: What about bringing in contractors?
+
+Alex: Maybe. We'll see. Let's circle back on that.
+
+Casey: Do we have a decision on QA resources? We've been tabling this question for three meetings now.
+
+Alex: We'll figure it out. The important thing is we're committed to all three deliverables.
+
+Sam: I want to be on record that I think this is not achievable without dropping something.
+
+Alex: Noted. Moving on — Jordan, can you give an update on the dashboard progress?
+
+Jordan: We're about 40% done. No decision yet on the data visualization library — we've been going back and forth between two options.
+
+Alex: Definitely go with the one that's faster to implement.
+
+Jordan: They're roughly equal in implementation time. I'm not sure which one has better long-term support.
+
+Alex: Just pick one by end of week. We'll see how it goes.
+
+Sam: We should probably get alignment from design before picking.
+
+Alex: Design is fine with either option. I guarantee it.
+
+Sam: Have you talked to them?
+
+Alex: I'll follow up. But I'm certain they won't block us.
+
+[End of meeting — no formal decisions recorded]

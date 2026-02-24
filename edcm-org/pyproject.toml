@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "edcm-org"
+version = "0.1.0"
+description = "Energy-Dissonance Circuit Model — Organizational Diagnostic Package"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["edcm", "diagnostic", "dissonance", "constraint", "organizational"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# No external dependencies — EDCM v0.1 uses only the standard library.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+edcm-org = "edcm_org.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/edcm_org"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["edcm_org"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
