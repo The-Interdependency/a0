@@ -11,6 +11,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@google/genai": "^1.43.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.4",
@@ -47,15 +48,20 @@
     "connect-pg-simple": "^10.0.0",
     "date-fns": "^3.6.0",
     "drizzle-orm": "^0.39.3",
-    "drizzle-zod": "^0.7.0",
+    "drizzle-zod": "^0.7.1",
     "embla-carousel-react": "^8.6.0",
     "express": "^5.0.1",
     "express-session": "^1.18.1",
     "framer-motion": "^11.13.1",
+    "google-auth-library": "^9.15.1",
+    "googleapis": "^148.0.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.453.0",
     "memorystore": "^1.6.7",
     "next-themes": "^0.4.6",
+    "openai": "^6.25.0",
+    "p-limit": "^7.3.0",
+    "p-retry": "^7.1.1",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.16.3",
@@ -72,8 +78,8 @@
     "vaul": "^1.1.2",
     "wouter": "^3.3.5",
     "ws": "^8.18.0",
-    "zod": "^3.24.2",
-    "zod-validation-error": "^3.4.0"
+    "zod": "^3.25.76",
+    "zod-validation-error": "^3.5.4"
   },
   "devDependencies": {
     "@replit/vite-plugin-cartographer": "^0.4.4",

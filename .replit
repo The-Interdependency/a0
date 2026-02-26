@@ -37,3 +37,6 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
+
+[agent]
+integrations = ["javascript_database:1.0.0", "javascript_xai:1.0.0", "javascript_gemini_ai_integrations:2.0.0", "google-mail:1.0.0"]
