@@ -2,8 +2,9 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { readdir, readFile, rename, stat, writeFile } from "fs/promises";
+import { readdir, readFile, rename, stat, writeFile, mkdir } from "fs/promises";
 import path from "path";
+import multer from "multer";
 import { storage } from "./storage";
 import { getUncachableGmailClient } from "./gmail";
 import { getUncachableGoogleDriveClient } from "./drive";
@@ -841,6 +842,57 @@ IMPORTANT RULES:
       const dst = safePath(to);
       await rename(src, dst);
       res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ FILE UPLOAD ============
+
+  const UPLOADS_DIR = path.join(BASE_DIR, "uploads");
+  mkdir(UPLOADS_DIR, { recursive: true }).catch(() => {});
+
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: async (_req, _file, cb) => {
+        await mkdir(UPLOADS_DIR, { recursive: true }).catch(() => {});
+        cb(null, UPLOADS_DIR);
+      },
+      filename: (_req, file, cb) => {
+        const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+        cb(null, `${Date.now()}-${safeName}`);
+      },
+    }),
+    limits: { fileSize: 50 * 1024 * 1024 },
+  });
+
+  app.post("/api/files/upload", upload.array("files", 50), async (req: any, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files?.length) return res.status(400).json({ error: "No files provided" });
+      const results = files.map((f) => ({
+        name: f.originalname,
+        storedAs: f.filename,
+        path: path.relative(BASE_DIR, f.path),
+        size: f.size,
+      }));
+      res.json({ uploaded: results });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/files/upload-manifest", upload.single("manifest"), async (req: any, res) => {
+    try {
+      const file = req.file as Express.Multer.File;
+      if (!file) return res.status(400).json({ error: "No manifest file provided" });
+      const content = await readFile(file.path, "utf-8");
+      const lines = content.split("\n").filter((l: string) => l.trim());
+      res.json({
+        path: path.relative(BASE_DIR, file.path),
+        totalEntries: lines.length,
+        preview: lines.slice(0, 20),
+      });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

@@ -1,14 +1,13 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   Folder, FileText, ChevronRight, ChevronLeft, RefreshCw,
-  Eye, Move, FileCode, File,
+  Move, FileCode, File, Upload, Camera, Loader2,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -16,6 +15,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 
 interface FileItem {
   name: string;
@@ -51,6 +51,10 @@ export default function FilesPage() {
   const [viewFile, setViewFile] = useState<{ path: string; content: string } | null>(null);
   const [moveDialog, setMoveDialog] = useState<{ from: string } | null>(null);
   const [moveTo, setMoveTo] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const manifestInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, refetch } = useQuery<FileListing>({
     queryKey: ["/api/files", currentPath],
@@ -92,6 +96,68 @@ export default function FilesPage() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  async function handleUpload(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    setUploadProgress(0);
+    const formData = new FormData();
+    Array.from(files).forEach((f) => formData.append("files", f));
+
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      await new Promise<void>((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const result = JSON.parse(xhr.responseText);
+            toast({
+              title: "Uploaded",
+              description: `${result.uploaded.length} file(s) uploaded to workspace`,
+            });
+            resolve();
+          } else {
+            reject(new Error("Upload failed"));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Upload failed"));
+        xhr.open("POST", "/api/files/upload");
+        xhr.send(formData);
+      });
+      refetch();
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleManifestUpload(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("manifest", files[0]);
+
+    try {
+      const res = await fetch("/api/files/upload-manifest", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      toast({
+        title: "Snapshot uploaded",
+        description: `${data.totalEntries} entries found. Ask the agent to analyze "${data.path}" for dedup.`,
+      });
+      refetch();
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (manifestInputRef.current) manifestInputRef.current.value = "";
+    }
+  }
+
   function navigate(item: FileItem) {
     if (item.type === "directory") {
       setPathHistory((h) => [...h, currentPath]);
@@ -113,8 +179,24 @@ export default function FilesPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0">
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => handleUpload(e.target.files)}
+        data-testid="input-file-upload"
+      />
+      <input
+        ref={manifestInputRef}
+        type="file"
+        accept=".txt,.csv,.json,.log"
+        className="hidden"
+        onChange={(e) => handleManifestUpload(e.target.files)}
+        data-testid="input-manifest-upload"
+      />
+
+      <header className="flex items-center gap-1 px-3 py-2 border-b border-border bg-card flex-shrink-0">
         <Button
           size="icon"
           variant="ghost"
@@ -139,6 +221,26 @@ export default function FilesPage() {
         <Button
           size="icon"
           variant="ghost"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          data-testid="button-upload"
+          title="Upload files"
+        >
+          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => manifestInputRef.current?.click()}
+          disabled={uploading}
+          data-testid="button-snapshot"
+          title="Upload phone snapshot"
+        >
+          <Camera className="w-4 h-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
           onClick={() => refetch()}
           data-testid="button-refresh-files"
         >
@@ -146,7 +248,13 @@ export default function FilesPage() {
         </Button>
       </header>
 
-      {/* File list */}
+      {uploading && uploadProgress > 0 && (
+        <div className="px-3 py-1 flex-shrink-0">
+          <Progress value={uploadProgress} className="h-1" />
+          <p className="text-[10px] text-muted-foreground mt-0.5">{uploadProgress}% uploaded</p>
+        </div>
+      )}
+
       <ScrollArea className="flex-1 px-2 py-1">
         {isLoading ? (
           Array.from({ length: 8 }).map((_, i) => (
@@ -193,7 +301,6 @@ export default function FilesPage() {
         )}
       </ScrollArea>
 
-      {/* File viewer dialog */}
       <Dialog open={!!viewFile} onOpenChange={() => setViewFile(null)}>
         <DialogContent className="w-[95vw] max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
@@ -226,7 +333,6 @@ export default function FilesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Move dialog */}
       <Dialog open={!!moveDialog} onOpenChange={() => setMoveDialog(null)}>
         <DialogContent className="w-[90vw] max-w-sm">
           <DialogHeader>

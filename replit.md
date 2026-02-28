@@ -49,6 +49,10 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 
 ### Files (`/files`)
 - Browse project directory tree, read/edit files inline
+- **Direct upload**: Upload files from phone/desktop into workspace (up to 50 files, 50MB each)
+- **Phone snapshot**: Upload a file manifest (.txt/.csv/.json) for dedup analysis by the agent
+- Upload progress bar with XHR tracking
+- Files stored in `uploads/` directory
 
 ### Console (`/console`) — 5 tabs
 - **Workflow**: Engine status, emergency stop (Enter-key confirm), heartbeat log, hash chain status
