@@ -1,14 +1,13 @@
 import { useLocation, Link } from "wouter";
-import { MessageSquare, Terminal, FolderOpen, CloudIcon, Mail, Zap } from "lucide-react";
+import { MessageSquare, Terminal, FolderOpen, Shield, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { path: "/", icon: MessageSquare, label: "Chat" },
-  { path: "/terminal", icon: Terminal, label: "Terminal" },
+  { path: "/terminal", icon: Terminal, label: "Term" },
   { path: "/files", icon: FolderOpen, label: "Files" },
-  { path: "/drive", icon: CloudIcon, label: "Drive" },
-  { path: "/mail", icon: Mail, label: "Mail" },
-  { path: "/automation", icon: Zap, label: "Automate" },
+  { path: "/console", icon: Shield, label: "Console" },
+  { path: "/pricing", icon: CreditCard, label: "Account" },
 ];
 
 export default function BottomNav() {

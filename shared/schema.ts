@@ -1,26 +1,15 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, timestamp, jsonb, real, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-});
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export * from "./models/auth";
 
 export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
   title: text("title").notNull().default("New Chat"),
   model: text("model").notNull().default("gemini"),
+  userId: varchar("user_id"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -86,3 +75,54 @@ export const insertCommandHistorySchema = createInsertSchema(commandHistory).omi
 
 export type CommandHistory = typeof commandHistory.$inferSelect;
 export type InsertCommandHistory = z.infer<typeof insertCommandHistorySchema>;
+
+export const events = pgTable("a0p_events", {
+  id: serial("id").primaryKey(),
+  taskId: text("task_id").notNull(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").notNull(),
+  prevHash: text("prev_hash").notNull(),
+  hash: text("hash").notNull(),
+  hmmm: jsonb("hmmm").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export type A0pEvent = typeof events.$inferSelect;
+
+export const heartbeatLogs = pgTable("heartbeat_logs", {
+  id: serial("id").primaryKey(),
+  status: text("status").notNull(),
+  hashChainValid: boolean("hash_chain_valid"),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export type HeartbeatLog = typeof heartbeatLogs.$inferSelect;
+
+export const costMetrics = pgTable("cost_metrics", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id"),
+  model: text("model").notNull(),
+  promptTokens: integer("prompt_tokens").notNull().default(0),
+  completionTokens: integer("completion_tokens").notNull().default(0),
+  estimatedCost: real("estimated_cost").notNull().default(0),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export type CostMetric = typeof costMetrics.$inferSelect;
+
+export const edcmSnapshots = pgTable("edcm_snapshots", {
+  id: serial("id").primaryKey(),
+  taskId: text("task_id"),
+  operatorGrok: jsonb("operator_grok"),
+  operatorGemini: jsonb("operator_gemini"),
+  operatorUser: jsonb("operator_user"),
+  deltaBone: real("delta_bone"),
+  deltaAlignGrok: real("delta_align_grok"),
+  deltaAlignGemini: real("delta_align_gemini"),
+  decision: text("decision"),
+  ptcaState: jsonb("ptca_state"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export type EdcmSnapshot = typeof edcmSnapshots.$inferSelect;

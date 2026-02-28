@@ -10,6 +10,12 @@ import { getUncachableGoogleDriveClient } from "./drive";
 import { getGrokClient } from "./xai";
 import { GoogleGenAI } from "@google/genai";
 import type { InsertConversation, InsertMessage } from "@shared/schema";
+import {
+  processA0Request, verifyHashChain, startHeartbeat, stopHeartbeat,
+  emergencyStopEngine, resumeEngine, ENGINE_STATUS,
+  trackCost, estimateCost, edcmDisposition, ptcaSolve,
+  type A0Request,
+} from "./a0p-engine";
 
 const execAsync = promisify(exec);
 
@@ -76,6 +82,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ============ CHAT / AI ============
 
+  const userContextStore: Record<string, { systemPrompt: string; contextPrefix: string }> = {};
+
+  app.post("/api/context", (req, res) => {
+    const { systemPrompt, contextPrefix } = req.body;
+    const userId = (req as any).user?.claims?.sub || "default";
+    userContextStore[userId] = { systemPrompt, contextPrefix };
+    res.json({ ok: true });
+  });
+
+  app.get("/api/context", (req, res) => {
+    const userId = (req as any).user?.claims?.sub || "default";
+    res.json(userContextStore[userId] || {
+      systemPrompt: "You are a0p, an elite AI agent. You help with cloud infrastructure, file automation, system tasks, and coding. Be concise, technical, and precise.",
+      contextPrefix: "EDCMBONE operator discernment active. PCNA 53-node topology. PTCA explicit-Euler. SHA-256 hash chain. 9 sentinels preflight/postflight. hmmm invariant enforced.",
+    });
+  });
+
   app.post("/api/conversations/:id/chat", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
@@ -98,6 +121,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       let fullResponse = "";
 
+      const userId = (req as any).user?.claims?.sub || "default";
+      const ctx = userContextStore[userId] || {
+        systemPrompt: "You are a0p, an elite AI agent. You help with cloud infrastructure, file automation, system tasks, and coding. Be concise, technical, and precise.",
+        contextPrefix: "EDCMBONE operator discernment active. PCNA 53-node topology. hmmm invariant enforced.",
+      };
+      const fullSystemPrompt = `${ctx.systemPrompt}\n\n${ctx.contextPrefix}`;
+
       if (model === "grok") {
         const client = getGrokClient();
         const chatMessages = prevMessages.map((m) => ({
@@ -109,11 +139,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const stream = await client.chat.completions.create({
           model: "grok-3-mini",
           messages: [
-            {
-              role: "system",
-              content:
-                "You are a0p, an elite AI agent with Grok intelligence. You help with cloud infrastructure, file automation, system tasks, and coding. Be concise, technical, and precise.",
-            },
+            { role: "system", content: fullSystemPrompt },
             ...chatMessages,
           ],
           stream: true,
@@ -136,8 +162,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             { role: "user", parts: [{ text: content }] },
           ],
           config: {
-            systemInstruction:
-              "You are a0p, an elite AI agent powered by Gemini intelligence. You assist with cloud infrastructure automation, file management, spec.md parsing, Google services, and system tasks. Be concise, technical, and helpful.",
+            systemInstruction: fullSystemPrompt,
             maxOutputTokens: 8192,
           },
         });
@@ -158,12 +183,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         model,
       } as InsertMessage);
 
+      const promptTokens = Math.ceil((content.length + prevMessages.reduce((s, m) => s + m.content.length, 0)) / 4);
+      const completionTokens = Math.ceil(fullResponse.length / 4);
+      await trackCost(userId === "default" ? null : userId, model, promptTokens, completionTokens);
+
       if (history.length === 1) {
         const title = content.slice(0, 60).replace(/\n/g, " ") || "New Chat";
         await storage.updateConversationTitle(conversationId, title);
       }
 
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true, tokens: { prompt: promptTokens, completion: completionTokens } })}\n\n`);
       res.end();
     } catch (e: any) {
       console.error("Chat error:", e);
@@ -495,6 +524,117 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(file.data);
     } catch (e: any) {
       res.status(503).json({ error: e.message });
+    }
+  });
+
+  // ============ A0P ENGINE ============
+
+  startHeartbeat();
+  ENGINE_STATUS.isRunning = true;
+
+  app.post("/api/a0p/process", async (req, res) => {
+    try {
+      if (ENGINE_STATUS.emergencyStop) {
+        return res.status(503).json({ error: "Engine emergency stopped" });
+      }
+      const request: A0Request = req.body;
+      const result = await processA0Request(request);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/a0p/events", async (req, res) => {
+    try {
+      const taskId = req.query.taskId as string | undefined;
+      if (taskId) {
+        const events = await storage.getEvents(taskId);
+        res.json(events);
+      } else {
+        const events = await storage.getRecentEvents(100);
+        res.json(events);
+      }
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/a0p/chain/verify", async (_req, res) => {
+    try {
+      const result = await verifyHashChain();
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/a0p/heartbeat", async (_req, res) => {
+    try {
+      const logs = await storage.getHeartbeats(24);
+      res.json(logs);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/a0p/status", (_req, res) => {
+    res.json({
+      isRunning: ENGINE_STATUS.isRunning,
+      emergencyStop: ENGINE_STATUS.emergencyStop,
+      uptime: process.uptime(),
+    });
+  });
+
+  app.post("/api/a0p/emergency-stop", (_req, res) => {
+    emergencyStopEngine();
+    res.json({ ok: true, status: "STOPPED" });
+  });
+
+  app.post("/api/a0p/resume", (_req, res) => {
+    resumeEngine();
+    res.json({ ok: true, status: "RUNNING" });
+  });
+
+  // ============ COST METRICS ============
+
+  app.get("/api/metrics/costs", async (_req, res) => {
+    try {
+      const summary = await storage.getCostSummary();
+      res.json(summary);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/metrics/costs/history", async (_req, res) => {
+    try {
+      const metrics = await storage.getCostMetrics();
+      res.json(metrics);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ EDCM SNAPSHOTS ============
+
+  app.get("/api/edcm/snapshots", async (_req, res) => {
+    try {
+      const snaps = await storage.getEdcmSnapshots(50);
+      res.json(snaps);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/edcm/evaluate", async (req, res) => {
+    try {
+      const { grokVec, geminiVec, userVec } = req.body;
+      const result = edcmDisposition(grokVec, geminiVec, userVec);
+      const ptca = ptcaSolve([]);
+      res.json({ edcm: result, ptca: { energy: ptca.energy, statePreview: ptca.state.slice(0, 10) } });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 

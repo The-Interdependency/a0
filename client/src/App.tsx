@@ -9,7 +9,10 @@ import FilesPage from "@/pages/files";
 import DrivePage from "@/pages/drive";
 import MailPage from "@/pages/mail";
 import AutomationPage from "@/pages/automation";
+import ConsolePage from "@/pages/console";
+import PricingPage from "@/pages/pricing";
 import BottomNav from "@/components/bottom-nav";
+import HmmmDoctrine from "@/components/hmmm-doctrine";
 
 function Router() {
   return (
@@ -20,6 +23,8 @@ function Router() {
       <Route path="/drive" component={DrivePage} />
       <Route path="/mail" component={MailPage} />
       <Route path="/automation" component={AutomationPage} />
+      <Route path="/console" component={ConsolePage} />
+      <Route path="/pricing" component={PricingPage} />
       <Route component={ChatPage} />
     </Switch>
   );
@@ -30,8 +35,11 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <div className="flex flex-col h-screen w-screen bg-background text-foreground overflow-hidden">
-          <div className="flex-1 overflow-hidden">
-            <Router />
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-hidden">
+              <Router />
+            </div>
+            <HmmmDoctrine />
           </div>
           <BottomNav />
         </div>

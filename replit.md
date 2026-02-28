@@ -1,12 +1,14 @@
 # a0p — AI Agent
 
-A mobile-first AI agent app that runs in Termux/browser, uses Grok (xAI) and Gemini as dual AI brains, and provides full access to your Google infrastructure.
+A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full EDCMBONE orchestration engine, Google infrastructure access, and cost telemetry.
 
 ## Architecture
 
 - **Frontend**: React + Vite + TypeScript, mobile-first bottom-tab navigation, dark mode by default
 - **Backend**: Express.js + TypeScript on port 5000
 - **Database**: PostgreSQL via Drizzle ORM
+- **Auth**: Replit Auth (OpenID Connect via passport)
+- **Engine**: a0p v1.0.0 — EDCMBONE + PCNA/PTCA + SHA-256 hash chain + 9 sentinels
 
 ## AI Integrations
 
@@ -19,65 +21,88 @@ A mobile-first AI agent app that runs in Termux/browser, uses Grok (xAI) and Gem
 - **Gmail**: Read inbox, open full emails, compose & send (via Replit Connector `google-mail`)
 - **Google Drive**: Browse folders, list files by type (via Replit Connector `google-drive`)
 
+## a0p Engine (v1.0.0)
+
+- **EDCMBONE**: 5-class operator vectors (P/K/Q/T/S), L1 normalization, L2 distance, merge/softfork/fork at 0.18/0.30
+- **PCNA**: 53-node circular topology, adjacency distances {1,2,3,4,5,6,7,14}
+- **PTCA**: Explicit-Euler solver, dt=0.01, alpha=0.6 beta=0.4 gamma=0.2
+- **Hash Chain**: SHA-256, genesis hash, canonical JSON with sorted keys
+- **Sentinels**: S1-S9 preflight/postflight checks
+- **hmmm invariant**: Fail-closed — no silent fallback
+- **Heartbeat**: Once per hour (+ startup at 5s)
+- **Cost tracking**: Token counting and estimated cost per model
+
 ## Features
 
 ### Chat (`/`)
 - Streaming AI chat with conversation history
 - Switch between Gemini and Grok per conversation
 - Sidebar with conversation list, delete, auto-title
-- Markdown rendering with code block support
 
 ### Terminal (`/terminal`)
 - Sandboxed shell execution (allowlisted commands only)
 - Arrow-key history navigation
-- Persistent command log in database
 
 ### Files (`/files`)
-- Browse project directory tree
-- Read and edit files inline
-- Move/rename files
+- Browse project directory tree, read/edit files inline
 
-### Drive (`/drive`)
-- Browse Google Drive folders
-- Navigate with breadcrumb path history
+### Console (`/console`) — 5 tabs
+- **Workflow**: Engine status, emergency stop (Enter-key confirm), heartbeat log, hash chain status
+- **Metrics**: Token usage, cost estimates, spend limits with slider + toggle
+- **EDCM**: Dual-brain operator vectors, BONE delta, alignment risk, PTCA energy, history
+- **Context**: Editable system prompt + context prefix sent with all AI requests
+- **Costs**: Donations vs API costs comparison, coverage percentage
 
-### Mail (`/mail`)
-- View Gmail inbox (last 15 messages)
-- Open full email bodies
-- Compose and send emails
+### Account/Pricing (`/pricing`)
+- Replit OAuth login/logout
+- $15/month Core Access tier
+- Optional support: +$1, +$2, +$5
+- Founder tier: $153 one-time (limited to 53)
+- Compute credits: $10, $25, $50 blocks
+
+### Drive (`/drive`) & Mail (`/mail`)
+- Still accessible via URL, not in main nav
 
 ### Automation (`/automation`)
-- Paste a `spec.md` to create an automation task
-- Gemini analyzes spec and produces a step-by-step cloud implementation plan
-- Streaming output, expandable results, run/retry/delete
+- Spec.md automation with Gemini analysis
+
+### hmmm Doctrine
+- Persistent footer across all pages
 
 ## Database Schema
 
-- `users` — auth (unused in MVP)
-- `conversations` — chat conversation records (title, model)
+- `users` + `sessions` — Replit Auth
+- `conversations` — chat records (title, model, userId)
 - `messages` — individual messages (role, content, model)
-- `automation_tasks` — spec.md tasks with status + result
-- `command_history` — terminal command log
+- `automation_tasks` — spec.md tasks
+- `command_history` — terminal log
+- `a0p_events` — hash-chained event log
+- `heartbeat_logs` — hourly heartbeat records
+- `cost_metrics` — token/cost tracking per model
+- `edcm_snapshots` — EDCMBONE evaluation history
 
 ## Key Files
 
 - `server/routes.ts` — all API routes
 - `server/storage.ts` — database storage layer
+- `server/a0p-engine.ts` — full engine: EDCMBONE, PCNA, PTCA, sentinels, hash chain, heartbeat, cost tracking
+- `server/replit_integrations/auth/` — Replit Auth module
 - `server/gmail.ts` — Gmail client factory
 - `server/drive.ts` — Google Drive client factory
 - `server/xai.ts` — Grok/xAI client factory
+- `client/src/pages/console.tsx` — tabbed console (5 tabs)
+- `client/src/pages/pricing.tsx` — pricing/account page
 - `client/src/pages/chat.tsx` — main chat UI
-- `client/src/pages/terminal.tsx` — terminal UI
-- `client/src/pages/files.tsx` — file manager UI
-- `client/src/pages/drive.tsx` — Drive browser UI
-- `client/src/pages/mail.tsx` — Gmail UI
-- `client/src/pages/automation.tsx` — spec.md automation UI
+- `client/src/components/hmmm-doctrine.tsx` — hmmm doctrine footer
 - `client/src/components/bottom-nav.tsx` — mobile bottom navigation
+- `client/src/hooks/use-auth.ts` — Replit Auth hook
 - `shared/schema.ts` — Drizzle schema + Zod types
+- `shared/models/auth.ts` — Auth-related models
 
 ## Environment Variables / Secrets
 
 - `DATABASE_URL` — PostgreSQL (auto-provisioned)
+- `SESSION_SECRET` — Express session secret
 - `XAI_API_KEY` — xAI/Grok API key (user-provided)
 - `AI_INTEGRATIONS_GEMINI_API_KEY` / `AI_INTEGRATIONS_GEMINI_BASE_URL` — Gemini (Replit-managed)
 - `REPLIT_CONNECTORS_HOSTNAME`, `REPL_IDENTITY` — Google OAuth connectors (Replit-managed)
