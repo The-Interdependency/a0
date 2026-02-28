@@ -1,9 +1,9 @@
 import { useLocation, Link } from "wouter";
-import { MessageSquare, Terminal, FolderOpen, Shield, CreditCard } from "lucide-react";
+import { Zap, Terminal, FolderOpen, Shield, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-  { path: "/", icon: MessageSquare, label: "Chat" },
+  { path: "/", icon: Zap, label: "Agent" },
   { path: "/terminal", icon: Terminal, label: "Term" },
   { path: "/files", icon: FolderOpen, label: "Files" },
   { path: "/console", icon: Shield, label: "Console" },

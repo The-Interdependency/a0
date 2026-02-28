@@ -9,25 +9,53 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownContent } from "@/lib/markdown";
 import {
-  Plus, Send, Trash2, ChevronLeft, Bot, User, Cpu, Sparkles,
-  PanelLeftOpen, PanelLeftClose,
+  Plus, Send, Trash2, Bot, User, ChevronRight,
+  PanelLeftOpen, PanelLeftClose, Terminal as TermIcon,
+  FileText, Mail, HardDrive, Search, Pencil,
+  Activity, Shield, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Conversation, Message } from "@shared/schema";
 
-const MODELS = [
-  { id: "gemini", label: "Gemini", icon: Sparkles, color: "text-blue-400" },
-  { id: "grok", label: "Grok", icon: Cpu, color: "text-emerald-400" },
-];
+const TOOL_ICONS: Record<string, typeof TermIcon> = {
+  run_command: TermIcon,
+  read_file: FileText,
+  write_file: Pencil,
+  list_files: FileText,
+  search_files: Search,
+  list_gmail: Mail,
+  read_gmail: Mail,
+  send_gmail: Mail,
+  list_drive: HardDrive,
+};
+
+const TOOL_LABELS: Record<string, string> = {
+  run_command: "Running command",
+  read_file: "Reading file",
+  write_file: "Writing file",
+  list_files: "Listing files",
+  search_files: "Searching files",
+  list_gmail: "Checking Gmail",
+  read_gmail: "Reading email",
+  send_gmail: "Sending email",
+  list_drive: "Browsing Drive",
+};
+
+interface ToolAction {
+  type: "tool_call" | "tool_result";
+  name: string;
+  args?: any;
+  result?: string;
+}
 
 export default function ChatPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [activeConvId, setActiveConvId] = useState<number | null>(null);
-  const [model, setModel] = useState<"gemini" | "grok">("gemini");
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
+  const [toolActions, setToolActions] = useState<ToolAction[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -43,11 +71,16 @@ export default function ChatPage() {
     enabled: !!activeConvId,
   });
 
+  const { data: engineStatus } = useQuery<{ status: string }>({
+    queryKey: ["/api/a0p/status"],
+    refetchInterval: 30000,
+  });
+
   const messages = convDetail?.messages || [];
 
   const createConv = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/conversations", { title: "New Chat", model });
+      const res = await apiRequest("POST", "/api/conversations", { title: "New Task", model: "agent" });
       return await res.json() as Conversation;
     },
     onSuccess: (conv: Conversation) => {
@@ -67,7 +100,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamContent]);
+  }, [messages, streamContent, toolActions]);
 
   async function sendMessage() {
     if (!input.trim() || streaming) return;
@@ -82,6 +115,7 @@ export default function ChatPage() {
     setInput("");
     setStreaming(true);
     setStreamContent("");
+    setToolActions([]);
 
     qc.setQueryData(
       ["/api/conversations", convId],
@@ -89,7 +123,7 @@ export default function ChatPage() {
         ...prev,
         messages: [
           ...(prev?.messages || []),
-          { id: Date.now(), role: "user", content: userMsg, conversationId: convId, createdAt: new Date() },
+          { id: Date.now(), role: "user", content: userMsg, conversationId: convId, model: "agent", createdAt: new Date() },
         ],
       })
     );
@@ -98,10 +132,10 @@ export default function ChatPage() {
       const response = await fetch(`/api/conversations/${convId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: userMsg, model }),
+        body: JSON.stringify({ content: userMsg }),
       });
 
-      if (!response.ok) throw new Error("Failed to send message");
+      if (!response.ok) throw new Error("Failed to send");
 
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
@@ -122,9 +156,16 @@ export default function ChatPage() {
                 accumulated += data.content;
                 setStreamContent(accumulated);
               }
+              if (data.tool_call) {
+                setToolActions((prev) => [...prev, { type: "tool_call", name: data.tool_call.name, args: data.tool_call.args }]);
+              }
+              if (data.tool_result) {
+                setToolActions((prev) => [...prev, { type: "tool_result", name: data.tool_result.name, result: data.tool_result.result }]);
+              }
               if (data.done) {
                 setStreaming(false);
                 setStreamContent("");
+                setToolActions([]);
                 qc.invalidateQueries({ queryKey: ["/api/conversations", convId] });
                 qc.invalidateQueries({ queryKey: ["/api/conversations"] });
               }
@@ -136,6 +177,7 @@ export default function ChatPage() {
       toast({ title: "Error", description: e.message, variant: "destructive" });
       setStreaming(false);
       setStreamContent("");
+      setToolActions([]);
     }
   }
 
@@ -146,11 +188,10 @@ export default function ChatPage() {
     }
   }
 
-  const activeModel = MODELS.find((m) => m.id === model)!;
+  const isEngineRunning = engineStatus?.status === "RUNNING";
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Sidebar */}
       <div
         className={cn(
           "absolute inset-y-0 left-0 z-40 w-72 flex flex-col bg-card border-r border-border transition-transform duration-200",
@@ -158,32 +199,20 @@ export default function ChatPage() {
         )}
       >
         <div className="flex items-center justify-between p-3 border-b border-border">
-          <span className="font-semibold text-sm">Conversations</span>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setSidebarOpen(false)}
-            data-testid="button-close-sidebar"
-          >
+          <span className="font-semibold text-sm">Tasks</span>
+          <Button size="icon" variant="ghost" onClick={() => setSidebarOpen(false)} data-testid="button-close-sidebar">
             <PanelLeftClose className="w-4 h-4" />
           </Button>
         </div>
         <div className="p-2">
-          <Button
-            className="w-full justify-start gap-2"
-            variant="secondary"
-            onClick={() => { createConv.mutate(); }}
-            data-testid="button-new-chat"
-          >
+          <Button className="w-full justify-start gap-2" variant="secondary" onClick={() => createConv.mutate()} data-testid="button-new-task">
             <Plus className="w-4 h-4" />
-            New Chat
+            New Task
           </Button>
         </div>
         <ScrollArea className="flex-1 px-2">
           {convsLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 w-full mb-1 rounded-md" />
-            ))
+            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full mb-1 rounded-md" />)
           ) : (
             conversations.map((c) => (
               <div
@@ -193,14 +222,14 @@ export default function ChatPage() {
                   activeConvId === c.id ? "bg-accent text-accent-foreground" : "hover-elevate"
                 )}
                 onClick={() => { setActiveConvId(c.id); setSidebarOpen(false); }}
-                data-testid={`conv-item-${c.id}`}
+                data-testid={`task-item-${c.id}`}
               >
-                <MessageSquareIcon className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
+                <Zap className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
                 <span className="text-xs flex-1 truncate">{c.title}</span>
                 <button
                   className="invisible group-hover:visible text-muted-foreground"
                   onClick={(e) => { e.stopPropagation(); deleteConv.mutate(c.id); }}
-                  data-testid={`button-delete-conv-${c.id}`}
+                  data-testid={`button-delete-task-${c.id}`}
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -210,76 +239,72 @@ export default function ChatPage() {
         </ScrollArea>
       </div>
 
-      {/* Overlay */}
-      {sidebarOpen && (
-        <div
-          className="absolute inset-0 z-30 bg-black/40"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      {sidebarOpen && <div className="absolute inset-0 z-30 bg-black/40" onClick={() => setSidebarOpen(false)} />}
 
-      {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 h-full">
-        {/* Header */}
         <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setSidebarOpen(true)}
-            data-testid="button-open-sidebar"
-          >
+          <Button size="icon" variant="ghost" onClick={() => setSidebarOpen(true)} data-testid="button-open-sidebar">
             <PanelLeftOpen className="w-4 h-4" />
           </Button>
           <div className="flex-1 flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-              <Bot className="w-3.5 h-3.5 text-primary-foreground" />
+            <div className="relative">
+              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                <Shield className="w-4 h-4 text-primary-foreground" />
+              </div>
+              <div className={cn(
+                "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card",
+                isEngineRunning ? "bg-green-400" : "bg-red-400"
+              )} />
             </div>
-            <span className="font-semibold text-sm truncate">
-              {convDetail?.title || "a0p Agent"}
-            </span>
+            <div className="min-w-0">
+              <span className="font-bold text-sm block leading-tight" data-testid="text-agent-title">
+                {convDetail?.title || "a0p"}
+              </span>
+              <span className="text-[10px] text-muted-foreground leading-none">
+                agent zero · {isEngineRunning ? "operational" : "stopped"}
+              </span>
+            </div>
           </div>
-          <div className="flex gap-1">
-            {MODELS.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setModel(m.id as any)}
-                className={cn(
-                  "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors",
-                  model === m.id
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-secondary text-secondary-foreground"
-                )}
-                data-testid={`button-model-${m.id}`}
-              >
-                <m.icon className="w-3 h-3" />
-                {m.label}
-              </button>
-            ))}
-          </div>
+          <Badge variant="secondary" className="text-[9px] gap-1 font-mono" data-testid="badge-engine-status">
+            <Activity className="w-2.5 h-2.5" />
+            EDCM
+          </Badge>
         </header>
 
-        {/* Messages */}
         <ScrollArea className="flex-1 px-3 py-2">
           {!activeConvId && !streaming && (
-            <div className="flex flex-col items-center justify-center h-full py-16 gap-4 text-center">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <Bot className="w-8 h-8 text-primary" />
+            <div className="flex flex-col items-center justify-center h-full py-12 gap-5 text-center">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                  <Shield className="w-10 h-10 text-primary" />
+                </div>
+                <div className={cn(
+                  "absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-background",
+                  isEngineRunning ? "bg-green-400" : "bg-red-400"
+                )} />
               </div>
               <div>
-                <h2 className="font-bold text-xl mb-1">a0p Agent</h2>
-                <p className="text-muted-foreground text-sm max-w-xs">
-                  Your AI-powered mobile agent. Ask anything — cloud automation, files, Gmail, Drive, and more.
+                <h2 className="font-bold text-xl mb-1">agent zero</h2>
+                <p className="text-muted-foreground text-xs max-w-xs">
+                  Autonomous AI agent with tool access. Give me a task — I'll execute commands, manage files, check email, and browse Drive.
                 </p>
               </div>
-              <div className="flex gap-2 flex-wrap justify-center">
-                {["Parse spec.md", "List Drive files", "Check Gmail", "Run a command"].map((s) => (
+              <div className="w-full max-w-sm space-y-2">
+                {[
+                  { label: "List project files", icon: FileText },
+                  { label: "Check my Gmail inbox", icon: Mail },
+                  { label: "Show system info", icon: TermIcon },
+                  { label: "Search codebase for TODO", icon: Search },
+                ].map((s) => (
                   <button
-                    key={s}
-                    onClick={() => { setInput(s); textareaRef.current?.focus(); }}
-                    className="px-3 py-1.5 rounded-full text-xs border border-border bg-card hover-elevate"
-                    data-testid={`suggestion-${s.replace(/\s+/g, "-").toLowerCase()}`}
+                    key={s.label}
+                    onClick={() => { setInput(s.label); textareaRef.current?.focus(); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs border border-border bg-card hover-elevate text-left"
+                    data-testid={`suggestion-${s.label.replace(/\s+/g, "-").toLowerCase()}`}
                   >
-                    {s}
+                    <s.icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span>{s.label}</span>
+                    <ChevronRight className="w-3 h-3 text-muted-foreground ml-auto" />
                   </button>
                 ))}
               </div>
@@ -299,29 +324,28 @@ export default function ChatPage() {
 
           <div className="space-y-3 pb-2">
             {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+              <AgentMessage key={msg.id} message={msg} />
             ))}
+            {streaming && toolActions.length > 0 && (
+              <ToolActionsDisplay actions={toolActions} />
+            )}
             {streaming && streamContent && (
-              <MessageBubble
+              <AgentMessage
                 message={{
-                  id: -1,
-                  role: "assistant",
-                  content: streamContent,
-                  conversationId: activeConvId!,
-                  model,
-                  metadata: null,
-                  createdAt: new Date(),
+                  id: -1, role: "assistant", content: streamContent,
+                  conversationId: activeConvId!, model: "agent", metadata: null, createdAt: new Date(),
                 }}
                 isStreaming
               />
             )}
-            {streaming && !streamContent && (
+            {streaming && !streamContent && toolActions.length === 0 && (
               <div className="flex gap-2 items-start">
                 <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Bot className="w-3.5 h-3.5 text-primary" />
+                  <Shield className="w-3.5 h-3.5 text-primary" />
                 </div>
-                <div className="bg-card border border-card-border rounded-xl px-3 py-2">
+                <div className="bg-card border border-border rounded-xl px-3 py-2">
                   <div className="flex gap-1 items-center h-5">
+                    <span className="text-xs text-muted-foreground mr-1">thinking</span>
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0ms]" />
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:150ms]" />
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:300ms]" />
@@ -333,7 +357,6 @@ export default function ChatPage() {
           <div ref={bottomRef} />
         </ScrollArea>
 
-        {/* Input */}
         <div className="px-3 py-2 border-t border-border bg-card flex-shrink-0">
           <div className="flex gap-2 items-end">
             <Textarea
@@ -341,24 +364,15 @@ export default function ChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder={`Message a0p (${activeModel.label})...`}
+              placeholder="Give a0p a task..."
               className="resize-none min-h-[40px] max-h-32 text-sm"
               rows={1}
               disabled={streaming}
               data-testid="input-message"
             />
-            <Button
-              size="icon"
-              onClick={sendMessage}
-              disabled={!input.trim() || streaming}
-              data-testid="button-send"
-            >
+            <Button size="icon" onClick={sendMessage} disabled={!input.trim() || streaming} data-testid="button-send">
               <Send className="w-4 h-4" />
             </Button>
-          </div>
-          <div className="flex items-center gap-1 mt-1.5">
-            <activeModel.icon className={cn("w-3 h-3", activeModel.color)} />
-            <span className={cn("text-xs", activeModel.color)}>{activeModel.label} active</span>
           </div>
         </div>
       </div>
@@ -366,11 +380,44 @@ export default function ChatPage() {
   );
 }
 
-function MessageSquareIcon({ className }: { className?: string }) {
-  return <Bot className={className} />;
+function ToolActionsDisplay({ actions }: { actions: ToolAction[] }) {
+  return (
+    <div className="space-y-1.5">
+      {actions.map((action, i) => {
+        const Icon = TOOL_ICONS[action.name] || TermIcon;
+        if (action.type === "tool_call") {
+          return (
+            <div key={i} className="flex items-start gap-2" data-testid={`tool-call-${i}`}>
+              <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Icon className="w-3 h-3 text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-medium text-amber-400">
+                  {TOOL_LABELS[action.name] || action.name}
+                </div>
+                {action.args && (
+                  <div className="text-[10px] font-mono text-muted-foreground truncate">
+                    {action.args.command || action.args.path || action.args.pattern || action.args.to || JSON.stringify(action.args).slice(0, 80)}
+                  </div>
+                )}
+              </div>
+              <div className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse mt-2" />
+            </div>
+          );
+        }
+        return (
+          <div key={i} className="ml-8 rounded-md bg-background border border-border p-2 max-h-32 overflow-auto" data-testid={`tool-result-${i}`}>
+            <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-all">
+              {action.result?.slice(0, 1000) || "(no output)"}
+            </pre>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-function MessageBubble({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
+function AgentMessage({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
   const isUser = message.role === "user";
   return (
     <div className={cn("flex gap-2 items-start", isUser && "flex-row-reverse")}>
@@ -380,14 +427,14 @@ function MessageBubble({ message, isStreaming }: { message: Message; isStreaming
           isUser ? "bg-secondary" : "bg-primary/10"
         )}
       >
-        {isUser ? <User className="w-3.5 h-3.5 text-secondary-foreground" /> : <Bot className="w-3.5 h-3.5 text-primary" />}
+        {isUser ? <User className="w-3.5 h-3.5 text-secondary-foreground" /> : <Shield className="w-3.5 h-3.5 text-primary" />}
       </div>
       <div
         className={cn(
-          "max-w-[80%] rounded-xl px-3 py-2 text-sm",
+          "max-w-[85%] rounded-xl px-3 py-2 text-sm",
           isUser
             ? "bg-primary text-primary-foreground rounded-tr-sm"
-            : "bg-card border border-card-border rounded-tl-sm"
+            : "bg-card border border-border rounded-tl-sm"
         )}
         data-testid={`message-${message.id}`}
       >
@@ -400,9 +447,6 @@ function MessageBubble({ message, isStreaming }: { message: Message; isStreaming
               <span className="inline-block w-0.5 h-3.5 bg-current ml-0.5 animate-pulse" />
             )}
           </div>
-        )}
-        {message.model && (
-          <div className="mt-1 opacity-50 text-[10px]">{message.model}</div>
         )}
       </div>
     </div>

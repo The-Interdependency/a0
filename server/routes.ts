@@ -53,7 +53,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/conversations", async (req, res) => {
     try {
-      const { title = "New Chat", model = "gemini" } = req.body;
+      const { title = "New Task", model = "agent" } = req.body;
       const conv = await storage.createConversation({ title, model } as InsertConversation);
       res.json(conv);
     } catch (e: any) {
@@ -456,17 +456,132 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ model, estimatedCost: cost });
   });
 
+  const AGENT_TOOLS = [
+    {
+      name: "run_command",
+      description: "Execute a shell command. Available commands: ls, pwd, echo, cat, find, grep, head, tail, mkdir, touch, cp, mv, rm, curl, wget, python3, node, npm, npx, git, sed, awk, sort, wc, diff, date, ps, df, du, whoami, uname",
+      parameters: { type: "object" as const, properties: { command: { type: "string" as const, description: "The shell command to execute" } }, required: ["command"] },
+    },
+    {
+      name: "read_file",
+      description: "Read the contents of a file",
+      parameters: { type: "object" as const, properties: { path: { type: "string" as const, description: "File path relative to project root" } }, required: ["path"] },
+    },
+    {
+      name: "write_file",
+      description: "Write content to a file (creates or overwrites)",
+      parameters: { type: "object" as const, properties: { path: { type: "string" as const, description: "File path" }, content: { type: "string" as const, description: "File content" } }, required: ["path", "content"] },
+    },
+    {
+      name: "list_files",
+      description: "List files and directories at a path",
+      parameters: { type: "object" as const, properties: { path: { type: "string" as const, description: "Directory path, defaults to ." } }, required: [] as string[] },
+    },
+    {
+      name: "search_files",
+      description: "Search for a pattern across files using grep",
+      parameters: { type: "object" as const, properties: { pattern: { type: "string" as const, description: "Search pattern (regex)" }, path: { type: "string" as const, description: "Directory to search in, defaults to ." } }, required: ["pattern"] },
+    },
+    {
+      name: "list_gmail",
+      description: "List recent Gmail inbox messages",
+      parameters: { type: "object" as const, properties: { maxResults: { type: "number" as const, description: "Max messages to return (default 10)" } }, required: [] as string[] },
+    },
+    {
+      name: "read_gmail",
+      description: "Read a specific Gmail message by ID",
+      parameters: { type: "object" as const, properties: { messageId: { type: "string" as const, description: "Gmail message ID" } }, required: ["messageId"] },
+    },
+    {
+      name: "send_gmail",
+      description: "Send an email via Gmail",
+      parameters: { type: "object" as const, properties: { to: { type: "string" as const }, subject: { type: "string" as const }, body: { type: "string" as const } }, required: ["to", "subject", "body"] },
+    },
+    {
+      name: "list_drive",
+      description: "List Google Drive files, optionally filtered by folder",
+      parameters: { type: "object" as const, properties: { folderId: { type: "string" as const, description: "Folder ID (optional, defaults to root)" } }, required: [] as string[] },
+    },
+  ];
+
+  async function executeAgentTool(toolName: string, args: any): Promise<string> {
+    try {
+      switch (toolName) {
+        case "run_command": {
+          const cmd = (args.command || "").trim();
+          const baseCmd = cmd.split(/\s+/)[0].split("/").pop()!;
+          if (!ALLOWED_COMMANDS.has(baseCmd)) return `Error: '${baseCmd}' is not an allowed command.`;
+          const { stdout, stderr } = await execAsync(cmd, { timeout: 10000, cwd: BASE_DIR });
+          return (stdout + stderr).trim().slice(0, 4000) || "(no output)";
+        }
+        case "read_file": {
+          const content = await readFile(safePath(args.path), "utf-8");
+          return content.slice(0, 8000);
+        }
+        case "write_file": {
+          await writeFile(safePath(args.path), args.content, "utf-8");
+          return `File written: ${args.path} (${args.content.length} bytes)`;
+        }
+        case "list_files": {
+          const dir = safePath(args.path || ".");
+          const entries = await readdir(dir, { withFileTypes: true });
+          return entries.map((e) => `${e.isDirectory() ? "[dir]" : "[file]"} ${e.name}`).join("\n");
+        }
+        case "search_files": {
+          const { stdout } = await execAsync(`grep -rn --include='*' '${args.pattern.replace(/'/g, "\\'")}' ${args.path || "."}`, { timeout: 5000, cwd: BASE_DIR });
+          return (stdout || "(no matches)").trim().slice(0, 4000);
+        }
+        case "list_gmail": {
+          const gmail = await getUncachableGmailClient();
+          const res = await gmail.users.messages.list({ userId: "me", maxResults: args.maxResults || 10 });
+          if (!res.data.messages?.length) return "No messages found.";
+          const summaries = [];
+          for (const msg of res.data.messages.slice(0, 5)) {
+            const detail = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["From", "Subject", "Date"] });
+            const headers = detail.data.payload?.headers || [];
+            summaries.push(`[${msg.id}] From: ${headers.find(h => h.name === "From")?.value || "?"} | Subject: ${headers.find(h => h.name === "Subject")?.value || "?"} | Date: ${headers.find(h => h.name === "Date")?.value || "?"}`);
+          }
+          return summaries.join("\n");
+        }
+        case "read_gmail": {
+          const gmail = await getUncachableGmailClient();
+          const msg = await gmail.users.messages.get({ userId: "me", id: args.messageId, format: "full" });
+          const headers = msg.data.payload?.headers || [];
+          const body = msg.data.snippet || "";
+          return `From: ${headers.find(h => h.name === "From")?.value}\nSubject: ${headers.find(h => h.name === "Subject")?.value}\nDate: ${headers.find(h => h.name === "Date")?.value}\n\n${body}`;
+        }
+        case "send_gmail": {
+          const gmail = await getUncachableGmailClient();
+          const raw = Buffer.from(`To: ${args.to}\r\nSubject: ${args.subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${args.body}`).toString("base64url");
+          await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+          return `Email sent to ${args.to}`;
+        }
+        case "list_drive": {
+          const drive = await getUncachableGoogleDriveClient();
+          const query = args.folderId ? `'${args.folderId}' in parents` : "'root' in parents";
+          const res = await drive.files.list({ q: query, fields: "files(id,name,mimeType,modifiedTime)", pageSize: 20 });
+          if (!res.data.files?.length) return "No files found.";
+          return res.data.files.map(f => `${f.mimeType?.includes("folder") ? "[dir]" : "[file]"} ${f.name} (${f.id})`).join("\n");
+        }
+        default:
+          return `Unknown tool: ${toolName}`;
+      }
+    } catch (e: any) {
+      return `Error: ${e.message}`;
+    }
+  }
+
   app.post("/api/conversations/:id/chat", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
-      const { content, model = "gemini" } = req.body;
+      const { content } = req.body;
 
       if (!content?.trim()) return res.status(400).json({ error: "Content required" });
 
       const conv = await storage.getConversation(conversationId);
       if (!conv) return res.status(404).json({ error: "Conversation not found" });
 
-      await storage.createMessage({ conversationId, role: "user", content, model } as InsertMessage);
+      await storage.createMessage({ conversationId, role: "user", content, model: "agent" } as InsertMessage);
 
       const history = await storage.getMessages(conversationId);
       const prevMessages = history.slice(0, -1);
@@ -476,83 +591,119 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.setHeader("Connection", "keep-alive");
       res.flushHeaders();
 
-      let fullResponse = "";
-
       const userId = (req as any).user?.claims?.sub || "default";
       const ctx = userContextStore[userId] || {
-        systemPrompt: "You are a0p, an elite AI agent. You help with cloud infrastructure, file automation, system tasks, and coding. Be concise, technical, and precise.",
-        contextPrefix: "EDCMBONE operator discernment active. PCNA 53-node topology. hmmm invariant enforced.",
+        systemPrompt: "You are a0p, an elite AI agent.",
+        contextPrefix: "EDCMBONE operator discernment active.",
       };
-      const fullSystemPrompt = `${ctx.systemPrompt}\n\n${ctx.contextPrefix}`;
 
-      if (model === "grok") {
-        const client = getGrokClient();
-        const chatMessages = prevMessages.map((m) => ({
-          role: m.role === "assistant" ? "assistant" : "user" as "assistant" | "user",
-          content: m.content,
-        }));
-        chatMessages.push({ role: "user", content });
+      const agentSystemPrompt = `${ctx.systemPrompt}
 
-        const stream = await client.chat.completions.create({
-          model: "grok-3-mini",
-          messages: [
-            { role: "system", content: fullSystemPrompt },
-            ...chatMessages,
-          ],
-          stream: true,
-        });
+${ctx.contextPrefix}
 
-        for await (const chunk of stream) {
-          const delta = chunk.choices[0]?.delta?.content || "";
-          if (delta) {
-            fullResponse += delta;
-            res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
-          }
-        }
-      } else {
-        const geminiHistory = buildGeminiHistory(prevMessages);
+You are agent zero (a0p) — an autonomous AI agent with tool access. You can execute commands, read/write files, search code, check Gmail, browse Google Drive, and send emails.
 
-        const stream = await geminiAI.models.generateContentStream({
+IMPORTANT RULES:
+- When a user asks you to DO something, use your tools. Don't just describe what to do.
+- Execute commands, read files, search code — take action.
+- Show your work: explain what you're doing and why.
+- If a tool call fails, try an alternative approach.
+- Be concise in your explanations but thorough in your actions.
+- For complex tasks, break them into steps and execute each one.
+- You have full access to the project filesystem and terminal.`;
+
+      const geminiTools = [{
+        functionDeclarations: AGENT_TOOLS.map(t => ({
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        })),
+      }];
+
+      const geminiHistory = prevMessages.map((m) => ({
+        role: m.role === "assistant" ? "model" as const : "user" as const,
+        parts: [{ text: m.content }],
+      }));
+
+      let contents = [
+        ...geminiHistory,
+        { role: "user" as const, parts: [{ text: content }] },
+      ];
+
+      let fullResponse = "";
+      let totalPromptTokens = 0;
+      let totalCompletionTokens = 0;
+      const MAX_TOOL_ROUNDS = 8;
+
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        const result = await geminiAI.models.generateContent({
           model: "gemini-2.5-flash",
-          contents: [
-            ...geminiHistory,
-            { role: "user", parts: [{ text: content }] },
-          ],
+          contents,
           config: {
-            systemInstruction: fullSystemPrompt,
+            systemInstruction: agentSystemPrompt,
             maxOutputTokens: 8192,
+            tools: geminiTools,
           },
         });
 
-        for await (const chunk of stream) {
-          const text = chunk.text || "";
-          if (text) {
-            fullResponse += text;
-            res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+        totalPromptTokens += Math.ceil(JSON.stringify(contents).length / 4);
+
+        const candidate = result.candidates?.[0];
+        if (!candidate?.content?.parts) break;
+
+        const parts = candidate.content.parts;
+        let hasToolCalls = false;
+        const toolResultParts: any[] = [];
+
+        for (const part of parts) {
+          if (part.text) {
+            fullResponse += part.text;
+            res.write(`data: ${JSON.stringify({ content: part.text })}\n\n`);
+          }
+
+          if (part.functionCall) {
+            hasToolCalls = true;
+            const { name, args } = part.functionCall;
+            res.write(`data: ${JSON.stringify({ tool_call: { name, args } })}\n\n`);
+
+            const toolResult = await executeAgentTool(name, args || {});
+            res.write(`data: ${JSON.stringify({ tool_result: { name, result: toolResult.slice(0, 2000) } })}\n\n`);
+
+            toolResultParts.push({
+              functionResponse: { name, response: { result: toolResult } },
+            });
           }
         }
+
+        if (!hasToolCalls) break;
+
+        contents = [
+          ...contents,
+          { role: "model" as const, parts },
+          { role: "user" as const, parts: toolResultParts },
+        ];
       }
+
+      totalCompletionTokens = Math.ceil(fullResponse.length / 4);
 
       await storage.createMessage({
         conversationId,
         role: "assistant",
         content: fullResponse,
-        model,
+        model: "agent",
       } as InsertMessage);
 
-      const promptTokens = Math.ceil((content.length + prevMessages.reduce((s, m) => s + m.content.length, 0)) / 4);
-      const completionTokens = Math.ceil(fullResponse.length / 4);
-      await trackCost(userId === "default" ? null : userId, model, promptTokens, completionTokens);
+      await trackCost(userId === "default" ? null : userId, "gemini", totalPromptTokens, totalCompletionTokens);
 
       if (history.length === 1) {
-        const title = content.slice(0, 60).replace(/\n/g, " ") || "New Chat";
+        const title = content.slice(0, 60).replace(/\n/g, " ") || "New Task";
         await storage.updateConversationTitle(conversationId, title);
       }
 
-      res.write(`data: ${JSON.stringify({ done: true, tokens: { prompt: promptTokens, completion: completionTokens } })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true, tokens: { prompt: totalPromptTokens, completion: totalCompletionTokens } })}\n\n`);
       res.end();
     } catch (e: any) {
-      console.error("Chat error:", e);
+      console.error("Agent error:", e);
       if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
         res.end();

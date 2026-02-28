@@ -36,10 +36,12 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 
 ## Features
 
-### Chat (`/`)
-- Streaming AI chat with conversation history
-- Switch between Gemini and Grok per conversation
-- Sidebar with conversation list, delete, auto-title
+### Agent (`/`)
+- Autonomous AI agent with Gemini function-calling (up to 8 tool rounds per request)
+- 9 tools: run_command, read_file, write_file, list_files, search_files, list_gmail, read_gmail, send_gmail, list_drive
+- Tool actions displayed in real-time (amber indicators for calls, results inline)
+- Task sidebar (replaces conversation list), auto-titling
+- Agent decides which tools to use — no manual model toggle
 
 ### Terminal (`/terminal`)
 - Sandboxed shell execution (allowlisted commands only)
@@ -52,7 +54,7 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 - **Workflow**: Engine status, emergency stop (Enter-key confirm), heartbeat log, hash chain status
 - **Metrics**: Token usage, cost estimates, spend limits with slider + toggle
 - **EDCM**: Dual-brain operator vectors, BONE delta, alignment risk, PTCA energy, history
-- **Context**: Editable system prompt + context prefix sent with all AI requests
+- **Context**: Editable system prompt + context prefix, BYO API keys (OpenAI, Anthropic, Mistral, Cohere, Perplexity)
 - **Costs**: Donations vs API costs comparison, coverage percentage
 
 ### Account/Pricing (`/pricing`)
