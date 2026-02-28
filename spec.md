@@ -63,16 +63,17 @@ Each actor (Grok, Gemini, User) produces a 5-dimensional operator vector. Vector
 
 Class priority for conflict resolution: P=0, K=1, Q=2, T=3, S=4 (lowest index dominates).
 
-### 3.3 PCNA (Probabilistic Cellular Network Automata)
+### 3.3 PCNA (Prime Circular Neural Architecture)
 
 - **Nodes**: n = 53
 - **Topology**: Circular graph
 - **Adjacency distances**: {1, 2, 3, 4, 5, 6, 7, 14}
 - Each node connects to neighbors at those distances (modular arithmetic)
 
-### 3.4 PTCA (Probabilistic Temporal Coupling Algorithm)
+### 3.4 PTCA (Prime Tensor Circular Architecture)
 
 Explicit-Euler solver for state evolution on the PCNA topology.
+PTCA is the tensor/field update rule that evolves state on the circular prime topology.
 
 | Parameter | Value | Role |
 |-----------|-------|------|
