@@ -112,9 +112,11 @@ export default function FilesPage() {
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             const result = JSON.parse(xhr.responseText);
+            const eng = result.engine?.[0];
+            const edcmInfo = eng?.decision ? ` [EDCM: ${eng.decision}, delta=${eng.delta?.toFixed(3)}]` : "";
             toast({
-              title: "Uploaded",
-              description: `${result.uploaded.length} file(s) uploaded to workspace`,
+              title: "Uploaded + EDCM processed",
+              description: `${result.uploaded.length} file(s) hash-chained${edcmInfo}`,
             });
             resolve();
           } else {
@@ -145,9 +147,10 @@ export default function FilesPage() {
       const res = await fetch("/api/files/upload-manifest", { method: "POST", body: formData });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      const engInfo = data.engine?.decision ? ` [EDCM: ${data.engine.decision}]` : "";
       toast({
-        title: "Snapshot uploaded",
-        description: `${data.totalEntries} entries found. Ask the agent to analyze "${data.path}" for dedup.`,
+        title: "Snapshot uploaded + EDCM processed",
+        description: `${data.totalEntries} entries hash-chained${engInfo}. Ask the agent to analyze "${data.path}" for dedup.`,
       });
       refetch();
     } catch (e: any) {

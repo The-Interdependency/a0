@@ -866,17 +866,62 @@ IMPORTANT RULES:
     limits: { fileSize: 50 * 1024 * 1024 },
   });
 
+  function fileOperatorVec(file: { originalname: string; size: number; mimetype: string }) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const isCode = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".java", ".c", ".cpp", ".h"].includes(ext);
+    const isConfig = [".json", ".yaml", ".yml", ".toml", ".env", ".ini", ".xml"].includes(ext);
+    const isMedia = file.mimetype.startsWith("image/") || file.mimetype.startsWith("video/") || file.mimetype.startsWith("audio/");
+    const isText = [".txt", ".md", ".csv", ".log"].includes(ext) || file.mimetype.startsWith("text/");
+    const sizeMB = file.size / (1024 * 1024);
+
+    return {
+      P: isCode ? 0.4 : 0.15,
+      K: isConfig ? 0.35 : isText ? 0.25 : 0.1,
+      Q: isMedia ? 0.35 : 0.1,
+      T: Math.min(0.4, 0.1 + sizeMB * 0.05),
+      S: 0.2,
+    };
+  }
+
   app.post("/api/files/upload", upload.array("files", 50), async (req: any, res) => {
     try {
       const files = req.files as Express.Multer.File[];
       if (!files?.length) return res.status(400).json({ error: "No files provided" });
-      const results = files.map((f) => ({
-        name: f.originalname,
-        storedAs: f.filename,
-        path: path.relative(BASE_DIR, f.path),
-        size: f.size,
-      }));
-      res.json({ uploaded: results });
+
+      const results = [];
+      const engineResults = [];
+      for (const f of files) {
+        const relPath = path.relative(BASE_DIR, f.path);
+        results.push({
+          name: f.originalname,
+          storedAs: f.filename,
+          path: relPath,
+          size: f.size,
+        });
+
+        try {
+          const opVec = fileOperatorVec(f);
+          const engineResult = await processA0Request({
+            taskId: `upload-${Date.now()}-${f.filename}`,
+            action: "file_upload",
+            operatorVec: opVec,
+            payload: { name: f.originalname, path: relPath, size: f.size, mimetype: f.mimetype },
+          });
+          engineResults.push({
+            file: f.originalname,
+            success: engineResult.success,
+            decision: engineResult.edcm?.decision,
+            delta: engineResult.edcm?.delta,
+            energy: engineResult.ptca?.energy,
+            hash: engineResult.eventHash,
+            hmmm: engineResult.hmmm,
+          });
+        } catch (engineErr: any) {
+          engineResults.push({ file: f.originalname, success: false, error: engineErr.message });
+        }
+      }
+
+      res.json({ uploaded: results, engine: engineResults });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -888,10 +933,32 @@ IMPORTANT RULES:
       if (!file) return res.status(400).json({ error: "No manifest file provided" });
       const content = await readFile(file.path, "utf-8");
       const lines = content.split("\n").filter((l: string) => l.trim());
+
+      const relPath = path.relative(BASE_DIR, file.path);
+      let engineResult;
+      try {
+        engineResult = await processA0Request({
+          taskId: `manifest-${Date.now()}`,
+          action: "manifest_upload",
+          operatorVec: { P: 0.15, K: 0.35, Q: 0.1, T: 0.2, S: 0.2 },
+          payload: { name: file.originalname, path: relPath, totalEntries: lines.length, sampleEntries: lines.slice(0, 5) },
+        });
+      } catch (engineErr: any) {
+        engineResult = { success: false, error: engineErr.message };
+      }
+
       res.json({
-        path: path.relative(BASE_DIR, file.path),
+        path: relPath,
         totalEntries: lines.length,
         preview: lines.slice(0, 20),
+        engine: engineResult.success !== undefined ? {
+          success: (engineResult as any).success,
+          decision: (engineResult as any).edcm?.decision,
+          delta: (engineResult as any).edcm?.delta,
+          energy: (engineResult as any).ptca?.energy,
+          hash: (engineResult as any).eventHash,
+          hmmm: (engineResult as any).hmmm,
+        } : { success: false, error: (engineResult as any).error },
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
