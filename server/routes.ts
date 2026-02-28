@@ -8,6 +8,7 @@ import { storage } from "./storage";
 import { getUncachableGmailClient } from "./gmail";
 import { getUncachableGoogleDriveClient } from "./drive";
 import { getGrokClient } from "./xai";
+import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import type { InsertConversation, InsertMessage } from "@shared/schema";
 import {
@@ -127,6 +128,332 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       delete userApiKeys[userId][provider];
     }
     res.json({ ok: true, provider, set: !!key });
+  });
+
+  // ============ AI REST ENDPOINTS ============
+
+  const BUILTIN_MODELS = [
+    { id: "gemini", provider: "gemini", name: "Gemini 2.5 Flash", contextWindow: 1048576, maxOutput: 8192, builtin: true },
+    { id: "grok", provider: "grok", name: "Grok-3 Mini", contextWindow: 131072, maxOutput: 16384, builtin: true },
+  ];
+
+  const BYO_MODELS: Record<string, { models: { id: string; name: string; contextWindow: number; maxOutput: number }[]; baseURL?: string; openaiCompat: boolean }> = {
+    openai: {
+      openaiCompat: true,
+      models: [
+        { id: "gpt-4o", name: "GPT-4o", contextWindow: 128000, maxOutput: 16384 },
+        { id: "gpt-4o-mini", name: "GPT-4o Mini", contextWindow: 128000, maxOutput: 16384 },
+        { id: "o3-mini", name: "o3-mini", contextWindow: 200000, maxOutput: 100000 },
+      ],
+    },
+    anthropic: {
+      openaiCompat: false,
+      models: [
+        { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200000, maxOutput: 16384 },
+        { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", contextWindow: 200000, maxOutput: 8192 },
+      ],
+    },
+    mistral: {
+      openaiCompat: true,
+      baseURL: "https://api.mistral.ai/v1",
+      models: [
+        { id: "mistral-large-latest", name: "Mistral Large", contextWindow: 128000, maxOutput: 8192 },
+        { id: "mistral-small-latest", name: "Mistral Small", contextWindow: 32000, maxOutput: 8192 },
+      ],
+    },
+    cohere: {
+      openaiCompat: false,
+      models: [
+        { id: "command-r-plus", name: "Command R+", contextWindow: 128000, maxOutput: 4096 },
+        { id: "command-r", name: "Command R", contextWindow: 128000, maxOutput: 4096 },
+      ],
+    },
+    perplexity: {
+      openaiCompat: true,
+      baseURL: "https://api.perplexity.ai",
+      models: [
+        { id: "sonar-pro", name: "Sonar Pro", contextWindow: 200000, maxOutput: 8192 },
+        { id: "sonar", name: "Sonar", contextWindow: 128000, maxOutput: 8192 },
+      ],
+    },
+  };
+
+  app.get("/api/ai/models", (req, res) => {
+    const userId = (req as any).user?.claims?.sub || "default";
+    const keys = userApiKeys[userId] || {};
+    const models = [...BUILTIN_MODELS];
+    for (const [provider, cfg] of Object.entries(BYO_MODELS)) {
+      const hasKey = !!keys[provider];
+      for (const m of cfg.models) {
+        const entry: any = {
+          id: `${provider}/${m.id}`,
+          provider,
+          name: m.name,
+          contextWindow: m.contextWindow,
+          maxOutput: m.maxOutput,
+          builtin: false,
+          openaiCompat: cfg.openaiCompat,
+        };
+        if (!hasKey) {
+          entry.disabled = true;
+          entry.reason = "API key not configured";
+        } else if (!cfg.openaiCompat) {
+          entry.disabled = true;
+          entry.reason = "Native adapter coming soon (stubbed)";
+        }
+        models.push(entry);
+      }
+    }
+    res.json(models);
+  });
+
+  function getOpenAICompatClient(provider: string, apiKey: string): OpenAI {
+    const cfg = BYO_MODELS[provider];
+    return new OpenAI({
+      apiKey,
+      ...(cfg?.baseURL ? { baseURL: cfg.baseURL } : {}),
+    });
+  }
+
+  function validateBYOModel(model: string, userId: string) {
+    const parts = model.split("/");
+    if (parts.length !== 2) return { error: `Invalid model format. Use "gemini", "grok", or "provider/model-id"`, status: 400 };
+    const [provider, modelId] = parts;
+    const keys = userApiKeys[userId] || {};
+    const apiKey = keys[provider];
+    if (!apiKey) return { error: `No API key configured for ${provider}. Add one in Console > Context.`, status: 401 };
+    const providerCfg = BYO_MODELS[provider];
+    if (!providerCfg) return { error: `Unknown provider: ${provider}`, status: 400 };
+    const modelCfg = providerCfg.models.find((m) => m.id === modelId);
+    if (!modelCfg) return { error: `Unknown model: ${modelId} for provider ${provider}`, status: 400 };
+    return { provider, modelId, modelCfg, apiKey, providerCfg };
+  }
+
+  app.post("/api/ai/complete", async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { model, messages, systemPrompt: customSystem, maxTokens, temperature } = req.body;
+
+      if (!model) return res.status(400).json({ error: "model is required" });
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: "messages array is required" });
+      }
+
+      const ctx = userContextStore[userId] || {
+        systemPrompt: "You are a0p, an elite AI agent.",
+        contextPrefix: "EDCMBONE operator discernment active.",
+      };
+      const sysPrompt = customSystem || `${ctx.systemPrompt}\n\n${ctx.contextPrefix}`;
+
+      if (model === "gemini") {
+        const geminiHistory = messages.slice(0, -1).map((m: any) => ({
+          role: m.role === "assistant" ? "model" : "user",
+          parts: [{ text: m.content }],
+        }));
+        const lastMsg = messages[messages.length - 1];
+        const result = await geminiAI.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [...geminiHistory, { role: "user", parts: [{ text: lastMsg.content }] }],
+          config: { systemInstruction: sysPrompt, maxOutputTokens: maxTokens || 8192 },
+        });
+        const text = result.text || "";
+        const promptTokens = Math.ceil(messages.reduce((s: number, m: any) => s + m.content.length, 0) / 4);
+        const completionTokens = Math.ceil(text.length / 4);
+        await trackCost(userId === "default" ? null : userId, "gemini", promptTokens, completionTokens);
+        return res.json({
+          model: "gemini-2.5-flash",
+          content: text,
+          usage: { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens },
+        });
+      }
+
+      if (model === "grok") {
+        const client = getGrokClient();
+        const chatMsgs = [
+          { role: "system" as const, content: sysPrompt },
+          ...messages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        ];
+        const result = await client.chat.completions.create({
+          model: "grok-3-mini",
+          messages: chatMsgs,
+          max_tokens: maxTokens || 16384,
+          ...(temperature != null ? { temperature } : {}),
+        });
+        const text = result.choices[0]?.message?.content || "";
+        const usage = result.usage;
+        await trackCost(userId === "default" ? null : userId, "grok", usage?.prompt_tokens || 0, usage?.completion_tokens || 0);
+        return res.json({
+          model: "grok-3-mini",
+          content: text,
+          usage: {
+            promptTokens: usage?.prompt_tokens || 0,
+            completionTokens: usage?.completion_tokens || 0,
+            totalTokens: usage?.total_tokens || 0,
+          },
+        });
+      }
+
+      const validated = validateBYOModel(model, userId);
+      if (validated.error) return res.status(validated.status!).json({ error: validated.error });
+      const { provider, modelId, modelCfg, apiKey: byoKey, providerCfg } = validated;
+
+      if (!providerCfg!.openaiCompat) {
+        return res.status(400).json({
+          error: `${provider} requires a native SDK adapter (not OpenAI-compatible). Use built-in Gemini/Grok, or an OpenAI-compatible provider (OpenAI, Mistral, Perplexity).`,
+          hint: `${provider} integration is stubbed — full native adapter coming soon.`,
+        });
+      }
+
+      const client = getOpenAICompatClient(provider!, byoKey!);
+      const chatMsgs = [
+        { role: "system" as const, content: sysPrompt },
+        ...messages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      ];
+
+      const result = await client.chat.completions.create({
+        model: modelId!,
+        messages: chatMsgs,
+        max_tokens: maxTokens || modelCfg!.maxOutput,
+        ...(temperature != null ? { temperature } : {}),
+      });
+
+      const text = result.choices[0]?.message?.content || "";
+      const usage = result.usage;
+      await trackCost(userId === "default" ? null : userId, provider!, usage?.prompt_tokens || 0, usage?.completion_tokens || 0);
+      return res.json({
+        model: modelId,
+        provider,
+        content: text,
+        usage: {
+          promptTokens: usage?.prompt_tokens || 0,
+          completionTokens: usage?.completion_tokens || 0,
+          totalTokens: usage?.total_tokens || 0,
+        },
+      });
+    } catch (e: any) {
+      console.error("AI complete error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/ai/stream", async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { model, messages, systemPrompt: customSystem, maxTokens, temperature } = req.body;
+
+      if (!model) return res.status(400).json({ error: "model is required" });
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: "messages array is required" });
+      }
+
+      const ctx = userContextStore[userId] || {
+        systemPrompt: "You are a0p, an elite AI agent.",
+        contextPrefix: "EDCMBONE operator discernment active.",
+      };
+      const sysPrompt = customSystem || `${ctx.systemPrompt}\n\n${ctx.contextPrefix}`;
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders();
+
+      let fullResponse = "";
+
+      if (model === "gemini") {
+        const geminiHistory = messages.slice(0, -1).map((m: any) => ({
+          role: m.role === "assistant" ? "model" : "user",
+          parts: [{ text: m.content }],
+        }));
+        const lastMsg = messages[messages.length - 1];
+        const stream = await geminiAI.models.generateContentStream({
+          model: "gemini-2.5-flash",
+          contents: [...geminiHistory, { role: "user", parts: [{ text: lastMsg.content }] }],
+          config: { systemInstruction: sysPrompt, maxOutputTokens: maxTokens || 8192 },
+        });
+        for await (const chunk of stream) {
+          const text = chunk.text || "";
+          if (text) {
+            fullResponse += text;
+            res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+          }
+        }
+      } else if (model === "grok") {
+        const client = getGrokClient();
+        const chatMsgs = [
+          { role: "system" as const, content: sysPrompt },
+          ...messages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        ];
+        const stream = await client.chat.completions.create({
+          model: "grok-3-mini",
+          messages: chatMsgs,
+          max_tokens: maxTokens || 16384,
+          ...(temperature != null ? { temperature } : {}),
+          stream: true,
+        });
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta?.content || "";
+          if (delta) {
+            fullResponse += delta;
+            res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+          }
+        }
+      } else {
+        const validated = validateBYOModel(model, userId);
+        if (validated.error) {
+          res.write(`data: ${JSON.stringify({ error: validated.error, done: true })}\n\n`);
+          return res.end();
+        }
+        const { provider, modelId, modelCfg, apiKey: byoKey, providerCfg } = validated;
+
+        if (!providerCfg!.openaiCompat) {
+          res.write(`data: ${JSON.stringify({ error: `${provider} requires a native SDK adapter (not OpenAI-compatible). Use OpenAI, Mistral, or Perplexity.`, done: true })}\n\n`);
+          return res.end();
+        }
+
+        const client = getOpenAICompatClient(provider!, byoKey!);
+        const chatMsgs = [
+          { role: "system" as const, content: sysPrompt },
+          ...messages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        ];
+        const stream = await client.chat.completions.create({
+          model: modelId!,
+          messages: chatMsgs,
+          max_tokens: maxTokens || modelCfg!.maxOutput,
+          ...(temperature != null ? { temperature } : {}),
+          stream: true,
+        });
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta?.content || "";
+          if (delta) {
+            fullResponse += delta;
+            res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+          }
+        }
+      }
+
+      const promptTokens = Math.ceil(messages.reduce((s: number, m: any) => s + m.content.length, 0) / 4);
+      const completionTokens = Math.ceil(fullResponse.length / 4);
+      const resolvedProvider = model.includes("/") ? model.split("/")[0] : model;
+      await trackCost(userId === "default" ? null : userId, resolvedProvider, promptTokens, completionTokens);
+
+      res.write(`data: ${JSON.stringify({ done: true, usage: { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens } })}\n\n`);
+      res.end();
+    } catch (e: any) {
+      console.error("AI stream error:", e);
+      if (res.headersSent) {
+        res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
+        res.end();
+      } else {
+        res.status(500).json({ error: e.message });
+      }
+    }
+  });
+
+  app.post("/api/ai/estimate", (req, res) => {
+    const { model, promptLength, maxTokens } = req.body;
+    if (!model || !promptLength) return res.status(400).json({ error: "model and promptLength required" });
+    const cost = estimateCost(model.includes("/") ? model.split("/")[0] : model, promptLength, maxTokens || 2048);
+    res.json({ model, estimatedCost: cost });
   });
 
   app.post("/api/conversations/:id/chat", async (req: Request, res: Response) => {

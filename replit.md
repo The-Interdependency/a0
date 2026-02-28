@@ -13,9 +13,10 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 
 ## AI Integrations
 
-- **Gemini 2.5 Flash** (Replit AI Integrations — no user API key needed)
-- **Grok-3 Mini** (xAI — requires `XAI_API_KEY` secret)
+- **Built-in**: Gemini 2.5 Flash (Replit AI Integrations), Grok-3 Mini (xAI `XAI_API_KEY`)
+- **BYO Providers**: OpenAI, Anthropic, Mistral, Cohere, Perplexity (user-supplied keys via Console > Context)
 - Switchable per conversation in chat header
+- REST AI endpoints: `GET /api/ai/models`, `POST /api/ai/complete`, `POST /api/ai/stream`, `POST /api/ai/estimate`
 
 ## Google Integrations
 
