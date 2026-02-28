@@ -8,6 +8,7 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 - **Backend**: Express.js + TypeScript on port 5000
 - **Database**: PostgreSQL via Drizzle ORM
 - **Auth**: Replit Auth (OpenID Connect via passport)
+- **Payments**: Stripe (sandbox) via stripe-replit-sync, managed webhooks
 - **Engine**: a0p v1.0.0 — EDCMBONE + PCNA/PTCA + SHA-256 hash chain + 9 sentinels
 
 ## AI Integrations
@@ -55,10 +56,11 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 
 ### Account/Pricing (`/pricing`)
 - Replit OAuth login/logout
-- $15/month Core Access tier
-- Optional support: +$1, +$2, +$5
-- Founder tier: $153 one-time (limited to 53)
-- Compute credits: $10, $25, $50 blocks
+- $15/month Core Access tier (Stripe Checkout subscription)
+- Optional support: +$1, +$2, +$5 (Stripe one-time payments)
+- Founder tier: $153 one-time (limited to 53) (Stripe one-time payment)
+- Compute credits: $10, $25, $50 blocks (Stripe one-time payments)
+- Products seeded via `server/seed-products.ts`
 
 ### Drive (`/drive`) & Mail (`/mail`)
 - Still accessible via URL, not in main nav
@@ -86,6 +88,9 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 - `server/routes.ts` — all API routes
 - `server/storage.ts` — database storage layer
 - `server/a0p-engine.ts` — full engine: EDCMBONE, PCNA, PTCA, sentinels, hash chain, heartbeat, cost tracking
+- `server/stripeClient.ts` — Stripe client + StripeSync setup
+- `server/webhookHandlers.ts` — Stripe webhook processor
+- `server/seed-products.ts` — Product seeding script (run manually)
 - `server/replit_integrations/auth/` — Replit Auth module
 - `server/gmail.ts` — Gmail client factory
 - `server/drive.ts` — Google Drive client factory

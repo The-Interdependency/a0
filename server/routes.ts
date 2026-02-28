@@ -16,6 +16,9 @@ import {
   trackCost, estimateCost, edcmDisposition, ptcaSolve,
   type A0Request,
 } from "./a0p-engine";
+import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 const execAsync = promisify(exec);
 
@@ -633,6 +636,106 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const result = edcmDisposition(grokVec, geminiVec, userVec);
       const ptca = ptcaSolve([]);
       res.json({ edcm: result, ptca: { energy: ptca.energy, statePreview: ptca.state.slice(0, 10) } });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ STRIPE PAYMENTS ============
+
+  app.get("/api/stripe/publishable-key", async (_req, res) => {
+    try {
+      const key = await getStripePublishableKey();
+      res.json({ publishableKey: key });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/stripe/products", async (_req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT 
+          p.id as product_id,
+          p.name as product_name,
+          p.description as product_description,
+          p.metadata as product_metadata,
+          pr.id as price_id,
+          pr.unit_amount,
+          pr.currency,
+          pr.recurring
+        FROM stripe.products p
+        LEFT JOIN stripe.prices pr ON pr.product = p.id AND pr.active = true
+        WHERE p.active = true
+        ORDER BY pr.unit_amount
+      `);
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/stripe/checkout", async (req, res) => {
+    try {
+      const { priceId } = req.body;
+      if (!priceId) return res.status(400).json({ error: "priceId required" });
+
+      const stripe = await getUncachableStripeClient();
+      const user = (req as any).user?.claims;
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+      let customerId: string | undefined;
+      if (user?.email) {
+        const existing = await stripe.customers.list({ email: user.email, limit: 1 });
+        if (existing.data.length > 0) {
+          customerId = existing.data[0].id;
+        } else {
+          const customer = await stripe.customers.create({
+            email: user.email,
+            name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || undefined,
+            metadata: { userId: user.sub },
+          });
+          customerId = customer.id;
+        }
+      }
+
+      const price = await stripe.prices.retrieve(priceId);
+      const mode = price.recurring ? "subscription" : "payment";
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ["card"],
+        line_items: [{ price: priceId, quantity: 1 }],
+        mode,
+        success_url: `${baseUrl}/pricing?success=true`,
+        cancel_url: `${baseUrl}/pricing?canceled=true`,
+      });
+
+      res.json({ url: session.url });
+    } catch (e: any) {
+      console.error("Checkout error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/stripe/portal", async (req, res) => {
+    try {
+      const stripe = await getUncachableStripeClient();
+      const user = (req as any).user?.claims;
+      if (!user?.email) return res.status(401).json({ error: "Not authenticated" });
+
+      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+      if (customers.data.length === 0) {
+        return res.status(404).json({ error: "No billing account found" });
+      }
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customers.data[0].id,
+        return_url: `${baseUrl}/pricing`,
+      });
+
+      res.json({ url: session.url });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
