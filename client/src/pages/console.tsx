@@ -10,9 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import {
   Activity, AlertTriangle, Brain, DollarSign, FileText,
-  Heart, OctagonX, Play, RefreshCw, Shield, Zap, Check,
+  Heart, Key, OctagonX, Play, RefreshCw, Shield, Zap, Check, X,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -462,16 +463,30 @@ function OperatorBar({ vec, color }: { vec: any; color: string }) {
   );
 }
 
+const AI_PROVIDERS = [
+  { id: "openai", label: "OpenAI", placeholder: "sk-..." },
+  { id: "anthropic", label: "Anthropic", placeholder: "sk-ant-..." },
+  { id: "mistral", label: "Mistral", placeholder: "..." },
+  { id: "cohere", label: "Cohere", placeholder: "..." },
+  { id: "perplexity", label: "Perplexity", placeholder: "pplx-..." },
+] as const;
+
 function ContextTab() {
   const { toast } = useToast();
+  const qc = useQueryClient();
 
   const { data: serverCtx } = useQuery<{ systemPrompt: string; contextPrefix: string }>({
     queryKey: ["/api/context"],
   });
 
+  const { data: savedKeys = {} } = useQuery<Record<string, string>>({
+    queryKey: ["/api/keys"],
+  });
+
   const [systemPrompt, setSystemPrompt] = useState("");
   const [contextPrefix, setContextPrefix] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (serverCtx && !loaded) {
@@ -484,6 +499,18 @@ function ContextTab() {
   const saveMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/context", { systemPrompt, contextPrefix }),
     onSuccess: () => toast({ title: "Context saved and active" }),
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const saveKeyMutation = useMutation({
+    mutationFn: async ({ provider, key }: { provider: string; key: string }) => {
+      await apiRequest("POST", "/api/keys", { provider, key });
+    },
+    onSuccess: (_, { provider, key }) => {
+      qc.invalidateQueries({ queryKey: ["/api/keys"] });
+      setKeyInputs((prev) => ({ ...prev, [provider]: "" }));
+      toast({ title: key ? `${provider} key saved` : `${provider} key removed` });
+    },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
@@ -521,6 +548,68 @@ function ContextTab() {
           <Check className="w-4 h-4 mr-1" />
           {saveMutation.isPending ? "Saving..." : "Save Context"}
         </Button>
+
+        <div className="rounded-lg border border-primary/20 bg-card p-4">
+          <h3 className="font-semibold text-sm mb-1 flex items-center gap-2">
+            <Key className="w-4 h-4 text-primary" />
+            BYO API Keys
+          </h3>
+          <p className="text-[10px] text-muted-foreground mb-3">
+            Bring your own keys for additional AI providers. Gemini and Grok are built-in.
+          </p>
+          <div className="space-y-3">
+            {AI_PROVIDERS.map((p) => {
+              const existing = savedKeys[p.id];
+              return (
+                <div key={p.id} className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">{p.label}</span>
+                    {existing && (
+                      <div className="flex items-center gap-1">
+                        <Badge variant="secondary" className="text-[9px] font-mono">{existing}</Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 w-5 p-0"
+                          onClick={() => saveKeyMutation.mutate({ provider: p.id, key: "" })}
+                          data-testid={`button-remove-key-${p.id}`}
+                        >
+                          <X className="w-3 h-3 text-destructive" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      placeholder={p.placeholder}
+                      value={keyInputs[p.id] || ""}
+                      onChange={(e) => setKeyInputs((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                      className="h-8 text-xs font-mono"
+                      data-testid={`input-key-${p.id}`}
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-8 px-3"
+                      disabled={!keyInputs[p.id]?.trim() || saveKeyMutation.isPending}
+                      onClick={() => saveKeyMutation.mutate({ provider: p.id, key: keyInputs[p.id]!.trim() })}
+                      data-testid={`button-save-key-${p.id}`}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 rounded bg-background p-2">
+            <p className="text-[9px] text-muted-foreground">
+              Built-in: Gemini 2.5 Flash, Grok-3 Mini. BYO keys enable future model routing.
+              Keys are stored server-side per session — never sent to third parties until you select a model.
+            </p>
+          </div>
+        </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="font-semibold text-sm mb-2">Full Prompt Preview</h3>

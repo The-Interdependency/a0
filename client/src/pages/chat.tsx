@@ -46,7 +46,10 @@ export default function ChatPage() {
   const messages = convDetail?.messages || [];
 
   const createConv = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/conversations", { title: "New Chat", model }),
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/conversations", { title: "New Chat", model });
+      return await res.json() as Conversation;
+    },
     onSuccess: (conv: Conversation) => {
       qc.invalidateQueries({ queryKey: ["/api/conversations"] });
       setActiveConvId(conv.id);
@@ -72,7 +75,7 @@ export default function ChatPage() {
 
     if (!convId) {
       const conv = await createConv.mutateAsync();
-      convId = (conv as any).id;
+      convId = conv.id;
     }
 
     const userMsg = input.trim();

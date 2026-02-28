@@ -86,6 +86,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ============ CHAT / AI ============
 
   const userContextStore: Record<string, { systemPrompt: string; contextPrefix: string }> = {};
+  const userApiKeys: Record<string, Record<string, string>> = {};
 
   app.post("/api/context", (req, res) => {
     const { systemPrompt, contextPrefix } = req.body;
@@ -100,6 +101,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       systemPrompt: "You are a0p, an elite AI agent. You help with cloud infrastructure, file automation, system tasks, and coding. Be concise, technical, and precise.",
       contextPrefix: "EDCMBONE operator discernment active. PCNA 53-node topology. PTCA explicit-Euler. SHA-256 hash chain. 9 sentinels preflight/postflight. hmmm invariant enforced.",
     });
+  });
+
+  app.get("/api/keys", (req, res) => {
+    const userId = (req as any).user?.claims?.sub || "default";
+    const keys = userApiKeys[userId] || {};
+    const masked: Record<string, string> = {};
+    for (const [k, v] of Object.entries(keys)) {
+      masked[k] = v ? `${v.slice(0, 4)}...${v.slice(-4)}` : "";
+    }
+    res.json(masked);
+  });
+
+  app.post("/api/keys", (req, res) => {
+    const userId = (req as any).user?.claims?.sub || "default";
+    const { provider, key } = req.body;
+    const validProviders = ["openai", "anthropic", "mistral", "cohere", "perplexity"];
+    if (!validProviders.includes(provider)) {
+      return res.status(400).json({ error: `Invalid provider. Valid: ${validProviders.join(", ")}` });
+    }
+    if (!userApiKeys[userId]) userApiKeys[userId] = {};
+    if (key) {
+      userApiKeys[userId][provider] = key;
+    } else {
+      delete userApiKeys[userId][provider];
+    }
+    res.json({ ok: true, provider, set: !!key });
   });
 
   app.post("/api/conversations/:id/chat", async (req: Request, res: Response) => {
