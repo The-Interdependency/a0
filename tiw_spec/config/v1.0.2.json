@@ -1,0 +1,51 @@
+{
+  "build": "v1.0.2-S9",
+  "ptca": {
+    "seed_count": 53,
+    "site": {
+      "ring_size": 6,
+      "hub_index": 6
+    },
+    "rotation": {
+      "delta": 1,
+      "dir_rule": "(-1)^s"
+    },
+    "aggregators": {
+      "Agg6": "mean",
+      "AggSeeds": "mean"
+    },
+    "coupling": {
+      "alpha": 0.1,
+      "beta": 0.2,
+      "gamma": 0.1
+    },
+    "grouping": {
+      "group_size": 53,
+      "phase_scope": "v2_between_groups_only"
+    }
+  },
+  "s5_context_defaults": {
+    "window": {
+      "type": "turns",
+      "W": 32
+    },
+    "retrieval": {
+      "mode": "none",
+      "sources": [],
+      "top_k": 0
+    },
+    "hygiene": {
+      "strip_secrets": true,
+      "redact_keys": true
+    }
+  },
+  "edcm": {
+    "alerts": {
+      "default_thresholds": {
+        "trigger_high": 0.8,
+        "clear_low": 0.2,
+        "hysteresis": true
+      }
+    }
+  }
+}

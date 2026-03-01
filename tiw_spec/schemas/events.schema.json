@@ -1,0 +1,65 @@
+{
+  "title": "TIW Canon Event",
+  "type": "object",
+  "required": [
+    "event_id",
+    "ts",
+    "thread_id",
+    "actor_id",
+    "event_type",
+    "payload",
+    "hash"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "ts": {
+      "type": "string",
+      "description": "ISO-8601"
+    },
+    "thread_id": {
+      "type": "string"
+    },
+    "actor_id": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "turn",
+        "metric",
+        "alert",
+        "decision",
+        "action_request",
+        "action_result",
+        "snapshot"
+      ]
+    },
+    "refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "payload": {
+      "type": "object"
+    },
+    "prev_hash": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hash": {
+      "type": "string",
+      "description": "sha256:..."
+    },
+    "sig": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}
