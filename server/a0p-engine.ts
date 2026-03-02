@@ -316,64 +316,155 @@ export interface PtcaTensorState {
   sentinelChannels: number[][];
   heptagramEnergy: number;
   totalEnergy: number;
+  axes: { prime_node: number; sentinel: number; phase: number; hept: number };
+  sentinelIndex: Record<string, string>;
+  phaseEnergies: number[];
 }
 
-function initHeptagramTensor(): number[][] {
-  const tensor: number[][] = [];
-  for (let s = 0; s < PCNA_N; s++) {
+const SENTINEL_INDEX: Record<string, string> = {
+  "0": "S1_PROVENANCE", "1": "S2_POLICY", "2": "S3_BOUNDS", "3": "S4_APPROVAL",
+  "4": "S5_CONTEXT", "5": "S6_IDENTITY", "6": "S7_MEMORY", "7": "S8_RISK", "8": "S9_AUDIT",
+};
+
+type Tensor4D = Float64Array;
+
+function t4idx(p: number, s: number, ph: number, h: number): number {
+  return ((p * PTCA_SENTINEL_COUNT + s) * PTCA_PHASE_COUNT + ph) * HEPT_TOTAL_SITES + h;
+}
+
+const T4_SIZE = PCNA_N * PTCA_SENTINEL_COUNT * PTCA_PHASE_COUNT * HEPT_TOTAL_SITES;
+
+function initTensor4D(): Tensor4D {
+  const t = new Float64Array(T4_SIZE);
+  for (let p = 0; p < PCNA_N; p++) {
+    for (let s = 0; s < PTCA_SENTINEL_COUNT; s++) {
+      const sWeight = s === 8 ? 1.0 : 0.1 * (1 + s * 0.05);
+      for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+        for (let k = 0; k < HEPT_RING_SIZE; k++) {
+          t[t4idx(p, s, ph, k)] = Math.sin(p * PTCA_DTHETA + (k * 2 * Math.PI) / HEPT_RING_SIZE) * 0.5 * sWeight;
+        }
+        t[t4idx(p, s, ph, HEPT_HUB_INDEX)] = Math.cos(p * PTCA_DTHETA) * 0.3 * sWeight;
+      }
+    }
+  }
+  return t;
+}
+
+function heptagramExchange4D(t: Tensor4D): void {
+  const scratch = new Float64Array(HEPT_RING_SIZE);
+
+  for (let p = 0; p < PCNA_N; p++) {
+    const dir = (p % 2 === 0) ? 1 : -1;
+    for (let s = 0; s < PTCA_SENTINEL_COUNT; s++) {
+      for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+        for (let k = 0; k < HEPT_RING_SIZE; k++) {
+          const srcK = ((k - dir) % HEPT_RING_SIZE + HEPT_RING_SIZE) % HEPT_RING_SIZE;
+          scratch[k] = t[t4idx(p, s, ph, srcK)];
+        }
+        for (let k = 0; k < HEPT_RING_SIZE; k++) {
+          t[t4idx(p, s, ph, k)] = scratch[k];
+        }
+      }
+    }
+  }
+
+  for (let p = 0; p < PCNA_N; p++) {
+    for (let s = 0; s < PTCA_SENTINEL_COUNT; s++) {
+      for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+        let ringSum = 0;
+        for (let k = 0; k < HEPT_RING_SIZE; k++) ringSum += t[t4idx(p, s, ph, k)];
+        const ringMean = ringSum / HEPT_RING_SIZE;
+        const hubIdx = t4idx(p, s, ph, HEPT_HUB_INDEX);
+        t[hubIdx] += PTCA_BETA_COUPLING * ringMean;
+        for (let k = 0; k < HEPT_RING_SIZE; k++) {
+          t[t4idx(p, s, ph, k)] += PTCA_GAMMA_COUPLING * t[hubIdx];
+        }
+      }
+    }
+  }
+
+  for (let s = 0; s < PTCA_SENTINEL_COUNT; s++) {
+    for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+      let hubSum = 0;
+      for (let p = 0; p < PCNA_N; p++) hubSum += t[t4idx(p, s, ph, HEPT_HUB_INDEX)];
+      const globalHub = hubSum / PCNA_N;
+      for (let p = 0; p < PCNA_N; p++) {
+        const idx = t4idx(p, s, ph, HEPT_HUB_INDEX);
+        t[idx] = (1 - PTCA_ALPHA_COUPLING) * t[idx] + PTCA_ALPHA_COUPLING * globalHub;
+      }
+    }
+  }
+}
+
+function computeTensor4DEnergy(t: Tensor4D): { total: number; heptagram: number; phaseEnergies: number[] } {
+  let total = 0;
+  const phaseEnergies = new Array(PTCA_PHASE_COUNT).fill(0);
+  for (let i = 0; i < T4_SIZE; i++) total += t[i] * t[i];
+
+  for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+    let phSum = 0;
+    for (let p = 0; p < PCNA_N; p++) {
+      for (let s = 0; s < PTCA_SENTINEL_COUNT; s++) {
+        for (let h = 0; h < HEPT_TOTAL_SITES; h++) {
+          const v = t[t4idx(p, s, ph, h)];
+          phSum += v * v;
+        }
+      }
+    }
+    phaseEnergies[ph] = phSum / (PCNA_N * PTCA_SENTINEL_COUNT * HEPT_TOTAL_SITES);
+  }
+
+  let heptEnergy = 0;
+  for (let p = 0; p < PCNA_N; p++) {
+    for (let h = 0; h < HEPT_TOTAL_SITES; h++) {
+      let siteSum = 0;
+      for (let s = 0; s < PTCA_SENTINEL_COUNT; s++) {
+        for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+          const v = t[t4idx(p, s, ph, h)];
+          siteSum += v * v;
+        }
+      }
+      heptEnergy += siteSum;
+    }
+  }
+  heptEnergy /= (PCNA_N * HEPT_TOTAL_SITES * PTCA_SENTINEL_COUNT * PTCA_PHASE_COUNT);
+
+  total /= T4_SIZE;
+  return { total, heptagram: heptEnergy, phaseEnergies };
+}
+
+function extractHeptNodes(t: Tensor4D): number[][] {
+  const nodes: number[][] = [];
+  for (let p = 0; p < PCNA_N; p++) {
     const sites = new Array(HEPT_TOTAL_SITES).fill(0);
-    for (let k = 0; k < HEPT_RING_SIZE; k++) {
-      sites[k] = Math.sin(s * PTCA_DTHETA + (k * 2 * Math.PI) / HEPT_RING_SIZE) * 0.5;
+    for (let h = 0; h < HEPT_TOTAL_SITES; h++) {
+      let sum = 0;
+      for (let s = 0; s < PTCA_SENTINEL_COUNT; s++) {
+        sum += t[t4idx(p, s, 0, h)];
+      }
+      sites[h] = sum / PTCA_SENTINEL_COUNT;
     }
-    sites[HEPT_HUB_INDEX] = Math.cos(s * PTCA_DTHETA) * 0.3;
-    tensor.push(sites);
+    nodes.push(sites);
   }
-  return tensor;
+  return nodes;
 }
 
-function heptagramExchange(tensor: number[][]): number[][] {
-  const result = tensor.map((row) => [...row]);
-
-  for (let s = 0; s < PCNA_N; s++) {
-    const dir = Math.pow(-1, s);
-    const rotated = new Array(HEPT_RING_SIZE);
-    for (let k = 0; k < HEPT_RING_SIZE; k++) {
-      const srcK = ((k - dir * 1) % HEPT_RING_SIZE + HEPT_RING_SIZE) % HEPT_RING_SIZE;
-      rotated[k] = result[s][srcK];
+function extractSentinelChannels(t: Tensor4D): number[][] {
+  const channels: number[][] = [];
+  for (let p = 0; p < PCNA_N; p++) {
+    const chVals = new Array(PTCA_SENTINEL_COUNT).fill(0);
+    for (let s = 0; s < PTCA_SENTINEL_COUNT; s++) {
+      let sum = 0;
+      for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+        for (let h = 0; h < HEPT_TOTAL_SITES; h++) {
+          sum += Math.abs(t[t4idx(p, s, ph, h)]);
+        }
+      }
+      chVals[s] = sum / (PTCA_PHASE_COUNT * HEPT_TOTAL_SITES);
     }
-    for (let k = 0; k < HEPT_RING_SIZE; k++) {
-      result[s][k] = rotated[k];
-    }
+    channels.push(chVals);
   }
-
-  for (let s = 0; s < PCNA_N; s++) {
-    let ringSum = 0;
-    for (let k = 0; k < HEPT_RING_SIZE; k++) ringSum += result[s][k];
-    const ringMean = ringSum / HEPT_RING_SIZE;
-    result[s][HEPT_HUB_INDEX] += PTCA_BETA_COUPLING * ringMean;
-    for (let k = 0; k < HEPT_RING_SIZE; k++) {
-      result[s][k] += PTCA_GAMMA_COUPLING * result[s][HEPT_HUB_INDEX];
-    }
-  }
-
-  let hubSum = 0;
-  for (let s = 0; s < PCNA_N; s++) hubSum += result[s][HEPT_HUB_INDEX];
-  const globalHub = hubSum / PCNA_N;
-  for (let s = 0; s < PCNA_N; s++) {
-    result[s][HEPT_HUB_INDEX] = (1 - PTCA_ALPHA_COUPLING) * result[s][HEPT_HUB_INDEX] + PTCA_ALPHA_COUPLING * globalHub;
-  }
-
-  return result;
-}
-
-function computeHeptagramEnergy(tensor: number[][]): number {
-  let sum = 0;
-  for (let s = 0; s < PCNA_N; s++) {
-    for (let k = 0; k < HEPT_TOTAL_SITES; k++) {
-      sum += tensor[s][k] * tensor[s][k];
-    }
-  }
-  return sum / (PCNA_N * HEPT_TOTAL_SITES);
+  return channels;
 }
 
 export function ptcaSolve(initialState: number[]): { state: number[]; energy: number } {
@@ -382,45 +473,7 @@ export function ptcaSolve(initialState: number[]): { state: number[]; energy: nu
     state = Array(PCNA_N).fill(0).map((_, i) => Math.sin(i * PTCA_DTHETA));
   }
 
-  let heptTensor = initHeptagramTensor();
-
-  for (let step = 0; step < PTCA_STEPS_PER_EVAL; step++) {
-    const newState = [...state];
-    for (let i = 0; i < PCNA_N; i++) {
-      let neighborSum = 0;
-      let count = 0;
-      for (let j = 0; j < PCNA_N; j++) {
-        if (PCNA_ADJ[i][j]) {
-          neighborSum += state[j];
-          count++;
-        }
-      }
-      const avg = count > 0 ? neighborSum / count : 0;
-      const diffusion = PTCA_ALPHA_DIFFUSION * (avg - state[i]);
-      const drift = PTCA_BETA_DRIFT * Math.sin(i * PTCA_DTHETA);
-      const damping = -PTCA_GAMMA_DAMPING * state[i];
-      newState[i] = state[i] + PTCA_DT * (diffusion + drift + damping);
-    }
-    state = newState;
-
-    heptTensor = heptagramExchange(heptTensor);
-  }
-
-  const linearEnergy = state.reduce((s, v) => s + v * v, 0) / PCNA_N;
-  const heptEnergy = computeHeptagramEnergy(heptTensor);
-  const energy = linearEnergy + heptEnergy;
-
-  return { state, energy };
-}
-
-export function ptcaSolveDetailed(initialState: number[]): { state: number[]; energy: number; heptagramEnergy: number; tensor: PtcaTensorState } {
-  let state = [...initialState];
-  if (state.length !== PCNA_N) {
-    state = Array(PCNA_N).fill(0).map((_, i) => Math.sin(i * PTCA_DTHETA));
-  }
-
-  let heptTensor = initHeptagramTensor();
-  const sentinelChannels: number[][] = Array.from({ length: PCNA_N }, () => new Array(PTCA_SENTINEL_COUNT).fill(0));
+  const tensor = initTensor4D();
 
   for (let step = 0; step < PTCA_STEPS_PER_EVAL; step++) {
     const newState = [...state];
@@ -438,27 +491,57 @@ export function ptcaSolveDetailed(initialState: number[]): { state: number[]; en
       );
     }
     state = newState;
-    heptTensor = heptagramExchange(heptTensor);
-
-    for (let i = 0; i < PCNA_N; i++) {
-      for (let ch = 0; ch < PTCA_SENTINEL_COUNT; ch++) {
-        sentinelChannels[i][ch] = state[i] * (ch === 8 ? 1.0 : 0.1);
-      }
-    }
+    heptagramExchange4D(tensor);
   }
 
   const linearEnergy = state.reduce((s, v) => s + v * v, 0) / PCNA_N;
-  const heptEnergy = computeHeptagramEnergy(heptTensor);
+  const { total: tensorEnergy } = computeTensor4DEnergy(tensor);
+
+  return { state, energy: linearEnergy + tensorEnergy };
+}
+
+export function ptcaSolveDetailed(initialState: number[]): { state: number[]; energy: number; heptagramEnergy: number; tensor: PtcaTensorState } {
+  let state = [...initialState];
+  if (state.length !== PCNA_N) {
+    state = Array(PCNA_N).fill(0).map((_, i) => Math.sin(i * PTCA_DTHETA));
+  }
+
+  const tensor = initTensor4D();
+
+  for (let step = 0; step < PTCA_STEPS_PER_EVAL; step++) {
+    const newState = [...state];
+    for (let i = 0; i < PCNA_N; i++) {
+      let neighborSum = 0;
+      let count = 0;
+      for (let j = 0; j < PCNA_N; j++) {
+        if (PCNA_ADJ[i][j]) { neighborSum += state[j]; count++; }
+      }
+      const avg = count > 0 ? neighborSum / count : 0;
+      newState[i] = state[i] + PTCA_DT * (
+        PTCA_ALPHA_DIFFUSION * (avg - state[i]) +
+        PTCA_BETA_DRIFT * Math.sin(i * PTCA_DTHETA) -
+        PTCA_GAMMA_DAMPING * state[i]
+      );
+    }
+    state = newState;
+    heptagramExchange4D(tensor);
+  }
+
+  const linearEnergy = state.reduce((s, v) => s + v * v, 0) / PCNA_N;
+  const energyInfo = computeTensor4DEnergy(tensor);
 
   return {
     state,
-    energy: linearEnergy + heptEnergy,
-    heptagramEnergy: heptEnergy,
+    energy: linearEnergy + energyInfo.total,
+    heptagramEnergy: energyInfo.heptagram,
     tensor: {
-      nodes: heptTensor,
-      sentinelChannels,
-      heptagramEnergy: heptEnergy,
-      totalEnergy: linearEnergy + heptEnergy,
+      nodes: extractHeptNodes(tensor),
+      sentinelChannels: extractSentinelChannels(tensor),
+      heptagramEnergy: energyInfo.heptagram,
+      totalEnergy: linearEnergy + energyInfo.total,
+      axes: { prime_node: PCNA_N, sentinel: PTCA_SENTINEL_COUNT, phase: PTCA_PHASE_COUNT, hept: HEPT_TOTAL_SITES },
+      sentinelIndex: SENTINEL_INDEX,
+      phaseEnergies: energyInfo.phaseEnergies,
     },
   };
 }
@@ -672,7 +755,9 @@ export async function processA0Request(req: A0Request): Promise<A0Response> {
         energy: ptcaResult.energy,
         heptagramEnergy: ptcaResult.heptagramEnergy,
         statePreview: ptcaResult.state.slice(0, 10),
-        tensorAxes: { prime_node: PCNA_N, sentinel: PTCA_SENTINEL_COUNT, phase: PTCA_PHASE_COUNT, hept: HEPT_TOTAL_SITES },
+        tensorAxes: ptcaResult.tensor.axes,
+        sentinelIndex: ptcaResult.tensor.sentinelIndex,
+        phaseEnergies: ptcaResult.tensor.phaseEnergies,
         coupling: { alpha: PTCA_ALPHA_COUPLING, beta: PTCA_BETA_COUPLING, gamma: PTCA_GAMMA_COUPLING },
       },
     });

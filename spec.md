@@ -13,7 +13,7 @@
 
 a0p (agent zero platform) is a mobile-first autonomous AI agent application. It combines Gemini function-calling with a mathematically rigorous orchestration engine (EDCMBONE), Google infrastructure access (Gmail, Drive), file management with direct phone upload, commercial subscriptions via Stripe, and Replit OAuth authentication.
 
-The agent executes tasks autonomously using up to 16 tools across up to 8 rounds per request, with full cryptographic audit logging and real-time cost tracking.
+The agent executes tasks autonomously using up to 23 tools across up to 8 rounds per request, with full cryptographic audit logging and real-time cost tracking.
 
 ---
 
@@ -138,7 +138,9 @@ Each seed (prime_node) has its own XY plane containing **6 ring sites** (hexagon
 | beta_drift | 0.4 | Drift (sine-wave signal) |
 | gamma_damping | 0.2 | Damping (energy dissipation) |
 
-**Energy** = linear energy (mean square of state vector) + heptagram energy (mean square of tensor sites).
+**Energy** = linear energy (mean square of state vector) + tensor energy (mean square across all 4D tensor elements).
+
+The full 4D tensor (53×9×8×7 = 26,712 elements) is implemented as a flat `Float64Array` with row-major indexing: `idx(p,s,ph,h) = ((p*9+s)*8+ph)*7+h`. The exchange operator pipeline runs across all sentinel channels and phase slots per tick. Phase energies are computed per-phase for monitoring. Sentinel channel amplitudes are extracted by averaging across phases and heptagram sites per node.
 
 #### 3.5.6 Grouping and Phase Scope
 
@@ -368,11 +370,11 @@ Manual kill switch. Sets `emergencyStop = true`, halts heartbeat. Resume availab
 
 The agent uses Gemini 2.5 Flash with native function-calling (not prompt-based tool use). Each user request can trigger up to 8 tool rounds.
 
-### 4.2 Tools (16)
+### 4.2 Tools (23)
 
 | Tool | Args | Description |
 |------|------|-------------|
-| run_command | command | Execute shell command (sandboxed allowlist) |
+| run_command | command | Execute shell command (sandboxed allowlist, includes python3) |
 | read_file | path | Read file contents |
 | write_file | path, content | Write/create file |
 | list_files | path | List directory contents |
@@ -386,6 +388,13 @@ The agent uses Gemini 2.5 Flash with native function-calling (not prompt-based t
 | github_list_files | owner, repo, path, branch | List files/dirs in a GitHub repo path |
 | github_create_or_update_file | owner, repo, path, content, message, branch | Create or update file (commits directly, triggers Pages rebuild) |
 | github_delete_file | owner, repo, path, message, branch | Delete a file from a GitHub repository |
+| github_push_zip | uploadFilename, owner, repo, basePath, message, branch | Extract uploaded zip and push all contents to GitHub repo |
+| codespace_list | (none) | List GitHub Codespaces |
+| codespace_create | owner, repo, branch, machine | Create a new Codespace for a repository |
+| codespace_start | codespace_name | Start a stopped Codespace |
+| codespace_stop | codespace_name | Stop a running Codespace |
+| codespace_delete | codespace_name | Delete a Codespace |
+| codespace_exec | codespace_name, command | Execute command in a running Codespace |
 | web_search | query | Search the web for information (DuckDuckGo fallback if Brave unavailable) |
 | fetch_url | url | Fetch and read web page content (HTTPS only, SSRF-protected, 8K char limit) |
 

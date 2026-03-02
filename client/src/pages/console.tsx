@@ -452,12 +452,13 @@ function EdcmTab() {
               {reportMetrics ? (
                 Object.entries(reportMetrics as Record<string, number>).map(([key, val]) => {
                   const metricVal = typeof val === "object" ? (val as any).value ?? val : val;
+                  const evidence = typeof val === "object" ? ((val as any).evidence || []) : [];
                   return (
                     <MetricRow
                       key={key}
                       metricKey={key}
                       value={typeof metricVal === "number" ? metricVal : 0}
-                      evidence={[]}
+                      evidence={evidence}
                     />
                   );
                 })
@@ -601,20 +602,52 @@ function EdcmTab() {
             </div>
           </div>
           {ptca && (
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-              <div className="text-center p-2 rounded bg-background">
-                <p className="text-muted-foreground">Heptagram Energy</p>
-                <p className="font-mono font-bold" data-testid="text-heptagram-energy">
-                  {ptca.heptagramEnergy?.toFixed(4) || "--"}
-                </p>
+            <>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="text-center p-2 rounded bg-background">
+                  <p className="text-muted-foreground">Heptagram Energy</p>
+                  <p className="font-mono font-bold" data-testid="text-heptagram-energy">
+                    {ptca.heptagramEnergy?.toFixed(4) || "--"}
+                  </p>
+                </div>
+                <div className="text-center p-2 rounded bg-background">
+                  <p className="text-muted-foreground">Total Energy</p>
+                  <p className="font-mono font-bold" data-testid="text-total-energy">
+                    {ptca.energy?.toFixed(4) || "--"}
+                  </p>
+                </div>
               </div>
-              <div className="text-center p-2 rounded bg-background">
-                <p className="text-muted-foreground">Total Energy</p>
-                <p className="font-mono font-bold" data-testid="text-total-energy">
-                  {ptca.energy?.toFixed(4) || "--"}
-                </p>
-              </div>
-            </div>
+              {ptca.phaseEnergies && (
+                <div className="mt-3">
+                  <p className="text-[10px] text-muted-foreground mb-1">Phase Energies (8 phases, reserved v2)</p>
+                  <div className="flex gap-1">
+                    {(ptca.phaseEnergies as number[]).map((e: number, i: number) => (
+                      <div key={i} className="flex-1 text-center">
+                        <div className="h-8 bg-background rounded relative overflow-hidden" data-testid={`phase-energy-bar-${i}`}>
+                          <div
+                            className="absolute bottom-0 left-0 right-0 bg-purple-500/40 rounded-b"
+                            style={{ height: `${Math.min(100, Math.max(5, e * 500))}%` }}
+                          />
+                        </div>
+                        <span className="text-[8px] font-mono text-muted-foreground">P{i}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {ptca.sentinelIndex && (
+                <div className="mt-3">
+                  <p className="text-[10px] text-muted-foreground mb-1">Sentinel Channel Index</p>
+                  <div className="grid grid-cols-3 gap-1 text-[9px]">
+                    {Object.entries(ptca.sentinelIndex as Record<string, string>).map(([idx, name]) => (
+                      <div key={idx} className="font-mono text-muted-foreground" data-testid={`sentinel-idx-${idx}`}>
+                        <span className="text-purple-400">{idx}</span>: {name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 

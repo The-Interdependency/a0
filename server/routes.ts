@@ -530,6 +530,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       parameters: { type: "object" as const, properties: { owner: { type: "string" as const, description: "Repository owner" }, repo: { type: "string" as const, description: "Repository name" }, path: { type: "string" as const, description: "File path to delete" }, message: { type: "string" as const, description: "Commit message" }, branch: { type: "string" as const, description: "Branch name (default: main)" } }, required: ["owner", "repo", "path", "message"] },
     },
     {
+      name: "codespace_list",
+      description: "List your GitHub Codespaces",
+      parameters: { type: "object" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "codespace_create",
+      description: "Create a new GitHub Codespace for a repository. Use this to set up a staging/dev environment for making, testing, and iterating on changes.",
+      parameters: { type: "object" as const, properties: { owner: { type: "string" as const, description: "Repository owner" }, repo: { type: "string" as const, description: "Repository name" }, branch: { type: "string" as const, description: "Branch to create codespace from (default: main)" }, machine: { type: "string" as const, description: "Machine type (default: basicLinux32gb)" } }, required: ["owner", "repo"] },
+    },
+    {
+      name: "codespace_start",
+      description: "Start a stopped Codespace",
+      parameters: { type: "object" as const, properties: { codespace_name: { type: "string" as const, description: "Codespace name" } }, required: ["codespace_name"] },
+    },
+    {
+      name: "codespace_stop",
+      description: "Stop a running Codespace to save resources",
+      parameters: { type: "object" as const, properties: { codespace_name: { type: "string" as const, description: "Codespace name" } }, required: ["codespace_name"] },
+    },
+    {
+      name: "codespace_delete",
+      description: "Delete a Codespace",
+      parameters: { type: "object" as const, properties: { codespace_name: { type: "string" as const, description: "Codespace name" } }, required: ["codespace_name"] },
+    },
+    {
+      name: "codespace_exec",
+      description: "Execute a command in a running Codespace via the GitHub API. Use for building, testing, running scripts, etc.",
+      parameters: { type: "object" as const, properties: { codespace_name: { type: "string" as const, description: "Codespace name" }, command: { type: "string" as const, description: "Shell command to execute" } }, required: ["codespace_name", "command"] },
+    },
+    {
       name: "github_push_zip",
       description: "Extract a previously uploaded zip file and push all its contents to a GitHub repository. Each file in the zip becomes a commit. Ideal for uploading an entire website at once.",
       parameters: { type: "object" as const, properties: { uploadFilename: { type: "string" as const, description: "Filename of the uploaded zip (from the uploads/ directory)" }, owner: { type: "string" as const, description: "Repository owner" }, repo: { type: "string" as const, description: "Repository name" }, basePath: { type: "string" as const, description: "Base path in repo to push files to (default: root)" }, message: { type: "string" as const, description: "Commit message" }, branch: { type: "string" as const, description: "Branch name (default: main)" } }, required: ["uploadFilename", "owner", "repo", "message"] },
@@ -656,6 +686,78 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             branch: args.branch || "main",
           });
           return `Deleted ${args.path} — commit: ${data.commit.sha?.slice(0, 7)}`;
+        }
+        case "codespace_list": {
+          const gh = await getUncachableGitHubClient();
+          if (isPublicFallbackMode()) return "Error: Codespace access requires GitHub authorization.";
+          const { data } = await gh.rest.codespaces.listForAuthenticatedUser({ per_page: 10 });
+          if (!data.codespaces.length) return "No Codespaces found.";
+          return data.codespaces.map((cs: any) =>
+            `${cs.name} — ${cs.state} | repo: ${cs.repository?.full_name || "?"} | machine: ${cs.machine?.display_name || "?"} | created: ${cs.created_at} | url: ${cs.web_url}`
+          ).join("\n\n");
+        }
+        case "codespace_create": {
+          const gh = await getUncachableGitHubClient();
+          if (isPublicFallbackMode()) return "Error: Codespace access requires GitHub authorization.";
+          const { data } = await gh.rest.codespaces.createWithRepoForAuthenticatedUser({
+            owner: args.owner,
+            repo: args.repo,
+            ref: args.branch || "main",
+            machine: args.machine || "basicLinux32gb",
+          });
+          return `Codespace created: ${data.name}\nState: ${data.state}\nURL: ${data.web_url}\n\nIt may take a minute to fully start. Use codespace_list to check the state.`;
+        }
+        case "codespace_start": {
+          const gh = await getUncachableGitHubClient();
+          if (isPublicFallbackMode()) return "Error: Codespace access requires GitHub authorization.";
+          const { data } = await gh.rest.codespaces.startForAuthenticatedUser({ codespace_name: args.codespace_name });
+          return `Codespace ${data.name} starting — state: ${data.state}\nURL: ${data.web_url}`;
+        }
+        case "codespace_stop": {
+          const gh = await getUncachableGitHubClient();
+          if (isPublicFallbackMode()) return "Error: Codespace access requires GitHub authorization.";
+          const { data } = await gh.rest.codespaces.stopForAuthenticatedUser({ codespace_name: args.codespace_name });
+          return `Codespace ${data.name} stopping — state: ${data.state}`;
+        }
+        case "codespace_delete": {
+          const gh = await getUncachableGitHubClient();
+          if (isPublicFallbackMode()) return "Error: Codespace access requires GitHub authorization.";
+          await gh.rest.codespaces.deleteForAuthenticatedUser({ codespace_name: args.codespace_name });
+          return `Codespace ${args.codespace_name} deleted.`;
+        }
+        case "codespace_exec": {
+          const pat = process.env.GITHUB_PAT;
+          if (!pat) return "Error: GITHUB_PAT required for Codespace execution.";
+          const csName = args.codespace_name;
+          const command = args.command;
+          const gh = await getUncachableGitHubClient();
+          if (isPublicFallbackMode()) return "Error: Codespace access requires GitHub authorization.";
+          const { data: cs } = await gh.rest.codespaces.getForAuthenticatedUser({ codespace_name: csName });
+          if (cs.state !== "Available") return `Error: Codespace ${csName} is not running (state: ${cs.state}). Start it first with codespace_start.`;
+          const machineUrl = cs.url;
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 30000);
+          try {
+            const execRes = await fetch(`${machineUrl}/exec`, {
+              method: "POST",
+              headers: {
+                "Authorization": `token ${pat}`,
+                "Accept": "application/vnd.github+json",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ command }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            if (!execRes.ok) {
+              return `Codespace ${csName} is running but remote exec is not available via REST API. You can:\n1. Open the Codespace in browser: ${cs.web_url}\n2. Use the GitHub CLI: gh cs ssh -c ${csName} -- ${command}\n3. Push changes to the repo and they'll sync to the Codespace automatically.`;
+            }
+            const result = await execRes.json();
+            return JSON.stringify(result, null, 2).slice(0, 4000);
+          } catch {
+            clearTimeout(timeout);
+            return `Codespace ${csName} is running but direct command execution isn't supported via REST API.\n\nAlternative workflow for make/test/iterate:\n1. Create a branch: push changes via github_create_or_update_file\n2. The Codespace syncs with the repo automatically\n3. Open the Codespace in browser to run builds/tests: ${cs.web_url}\n4. Or use github_push_zip to push a full set of files\n\nThe Codespace is available at: ${cs.web_url}`;
+          }
         }
         case "github_push_zip": {
           const gh = await getUncachableGitHubClient();
@@ -881,6 +983,7 @@ IMPORTANT RULES:
 - When browsing, search first to find relevant URLs, then fetch specific pages to read their content in detail.
 - You can manage GitHub repositories using github_list_repos, github_list_files, github_get_file, github_create_or_update_file, github_delete_file, and github_push_zip. Creating or updating files commits directly and triggers GitHub Pages rebuilds automatically.
 - github_push_zip extracts an uploaded zip file and pushes all its contents to a GitHub repo. Use this when the user uploads a zip of website files.
+- You can manage GitHub Codespaces using codespace_list, codespace_create, codespace_start, codespace_stop, codespace_delete, and codespace_exec. Use Codespaces as a staging environment for making, testing, and iterating on changes before pushing to production.
 - The user's GitHub Pages site is at wayseer00/wayseer.github.io. When they ask about "my website" or "my site", this is the repo to work with.`;
 
       const geminiTools = [{
