@@ -26,7 +26,7 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 ## GitHub Integration
 
 - **Connector**: Replit GitHub Connector (`@octokit/rest` v22)
-- **Tools**: github_list_repos, github_get_file, github_list_files, github_create_or_update_file, github_delete_file, github_push_zip
+- **Tools**: github_list_repos, github_get_file, github_list_files, github_create_or_update_file, github_delete_file, github_push_zip, codespace_list, codespace_create, codespace_start, codespace_stop, codespace_delete, codespace_exec
 - **GitHub Pages**: Agent can manage wayseer00/wayseer.github.io directly — read, create, update, and delete files; commits trigger Pages rebuild automatically
 - **Auth**: OAuth via Replit Connector (user must authorize in integrations panel)
 - **Client**: `server/github.ts` — uncacheable client pattern (tokens expire)
@@ -37,7 +37,7 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 - **EDCM Metrics**: 6 families — CM (Constraint Mismatch), DA (Dissonance Accumulation), DRIFT, DVG (Divergence), INT (Intensity), TBF (Turn-Balance Fairness)
 - **80/20 Alerts**: TRIGGER >= 0.80, CLEAR <= 0.20, hysteresis band — named alerts: ALERT_CM_HIGH, ALERT_DA_RISING, ALERT_DRIFT_AWAY, ALERT_DVG_SPLIT, ALERT_INT_SPIKE, ALERT_TBF_SKEW
 - **PCNA**: 53-node circular topology, adjacency distances {1,2,3,4,5,6,7,14}
-- **PTCA**: 4-axis tensor (53 × 9 × 8 × 7) — prime_node, sentinel, phase, heptagram
+- **PTCA**: Full 4D tensor (53×9×8×7 = 26,712 elements via Float64Array) — prime_node, sentinel, phase, heptagram
   - Heptagram 6+1 geometry: 6 ring sites + Z hub per seed
   - Exchange operator: ring rotation (Δ=1, dir=(-1)^s), intra-seed coupling (β=0.20 ring→hub, γ=0.10 hub→ring), inter-seed coupling (α=0.10 shared Z)
   - Diffusion solver: dt=0.01, alpha=0.6 beta=0.4 gamma=0.2
@@ -56,7 +56,7 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 
 ### Agent (`/`)
 - Autonomous AI agent with Gemini function-calling (up to 8 tool rounds per request)
-- 17 tools: run_command, read_file, write_file, list_files, search_files, list_gmail, read_gmail, send_gmail, list_drive, github_list_repos, github_get_file, github_list_files, github_create_or_update_file, github_delete_file, github_push_zip, web_search, fetch_url
+- 23 tools: run_command, read_file, write_file, list_files, search_files, list_gmail, read_gmail, send_gmail, list_drive, github_list_repos, github_get_file, github_list_files, github_create_or_update_file, github_delete_file, github_push_zip, codespace_list, codespace_create, codespace_start, codespace_stop, codespace_delete, codespace_exec, web_search, fetch_url
 - Tool actions displayed in real-time (amber indicators for calls, results inline)
 - Task sidebar (replaces conversation list), auto-titling
 - Agent decides which tools to use — no manual model toggle
