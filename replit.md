@@ -26,7 +26,7 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 ## GitHub Integration
 
 - **Connector**: Replit GitHub Connector (`@octokit/rest` v22)
-- **Tools**: github_list_repos, github_get_file, github_list_files, github_create_or_update_file, github_delete_file
+- **Tools**: github_list_repos, github_get_file, github_list_files, github_create_or_update_file, github_delete_file, github_push_zip
 - **GitHub Pages**: Agent can manage wayseer00/wayseer.github.io directly — read, create, update, and delete files; commits trigger Pages rebuild automatically
 - **Auth**: OAuth via Replit Connector (user must authorize in integrations panel)
 - **Client**: `server/github.ts` — uncacheable client pattern (tokens expire)
@@ -56,7 +56,7 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 
 ### Agent (`/`)
 - Autonomous AI agent with Gemini function-calling (up to 8 tool rounds per request)
-- 16 tools: run_command, read_file, write_file, list_files, search_files, list_gmail, read_gmail, send_gmail, list_drive, github_list_repos, github_get_file, github_list_files, github_create_or_update_file, github_delete_file, web_search, fetch_url
+- 17 tools: run_command, read_file, write_file, list_files, search_files, list_gmail, read_gmail, send_gmail, list_drive, github_list_repos, github_get_file, github_list_files, github_create_or_update_file, github_delete_file, github_push_zip, web_search, fetch_url
 - Tool actions displayed in real-time (amber indicators for calls, results inline)
 - Task sidebar (replaces conversation list), auto-titling
 - Agent decides which tools to use — no manual model toggle

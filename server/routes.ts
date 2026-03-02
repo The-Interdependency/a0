@@ -530,6 +530,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       parameters: { type: "object" as const, properties: { owner: { type: "string" as const, description: "Repository owner" }, repo: { type: "string" as const, description: "Repository name" }, path: { type: "string" as const, description: "File path to delete" }, message: { type: "string" as const, description: "Commit message" }, branch: { type: "string" as const, description: "Branch name (default: main)" } }, required: ["owner", "repo", "path", "message"] },
     },
     {
+      name: "github_push_zip",
+      description: "Extract a previously uploaded zip file and push all its contents to a GitHub repository. Each file in the zip becomes a commit. Ideal for uploading an entire website at once.",
+      parameters: { type: "object" as const, properties: { uploadFilename: { type: "string" as const, description: "Filename of the uploaded zip (from the uploads/ directory)" }, owner: { type: "string" as const, description: "Repository owner" }, repo: { type: "string" as const, description: "Repository name" }, basePath: { type: "string" as const, description: "Base path in repo to push files to (default: root)" }, message: { type: "string" as const, description: "Commit message" }, branch: { type: "string" as const, description: "Branch name (default: main)" } }, required: ["uploadFilename", "owner", "repo", "message"] },
+    },
+    {
       name: "web_search",
       description: "Search the web for information. Use for finding AI agent platforms, news, research, protocol docs, communities, current events, or any topic. Returns a summary answer and a list of result URLs.",
       parameters: { type: "object" as const, properties: { query: { type: "string" as const, description: "Search query — be specific and descriptive" } }, required: ["query"] },
@@ -651,6 +656,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             branch: args.branch || "main",
           });
           return `Deleted ${args.path} — commit: ${data.commit.sha?.slice(0, 7)}`;
+        }
+        case "github_push_zip": {
+          const gh = await getUncachableGitHubClient();
+          if (isPublicFallbackMode()) return "Error: Write access requires GitHub authorization (PAT or connector).";
+          const zipFilename = (args.uploadFilename || "").trim();
+          if (!zipFilename) return "Error: uploadFilename is required";
+          const uploadsDir = path.join(BASE_DIR, "uploads");
+          let zipPath = path.join(uploadsDir, zipFilename);
+          try { await stat(zipPath); } catch {
+            const files = await readdir(uploadsDir);
+            const match = files.find(f => f.endsWith(zipFilename) || f.includes(zipFilename));
+            if (match) zipPath = path.join(uploadsDir, match);
+            else return `Error: File not found: ${zipFilename}. Available files: ${files.filter(f => f.endsWith('.zip')).join(', ') || 'none'}`;
+          }
+          const AdmZip = (await import("adm-zip")).default;
+          const zip = new AdmZip(zipPath);
+          const entries = zip.getEntries();
+          const textEntries = entries.filter(e => !e.isDirectory && !e.entryName.startsWith("__MACOSX") && !e.entryName.startsWith("."));
+          if (textEntries.length === 0) return "Error: Zip file is empty or contains no usable files.";
+          const results: string[] = [];
+          const branch = args.branch || "main";
+          const basePath = (args.basePath || "").replace(/^\/|\/$/g, "");
+          for (const entry of textEntries) {
+            const filePath = basePath ? `${basePath}/${entry.entryName}` : entry.entryName;
+            const content = entry.getData();
+            let sha: string | undefined;
+            try {
+              const { data: existing } = await gh.repos.getContent({ owner: args.owner, repo: args.repo, path: filePath, ref: branch });
+              if (!Array.isArray(existing)) sha = existing.sha;
+            } catch {}
+            try {
+              await gh.repos.createOrUpdateFileContents({
+                owner: args.owner, repo: args.repo, path: filePath,
+                message: `${args.message} — ${entry.entryName}`,
+                content: content.toString("base64"),
+                branch,
+                ...(sha ? { sha } : {}),
+              });
+              results.push(`${sha ? "Updated" : "Created"} ${filePath}`);
+            } catch (e: any) {
+              results.push(`Failed ${filePath}: ${e.message}`);
+            }
+          }
+          return `Pushed ${results.length} files from ${zipFilename} to ${args.owner}/${args.repo}:\n${results.join("\n")}`;
         }
         case "web_search": {
           const q = (args.query || "").trim();
@@ -830,7 +879,8 @@ IMPORTANT RULES:
 - You have full access to the project filesystem and terminal.
 - You can browse the web using web_search (find pages) and fetch_url (read pages). Use these to research topics, find AI agent platforms, read documentation, explore communities, and stay current on any subject.
 - When browsing, search first to find relevant URLs, then fetch specific pages to read their content in detail.
-- You can manage GitHub repositories using github_list_repos, github_list_files, github_get_file, github_create_or_update_file, and github_delete_file. Creating or updating files commits directly and triggers GitHub Pages rebuilds automatically.
+- You can manage GitHub repositories using github_list_repos, github_list_files, github_get_file, github_create_or_update_file, github_delete_file, and github_push_zip. Creating or updating files commits directly and triggers GitHub Pages rebuilds automatically.
+- github_push_zip extracts an uploaded zip file and pushes all its contents to a GitHub repo. Use this when the user uploads a zip of website files.
 - The user's GitHub Pages site is at wayseer00/wayseer.github.io. When they ask about "my website" or "my site", this is the repo to work with.`;
 
       const geminiTools = [{
