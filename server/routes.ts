@@ -503,6 +503,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       description: "List Google Drive files, optionally filtered by folder",
       parameters: { type: "object" as const, properties: { folderId: { type: "string" as const, description: "Folder ID (optional, defaults to root)" } }, required: [] as string[] },
     },
+    {
+      name: "web_search",
+      description: "Search the web for information. Use for finding AI agent platforms, news, research, protocol docs, communities, current events, or any topic. Returns a summary answer and a list of result URLs.",
+      parameters: { type: "object" as const, properties: { query: { type: "string" as const, description: "Search query — be specific and descriptive" } }, required: ["query"] },
+    },
+    {
+      name: "fetch_url",
+      description: "Fetch and read the content of a web page. Returns the page text content cleaned of HTML tags. Use after web_search to read specific pages in detail.",
+      parameters: { type: "object" as const, properties: { url: { type: "string" as const, description: "Full URL to fetch (https://...)" } }, required: ["url"] },
+    },
   ];
 
   async function executeAgentTool(toolName: string, args: any): Promise<string> {
@@ -564,6 +574,134 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           if (!res.data.files?.length) return "No files found.";
           return res.data.files.map(f => `${f.mimeType?.includes("folder") ? "[dir]" : "[file]"} ${f.name} (${f.id})`).join("\n");
         }
+        case "web_search": {
+          const q = (args.query || "").trim();
+          if (!q) return "Error: query is required";
+          const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(q)}&count=8`;
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 10000);
+          try {
+            const searchRes = await fetch(searchUrl, {
+              headers: {
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip",
+                "X-Subscription-Token": process.env.BRAVE_API_KEY || "",
+              },
+              signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            if (!searchRes.ok) {
+              const fallbackRes = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, {
+                headers: { "User-Agent": "a0p-agent/1.0" },
+              });
+              const html = await fallbackRes.text();
+              const results: string[] = [];
+              const linkRegex = /<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+              const snippetRegex = /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+              let match;
+              while ((match = linkRegex.exec(html)) !== null && results.length < 8) {
+                const url = match[1].replace(/&amp;/g, "&");
+                const title = match[2].replace(/<[^>]+>/g, "").trim();
+                let snippet = "";
+                const sMatch = snippetRegex.exec(html);
+                if (sMatch) snippet = sMatch[1].replace(/<[^>]+>/g, "").trim();
+                results.push(`[${results.length + 1}] ${title}\n    URL: ${url}${snippet ? `\n    ${snippet}` : ""}`);
+              }
+              return results.length > 0
+                ? `Search results for "${q}":\n\n${results.join("\n\n")}`
+                : `No results found for "${q}". Try a different query.`;
+            }
+            const data = await searchRes.json();
+            const webResults = data.web?.results || [];
+            if (webResults.length === 0) return `No results found for "${q}".`;
+            const formatted = webResults.slice(0, 8).map((r: any, i: number) =>
+              `[${i + 1}] ${r.title}\n    URL: ${r.url}${r.description ? `\n    ${r.description}` : ""}`
+            ).join("\n\n");
+            const answer = data.query?.answer || "";
+            return `${answer ? `Summary: ${answer}\n\n` : ""}Search results for "${q}":\n\n${formatted}`;
+          } catch (e: any) {
+            clearTimeout(timeout);
+            try {
+              const fallbackRes = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, {
+                headers: { "User-Agent": "a0p-agent/1.0" },
+              });
+              const html = await fallbackRes.text();
+              const results: string[] = [];
+              const linkRegex = /<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+              let match;
+              while ((match = linkRegex.exec(html)) !== null && results.length < 8) {
+                const url = match[1].replace(/&amp;/g, "&");
+                const title = match[2].replace(/<[^>]+>/g, "").trim();
+                results.push(`[${results.length + 1}] ${title}\n    URL: ${url}`);
+              }
+              return results.length > 0
+                ? `Search results for "${q}":\n\n${results.join("\n\n")}`
+                : `Search failed: ${e.message}`;
+            } catch {
+              return `Search failed: ${e.message}`;
+            }
+          }
+        }
+        case "fetch_url": {
+          const url = (args.url || "").trim();
+          if (!url) return "Error: url is required";
+          if (!url.startsWith("https://")) return "Error: Only https:// URLs are allowed";
+          let parsed: URL;
+          try { parsed = new URL(url); } catch { return "Error: Invalid URL format"; }
+          const hostname = parsed.hostname.toLowerCase();
+          const blockedHosts = ["localhost", "127.0.0.1", "0.0.0.0", "[::1]", "metadata.google.internal", "169.254.169.254"];
+          if (blockedHosts.some(h => hostname === h || hostname.endsWith(`.${h}`))) return "Error: Access to internal/private hosts is blocked";
+          if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/.test(hostname)) return "Error: Access to private IP ranges is blocked";
+          if (hostname.endsWith(".internal") || hostname.endsWith(".local")) return "Error: Access to internal domains is blocked";
+          const contentLimit = 8000;
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
+          try {
+            const fetchRes = await fetch(url, {
+              headers: {
+                "User-Agent": "a0p-agent/1.0 (autonomous AI agent)",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
+              },
+              signal: controller.signal,
+              redirect: "follow",
+            });
+            clearTimeout(timeout);
+            if (!fetchRes.ok) return `Error: HTTP ${fetchRes.status} ${fetchRes.statusText}`;
+            const clHeader = fetchRes.headers.get("content-length");
+            if (clHeader && parseInt(clHeader, 10) > 5_000_000) return "Error: Response too large (>5MB)";
+            const contentType = fetchRes.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+              const text = (await fetchRes.text()).slice(0, 50000);
+              try { return JSON.stringify(JSON.parse(text), null, 2).slice(0, contentLimit); } catch { return text.slice(0, contentLimit); }
+            }
+            const html = (await fetchRes.text()).slice(0, 200000);
+            let text = html
+              .replace(/<script[\s\S]*?<\/script>/gi, "")
+              .replace(/<style[\s\S]*?<\/style>/gi, "")
+              .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+              .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+              .replace(/<header[\s\S]*?<\/header>/gi, "")
+              .replace(/<[^>]+>/g, " ")
+              .replace(/&nbsp;/g, " ")
+              .replace(/&amp;/g, "&")
+              .replace(/&lt;/g, "<")
+              .replace(/&gt;/g, ">")
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+              .replace(/\s+/g, " ")
+              .trim();
+            const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() || "";
+            const meta = html.match(/<meta[^>]+name="description"[^>]+content="([^"]*)"[^>]*>/i)?.[1] || "";
+            let result = "";
+            if (title) result += `Title: ${title}\n`;
+            if (meta) result += `Description: ${meta}\n`;
+            result += `\n${text}`;
+            return result.slice(0, contentLimit);
+          } catch (e: any) {
+            clearTimeout(timeout);
+            return `Error fetching URL: ${e.message}`;
+          }
+        }
         default:
           return `Unknown tool: ${toolName}`;
       }
@@ -602,7 +740,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
 ${ctx.contextPrefix}
 
-You are agent zero (a0p) — an autonomous AI agent with tool access. You can execute commands, read/write files, search code, check Gmail, browse Google Drive, and send emails.
+You are agent zero (a0p) — an autonomous AI agent with tool access. You can execute commands, read/write files, search code, check Gmail, browse Google Drive, send emails, search the web, and fetch web pages.
 
 IMPORTANT RULES:
 - When a user asks you to DO something, use your tools. Don't just describe what to do.
@@ -611,7 +749,9 @@ IMPORTANT RULES:
 - If a tool call fails, try an alternative approach.
 - Be concise in your explanations but thorough in your actions.
 - For complex tasks, break them into steps and execute each one.
-- You have full access to the project filesystem and terminal.`;
+- You have full access to the project filesystem and terminal.
+- You can browse the web using web_search (find pages) and fetch_url (read pages). Use these to research topics, find AI agent platforms, read documentation, explore communities, and stay current on any subject.
+- When browsing, search first to find relevant URLs, then fetch specific pages to read their content in detail.`;
 
       const geminiTools = [{
         functionDeclarations: AGENT_TOOLS.map(t => ({

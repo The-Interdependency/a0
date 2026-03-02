@@ -13,7 +13,7 @@
 
 a0p (agent zero platform) is a mobile-first autonomous AI agent application. It combines Gemini function-calling with a mathematically rigorous orchestration engine (EDCMBONE), Google infrastructure access (Gmail, Drive), file management with direct phone upload, commercial subscriptions via Stripe, and Replit OAuth authentication.
 
-The agent executes tasks autonomously using up to 9 tools across up to 8 rounds per request, with full cryptographic audit logging and real-time cost tracking.
+The agent executes tasks autonomously using up to 11 tools across up to 8 rounds per request, with full cryptographic audit logging and real-time cost tracking.
 
 ---
 
@@ -368,7 +368,7 @@ Manual kill switch. Sets `emergencyStop = true`, halts heartbeat. Resume availab
 
 The agent uses Gemini 2.5 Flash with native function-calling (not prompt-based tool use). Each user request can trigger up to 8 tool rounds.
 
-### 4.2 Tools (9)
+### 4.2 Tools (11)
 
 | Tool | Args | Description |
 |------|------|-------------|
@@ -381,10 +381,13 @@ The agent uses Gemini 2.5 Flash with native function-calling (not prompt-based t
 | read_gmail | messageId | Read full Gmail message body |
 | send_gmail | to, subject, body | Send email via Gmail |
 | list_drive | folderId, query | List/search Google Drive files |
+| web_search | query | Search the web for information (DuckDuckGo fallback if Brave unavailable) |
+| fetch_url | url | Fetch and read web page content (HTTPS only, SSRF-protected, 8K char limit) |
 
 ### 4.3 Tool Output
 
 - Terminal results truncated to 4,000 chars
+- Web page content truncated to 8,000 chars (HTML stripped, scripts/nav/footer removed)
 - SSE display results truncated to 2,000 chars
 - Tool calls shown as amber indicators in real-time
 - Tool results displayed inline in conversation
