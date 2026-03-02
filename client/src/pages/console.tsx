@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -12,17 +12,28 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
-  Activity, AlertTriangle, Brain, ChevronDown, ChevronRight, DollarSign, FileText, Filter,
-  Heart, Key, OctagonX, Play, RefreshCw, ScrollText, Shield, Zap, Check, X,
+  Activity, AlertTriangle, Brain, ChevronDown, ChevronRight, DollarSign, Download, FileText, Filter,
+  Heart, Key, OctagonX, Play, RefreshCw, ScrollText, Shield, Upload, Zap, Check, X, Wrench, Plus, Trash2, ToggleLeft, TestTube,
+  Clock, Sparkles, Target, Settings,
 } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
 const TABS = [
   { id: "workflow", label: "Workflow", icon: Activity },
+  { id: "bandit", label: "Bandit", icon: Target },
   { id: "metrics", label: "Metrics", icon: DollarSign },
   { id: "edcm", label: "EDCM", icon: Brain },
+  { id: "memory", label: "Memory", icon: Brain },
+  { id: "system", label: "System", icon: Settings },
+  { id: "heartbeat", label: "Heartbeat", icon: Clock },
+  { id: "tools", label: "Tools", icon: Wrench },
   { id: "logs", label: "Logs", icon: ScrollText },
   { id: "context", label: "Context", icon: FileText },
 ] as const;
@@ -60,8 +71,13 @@ export default function ConsolePage() {
 
       <div className="flex-1 overflow-hidden">
         {activeTab === "workflow" && <WorkflowTab />}
+        {activeTab === "bandit" && <BanditTab />}
         {activeTab === "metrics" && <MetricsTab />}
         {activeTab === "edcm" && <EdcmTab />}
+        {activeTab === "memory" && <MemoryTab />}
+        {activeTab === "system" && <SystemTab />}
+        {activeTab === "heartbeat" && <HeartbeatTab />}
+        {activeTab === "tools" && <CustomToolsTab />}
         {activeTab === "logs" && <LogsTab />}
         {activeTab === "context" && <ContextTab />}
       </div>
@@ -230,6 +246,306 @@ function WorkflowTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </ScrollArea>
+  );
+}
+
+const BANDIT_DOMAINS = ["tool", "model", "ptca_route", "pcna_route"] as const;
+
+function BanditTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: statsData, isLoading } = useQuery<any>({
+    queryKey: ["/api/bandit/stats"],
+    refetchInterval: 10000,
+  });
+  const stats: any[] = statsData?.arms || [];
+
+  const { data: correlationsData } = useQuery<any>({
+    queryKey: ["/api/bandit/correlations"],
+    refetchInterval: 10000,
+  });
+  const correlations: any[] = Array.isArray(correlationsData) ? correlationsData : [];
+
+  const { data: directiveConfig } = useQuery<any>({
+    queryKey: ["/api/edcm/directives"],
+    refetchInterval: 10000,
+  });
+
+  const { data: edcmHistory } = useQuery<{ snapshots: any[]; directiveHistory: any[] }>({
+    queryKey: ["/api/edcm/history"],
+    refetchInterval: 10000,
+  });
+
+  const toggleArmMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+      apiRequest("POST", `/api/bandit/toggle/${id}`, { enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bandit/stats"] });
+    },
+  });
+
+  const resetDomainMutation = useMutation({
+    mutationFn: (domain: string) => apiRequest("POST", `/api/bandit/reset/${domain}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bandit/stats"] });
+      toast({ title: "Domain reset" });
+    },
+  });
+
+  const updateToggleMutation = useMutation({
+    mutationFn: ({ subsystem, enabled, parameters }: { subsystem: string; enabled?: boolean; parameters?: any }) =>
+      apiRequest("PATCH", `/api/toggles/${subsystem}`, { enabled, parameters }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/edcm/directives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/toggles"] });
+    },
+  });
+
+  if (isLoading) return <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
+
+  const armsByDomain: Record<string, any[]> = {};
+  for (const arm of stats) {
+    if (!armsByDomain[arm.domain]) armsByDomain[arm.domain] = [];
+    armsByDomain[arm.domain].push(arm);
+  }
+
+  const DIRECTIVE_TYPES = [
+    { type: "CONSTRAINT_REFOCUS", metric: "CM", description: "Refocuses when constraint metric exceeds threshold" },
+    { type: "DISSONANCE_HALT", metric: "DA", description: "Halts when dissonance metric exceeds threshold" },
+    { type: "DRIFT_ANCHOR", metric: "DRIFT", description: "Anchors when drift metric exceeds threshold" },
+    { type: "DIVERGENCE_COMMIT", metric: "DVG", description: "Commits when divergence metric exceeds threshold" },
+    { type: "INTENSITY_CALM", metric: "INT", description: "Calms when intensity metric exceeds threshold" },
+    { type: "BALANCE_CONCISE", metric: "TBF", description: "Concise when balance metric exceeds threshold" },
+  ];
+  const directives = DIRECTIVE_TYPES.map(d => ({
+    ...d,
+    enabled: directiveConfig?.directiveToggles?.[d.type] !== false,
+    threshold: directiveConfig?.thresholds?.[d.type] ?? 0.8,
+    fired: false,
+  }));
+  const edcmSnapshots = edcmHistory?.snapshots || [];
+
+  return (
+    <ScrollArea className="h-full px-3 py-3">
+      <div className="space-y-4 pb-4">
+        {BANDIT_DOMAINS.map((domain) => {
+          const arms = armsByDomain[domain] || [];
+          const maxReward = Math.max(0.001, ...arms.map((a: any) => a.avgReward || 0));
+          return (
+            <div key={domain} className="rounded-lg border border-border bg-card p-4">
+              <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Target className="w-4 h-4 text-orange-400" />
+                  {domain.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+                </h3>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => resetDomainMutation.mutate(domain)}
+                  disabled={resetDomainMutation.isPending}
+                  data-testid={`button-reset-${domain}`}
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                  Reset
+                </Button>
+              </div>
+              {arms.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No arms configured for this domain.</p>
+              ) : (
+                <div className="space-y-2">
+                  {arms.map((arm: any) => (
+                    <div
+                      key={arm.id}
+                      className={cn("rounded-md border border-border p-2.5 space-y-1.5", !arm.enabled && "opacity-50")}
+                      data-testid={`bandit-arm-${arm.id}`}
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <Switch
+                            checked={arm.enabled}
+                            onCheckedChange={(enabled) => toggleArmMutation.mutate({ id: arm.id, enabled })}
+                            data-testid={`toggle-arm-${arm.id}`}
+                          />
+                          <span className="text-xs font-mono font-bold truncate" data-testid={`text-arm-name-${arm.id}`}>
+                            {arm.armName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <Badge variant="secondary" className="text-[9px] font-mono">
+                            pulls={arm.pulls}
+                          </Badge>
+                          <Badge variant="secondary" className="text-[9px] font-mono">
+                            UCB={arm.ucbScore?.toFixed(3) || "0.000"}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground w-10 flex-shrink-0">Avg</span>
+                        <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full transition-all"
+                            style={{ width: `${maxReward > 0 ? ((arm.avgReward || 0) / maxReward) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] font-mono w-12 text-right">{(arm.avgReward || 0).toFixed(3)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground w-10 flex-shrink-0">EMA</span>
+                        <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500 rounded-full transition-all"
+                            style={{ width: `${maxReward > 0 ? ((arm.emaReward || 0) / maxReward) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] font-mono w-12 text-right">{(arm.emaReward || 0).toFixed(3)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Brain className="w-4 h-4 text-purple-400" />
+            EDCM Directives
+          </h3>
+          {directives.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No directive configuration loaded.</p>
+          ) : (
+            <div className="space-y-2">
+              {directives.map((dir: any) => (
+                <div key={dir.type} className="rounded-md border border-border p-2.5 space-y-1.5" data-testid={`directive-${dir.type}`}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Switch
+                        checked={dir.enabled !== false}
+                        onCheckedChange={(enabled) => {
+                          const params = directiveConfig?.parameters || {};
+                          const dirToggles = { ...(params.directiveToggles || {}) };
+                          dirToggles[dir.type] = enabled;
+                          updateToggleMutation.mutate({
+                            subsystem: "edcm_directives",
+                            parameters: { ...params, directiveToggles: dirToggles },
+                          });
+                        }}
+                        data-testid={`toggle-directive-${dir.type}`}
+                      />
+                      <span className="text-xs font-mono font-bold">{dir.type}</span>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className={cn("text-[9px]", dir.fired ? "bg-red-500/20 text-red-400" : "bg-muted text-muted-foreground")}
+                    >
+                      {dir.fired ? "FIRED" : "idle"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0">Threshold</span>
+                    <Slider
+                      value={[dir.threshold ?? 0.8]}
+                      onValueChange={([val]) => {
+                        const params = directiveConfig?.parameters || {};
+                        const thresholds = { ...(params.thresholds || {}) };
+                        thresholds[dir.metric] = val;
+                        updateToggleMutation.mutate({
+                          subsystem: "edcm_directives",
+                          parameters: { ...params, thresholds },
+                        });
+                      }}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      className="flex-1"
+                      data-testid={`slider-threshold-${dir.type}`}
+                    />
+                    <span className="text-[10px] font-mono w-10 text-right">{(dir.threshold ?? 0.8).toFixed(2)}</span>
+                  </div>
+                  <p className="text-[9px] text-muted-foreground">{dir.description || `Fires when ${dir.metric} exceeds threshold`}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-blue-400" />
+            EDCM History
+          </h3>
+          {edcmSnapshots.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No EDCM history yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {["CM", "DA", "DRIFT", "DVG", "INT", "TBF"].map((metric) => {
+                const keyMap: Record<string, string> = { CM: "cm", DA: "da", DRIFT: "drift", DVG: "dvg", INT: "intVal", TBF: "tbf" };
+                const values = edcmSnapshots.slice(0, 20).reverse().map((s: any) => {
+                  const val = s[keyMap[metric]] ?? s[metric.toLowerCase()] ?? s[metric] ?? 0;
+                  return typeof val === "number" ? val : 0;
+                });
+                return (
+                  <div key={metric} className="flex items-center gap-2" data-testid={`sparkline-${metric}`}>
+                    <span className="text-[10px] font-mono w-10 flex-shrink-0">{metric}</span>
+                    <div className="flex items-end gap-px flex-1 h-5">
+                      {values.map((v: number, i: number) => (
+                        <div
+                          key={i}
+                          className={cn(
+                            "flex-1 rounded-t min-w-[2px]",
+                            v >= 0.8 ? "bg-red-500" : v <= 0.2 ? "bg-green-500" : "bg-amber-500"
+                          )}
+                          style={{ height: `${Math.max(2, v * 100)}%` }}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-[9px] font-mono w-10 text-right text-muted-foreground">
+                      {values.length > 0 ? values[values.length - 1].toFixed(2) : "--"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-400" />
+            Cross-Domain Correlations (Top 10)
+          </h3>
+          {correlations.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No cross-domain correlations recorded yet.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {correlations.slice(0, 10).map((corr: any, i: number) => {
+                const maxJoint = Math.max(0.001, ...correlations.slice(0, 10).map((c: any) => c.jointReward || 0));
+                return (
+                  <div key={corr.id || i} className="flex items-center gap-2 text-xs" data-testid={`correlation-${i}`}>
+                    <span className="font-mono text-[9px] w-4 text-muted-foreground flex-shrink-0">{i + 1}</span>
+                    <div className="flex items-center gap-1 flex-1 min-w-0 flex-wrap">
+                      <Badge variant="secondary" className="text-[8px]">{corr.toolArm}</Badge>
+                      <Badge variant="secondary" className="text-[8px]">{corr.modelArm}</Badge>
+                      <Badge variant="secondary" className="text-[8px]">{corr.ptcaArm}</Badge>
+                      <Badge variant="secondary" className="text-[8px]">{corr.pcnaArm}</Badge>
+                    </div>
+                    <div className="w-16 h-2 bg-background rounded-full overflow-hidden flex-shrink-0">
+                      <div
+                        className="h-full bg-amber-500 rounded-full"
+                        style={{ width: `${(corr.jointReward / maxJoint) * 100}%` }}
+                      />
+                    </div>
+                    <span className="font-mono text-[9px] w-10 text-right flex-shrink-0">{(corr.jointReward || 0).toFixed(3)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </ScrollArea>
   );
 }
@@ -802,6 +1118,1428 @@ const AI_PROVIDERS = [
   { id: "cohere", label: "Cohere", placeholder: "..." },
   { id: "perplexity", label: "Perplexity", placeholder: "pplx-..." },
 ] as const;
+
+interface CustomToolData {
+  id: number;
+  userId: string;
+  name: string;
+  description: string;
+  parametersSchema: any;
+  targetModels: string[] | null;
+  handlerType: string;
+  handlerCode: string;
+  enabled: boolean;
+  createdAt: string;
+}
+
+const AVAILABLE_MODELS = ["gemini", "grok", "agent", "synthesis"];
+const HANDLER_TYPES = [
+  { value: "webhook", label: "Webhook (POST URL)" },
+  { value: "javascript", label: "JavaScript (eval)" },
+  { value: "template", label: "Template ({{vars}})" },
+];
+
+function MemoryTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const fileInputNodeRef = { current: null as HTMLInputElement | null };
+  const [editingSeed, setEditingSeed] = useState<number | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editSummary, setEditSummary] = useState("");
+  const [importSeedIndex, setImportSeedIndex] = useState<number | null>(null);
+  const [importText, setImportText] = useState("");
+
+  const { data: memoryState, isLoading } = useQuery<{
+    seeds: Array<{
+      seedIndex: number;
+      label: string;
+      summary: string;
+      originalSummary: string;
+      pinned: boolean;
+      enabled: boolean;
+      weight: number;
+      ptcaValues: number[];
+      pcnaWeights: number[];
+      sentinelPassCount: number;
+      sentinelFailCount: number;
+      lastSentinelStatus: string | null;
+    }>;
+    projectionIn: number[][] | null;
+    projectionOut: number[][] | null;
+    requestCount: number;
+  }>({
+    queryKey: ["/api/memory/state"],
+    refetchInterval: 10000,
+  });
+
+  const { data: driftResults = [] } = useQuery<any[]>({
+    queryKey: ["/api/memory/drift"],
+    refetchInterval: 30000,
+  });
+
+  const { data: memoryHistory = [] } = useQuery<any[]>({
+    queryKey: ["/api/memory/history"],
+    refetchInterval: 15000,
+  });
+
+  const updateSeedMutation = useMutation({
+    mutationFn: ({ index, updates }: { index: number; updates: any }) =>
+      apiRequest("PATCH", `/api/memory/seeds/${index}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/memory/state"] });
+      setEditingSeed(null);
+    },
+  });
+
+  const clearSeedMutation = useMutation({
+    mutationFn: (index: number) => apiRequest("POST", `/api/memory/seeds/${index}/clear`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/memory/state"] });
+      toast({ title: "Seed cleared" });
+    },
+  });
+
+  const importSeedMutation = useMutation({
+    mutationFn: ({ index, text }: { index: number; text: string }) =>
+      apiRequest("POST", `/api/memory/seeds/${index}/import`, { text }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/memory/state"] });
+      setImportSeedIndex(null);
+      setImportText("");
+      toast({ title: "Seed text imported" });
+    },
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: async () => {
+      const resp = await fetch("/api/memory/export");
+      if (!resp.ok) throw new Error("Export failed");
+      return resp.json();
+    },
+    onSuccess: (data) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `a0p-memory-identity-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: "Memory identity exported" });
+    },
+    onError: (e: any) => toast({ title: "Export failed", description: e.message, variant: "destructive" }),
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const resp = await apiRequest("POST", "/api/memory/import", data);
+      return resp;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/memory/state"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/memory/seeds"] });
+      toast({ title: "Memory identity imported successfully" });
+    },
+    onError: (e: any) => toast({ title: "Import failed", description: e.message, variant: "destructive" }),
+  });
+
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (!data.seeds || !Array.isArray(data.seeds)) {
+          toast({ title: "Invalid file", description: "Expected a memory identity JSON with seeds array", variant: "destructive" });
+          return;
+        }
+        importMutation.mutate(data);
+      } catch {
+        toast({ title: "Invalid JSON", description: "Could not parse the file as JSON", variant: "destructive" });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  function startEditSeed(seed: any) {
+    setEditingSeed(seed.seedIndex);
+    setEditLabel(seed.label);
+    setEditSummary(seed.summary || "");
+  }
+
+  if (isLoading) return <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
+
+  const seeds = memoryState?.seeds || [];
+  const driftWarnings = Array.isArray(driftResults) ? driftResults.filter((d: any) => d.driftScore > 0.6) : [];
+
+  return (
+    <ScrollArea className="h-full px-3 py-3">
+      <div className="space-y-4 pb-4">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <Brain className="w-4 h-4 text-purple-400" />
+            Memory Identity
+          </h3>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => exportMutation.mutate()}
+              disabled={exportMutation.isPending}
+              data-testid="button-export-memory"
+            >
+              <Download className="w-3.5 h-3.5 mr-1" />
+              {exportMutation.isPending ? "Exporting..." : "Export"}
+            </Button>
+            <input
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleImportFile}
+              ref={(node) => { if (node) fileInputNodeRef.current = node; }}
+              data-testid="input-import-file"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => fileInputNodeRef.current?.click()}
+              disabled={importMutation.isPending}
+              data-testid="button-import-memory"
+            >
+              <Upload className="w-3.5 h-3.5 mr-1" />
+              {importMutation.isPending ? "Importing..." : "Import"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <h4 className="font-semibold text-sm">11 External Memory Seeds</h4>
+            <Badge variant="secondary" className="text-[9px] font-mono" data-testid="badge-request-count">
+              {memoryState?.requestCount ?? 0} requests
+            </Badge>
+          </div>
+
+          {seeds.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No memory seeds initialized yet. Seeds are created automatically on first use.</p>
+          ) : (
+            <div className="space-y-2">
+              {seeds.map((seed) => {
+                const totalChecks = seed.sentinelPassCount + seed.sentinelFailCount;
+                const passRate = totalChecks > 0 ? (seed.sentinelPassCount / totalChecks * 100).toFixed(0) : "--";
+                const ptcaMagnitude = seed.ptcaValues.length > 0
+                  ? Math.sqrt(seed.ptcaValues.reduce((s, v) => s + v * v, 0)).toFixed(2)
+                  : "0.00";
+                const hasDrift = driftWarnings.some((d: any) => d.seedIndex === seed.seedIndex);
+                const isEditing = editingSeed === seed.seedIndex;
+                const isImporting = importSeedIndex === seed.seedIndex;
+
+                return (
+                  <div
+                    key={seed.seedIndex}
+                    className={cn(
+                      "rounded-md border p-2.5 space-y-1.5",
+                      !seed.enabled && "opacity-50",
+                      hasDrift ? "border-amber-500/50" : "border-border"
+                    )}
+                    data-testid={`card-seed-${seed.seedIndex}`}
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Badge variant="secondary" className="text-[9px] font-mono flex-shrink-0">
+                          {seed.seedIndex}
+                        </Badge>
+                        {isEditing ? (
+                          <Input
+                            value={editLabel}
+                            onChange={(e) => setEditLabel(e.target.value)}
+                            className="text-xs h-7 flex-1"
+                            data-testid={`input-edit-label-${seed.seedIndex}`}
+                          />
+                        ) : (
+                          <span className="text-xs font-medium truncate" data-testid={`text-seed-label-${seed.seedIndex}`}>
+                            {seed.label}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
+                        {hasDrift && (
+                          <Badge variant="secondary" className="text-[9px] bg-amber-500/20 text-amber-400">DRIFT</Badge>
+                        )}
+                        <Switch
+                          checked={seed.pinned}
+                          onCheckedChange={(pinned) => updateSeedMutation.mutate({ index: seed.seedIndex, updates: { pinned } })}
+                          data-testid={`toggle-pin-${seed.seedIndex}`}
+                        />
+                        <span className="text-[9px] text-muted-foreground">Pin</span>
+                        <Switch
+                          checked={seed.enabled}
+                          onCheckedChange={(enabled) => updateSeedMutation.mutate({ index: seed.seedIndex, updates: { enabled } })}
+                          data-testid={`toggle-enable-${seed.seedIndex}`}
+                        />
+                      </div>
+                    </div>
+
+                    {isEditing ? (
+                      <div className="space-y-1.5">
+                        <Textarea
+                          value={editSummary}
+                          onChange={(e) => setEditSummary(e.target.value.slice(0, 500))}
+                          className="text-[10px] font-mono min-h-[60px]"
+                          data-testid={`input-edit-summary-${seed.seedIndex}`}
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[9px] text-muted-foreground">{editSummary.length}/500</span>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="outline" onClick={() => setEditingSeed(null)} data-testid={`button-cancel-edit-${seed.seedIndex}`}>
+                              <X className="w-3 h-3 mr-1" />Cancel
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => updateSeedMutation.mutate({ index: seed.seedIndex, updates: { label: editLabel, summary: editSummary } })}
+                              disabled={updateSeedMutation.isPending}
+                              data-testid={`button-save-edit-${seed.seedIndex}`}
+                            >
+                              <Check className="w-3 h-3 mr-1" />Save
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p
+                        className="text-[10px] text-muted-foreground cursor-pointer"
+                        onClick={() => startEditSeed(seed)}
+                        data-testid={`text-seed-summary-${seed.seedIndex}`}
+                      >
+                        {seed.summary || "(empty — click to edit)"}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground w-12 flex-shrink-0">Weight</span>
+                      <Slider
+                        value={[seed.weight]}
+                        onValueChange={([val]) => updateSeedMutation.mutate({ index: seed.seedIndex, updates: { weight: val } })}
+                        min={0}
+                        max={2}
+                        step={0.1}
+                        className="flex-1"
+                        data-testid={`slider-weight-${seed.seedIndex}`}
+                      />
+                      <span className="text-[10px] font-mono w-8 text-right">{seed.weight.toFixed(1)}</span>
+                    </div>
+
+                    <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-purple-500/60 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, parseFloat(ptcaMagnitude) * 10)}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-3 text-[9px] text-muted-foreground font-mono flex-wrap">
+                        <span>mag={ptcaMagnitude}</span>
+                        <span>sentinel={passRate}%</span>
+                        <span>pass={seed.sentinelPassCount} fail={seed.sentinelFailCount}</span>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button size="sm" variant="ghost" onClick={() => startEditSeed(seed)} data-testid={`button-edit-seed-${seed.seedIndex}`}>
+                          <FileText className="w-3 h-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setImportSeedIndex(seed.seedIndex); setImportText(""); }} data-testid={`button-import-seed-${seed.seedIndex}`}>
+                          <Upload className="w-3 h-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => clearSeedMutation.mutate(seed.seedIndex)} disabled={clearSeedMutation.isPending} data-testid={`button-clear-seed-${seed.seedIndex}`}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {isImporting && (
+                      <div className="space-y-1.5 pt-1 border-t border-border">
+                        <Textarea
+                          value={importText}
+                          onChange={(e) => setImportText(e.target.value)}
+                          placeholder="Paste text to import into this seed..."
+                          className="text-[10px] font-mono min-h-[60px]"
+                          data-testid={`input-import-text-${seed.seedIndex}`}
+                        />
+                        <div className="flex gap-1 justify-end">
+                          <Button size="sm" variant="outline" onClick={() => setImportSeedIndex(null)}>Cancel</Button>
+                          <Button
+                            size="sm"
+                            onClick={() => importSeedMutation.mutate({ index: seed.seedIndex, text: importText })}
+                            disabled={importSeedMutation.isPending || !importText.trim()}
+                            data-testid={`button-confirm-import-${seed.seedIndex}`}
+                          >
+                            Import
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {hasDrift && (
+                      <div className="flex items-center gap-2 pt-1 border-t border-amber-500/30">
+                        <AlertTriangle className="w-3 h-3 text-amber-400 flex-shrink-0" />
+                        <span className="text-[9px] text-amber-400 flex-1">Semantic drift detected</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateSeedMutation.mutate({ index: seed.seedIndex, updates: { pinned: true } })}
+                          data-testid={`button-repin-${seed.seedIndex}`}
+                        >
+                          Re-pin
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+            <Shield className="w-4 h-4 text-blue-400" />
+            Sentinel Audit
+          </h4>
+          {seeds.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No sentinel data.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {seeds.map((seed) => {
+                const total = seed.sentinelPassCount + seed.sentinelFailCount;
+                const pRate = total > 0 ? (seed.sentinelPassCount / total) * 100 : 100;
+                return (
+                  <div key={seed.seedIndex} className="flex items-center gap-2 text-xs" data-testid={`sentinel-audit-${seed.seedIndex}`}>
+                    <span className="font-mono w-4 text-muted-foreground flex-shrink-0">{seed.seedIndex}</span>
+                    <span className="w-24 truncate text-muted-foreground">{seed.label}</span>
+                    <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
+                      <div
+                        className={cn("h-full rounded-full transition-all", pRate > 90 ? "bg-green-500" : pRate > 70 ? "bg-amber-500" : "bg-red-500")}
+                        style={{ width: `${pRate}%` }}
+                      />
+                    </div>
+                    <span className="font-mono text-[9px] w-12 text-right">{pRate.toFixed(0)}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {driftWarnings.length > 0 && (
+          <div className="rounded-lg border border-amber-500/50 bg-card p-4">
+            <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
+              Drift Warnings
+            </h4>
+            <div className="space-y-1.5">
+              {driftWarnings.map((d: any) => (
+                <div key={d.seedIndex} className="flex items-center justify-between gap-2 text-xs" data-testid={`drift-warning-${d.seedIndex}`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge variant="secondary" className="text-[9px] bg-amber-500/20 text-amber-400">{d.seedIndex}</Badge>
+                    <span className="truncate text-muted-foreground">{d.label || `Seed ${d.seedIndex}`}</span>
+                  </div>
+                  <span className="font-mono text-amber-400 flex-shrink-0">DRIFT={d.driftScore?.toFixed(3)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h4 className="font-semibold text-sm mb-2">Projection Heatmaps</h4>
+          <div className="space-y-3">
+            <div>
+              <span className="text-[10px] text-muted-foreground">Projection IN (11 seeds to 53 working nodes)</span>
+              {memoryState?.projectionIn ? (
+                <div className="mt-1 flex gap-px" data-testid="heatmap-projection-in">
+                  {memoryState.projectionIn.map((row, ri) => (
+                    <div key={ri} className="flex flex-col gap-px flex-1">
+                      {row.slice(0, 53).map((val, ci) => {
+                        const absVal = Math.abs(val);
+                        const color = val >= 0
+                          ? `rgba(147, 51, 234, ${Math.min(1, absVal * 5)})`
+                          : `rgba(239, 68, 68, ${Math.min(1, absVal * 5)})`;
+                        return (
+                          <div
+                            key={ci}
+                            className="h-[3px] rounded-sm"
+                            style={{ backgroundColor: color }}
+                            title={`[${ri},${ci}] = ${val.toFixed(4)}`}
+                          />
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="font-mono text-xs mt-1" data-testid="text-projection-in-status">Not initialized</p>
+              )}
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground">Projection OUT (53 working nodes to 11 seeds)</span>
+              {memoryState?.projectionOut ? (
+                <div className="mt-1 flex gap-px" data-testid="heatmap-projection-out">
+                  {memoryState.projectionOut.slice(0, 53).map((row, ri) => (
+                    <div key={ri} className="flex flex-col gap-px flex-1">
+                      {row.map((val, ci) => {
+                        const absVal = Math.abs(val);
+                        const color = val >= 0
+                          ? `rgba(59, 130, 246, ${Math.min(1, absVal * 5)})`
+                          : `rgba(239, 68, 68, ${Math.min(1, absVal * 5)})`;
+                        return (
+                          <div
+                            key={ci}
+                            className="h-[3px] rounded-sm"
+                            style={{ backgroundColor: color }}
+                            title={`[${ri},${ci}] = ${val.toFixed(4)}`}
+                          />
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="font-mono text-xs mt-1" data-testid="text-projection-out-status">Not initialized</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h4 className="font-semibold text-sm mb-2">Memory Snapshot History</h4>
+          {memoryHistory.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No snapshots yet. Snapshots are saved every 10 requests.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {memoryHistory.slice(0, 10).map((snap: any) => (
+                <div key={snap.id} className="flex items-center justify-between gap-2 text-xs" data-testid={`snapshot-${snap.id}`}>
+                  <span className="font-mono text-muted-foreground">#{snap.id}</span>
+                  <span className="font-mono">req={snap.requestCount}</span>
+                  <span className="text-muted-foreground text-[10px]">{new Date(snap.createdAt).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
+const SUBSYSTEM_PARAMS: Record<string, { label: string; params: { key: string; label: string; min: number; max: number; step: number; default: number }[] }> = {
+  bandit: {
+    label: "Multi-Armed Bandit",
+    params: [
+      { key: "C", label: "Exploration (C)", min: 0, max: 5, step: 0.1, default: 1.414 },
+      { key: "lambda", label: "EMA Decay (lambda)", min: 0.5, max: 1, step: 0.01, default: 0.95 },
+      { key: "epsilon", label: "Cold Start Epsilon", min: 0, max: 1, step: 0.05, default: 0.3 },
+      { key: "cold_start_threshold", label: "Cold Start Pulls", min: 1, max: 20, step: 1, default: 5 },
+    ],
+  },
+  edcm_directives: {
+    label: "EDCM Directives",
+    params: [
+      { key: "default_threshold", label: "Default Threshold", min: 0, max: 1, step: 0.05, default: 0.8 },
+    ],
+  },
+  memory_injection: {
+    label: "Memory Injection",
+    params: [
+      { key: "alpha", label: "Learning Rate (alpha)", min: 0, max: 1, step: 0.01, default: 0.1 },
+      { key: "s8_threshold", label: "S8 Risk Threshold", min: 1, max: 200, step: 1, default: 50 },
+      { key: "s9_threshold", label: "S9 Coherence Min", min: -1, max: 0, step: 0.05, default: -0.5 },
+      { key: "drift_check_interval", label: "Drift Check Interval (reqs)", min: 10, max: 200, step: 10, default: 50 },
+    ],
+  },
+  heartbeat: {
+    label: "Heartbeat Scheduler",
+    params: [
+      { key: "tickIntervalMs", label: "Tick Interval (ms)", min: 5000, max: 300000, step: 1000, default: 30000 },
+    ],
+  },
+  synthesis: {
+    label: "Dual-Model Synthesis",
+    params: [
+      { key: "timeoutMs", label: "Timeout (ms)", min: 5000, max: 120000, step: 1000, default: 30000 },
+    ],
+  },
+  custom_tools: { label: "Custom Tools", params: [] },
+  logging: { label: "Logging", params: [] },
+};
+
+function SystemTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [expandedSub, setExpandedSub] = useState<string | null>(null);
+
+  const { data: toggles = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/toggles"],
+    refetchInterval: 10000,
+  });
+
+  const { data: discoveries = [] } = useQuery<any[]>({
+    queryKey: ["/api/discoveries"],
+    refetchInterval: 10000,
+  });
+
+  const updateToggleMutation = useMutation({
+    mutationFn: ({ subsystem, enabled, parameters }: { subsystem: string; enabled?: boolean; parameters?: any }) =>
+      apiRequest("PATCH", `/api/toggles/${subsystem}`, { enabled, parameters }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/toggles"] });
+      toast({ title: "Toggle updated" });
+    },
+  });
+
+  const promoteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/discoveries/${id}/promote`),
+    onSuccess: () => {
+      toast({ title: "Discovery promoted to conversation" });
+      queryClient.invalidateQueries({ queryKey: ["/api/discoveries"] });
+    },
+  });
+
+  if (isLoading) return <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
+
+  const toggleMap: Record<string, any> = {};
+  for (const t of toggles) {
+    toggleMap[t.subsystem] = t;
+  }
+
+  const subsystems = Object.keys(SUBSYSTEM_PARAMS);
+
+  return (
+    <ScrollArea className="h-full px-3 py-3">
+      <div className="space-y-4 pb-4">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Settings className="w-4 h-4 text-muted-foreground" />
+            Global System Toggles
+          </h3>
+          <div className="space-y-2">
+            {subsystems.map((sub) => {
+              const config = SUBSYSTEM_PARAMS[sub];
+              const toggle = toggleMap[sub];
+              const isEnabled = toggle?.enabled ?? true;
+              const params = (toggle?.parameters || {}) as Record<string, any>;
+              const isExpanded = expandedSub === sub;
+
+              return (
+                <div key={sub} className="rounded-md border border-border" data-testid={`toggle-subsystem-${sub}`}>
+                  <div className="flex items-center justify-between gap-2 p-2.5">
+                    <button
+                      className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                      onClick={() => setExpandedSub(isExpanded ? null : sub)}
+                      data-testid={`button-expand-${sub}`}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <span className="text-xs font-medium truncate">{config.label}</span>
+                      <Badge variant="secondary" className="text-[9px] font-mono">{sub}</Badge>
+                    </button>
+                    <Switch
+                      checked={isEnabled}
+                      onCheckedChange={(enabled) => updateToggleMutation.mutate({ subsystem: sub, enabled })}
+                      data-testid={`toggle-enable-${sub}`}
+                    />
+                  </div>
+
+                  {isExpanded && config.params.length > 0 && (
+                    <div className="px-2.5 pb-2.5 space-y-2 border-t border-border pt-2">
+                      {config.params.map((p) => {
+                        const currentVal = params[p.key] ?? p.default;
+                        return (
+                          <div key={p.key} className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground w-32 flex-shrink-0">{p.label}</span>
+                            <Slider
+                              value={[currentVal]}
+                              onValueChange={([val]) => {
+                                const newParams = { ...params, [p.key]: val };
+                                updateToggleMutation.mutate({ subsystem: sub, parameters: newParams });
+                              }}
+                              min={p.min}
+                              max={p.max}
+                              step={p.step}
+                              className="flex-1"
+                              data-testid={`slider-param-${sub}-${p.key}`}
+                            />
+                            <span className="text-[10px] font-mono w-14 text-right">{typeof currentVal === "number" ? currentVal.toFixed(p.step < 1 ? 2 : 0) : currentVal}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            Discovery Drafts
+          </h3>
+          {discoveries.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No discoveries yet. Heartbeat tasks will surface notable findings here.</p>
+          ) : (
+            <div className="space-y-2">
+              {discoveries.slice(0, 20).map((draft: any) => (
+                <div
+                  key={draft.id}
+                  className="rounded-md border border-border p-2.5 space-y-1"
+                  data-testid={`discovery-system-${draft.id}`}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-medium truncate flex-1">{draft.title}</span>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Badge variant="secondary" className="text-[9px]">
+                        {(draft.relevanceScore * 100).toFixed(0)}%
+                      </Badge>
+                      {!draft.promotedToConversation ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => promoteMutation.mutate(draft.id)}
+                          disabled={promoteMutation.isPending}
+                          data-testid={`button-promote-system-${draft.id}`}
+                        >
+                          Start Conversation
+                        </Button>
+                      ) : (
+                        <Badge variant="default" className="text-[9px]">Promoted</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground truncate">{draft.summary}</p>
+                  <div className="flex items-center gap-2 text-[9px] text-muted-foreground">
+                    <span>{draft.sourceTask}</span>
+                    <span>{new Date(draft.createdAt).toLocaleString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
+function HeartbeatTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: status } = useQuery<{ running: boolean; tickIntervalMs: number }>({
+    queryKey: ["/api/heartbeat/status"],
+    refetchInterval: 10000,
+  });
+
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery<any[]>({
+    queryKey: ["/api/heartbeat/tasks"],
+    refetchInterval: 10000,
+  });
+
+  const { data: discoveries = [] } = useQuery<any[]>({
+    queryKey: ["/api/discoveries"],
+    refetchInterval: 10000,
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: number; updates: any }) =>
+      apiRequest("PATCH", `/api/heartbeat/tasks/${id}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/heartbeat/tasks"] });
+    },
+  });
+
+  const runNowMutation = useMutation({
+    mutationFn: (name: string) => apiRequest("POST", `/api/heartbeat/tasks/${name}/run`),
+    onSuccess: () => {
+      toast({ title: "Task executed" });
+      queryClient.invalidateQueries({ queryKey: ["/api/heartbeat/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/discoveries"] });
+    },
+    onError: (e: any) => {
+      toast({ title: "Run failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const toggleSchedulerMutation = useMutation({
+    mutationFn: (start: boolean) => apiRequest("POST", start ? "/api/heartbeat/start" : "/api/heartbeat/stop"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/heartbeat/status"] });
+    },
+  });
+
+  const promoteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/discoveries/${id}/promote`),
+    onSuccess: () => {
+      toast({ title: "Discovery promoted to conversation" });
+      queryClient.invalidateQueries({ queryKey: ["/api/discoveries"] });
+    },
+  });
+
+  const totalWeight = tasks.reduce((sum: number, t: any) => sum + (t.enabled ? t.weight : 0), 0);
+
+  return (
+    <ScrollArea className="h-full px-3 py-3">
+      <div className="space-y-4 pb-4">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Clock className="w-4 h-4 text-blue-400" />
+              Heartbeat Scheduler
+            </h3>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant={status?.running ? "default" : "secondary"}
+                data-testid="status-heartbeat"
+              >
+                {status?.running ? "RUNNING" : "STOPPED"}
+              </Badge>
+              <Switch
+                checked={status?.running || false}
+                onCheckedChange={(checked) => toggleSchedulerMutation.mutate(checked)}
+                data-testid="toggle-heartbeat-scheduler"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <span className="text-muted-foreground">Tick Interval</span>
+              <p className="font-mono" data-testid="text-tick-interval">
+                {status ? `${(status.tickIntervalMs / 1000).toFixed(0)}s` : "--"}
+              </p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Active Tasks</span>
+              <p className="font-mono" data-testid="text-active-tasks">
+                {tasks.filter((t: any) => t.enabled).length} / {tasks.length}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-emerald-400" />
+            Task List
+          </h3>
+          {tasksLoading ? (
+            <Skeleton className="h-32 w-full" />
+          ) : tasks.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No heartbeat tasks configured.</p>
+          ) : (
+            <div className="space-y-3">
+              {tasks.map((task: any) => {
+                const weightPct = totalWeight > 0 && task.enabled ? ((task.weight / totalWeight) * 100).toFixed(1) : "0";
+                return (
+                  <div
+                    key={task.id}
+                    className="rounded-md border border-border p-3 space-y-2"
+                    data-testid={`heartbeat-task-${task.name}`}
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Switch
+                          checked={task.enabled}
+                          onCheckedChange={(enabled) =>
+                            updateTaskMutation.mutate({ id: task.id, updates: { enabled } })
+                          }
+                          data-testid={`toggle-task-${task.name}`}
+                        />
+                        <span className="font-mono text-xs font-bold truncate">{task.name}</span>
+                        <Badge variant="secondary" className="text-[9px]">{task.taskType}</Badge>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => runNowMutation.mutate(task.name)}
+                        disabled={runNowMutation.isPending}
+                        data-testid={`button-run-${task.name}`}
+                      >
+                        <Play className="w-3 h-3 mr-1" />
+                        Run Now
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">{task.description}</p>
+                    <div className="grid grid-cols-3 gap-2 text-[10px]">
+                      <div>
+                        <span className="text-muted-foreground">Weight</span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Slider
+                            value={[task.weight]}
+                            onValueChange={([val]) =>
+                              updateTaskMutation.mutate({ id: task.id, updates: { weight: val } })
+                            }
+                            min={0}
+                            max={5}
+                            step={0.1}
+                            className="flex-1"
+                            data-testid={`slider-weight-${task.name}`}
+                          />
+                          <span className="font-mono w-8 text-right">{task.weight.toFixed(1)}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Interval</span>
+                        <Input
+                          type="number"
+                          value={task.intervalSeconds}
+                          onChange={(e) =>
+                            updateTaskMutation.mutate({
+                              id: task.id,
+                              updates: { intervalSeconds: parseInt(e.target.value) || 300 },
+                            })
+                          }
+                          className="text-[10px] font-mono mt-0.5"
+                          data-testid={`input-interval-${task.name}`}
+                        />
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Runs / Share</span>
+                        <p className="font-mono mt-0.5">
+                          {task.runCount} / {weightPct}%
+                        </p>
+                      </div>
+                    </div>
+                    {task.lastRun && (
+                      <div className="text-[10px] text-muted-foreground">
+                        Last run: {new Date(task.lastRun).toLocaleString()}
+                        {task.lastResult && (
+                          <span className="block truncate">{task.lastResult}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Zap className="w-4 h-4 text-blue-400" />
+            Resource Allocation
+          </h3>
+          {tasks.filter((t: any) => t.enabled).length === 0 ? (
+            <p className="text-xs text-muted-foreground">No enabled tasks.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {tasks
+                .filter((t: any) => t.enabled)
+                .map((task: any) => {
+                  const pct = totalWeight > 0 ? (task.weight / totalWeight) * 100 : 0;
+                  return (
+                    <div key={task.id} className="flex items-center gap-2 text-xs" data-testid={`resource-${task.name}`}>
+                      <span className="font-mono w-28 truncate">{task.name}</span>
+                      <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="font-mono w-12 text-right">{pct.toFixed(1)}%</span>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            Discovery Feed
+          </h3>
+          {discoveries.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No discoveries yet. Heartbeat tasks will surface notable findings here.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {discoveries.slice(0, 20).map((draft: any) => (
+                <div
+                  key={draft.id}
+                  className="rounded-md border border-border p-2.5 space-y-1"
+                  data-testid={`discovery-${draft.id}`}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-medium truncate flex-1">{draft.title}</span>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Badge variant="secondary" className="text-[9px]">
+                        {(draft.relevanceScore * 100).toFixed(0)}%
+                      </Badge>
+                      {!draft.promotedToConversation ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => promoteMutation.mutate(draft.id)}
+                          disabled={promoteMutation.isPending}
+                          data-testid={`button-promote-${draft.id}`}
+                        >
+                          Start Conversation
+                        </Button>
+                      ) : (
+                        <Badge variant="default" className="text-[9px]">Promoted</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground truncate">{draft.summary}</p>
+                  <div className="flex items-center gap-2 text-[9px] text-muted-foreground">
+                    <span>{draft.sourceTask}</span>
+                    <span>{new Date(draft.createdAt).toLocaleString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
+function CustomToolsTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [editingTool, setEditingTool] = useState<CustomToolData | null>(null);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [testToolId, setTestToolId] = useState<number | null>(null);
+  const [testArgs, setTestArgs] = useState("{}");
+  const [testResult, setTestResult] = useState<{ success: boolean; result: string; duration: number } | null>(null);
+
+  const [formName, setFormName] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+  const [formType, setFormType] = useState("template");
+  const [formCode, setFormCode] = useState("");
+  const [formSchema, setFormSchema] = useState("{}");
+  const [formModels, setFormModels] = useState<string[]>([]);
+  const [formEnabled, setFormEnabled] = useState(true);
+
+  const { data: tools = [], isLoading } = useQuery<CustomToolData[]>({
+    queryKey: ["/api/custom-tools"],
+    refetchInterval: 10000,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/custom-tools", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/custom-tools"] });
+      toast({ title: "Tool created" });
+      resetForm();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/custom-tools/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/custom-tools"] });
+      toast({ title: "Tool updated" });
+      resetForm();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/custom-tools/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/custom-tools"] });
+      toast({ title: "Tool deleted" });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/custom-tools/${id}/toggle`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/custom-tools"] });
+    },
+  });
+
+  const testMutation = useMutation({
+    mutationFn: ({ id, args }: { id: number; args: any }) => apiRequest("POST", `/api/custom-tools/${id}/test`, { args }),
+    onSuccess: async (response: any) => {
+      const data = await response.json();
+      setTestResult(data);
+    },
+    onError: (e: any) => {
+      setTestResult({ success: false, result: e.message, duration: 0 });
+    },
+  });
+
+  function resetForm() {
+    setShowForm(false);
+    setEditingTool(null);
+    setFormName("");
+    setFormDesc("");
+    setFormType("template");
+    setFormCode("");
+    setFormSchema("{}");
+    setFormModels([]);
+    setFormEnabled(true);
+  }
+
+  function startEdit(tool: CustomToolData) {
+    setEditingTool(tool);
+    setFormName(tool.name);
+    setFormDesc(tool.description);
+    setFormType(tool.handlerType);
+    setFormCode(tool.handlerCode);
+    setFormSchema(tool.parametersSchema ? JSON.stringify(tool.parametersSchema, null, 2) : "{}");
+    setFormModels(tool.targetModels || []);
+    setFormEnabled(tool.enabled);
+    setShowForm(true);
+  }
+
+  function handleSubmit() {
+    let parsedSchema: any = null;
+    try {
+      parsedSchema = JSON.parse(formSchema);
+    } catch {
+      toast({ title: "Invalid JSON in parameters schema", variant: "destructive" });
+      return;
+    }
+    const payload = {
+      name: formName,
+      description: formDesc,
+      handlerType: formType,
+      handlerCode: formCode,
+      parametersSchema: parsedSchema,
+      targetModels: formModels.length > 0 ? formModels : [],
+      enabled: formEnabled,
+    };
+    if (editingTool) {
+      updateMutation.mutate({ id: editingTool.id, data: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  }
+
+  function openTest(toolId: number) {
+    setTestToolId(toolId);
+    setTestArgs("{}");
+    setTestResult(null);
+    setTestDialogOpen(true);
+  }
+
+  function runTest() {
+    if (testToolId == null) return;
+    let args: any;
+    try {
+      args = JSON.parse(testArgs);
+    } catch {
+      toast({ title: "Invalid JSON for test args", variant: "destructive" });
+      return;
+    }
+    testMutation.mutate({ id: testToolId, args });
+  }
+
+  function toggleModel(model: string) {
+    setFormModels((prev) =>
+      prev.includes(model) ? prev.filter((m) => m !== model) : [...prev, model]
+    );
+  }
+
+  if (isLoading) return <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
+
+  return (
+    <ScrollArea className="h-full px-3 py-3">
+      <div className="space-y-4 pb-4">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <Wrench className="w-4 h-4 text-orange-400" />
+            Custom Function Calls
+          </h3>
+          <Button
+            size="sm"
+            onClick={() => { resetForm(); setShowForm(true); }}
+            data-testid="button-add-tool"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Add Tool
+          </Button>
+        </div>
+
+        {showForm && (
+          <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+            <h4 className="font-semibold text-sm">{editingTool ? "Edit Tool" : "New Custom Tool"}</h4>
+
+            <div className="space-y-2">
+              <div>
+                <Label className="text-xs">Name</Label>
+                <Input
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="my_tool"
+                  className="text-xs font-mono"
+                  data-testid="input-tool-name"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs">Description</Label>
+                <Input
+                  value={formDesc}
+                  onChange={(e) => setFormDesc(e.target.value)}
+                  placeholder="What this tool does..."
+                  className="text-xs"
+                  data-testid="input-tool-description"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs">Handler Type</Label>
+                <Select value={formType} onValueChange={setFormType}>
+                  <SelectTrigger className="text-xs" data-testid="select-handler-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HANDLER_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">
+                  {formType === "webhook" ? "Webhook URL" : formType === "javascript" ? "JavaScript Code" : "Template"}
+                </Label>
+                <Textarea
+                  value={formCode}
+                  onChange={(e) => setFormCode(e.target.value)}
+                  placeholder={
+                    formType === "webhook" ? "https://example.com/webhook"
+                    : formType === "javascript" ? "return `Hello ${args.name}`;"
+                    : "Hello {{name}}, your value is {{value}}"
+                  }
+                  className="text-xs font-mono min-h-[80px]"
+                  data-testid="input-tool-code"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs">Parameters Schema (JSON)</Label>
+                <Textarea
+                  value={formSchema}
+                  onChange={(e) => setFormSchema(e.target.value)}
+                  placeholder='{"type":"object","properties":{"name":{"type":"string"}}}'
+                  className="text-xs font-mono min-h-[60px]"
+                  data-testid="input-tool-schema"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs">Target Models</Label>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  {AVAILABLE_MODELS.map((model) => (
+                    <div key={model} className="flex items-center gap-1.5">
+                      <Checkbox
+                        id={`model-${model}`}
+                        checked={formModels.includes(model)}
+                        onCheckedChange={() => toggleModel(model)}
+                        data-testid={`checkbox-model-${model}`}
+                      />
+                      <Label htmlFor={`model-${model}`} className="text-xs font-mono cursor-pointer">
+                        {model}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Select which models can use this tool. Leave empty for all models.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={formEnabled}
+                  onCheckedChange={setFormEnabled}
+                  data-testid="toggle-tool-enabled"
+                />
+                <Label className="text-xs">Enabled</Label>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleSubmit}
+                disabled={!formName || !formDesc || !formCode || createMutation.isPending || updateMutation.isPending}
+                data-testid="button-save-tool"
+              >
+                <Check className="w-3.5 h-3.5 mr-1" />
+                {editingTool ? "Update" : "Create"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetForm}
+                data-testid="button-cancel-tool"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {tools.length === 0 && !showForm ? (
+          <div className="rounded-lg border border-border bg-card p-6 text-center">
+            <Wrench className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">No custom tools defined yet.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Create tools with webhook, JavaScript, or template handlers that models can call during conversations.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {tools.map((tool) => (
+              <div
+                key={tool.id}
+                className={cn(
+                  "rounded-lg border border-border bg-card p-3 space-y-2",
+                  !tool.enabled && "opacity-60"
+                )}
+                data-testid={`card-tool-${tool.id}`}
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="font-mono text-sm font-semibold truncate" data-testid={`text-tool-name-${tool.id}`}>
+                      {tool.name}
+                    </span>
+                    <Badge variant="secondary" className="text-[9px] font-mono flex-shrink-0">
+                      {tool.handlerType}
+                    </Badge>
+                    {!tool.enabled && (
+                      <Badge variant="secondary" className="text-[9px] bg-amber-500/20 text-amber-400 flex-shrink-0">
+                        disabled
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => toggleMutation.mutate(tool.id)}
+                      data-testid={`button-toggle-tool-${tool.id}`}
+                    >
+                      <ToggleLeft className={cn("w-4 h-4", tool.enabled ? "text-green-400" : "text-muted-foreground")} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openTest(tool.id)}
+                      data-testid={`button-test-tool-${tool.id}`}
+                    >
+                      <TestTube className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => startEdit(tool)}
+                      data-testid={`button-edit-tool-${tool.id}`}
+                    >
+                      <Wrench className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteMutation.mutate(tool.id)}
+                      data-testid={`button-delete-tool-${tool.id}`}
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">{tool.description}</p>
+
+                {tool.targetModels && tool.targetModels.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[10px] text-muted-foreground">Models:</span>
+                    {tool.targetModels.map((m) => (
+                      <Badge key={m} variant="secondary" className="text-[9px] font-mono">{m}</Badge>
+                    ))}
+                  </div>
+                )}
+
+                <div className="text-[10px] font-mono text-muted-foreground bg-background rounded p-2 max-h-16 overflow-hidden">
+                  {tool.handlerCode.slice(0, 200)}{tool.handlerCode.length > 200 ? "..." : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+        <DialogContent className="w-[90vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TestTube className="w-5 h-5" />
+              Test Tool
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Test Arguments (JSON)</Label>
+              <Textarea
+                value={testArgs}
+                onChange={(e) => setTestArgs(e.target.value)}
+                placeholder='{"key": "value"}'
+                className="text-xs font-mono min-h-[60px]"
+                data-testid="input-test-args"
+              />
+            </div>
+            {testResult && (
+              <div className={cn(
+                "rounded p-3 text-xs font-mono",
+                testResult.success ? "bg-green-500/10 border border-green-500/20" : "bg-red-500/10 border border-red-500/20"
+              )}>
+                <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                  <Badge variant="secondary" className={cn("text-[9px]", testResult.success ? "text-green-400" : "text-red-400")}>
+                    {testResult.success ? "SUCCESS" : "ERROR"}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground">{testResult.duration}ms</span>
+                </div>
+                <pre className="whitespace-pre-wrap max-h-40 overflow-auto text-[10px]" data-testid="text-test-result">
+                  {testResult.result}
+                </pre>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="secondary" onClick={() => setTestDialogOpen(false)}>
+              Close
+            </Button>
+            <Button
+              onClick={runTest}
+              disabled={testMutation.isPending}
+              data-testid="button-run-test"
+            >
+              <Play className="w-4 h-4 mr-1" />
+              {testMutation.isPending ? "Running..." : "Run Test"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </ScrollArea>
+  );
+}
 
 function ContextTab() {
   const { toast } = useToast();

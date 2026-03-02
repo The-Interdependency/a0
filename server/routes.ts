@@ -17,11 +17,31 @@ import {
   processA0Request, verifyHashChain, startHeartbeat, stopHeartbeat,
   emergencyStopEngine, resumeEngine, ENGINE_STATUS,
   trackCost, estimateCost, edcmDisposition, ptcaSolve,
+  computeEdcmMetrics,
+  generateEdcmDirectives, buildDirectivePromptInjection,
+  getEdcmDirectiveConfig, getEdcmDirectiveHistory,
+  getMemoryState, performMemoryInjection, performMemoryProjectionOut,
+  updateSemanticMemory,
+  buildMemoryContextPrompt, buildAttributionContext,
+  clearMemorySeed, importMemorySeedText,
+  exportMemoryIdentity, importMemoryIdentity, checkSemanticDrift,
+  initializeMemorySeeds, getMemoryRequestCounter,
+  banditSelect, banditReward, banditGetStats, banditToggleArm, initializeBanditArms,
+  recordCorrelation, getTopCorrelations,
   type A0Request,
+  type MemoryAttribution,
 } from "./a0p-engine";
-import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
-import { db } from "./db";
-import { sql } from "drizzle-orm";
+import {
+  readLogStream, listTranscripts, readTranscriptLog,
+  getLogStats, getStreamToggles, setStreamToggle, setLoggingEnabled,
+  logMaster, logEdcm, type LogStream,
+} from "./logger";
+import {
+  initializeHeartbeatTasks, startHeartbeatScheduler, stopHeartbeatScheduler,
+  isHeartbeatSchedulerRunning, runTaskNow, updateTickInterval,
+  getHeartbeatSchedulerStatus,
+} from "./heartbeat";
+import { STRIPE_ENABLED } from "./index";
 
 const execAsync = promisify(exec);
 
@@ -137,6 +157,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const BUILTIN_MODELS = [
     { id: "gemini", provider: "gemini", name: "Gemini 2.5 Flash", contextWindow: 1048576, maxOutput: 8192, builtin: true },
     { id: "grok", provider: "grok", name: "Grok-3 Mini", contextWindow: 131072, maxOutput: 16384, builtin: true },
+    { id: "synthesis", provider: "synthesis", name: "Synthesis (Gemini + Grok)", contextWindow: 131072, maxOutput: 16384, builtin: true },
   ];
 
   const BYO_MODELS: Record<string, { models: { id: string; name: string; contextWindow: number; maxOutput: number }[]; baseURL?: string; openaiCompat: boolean }> = {
@@ -231,6 +252,274 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return { provider, modelId, modelCfg, apiKey, providerCfg };
   }
 
+  async function getSynthesisConfig(): Promise<{ enabled: boolean; timeoutMs: number }> {
+    try {
+      const toggle = await storage.getSystemToggle("synthesis");
+      if (toggle) {
+        const params = (toggle.parameters || {}) as any;
+        return {
+          enabled: toggle.enabled,
+          timeoutMs: params.timeoutMs || 30000,
+        };
+      }
+    } catch {}
+    return { enabled: true, timeoutMs: 30000 };
+  }
+
+  const lastAttributionStore: Record<number, MemoryAttribution> = {};
+
+  function computeResponseReward(responseContent: string, latencyMs: number): number {
+    const lengthScore = Math.min(1.0, responseContent.length / 2000);
+    const latencyPenalty = Math.max(0, 1.0 - latencyMs / 30000);
+    const edcm = computeEdcmMetrics(responseContent);
+    const qualityScore = 1.0 - (edcm.DA.value * 0.3 + edcm.DRIFT.value * 0.2 + edcm.INT.value * 0.1);
+    const reward = 0.3 * lengthScore + 0.3 * latencyPenalty + 0.4 * qualityScore;
+    return Math.max(0, Math.min(1, reward));
+  }
+
+  async function banditSelectWithFallback(domain: string, fallback: string): Promise<{ armName: string; armId: number } | null> {
+    try {
+      const result = await banditSelect(domain);
+      return result;
+    } catch (e: any) {
+      console.error(`[a0p:bandit] Select error for ${domain}:`, e.message);
+      return null;
+    }
+  }
+
+  async function rewardAndLogBandit(armId: number | null, reward: number, domain: string, armName: string): Promise<void> {
+    if (armId == null) return;
+    try {
+      await banditReward(armId, reward);
+      await logMaster("bandit", "reward_applied", { domain, armName, armId, reward });
+    } catch (e: any) {
+      console.error(`[a0p:bandit] Reward error for ${domain}:`, e.message);
+    }
+  }
+
+  async function buildAugmentedSystemPrompt(
+    basePrompt: string,
+    conversationContext: string,
+    conversationId?: number
+  ): Promise<{
+    augmentedPrompt: string;
+    directivesFired: string[];
+    memorySeedsUsed: number[];
+    attribution: MemoryAttribution;
+  }> {
+    let augmented = basePrompt;
+    const directivesFired: string[] = [];
+    let memorySeedsUsed: number[] = [];
+    let attribution: MemoryAttribution = {};
+
+    try {
+      const edcmMetrics = computeEdcmMetrics(conversationContext);
+      const directives = await generateEdcmDirectives(edcmMetrics);
+      const firedDirs = directives.filter(d => d.fired);
+      const directiveInjection = buildDirectivePromptInjection(directives);
+
+      if (directiveInjection) {
+        augmented += directiveInjection;
+        directivesFired.push(...firedDirs.map(d => d.type));
+      }
+
+      await logEdcm("directives_computed", {
+        conversationId,
+        metricsSnapshot: {
+          CM: edcmMetrics.CM.value,
+          DA: edcmMetrics.DA.value,
+          DRIFT: edcmMetrics.DRIFT.value,
+          DVG: edcmMetrics.DVG.value,
+          INT: edcmMetrics.INT.value,
+          TBF: edcmMetrics.TBF.value,
+        },
+        directivesFired,
+        directiveCount: firedDirs.length,
+      });
+    } catch (e: any) {
+      console.error("[a0p:edcm] Directive computation error:", e.message);
+    }
+
+    try {
+      const memState = await getMemoryState();
+      const memoryContext = buildMemoryContextPrompt(memState.seeds);
+      if (memoryContext) {
+        augmented += memoryContext;
+        memorySeedsUsed = memState.seeds.filter(s => s.enabled && s.summary.length > 0).map(s => s.seedIndex);
+      }
+
+      if (conversationId && lastAttributionStore[conversationId]) {
+        const prevAttribution = lastAttributionStore[conversationId];
+        const attrContext = buildAttributionContext(prevAttribution);
+        if (attrContext) {
+          augmented += attrContext;
+        }
+        attribution = prevAttribution;
+      }
+
+      await logMaster("memory_context", "prompt_augmented", {
+        conversationId,
+        memorySeedsUsed,
+        hasAttribution: Object.keys(attribution).length > 0,
+      });
+    } catch (e: any) {
+      console.error("[a0p:memory] Memory context injection error:", e.message);
+    }
+
+    return { augmentedPrompt: augmented, directivesFired, memorySeedsUsed, attribution };
+  }
+
+  async function postResponseMemoryUpdate(
+    conversationId: number,
+    responseContent: string,
+    workingState?: number[]
+  ): Promise<void> {
+    try {
+      const injResult = await performMemoryInjection(
+        workingState || new Array(53).fill(0).map((_, i) => Math.sin(i * 0.118))
+      );
+      lastAttributionStore[conversationId] = injResult.attribution;
+
+      await logMaster("memory_context", "post_response_injection", {
+        conversationId,
+        seedsUsed: injResult.seedsUsed,
+        interferenceCount: injResult.interferenceEvents.length,
+      });
+
+      const finalState = new Array(53).fill(0).map((_, i) => Math.sin(i * 0.118 + responseContent.length * 0.001));
+      await performMemoryProjectionOut(finalState);
+
+      await updateSemanticMemory(responseContent);
+    } catch (e: any) {
+      console.error("[a0p:memory] Post-response memory update error:", e.message);
+    }
+  }
+
+  async function recomputeEdcmAfterToolCall(
+    accumulatedResponse: string,
+    conversationId: number,
+    round: number
+  ): Promise<string> {
+    try {
+      const metrics = computeEdcmMetrics(accumulatedResponse);
+      const directives = await generateEdcmDirectives(metrics);
+      const injection = buildDirectivePromptInjection(directives);
+      const firedDirs = directives.filter(d => d.fired).map(d => d.type);
+
+      await logEdcm("directives_recomputed_after_tool", {
+        conversationId,
+        round,
+        directivesFired: firedDirs,
+        metricsSnapshot: {
+          CM: metrics.CM.value,
+          DA: metrics.DA.value,
+          DRIFT: metrics.DRIFT.value,
+        },
+      });
+
+      return injection;
+    } catch (e: any) {
+      console.error("[a0p:edcm] Recompute after tool call error:", e.message);
+      return "";
+    }
+  }
+
+  async function callGeminiForSynthesis(
+    messages: { role: string; content: string }[],
+    sysPrompt: string,
+    maxTokens: number,
+    timeoutMs: number
+  ): Promise<{ content: string; promptTokens: number; completionTokens: number }> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const geminiHistory = messages.slice(0, -1).map((m: any) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+      const lastMsg = messages[messages.length - 1];
+      const result = await geminiAI.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [...geminiHistory, { role: "user", parts: [{ text: lastMsg.content }] }],
+        config: { systemInstruction: sysPrompt, maxOutputTokens: maxTokens || 8192 },
+      });
+      clearTimeout(timeout);
+      const text = result.text || "";
+      const promptTokens = Math.ceil(messages.reduce((s: number, m: any) => s + m.content.length, 0) / 4);
+      const completionTokens = Math.ceil(text.length / 4);
+      return { content: text, promptTokens, completionTokens };
+    } catch (e) {
+      clearTimeout(timeout);
+      throw e;
+    }
+  }
+
+  async function callGrokForSynthesis(
+    messages: { role: string; content: string }[],
+    sysPrompt: string,
+    maxTokens: number,
+    temperature: number | undefined,
+    timeoutMs: number
+  ): Promise<{ content: string; promptTokens: number; completionTokens: number }> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const client = getGrokClient();
+      const chatMsgs = [
+        { role: "system" as const, content: sysPrompt },
+        ...messages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      ];
+      const result = await client.chat.completions.create({
+        model: "grok-3-mini",
+        messages: chatMsgs,
+        max_tokens: maxTokens || 16384,
+        ...(temperature != null ? { temperature } : {}),
+      });
+      clearTimeout(timeout);
+      const text = result.choices[0]?.message?.content || "";
+      const usage = result.usage;
+      return {
+        content: text,
+        promptTokens: usage?.prompt_tokens || 0,
+        completionTokens: usage?.completion_tokens || 0,
+      };
+    } catch (e) {
+      clearTimeout(timeout);
+      throw e;
+    }
+  }
+
+  async function mergeResponsesViaGemini(
+    geminiResponse: string,
+    grokResponse: string,
+    originalQuery: string
+  ): Promise<string> {
+    const mergePrompt = `You are a synthesis engine. Two AI models have independently answered the same query. Your job is to produce a single, coherent, high-quality merged response that combines the best insights from both.
+
+ORIGINAL QUERY:
+${originalQuery}
+
+GEMINI RESPONSE:
+${geminiResponse}
+
+GROK RESPONSE:
+${grokResponse}
+
+INSTRUCTIONS:
+- Combine the strongest points from both responses
+- Resolve any contradictions by choosing the more accurate/complete answer
+- Maintain a consistent voice and tone
+- Do not mention that this is a synthesis or that two models were used
+- Produce a single unified response`;
+
+    const result = await geminiAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: mergePrompt }] }],
+      config: { maxOutputTokens: 8192 },
+    });
+    return result.text || geminiResponse || grokResponse;
+  }
+
   app.post("/api/ai/complete", async (req: Request, res: Response) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
@@ -246,6 +535,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         contextPrefix: "EDCMBONE operator discernment active.",
       };
       const sysPrompt = customSystem || `${ctx.systemPrompt}\n\n${ctx.contextPrefix}`;
+
+      if (model === "synthesis") {
+        const synthConfig = await getSynthesisConfig();
+        if (!synthConfig.enabled) {
+          return res.status(403).json({ error: "Synthesis model is disabled. Enable it in Console > System toggles." });
+        }
+        const originalQuery = messages[messages.length - 1]?.content || "";
+        const results = await Promise.allSettled([
+          callGeminiForSynthesis(messages, sysPrompt, maxTokens || 8192, synthConfig.timeoutMs),
+          callGrokForSynthesis(messages, sysPrompt, maxTokens || 16384, temperature, synthConfig.timeoutMs),
+        ]);
+        const geminiResult = results[0].status === "fulfilled" ? results[0].value : null;
+        const grokResult = results[1].status === "fulfilled" ? results[1].value : null;
+        const geminiError = results[0].status === "rejected" ? results[0].reason?.message : null;
+        const grokError = results[1].status === "rejected" ? results[1].reason?.message : null;
+        await logMaster("synthesis", "parallel_complete", {
+          geminiOk: !!geminiResult,
+          grokOk: !!grokResult,
+          geminiError,
+          grokError,
+        });
+        let finalContent: string;
+        let mergeMethod: string;
+        if (geminiResult && grokResult) {
+          const geminiEdcm = computeEdcmMetrics(geminiResult.content);
+          const grokEdcm = computeEdcmMetrics(grokResult.content);
+          await logMaster("synthesis", "edcm_scored", {
+            gemini: { CM: geminiEdcm.CM.value, DA: geminiEdcm.DA.value, DRIFT: geminiEdcm.DRIFT.value },
+            grok: { CM: grokEdcm.CM.value, DA: grokEdcm.DA.value, DRIFT: grokEdcm.DRIFT.value },
+          });
+          finalContent = await mergeResponsesViaGemini(geminiResult.content, grokResult.content, originalQuery);
+          mergeMethod = "merged";
+        } else if (geminiResult) {
+          finalContent = geminiResult.content;
+          mergeMethod = "gemini_fallback";
+        } else if (grokResult) {
+          finalContent = grokResult.content;
+          mergeMethod = "grok_fallback";
+        } else {
+          return res.status(500).json({ error: `Both models failed. Gemini: ${geminiError}. Grok: ${grokError}` });
+        }
+        const totalPrompt = (geminiResult?.promptTokens || 0) + (grokResult?.promptTokens || 0);
+        const totalCompletion = (geminiResult?.completionTokens || 0) + (grokResult?.completionTokens || 0) + Math.ceil(finalContent.length / 4);
+        if (geminiResult) await trackCost(userId === "default" ? null : userId, "gemini", geminiResult.promptTokens, geminiResult.completionTokens);
+        if (grokResult) await trackCost(userId === "default" ? null : userId, "grok", grokResult.promptTokens, grokResult.completionTokens);
+        await logMaster("synthesis", "complete_done", { mergeMethod, contentLength: finalContent.length });
+        return res.json({
+          model: "synthesis",
+          content: finalContent,
+          mergeMethod,
+          usage: { promptTokens: totalPrompt, completionTokens: totalCompletion, totalTokens: totalPrompt + totalCompletion },
+        });
+      }
 
       if (model === "gemini") {
         const geminiHistory = messages.slice(0, -1).map((m: any) => ({
@@ -360,6 +702,62 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.flushHeaders();
 
       let fullResponse = "";
+
+      if (model === "synthesis") {
+        const synthConfig = await getSynthesisConfig();
+        if (!synthConfig.enabled) {
+          res.write(`data: ${JSON.stringify({ error: "Synthesis model is disabled. Enable it in Console > System toggles.", done: true })}\n\n`);
+          return res.end();
+        }
+        res.write(`data: ${JSON.stringify({ content: "", synthesis: true, phase: "parallel" })}\n\n`);
+        const originalQuery = messages[messages.length - 1]?.content || "";
+        const results = await Promise.allSettled([
+          callGeminiForSynthesis(messages, sysPrompt, maxTokens || 8192, synthConfig.timeoutMs),
+          callGrokForSynthesis(messages, sysPrompt, maxTokens || 16384, temperature, synthConfig.timeoutMs),
+        ]);
+        const geminiResult = results[0].status === "fulfilled" ? results[0].value : null;
+        const grokResult = results[1].status === "fulfilled" ? results[1].value : null;
+        const geminiError = results[0].status === "rejected" ? results[0].reason?.message : null;
+        const grokError = results[1].status === "rejected" ? results[1].reason?.message : null;
+        await logMaster("synthesis", "parallel_stream", {
+          geminiOk: !!geminiResult,
+          grokOk: !!grokResult,
+          geminiError,
+          grokError,
+        });
+        let mergeMethod: string;
+        if (geminiResult && grokResult) {
+          const geminiEdcm = computeEdcmMetrics(geminiResult.content);
+          const grokEdcm = computeEdcmMetrics(grokResult.content);
+          await logMaster("synthesis", "edcm_scored_stream", {
+            gemini: { CM: geminiEdcm.CM.value, DA: geminiEdcm.DA.value },
+            grok: { CM: grokEdcm.CM.value, DA: grokEdcm.DA.value },
+          });
+          res.write(`data: ${JSON.stringify({ synthesis: true, phase: "merging" })}\n\n`);
+          const mergedContent = await mergeResponsesViaGemini(geminiResult.content, grokResult.content, originalQuery);
+          fullResponse = mergedContent;
+          mergeMethod = "merged";
+          res.write(`data: ${JSON.stringify({ content: mergedContent })}\n\n`);
+        } else if (geminiResult) {
+          fullResponse = geminiResult.content;
+          mergeMethod = "gemini_fallback";
+          res.write(`data: ${JSON.stringify({ content: geminiResult.content })}\n\n`);
+        } else if (grokResult) {
+          fullResponse = grokResult.content;
+          mergeMethod = "grok_fallback";
+          res.write(`data: ${JSON.stringify({ content: grokResult.content })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ error: `Both models failed. Gemini: ${geminiError}. Grok: ${grokError}`, done: true })}\n\n`);
+          return res.end();
+        }
+        const totalPrompt = (geminiResult?.promptTokens || 0) + (grokResult?.promptTokens || 0);
+        const totalCompletion = (geminiResult?.completionTokens || 0) + (grokResult?.completionTokens || 0);
+        if (geminiResult) await trackCost(userId === "default" ? null : userId, "gemini", geminiResult.promptTokens, geminiResult.completionTokens);
+        if (grokResult) await trackCost(userId === "default" ? null : userId, "grok", grokResult.promptTokens, grokResult.completionTokens);
+        await logMaster("synthesis", "stream_done", { mergeMethod, contentLength: fullResponse.length });
+        res.write(`data: ${JSON.stringify({ done: true, mergeMethod, usage: { promptTokens: totalPrompt, completionTokens: totalCompletion, totalTokens: totalPrompt + totalCompletion } })}\n\n`);
+        return res.end();
+      }
 
       if (model === "gemini") {
         const geminiHistory = messages.slice(0, -1).map((m: any) => ({
@@ -942,14 +1340,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/conversations/:id/chat", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
-      const { content } = req.body;
+      const { content, model: requestModel } = req.body;
 
       if (!content?.trim()) return res.status(400).json({ error: "Content required" });
 
       const conv = await storage.getConversation(conversationId);
       if (!conv) return res.status(404).json({ error: "Conversation not found" });
 
-      await storage.createMessage({ conversationId, role: "user", content, model: "agent" } as InsertMessage);
+      const chatModel = requestModel || conv.model || "agent";
+      const requestStartTime = Date.now();
+
+      await storage.createMessage({ conversationId, role: "user", content, model: chatModel } as InsertMessage);
 
       const history = await storage.getMessages(conversationId);
       const prevMessages = history.slice(0, -1);
@@ -965,7 +1366,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         contextPrefix: "EDCMBONE operator discernment active.",
       };
 
-      const agentSystemPrompt = `${ctx.systemPrompt}
+      const modelBandit = await banditSelectWithFallback("model", chatModel);
+      const ptcaBandit = await banditSelectWithFallback("ptca_route", "standard");
+      const pcnaBandit = await banditSelectWithFallback("pcna_route", "ring_53");
+
+      const resolvedModel = chatModel === "agent" ? "agent" : (modelBandit?.armName || chatModel);
+
+      await logMaster("bandit", "request_selections", {
+        conversationId,
+        requestedModel: chatModel,
+        resolvedModel,
+        modelArm: modelBandit?.armName || chatModel,
+        modelArmId: modelBandit?.armId || null,
+        ptcaArm: ptcaBandit?.armName || "standard",
+        ptcaArmId: ptcaBandit?.armId || null,
+        pcnaArm: pcnaBandit?.armName || "ring_53",
+        pcnaArmId: pcnaBandit?.armId || null,
+      });
+
+      const baseAgentSystemPrompt = `${ctx.systemPrompt}
 
 ${ctx.contextPrefix}
 
@@ -985,6 +1404,173 @@ IMPORTANT RULES:
 - github_push_zip extracts an uploaded zip file and pushes all its contents to a GitHub repo. Use this when the user uploads a zip of website files.
 - You can manage GitHub Codespaces using codespace_list, codespace_create, codespace_start, codespace_stop, codespace_delete, and codespace_exec. Use Codespaces as a staging environment for making, testing, and iterating on changes before pushing to production.
 - The user's GitHub Pages site is at wayseer00/wayseer.github.io. When they ask about "my website" or "my site", this is the repo to work with.`;
+
+      const conversationContext = prevMessages.map(m => m.content).join("\n") + "\n" + content;
+      const { augmentedPrompt: agentSystemPrompt, directivesFired, memorySeedsUsed } = await buildAugmentedSystemPrompt(
+        baseAgentSystemPrompt,
+        conversationContext,
+        conversationId
+      );
+
+      await logMaster("chat", "augmented_prompt_built", {
+        conversationId,
+        chatModel,
+        directivesFired,
+        memorySeedsUsed,
+        promptLength: agentSystemPrompt.length,
+      });
+
+      if (chatModel === "synthesis" || chatModel === "gemini" || chatModel === "grok") {
+        const simpleMessages = prevMessages.map(m => ({ role: m.role, content: m.content }));
+        simpleMessages.push({ role: "user", content });
+
+        if (chatModel === "synthesis") {
+          const synthConfig = await getSynthesisConfig();
+          if (!synthConfig.enabled) {
+            res.write(`data: ${JSON.stringify({ error: "Synthesis is disabled. Enable in Console > System.", done: true })}\n\n`);
+            return res.end();
+          }
+          res.write(`data: ${JSON.stringify({ synthesis: true, phase: "parallel" })}\n\n`);
+          const results = await Promise.allSettled([
+            callGeminiForSynthesis(simpleMessages, agentSystemPrompt, 8192, synthConfig.timeoutMs),
+            callGrokForSynthesis(simpleMessages, agentSystemPrompt, 16384, undefined, synthConfig.timeoutMs),
+          ]);
+          const geminiRes = results[0].status === "fulfilled" ? results[0].value : null;
+          const grokRes = results[1].status === "fulfilled" ? results[1].value : null;
+          await logMaster("synthesis", "chat_parallel", {
+            conversationId,
+            geminiOk: !!geminiRes,
+            grokOk: !!grokRes,
+          });
+          let finalContent: string;
+          let mergeMethod: string;
+          if (geminiRes && grokRes) {
+            const gemEdcm = computeEdcmMetrics(geminiRes.content);
+            const grkEdcm = computeEdcmMetrics(grokRes.content);
+            await logMaster("synthesis", "chat_edcm", {
+              gemini: { CM: gemEdcm.CM.value, DA: gemEdcm.DA.value },
+              grok: { CM: grkEdcm.CM.value, DA: grkEdcm.DA.value },
+            });
+            res.write(`data: ${JSON.stringify({ synthesis: true, phase: "merging" })}\n\n`);
+            finalContent = await mergeResponsesViaGemini(geminiRes.content, grokRes.content, content);
+            mergeMethod = "merged";
+          } else if (geminiRes) {
+            finalContent = geminiRes.content;
+            mergeMethod = "gemini_fallback";
+          } else if (grokRes) {
+            finalContent = grokRes.content;
+            mergeMethod = "grok_fallback";
+          } else {
+            res.write(`data: ${JSON.stringify({ error: "Both models failed", done: true })}\n\n`);
+            return res.end();
+          }
+          res.write(`data: ${JSON.stringify({ content: finalContent })}\n\n`);
+          await storage.createMessage({ conversationId, role: "assistant", content: finalContent, model: "synthesis" } as InsertMessage);
+          if (geminiRes) await trackCost(userId === "default" ? null : userId, "gemini", geminiRes.promptTokens, geminiRes.completionTokens);
+          if (grokRes) await trackCost(userId === "default" ? null : userId, "grok", grokRes.promptTokens, grokRes.completionTokens);
+          await logMaster("synthesis", "chat_done", { mergeMethod, conversationId });
+          postResponseMemoryUpdate(conversationId, finalContent).catch(() => {});
+          if (history.length === 1) {
+            const title = content.slice(0, 60).replace(/\n/g, " ") || "New Task";
+            await storage.updateConversationTitle(conversationId, title);
+          }
+
+          const synthLatency = Date.now() - requestStartTime;
+          const synthReward = computeResponseReward(finalContent, synthLatency);
+          await rewardAndLogBandit(modelBandit?.armId || null, synthReward, "model", modelBandit?.armName || "synthesis");
+          await rewardAndLogBandit(ptcaBandit?.armId || null, synthReward, "ptca_route", ptcaBandit?.armName || "standard");
+          await rewardAndLogBandit(pcnaBandit?.armId || null, synthReward, "pcna_route", pcnaBandit?.armName || "ring_53");
+          recordCorrelation(
+            null,
+            modelBandit?.armName || "synthesis",
+            ptcaBandit?.armName || "standard",
+            pcnaBandit?.armName || "ring_53",
+            synthReward
+          ).catch(() => {});
+
+          res.write(`data: ${JSON.stringify({ done: true, mergeMethod })}\n\n`);
+          return res.end();
+        }
+
+        if (chatModel === "gemini") {
+          const gemHist = simpleMessages.slice(0, -1).map((m: any) => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }],
+          }));
+          const lastMsg = simpleMessages[simpleMessages.length - 1];
+          const result = await geminiAI.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: [...gemHist, { role: "user", parts: [{ text: lastMsg.content }] }],
+            config: { systemInstruction: agentSystemPrompt, maxOutputTokens: 8192 },
+          });
+          const text = result.text || "";
+          res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+          await storage.createMessage({ conversationId, role: "assistant", content: text, model: "gemini" } as InsertMessage);
+          const pt = Math.ceil(simpleMessages.reduce((s, m) => s + m.content.length, 0) / 4);
+          const ct = Math.ceil(text.length / 4);
+          await trackCost(userId === "default" ? null : userId, "gemini", pt, ct);
+          postResponseMemoryUpdate(conversationId, text).catch(() => {});
+          if (history.length === 1) {
+            const title = content.slice(0, 60).replace(/\n/g, " ") || "New Task";
+            await storage.updateConversationTitle(conversationId, title);
+          }
+
+          const gemLatency = Date.now() - requestStartTime;
+          const gemReward = computeResponseReward(text, gemLatency);
+          await rewardAndLogBandit(modelBandit?.armId || null, gemReward, "model", modelBandit?.armName || "gemini");
+          await rewardAndLogBandit(ptcaBandit?.armId || null, gemReward, "ptca_route", ptcaBandit?.armName || "standard");
+          await rewardAndLogBandit(pcnaBandit?.armId || null, gemReward, "pcna_route", pcnaBandit?.armName || "ring_53");
+          recordCorrelation(
+            null,
+            modelBandit?.armName || "gemini",
+            ptcaBandit?.armName || "standard",
+            pcnaBandit?.armName || "ring_53",
+            gemReward
+          ).catch(() => {});
+
+          res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+          return res.end();
+        }
+
+        if (chatModel === "grok") {
+          const client = getGrokClient();
+          const chatMsgs = [
+            { role: "system" as const, content: agentSystemPrompt },
+            ...simpleMessages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
+          ];
+          const result = await client.chat.completions.create({
+            model: "grok-3-mini",
+            messages: chatMsgs,
+            max_tokens: 16384,
+          });
+          const text = result.choices[0]?.message?.content || "";
+          res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+          await storage.createMessage({ conversationId, role: "assistant", content: text, model: "grok" } as InsertMessage);
+          const usage = result.usage;
+          await trackCost(userId === "default" ? null : userId, "grok", usage?.prompt_tokens || 0, usage?.completion_tokens || 0);
+          postResponseMemoryUpdate(conversationId, text).catch(() => {});
+          if (history.length === 1) {
+            const title = content.slice(0, 60).replace(/\n/g, " ") || "New Task";
+            await storage.updateConversationTitle(conversationId, title);
+          }
+
+          const grokLatency = Date.now() - requestStartTime;
+          const grokReward = computeResponseReward(text, grokLatency);
+          await rewardAndLogBandit(modelBandit?.armId || null, grokReward, "model", modelBandit?.armName || "grok");
+          await rewardAndLogBandit(ptcaBandit?.armId || null, grokReward, "ptca_route", ptcaBandit?.armName || "standard");
+          await rewardAndLogBandit(pcnaBandit?.armId || null, grokReward, "pcna_route", pcnaBandit?.armName || "ring_53");
+          recordCorrelation(
+            null,
+            modelBandit?.armName || "grok",
+            ptcaBandit?.armName || "standard",
+            pcnaBandit?.armName || "ring_53",
+            grokReward
+          ).catch(() => {});
+
+          res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+          return res.end();
+        }
+      }
 
       const geminiTools = [{
         functionDeclarations: AGENT_TOOLS.map(t => ({
@@ -1008,13 +1594,15 @@ IMPORTANT RULES:
       let totalPromptTokens = 0;
       let totalCompletionTokens = 0;
       const MAX_TOOL_ROUNDS = 8;
+      let currentSystemPrompt = agentSystemPrompt;
+      const toolsUsedInRequest: string[] = [];
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         const result = await geminiAI.models.generateContent({
           model: "gemini-2.5-flash",
           contents,
           config: {
-            systemInstruction: agentSystemPrompt,
+            systemInstruction: currentSystemPrompt,
             maxOutputTokens: 8192,
             tools: geminiTools,
           },
@@ -1040,8 +1628,18 @@ IMPORTANT RULES:
             const { name, args } = part.functionCall;
             res.write(`data: ${JSON.stringify({ tool_call: { name, args } })}\n\n`);
 
+            const toolBandit = await banditSelectWithFallback("tool", name);
+
             const toolResult = await executeAgentTool(name, args || {});
             res.write(`data: ${JSON.stringify({ tool_result: { name, result: toolResult.slice(0, 2000) } })}\n\n`);
+
+            const toolSuccess = !toolResult.startsWith("Error:");
+            const toolReward = toolSuccess ? 0.8 : 0.1;
+            await rewardAndLogBandit(toolBandit?.armId || null, toolReward, "tool", toolBandit?.armName || name);
+
+            if (!toolsUsedInRequest.includes(name)) {
+              toolsUsedInRequest.push(name);
+            }
 
             toolResultParts.push({
               functionResponse: { name, response: { result: toolResult } },
@@ -1050,6 +1648,16 @@ IMPORTANT RULES:
         }
 
         if (!hasToolCalls) break;
+
+        const directiveUpdate = await recomputeEdcmAfterToolCall(fullResponse, conversationId, round);
+        if (directiveUpdate) {
+          currentSystemPrompt = baseAgentSystemPrompt + directiveUpdate;
+          try {
+            const memState = await getMemoryState();
+            const memCtx = buildMemoryContextPrompt(memState.seeds);
+            if (memCtx) currentSystemPrompt += memCtx;
+          } catch {}
+        }
 
         contents = [
           ...contents,
@@ -1069,10 +1677,37 @@ IMPORTANT RULES:
 
       await trackCost(userId === "default" ? null : userId, "gemini", totalPromptTokens, totalCompletionTokens);
 
+      postResponseMemoryUpdate(conversationId, fullResponse).catch(() => {});
+
       if (history.length === 1) {
         const title = content.slice(0, 60).replace(/\n/g, " ") || "New Task";
         await storage.updateConversationTitle(conversationId, title);
       }
+
+      const agentLatency = Date.now() - requestStartTime;
+      const agentReward = computeResponseReward(fullResponse, agentLatency);
+      await rewardAndLogBandit(modelBandit?.armId || null, agentReward, "model", modelBandit?.armName || "gemini");
+      await rewardAndLogBandit(ptcaBandit?.armId || null, agentReward, "ptca_route", ptcaBandit?.armName || "standard");
+      await rewardAndLogBandit(pcnaBandit?.armId || null, agentReward, "pcna_route", pcnaBandit?.armName || "ring_53");
+      const primaryTool = toolsUsedInRequest.length > 0 ? toolsUsedInRequest[0] : null;
+      recordCorrelation(
+        primaryTool,
+        modelBandit?.armName || "gemini",
+        ptcaBandit?.armName || "standard",
+        pcnaBandit?.armName || "ring_53",
+        agentReward
+      ).catch(() => {});
+
+      await logMaster("bandit", "request_complete", {
+        conversationId,
+        chatModel,
+        reward: agentReward,
+        latencyMs: agentLatency,
+        toolsUsed: toolsUsedInRequest,
+        modelArm: modelBandit?.armName || "gemini",
+        ptcaArm: ptcaBandit?.armName || "standard",
+        pcnaArm: pcnaBandit?.armName || "ring_53",
+      });
 
       res.write(`data: ${JSON.stringify({ done: true, tokens: { prompt: totalPromptTokens, completion: totalCompletionTokens } })}\n\n`);
       res.end();
@@ -1640,99 +2275,621 @@ IMPORTANT RULES:
 
   // ============ STRIPE PAYMENTS ============
 
-  app.get("/api/stripe/publishable-key", async (_req, res) => {
+  const stripeDisabledMsg = { error: "Stripe payments are currently disabled. Coming soon." };
+
+  app.get("/api/stripe/publishable-key", (_req, res) => {
+    if (!STRIPE_ENABLED) return res.status(503).json(stripeDisabledMsg);
+    res.status(503).json(stripeDisabledMsg);
+  });
+
+  app.get("/api/stripe/products", (_req, res) => {
+    if (!STRIPE_ENABLED) return res.status(503).json(stripeDisabledMsg);
+    res.status(503).json(stripeDisabledMsg);
+  });
+
+  app.post("/api/stripe/checkout", (_req, res) => {
+    if (!STRIPE_ENABLED) return res.status(503).json(stripeDisabledMsg);
+    res.status(503).json(stripeDisabledMsg);
+  });
+
+  app.post("/api/stripe/portal", (_req, res) => {
+    if (!STRIPE_ENABLED) return res.status(503).json(stripeDisabledMsg);
+    res.status(503).json(stripeDisabledMsg);
+  });
+
+  // ============ CUSTOM TOOLS ============
+
+  app.get("/api/custom-tools", async (req, res) => {
     try {
-      const key = await getStripePublishableKey();
-      res.json({ publishableKey: key });
+      const userId = (req as any).user?.claims?.sub || "default";
+      const tools = await storage.getCustomTools(userId);
+      res.json(tools);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  app.get("/api/stripe/products", async (_req, res) => {
+  app.get("/api/custom-tools/:id", async (req, res) => {
     try {
-      const result = await db.execute(sql`
-        SELECT 
-          p.id as product_id,
-          p.name as product_name,
-          p.description as product_description,
-          p.metadata as product_metadata,
-          pr.id as price_id,
-          pr.unit_amount,
-          pr.currency,
-          pr.recurring
-        FROM stripe.products p
-        LEFT JOIN stripe.prices pr ON pr.product = p.id AND pr.active = true
-        WHERE p.active = true
-        ORDER BY pr.unit_amount
-      `);
-      res.json(result.rows);
+      const tool = await storage.getCustomTool(parseInt(req.params.id));
+      if (!tool) return res.status(404).json({ error: "Tool not found" });
+      res.json(tool);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  app.post("/api/stripe/checkout", async (req, res) => {
+  app.post("/api/custom-tools", async (req, res) => {
     try {
-      const { priceId } = req.body;
-      if (!priceId) return res.status(400).json({ error: "priceId required" });
+      const toggle = await storage.getSystemToggle("custom_tools");
+      if (toggle && !toggle.enabled) {
+        return res.status(403).json({ error: "Custom tools subsystem is disabled" });
+      }
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { name, description, parametersSchema, targetModels, handlerType, handlerCode, enabled } = req.body;
+      if (!name || !description || !handlerType || !handlerCode) {
+        return res.status(400).json({ error: "name, description, handlerType, and handlerCode are required" });
+      }
+      const validTypes = ["webhook", "javascript", "template"];
+      if (!validTypes.includes(handlerType)) {
+        return res.status(400).json({ error: `Invalid handlerType. Valid: ${validTypes.join(", ")}` });
+      }
+      const tool = await storage.createCustomTool({
+        userId,
+        name,
+        description,
+        parametersSchema: parametersSchema || null,
+        targetModels: targetModels || [],
+        handlerType,
+        handlerCode,
+        enabled: enabled !== false,
+      });
+      await logMaster("custom_tools", "tool_created", { toolId: tool.id, name: tool.name, handlerType, targetModels });
+      res.json(tool);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
-      const stripe = await getUncachableStripeClient();
-      const user = (req as any).user?.claims;
-      const baseUrl = `${req.protocol}://${req.get("host")}`;
+  app.patch("/api/custom-tools/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tool = await storage.getCustomTool(id);
+      if (!tool) return res.status(404).json({ error: "Tool not found" });
+      const updates: any = {};
+      if (req.body.name !== undefined) updates.name = req.body.name;
+      if (req.body.description !== undefined) updates.description = req.body.description;
+      if (req.body.parametersSchema !== undefined) updates.parametersSchema = req.body.parametersSchema;
+      if (req.body.targetModels !== undefined) updates.targetModels = req.body.targetModels;
+      if (req.body.handlerType !== undefined) updates.handlerType = req.body.handlerType;
+      if (req.body.handlerCode !== undefined) updates.handlerCode = req.body.handlerCode;
+      if (req.body.enabled !== undefined) updates.enabled = req.body.enabled;
+      await storage.updateCustomTool(id, updates);
+      const updated = await storage.getCustomTool(id);
+      await logMaster("custom_tools", "tool_updated", { toolId: id, updates: Object.keys(updates) });
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
-      let customerId: string | undefined;
-      if (user?.email) {
-        const existing = await stripe.customers.list({ email: user.email, limit: 1 });
-        if (existing.data.length > 0) {
-          customerId = existing.data[0].id;
-        } else {
-          const customer = await stripe.customers.create({
-            email: user.email,
-            name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || undefined,
-            metadata: { userId: user.sub },
-          });
-          customerId = customer.id;
+  app.delete("/api/custom-tools/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tool = await storage.getCustomTool(id);
+      if (!tool) return res.status(404).json({ error: "Tool not found" });
+      await storage.deleteCustomTool(id);
+      await logMaster("custom_tools", "tool_deleted", { toolId: id, name: tool.name });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/custom-tools/:id/toggle", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tool = await storage.getCustomTool(id);
+      if (!tool) return res.status(404).json({ error: "Tool not found" });
+      const newEnabled = !tool.enabled;
+      await storage.updateCustomTool(id, { enabled: newEnabled });
+      await logMaster("custom_tools", "tool_toggled", { toolId: id, name: tool.name, enabled: newEnabled });
+      res.json({ ok: true, enabled: newEnabled });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/custom-tools/:id/test", async (req, res) => {
+    try {
+      const toggle = await storage.getSystemToggle("custom_tools");
+      if (toggle && !toggle.enabled) {
+        return res.status(403).json({ error: "Custom tools subsystem is disabled" });
+      }
+      const id = parseInt(req.params.id);
+      const tool = await storage.getCustomTool(id);
+      if (!tool) return res.status(404).json({ error: "Tool not found" });
+      const testArgs = req.body.args || {};
+      const startTime = Date.now();
+      let result: string;
+      let success = true;
+      try {
+        result = await executeCustomToolHandler(tool, testArgs);
+      } catch (err: any) {
+        result = `Error: ${err.message}`;
+        success = false;
+      }
+      const duration = Date.now() - startTime;
+      await logMaster("custom_tools", "tool_tested", {
+        toolId: id, name: tool.name, handlerType: tool.handlerType,
+        success, duration, resultPreview: result.slice(0, 500),
+      });
+      res.json({ success, result, duration });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  async function executeCustomToolHandler(tool: any, args: Record<string, any>): Promise<string> {
+    switch (tool.handlerType) {
+      case "webhook": {
+        const url = tool.handlerCode;
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(args),
+          signal: AbortSignal.timeout(10000),
+        });
+        const text = await response.text();
+        return text.slice(0, 5000);
+      }
+      case "javascript": {
+        const fn = new Function("args", `"use strict"; ${tool.handlerCode}`);
+        const result = fn(args);
+        return typeof result === "string" ? result : JSON.stringify(result);
+      }
+      case "template": {
+        let output = tool.handlerCode;
+        for (const [key, value] of Object.entries(args)) {
+          output = output.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(value));
         }
+        return output;
       }
+      default:
+        throw new Error(`Unknown handler type: ${tool.handlerType}`);
+    }
+  }
 
-      const price = await stripe.prices.retrieve(priceId);
-      const mode = price.recurring ? "subscription" : "payment";
+  // ============ BANDIT INITIALIZATION ============
 
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        payment_method_types: ["card"],
-        line_items: [{ price: priceId, quantity: 1 }],
-        mode,
-        success_url: `${baseUrl}/pricing?success=true`,
-        cancel_url: `${baseUrl}/pricing?canceled=true`,
-      });
+  initializeBanditArms().then(() => {
+    console.log("[a0p:bandit] Bandit arms initialized");
+  }).catch((err) => {
+    console.error("[a0p:bandit] Failed to initialize bandit arms:", err);
+  });
 
-      res.json({ url: session.url });
+  initializeMemorySeeds().then(() => {
+    console.log("[a0p:memory] Memory seeds initialized");
+  }).catch((err) => {
+    console.error("[a0p:memory] Failed to initialize memory seeds:", err);
+  });
+
+  // ============ HEARTBEAT SCHEDULER ============
+
+  initializeHeartbeatTasks().then(() => {
+    startHeartbeatScheduler();
+  }).catch((err) => {
+    console.error("[heartbeat] Failed to initialize:", err);
+  });
+
+  app.get("/api/heartbeat/status", (_req, res) => {
+    const status = getHeartbeatSchedulerStatus();
+    res.json(status);
+  });
+
+  app.get("/api/heartbeat/tasks", async (_req, res) => {
+    try {
+      const tasks = await storage.getHeartbeatTasks();
+      res.json(tasks);
     } catch (e: any) {
-      console.error("Checkout error:", e);
       res.status(500).json({ error: e.message });
     }
   });
 
-  app.post("/api/stripe/portal", async (req, res) => {
+  app.patch("/api/heartbeat/tasks/:id", async (req, res) => {
     try {
-      const stripe = await getUncachableStripeClient();
-      const user = (req as any).user?.claims;
-      if (!user?.email) return res.status(401).json({ error: "Not authenticated" });
+      const id = parseInt(req.params.id);
+      const updates: any = {};
+      if (req.body.enabled !== undefined) updates.enabled = req.body.enabled;
+      if (req.body.weight !== undefined) updates.weight = req.body.weight;
+      if (req.body.intervalSeconds !== undefined) updates.intervalSeconds = req.body.intervalSeconds;
+      if (req.body.description !== undefined) updates.description = req.body.description;
+      await storage.updateHeartbeatTask(id, updates);
+      const tasks = await storage.getHeartbeatTasks();
+      res.json(tasks);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
-      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-      if (customers.data.length === 0) {
-        return res.status(404).json({ error: "No billing account found" });
+  app.post("/api/heartbeat/tasks/:name/run", async (req, res) => {
+    try {
+      const { name } = req.params;
+      const result = await runTaskNow(name);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/heartbeat/start", (_req, res) => {
+    startHeartbeatScheduler();
+    res.json({ ok: true, running: true });
+  });
+
+  app.post("/api/heartbeat/stop", (_req, res) => {
+    stopHeartbeatScheduler();
+    res.json({ ok: true, running: false });
+  });
+
+  app.patch("/api/heartbeat/tick-interval", async (req, res) => {
+    try {
+      const { seconds } = req.body;
+      if (!seconds || seconds < 5) {
+        return res.status(400).json({ error: "Minimum tick interval is 5 seconds" });
       }
+      await updateTickInterval(seconds);
+      res.json({ ok: true, tickIntervalMs: seconds * 1000 });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
-      const baseUrl = `${req.protocol}://${req.get("host")}`;
-      const session = await stripe.billingPortal.sessions.create({
-        customer: customers.data[0].id,
-        return_url: `${baseUrl}/pricing`,
+  app.get("/api/discoveries", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const drafts = await storage.getDiscoveryDrafts(limit);
+      res.json(drafts);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/discoveries/:id/promote", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const conv = await storage.createConversation({
+        title: `Discovery: ${id}`,
+        model: "gemini",
       });
+      await storage.promoteDiscoveryDraft(id, conv.id);
+      await logMaster("heartbeat", "discovery_promoted", { draftId: id, conversationId: conv.id });
+      res.json({ ok: true, conversationId: conv.id });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
-      res.json({ url: session.url });
+  // ============ APPEND-ONLY LOGS ============
+
+  const VALID_STREAMS: LogStream[] = ["master", "edcm", "memory", "sentinel", "interference", "attribution"];
+
+  app.get("/api/logs/stats", async (_req, res) => {
+    try {
+      const stats = await getLogStats();
+      const toggles = getStreamToggles();
+      res.json({ stats, toggles });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/logs/toggles", (_req, res) => {
+    res.json(getStreamToggles());
+  });
+
+  app.patch("/api/logs/toggles", (req, res) => {
+    const { stream, enabled, globalEnabled } = req.body;
+    if (typeof globalEnabled === "boolean") {
+      setLoggingEnabled(globalEnabled);
+    }
+    if (stream && typeof enabled === "boolean") {
+      setStreamToggle(stream, enabled);
+    }
+    res.json(getStreamToggles());
+  });
+
+  app.get("/api/logs/transcripts/list", async (_req, res) => {
+    try {
+      const transcripts = await listTranscripts();
+      res.json(transcripts);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/logs/transcripts/:filename", async (req, res) => {
+    try {
+      const { filename } = req.params;
+      if (!filename.endsWith(".jsonl") || filename.includes("..")) {
+        return res.status(400).json({ error: "Invalid transcript filename" });
+      }
+      const entries = await readTranscriptLog(filename);
+      res.json({ entries, total: entries.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/logs/:stream", async (req, res) => {
+    try {
+      const stream = req.params.stream as LogStream;
+      if (!VALID_STREAMS.includes(stream)) {
+        return res.status(400).json({ error: `Invalid stream. Valid: ${VALID_STREAMS.join(", ")}` });
+      }
+      const offset = parseInt(req.query.offset as string) || 0;
+      const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+      const result = await readLogStream(stream, { offset, limit });
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ BANDIT ENDPOINTS ============
+
+  app.get("/api/bandit/stats", async (req, res) => {
+    try {
+      const domain = req.query.domain as string | undefined;
+      const stats = await banditGetStats(domain);
+      res.json(stats);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/bandit/stats/:domain", async (req, res) => {
+    try {
+      const stats = await banditGetStats(req.params.domain);
+      res.json(stats);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/bandit/reset/:domain", async (req, res) => {
+    try {
+      await storage.resetBanditDomain(req.params.domain);
+      await logMaster("bandit", "domain_reset", { domain: req.params.domain });
+      res.json({ ok: true, domain: req.params.domain });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/bandit/toggle/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { enabled } = req.body;
+      if (typeof enabled !== "boolean") {
+        return res.status(400).json({ error: "enabled (boolean) is required" });
+      }
+      await banditToggleArm(id, enabled);
+      res.json({ ok: true, id, enabled });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/bandit/correlations", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const correlations = await getTopCorrelations(limit);
+      res.json(correlations);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ MEMORY SEEDS ENDPOINTS ============
+
+  app.get("/api/memory/seeds", async (_req, res) => {
+    try {
+      const seeds = await storage.getMemorySeeds();
+      res.json(seeds);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/memory/seeds/:index", async (req, res) => {
+    try {
+      const seedIndex = parseInt(req.params.index);
+      if (isNaN(seedIndex) || seedIndex < 0 || seedIndex > 10) {
+        return res.status(400).json({ error: "Invalid seed index (0-10)" });
+      }
+      const updates: any = {};
+      if (req.body.label !== undefined) updates.label = req.body.label;
+      if (req.body.summary !== undefined) updates.summary = req.body.summary;
+      if (req.body.pinned !== undefined) updates.pinned = req.body.pinned;
+      if (req.body.enabled !== undefined) updates.enabled = req.body.enabled;
+      if (req.body.weight !== undefined) updates.weight = req.body.weight;
+      await storage.updateMemorySeed(seedIndex, updates);
+      const updated = await storage.getMemorySeed(seedIndex);
+      await logMaster("memory", "seed_updated", { seedIndex, updates: Object.keys(updates) });
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/memory/seeds/:index/clear", async (req, res) => {
+    try {
+      const seedIndex = parseInt(req.params.index);
+      if (isNaN(seedIndex) || seedIndex < 0 || seedIndex > 10) {
+        return res.status(400).json({ error: "Invalid seed index (0-10)" });
+      }
+      await clearMemorySeed(seedIndex);
+      res.json({ ok: true, seedIndex });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/memory/seeds/:index/import", async (req, res) => {
+    try {
+      const seedIndex = parseInt(req.params.index);
+      if (isNaN(seedIndex) || seedIndex < 0 || seedIndex > 10) {
+        return res.status(400).json({ error: "Invalid seed index (0-10)" });
+      }
+      const { text } = req.body;
+      if (!text || typeof text !== "string") {
+        return res.status(400).json({ error: "text (string) is required" });
+      }
+      await importMemorySeedText(seedIndex, text);
+      const updated = await storage.getMemorySeed(seedIndex);
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/memory/state", async (_req, res) => {
+    try {
+      const state = await getMemoryState();
+      res.json(state);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/memory/history", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+      const snapshots = await storage.getMemoryTensorSnapshots(limit);
+      res.json(snapshots);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/memory/drift", async (_req, res) => {
+    try {
+      const driftResults = await checkSemanticDrift();
+      res.json(driftResults);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/memory/export", async (_req, res) => {
+    try {
+      const identity = await exportMemoryIdentity();
+      res.json(identity);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/memory/import", async (req, res) => {
+    try {
+      const data = req.body;
+      if (!data || !data.seeds || !Array.isArray(data.seeds)) {
+        return res.status(400).json({ error: "Invalid memory identity format. Expected { seeds, projectionIn, projectionOut, ... }" });
+      }
+      await importMemoryIdentity(data);
+      await logMaster("memory", "identity_imported", { seedCount: data.seeds.length });
+      res.json({ ok: true, message: "Memory identity imported successfully" });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ SYSTEM TOGGLES ENDPOINTS ============
+
+  app.get("/api/toggles", async (_req, res) => {
+    try {
+      const toggles = await storage.getSystemToggles();
+      res.json(toggles);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/toggles/:subsystem", async (req, res) => {
+    try {
+      const { subsystem } = req.params;
+      const { enabled, parameters } = req.body;
+      if (typeof enabled !== "boolean" && parameters === undefined) {
+        return res.status(400).json({ error: "enabled (boolean) or parameters (object) required" });
+      }
+      const existing = await storage.getSystemToggle(subsystem);
+      const newEnabled = typeof enabled === "boolean" ? enabled : (existing?.enabled ?? true);
+      const newParams = parameters !== undefined ? parameters : (existing?.parameters ?? null);
+      const toggle = await storage.upsertSystemToggle(subsystem, newEnabled, newParams);
+      await logMaster("system", "toggle_updated", { subsystem, enabled: newEnabled, hasParams: !!newParams });
+      res.json(toggle);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ EDCM DIRECTIVES ENDPOINTS ============
+
+  app.get("/api/edcm/directives", async (_req, res) => {
+    try {
+      const config = await getEdcmDirectiveConfig();
+      res.json(config);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/edcm/history", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const snapshots = await storage.getEdcmMetricSnapshots(limit);
+      const directiveHistory = getEdcmDirectiveHistory();
+      res.json({ snapshots, directiveHistory });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ DISCOVERY DRAFTS ENDPOINTS ============
+
+  app.get("/api/discoveries", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const drafts = await storage.getDiscoveryDrafts(limit);
+      res.json(drafts);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/discoveries/:id/promote", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const drafts = await storage.getDiscoveryDrafts(200);
+      const draft = drafts.find(d => d.id === id);
+      if (!draft) return res.status(404).json({ error: "Discovery draft not found" });
+      if (draft.promotedToConversation) {
+        return res.status(400).json({ error: "Draft already promoted to conversation" });
+      }
+      const conv = await storage.createConversation({
+        title: draft.title,
+        model: "agent",
+      } as InsertConversation);
+      await storage.createMessage({
+        conversationId: conv.id,
+        role: "system",
+        content: `Discovery from ${draft.sourceTask}: ${draft.summary}`,
+        model: "system",
+      } as InsertMessage);
+      await storage.promoteDiscoveryDraft(id, conv.id);
+      await logMaster("discovery", "draft_promoted", { draftId: id, conversationId: conv.id, title: draft.title });
+      res.json({ ok: true, conversationId: conv.id, draft });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
