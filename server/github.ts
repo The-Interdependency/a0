@@ -4,6 +4,10 @@ let connectionSettings: any;
 let usePublicFallback = false;
 
 async function getAccessToken(): Promise<string | null> {
+  if (process.env.GITHUB_PAT) {
+    return process.env.GITHUB_PAT;
+  }
+
   if (
     connectionSettings &&
     connectionSettings.settings?.expires_at &&
