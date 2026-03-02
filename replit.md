@@ -68,8 +68,8 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 - **Workflow**: Engine status, emergency stop (Enter-key confirm), heartbeat log, hash chain status
 - **Metrics**: Token usage, cost estimates, spend limits with slider + toggle
 - **EDCM**: 6 metric families (CM/DA/DRIFT/DVG/INT/TBF), 80/20 alerts, PTCA tensor (53×9×8×7), sentinel context (S1-S9), EDCMBONE report, disposition & operators, history
+- **Logs**: Unified log viewer — events, heartbeats, EDCM snapshots, commands, costs; filterable by source, searchable, expandable detail panels with raw payload inspection
 - **Context**: Editable system prompt + context prefix, BYO API keys (OpenAI, Anthropic, Mistral, Cohere, Perplexity)
-- **Costs**: Donations vs API costs comparison, coverage percentage
 
 ### Account/Pricing (`/pricing`)
 - Replit OAuth login/logout
