@@ -8,7 +8,7 @@ import multer from "multer";
 import { storage } from "./storage";
 import { getUncachableGmailClient } from "./gmail";
 import { getUncachableGoogleDriveClient } from "./drive";
-import { getUncachableGitHubClient } from "./github";
+import { getUncachableGitHubClient, isPublicFallbackMode } from "./github";
 import { getGrokClient } from "./xai";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
@@ -625,6 +625,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
         case "github_create_or_update_file": {
           const gh = await getUncachableGitHubClient();
+          if (isPublicFallbackMode()) return "Error: Write access requires GitHub authorization. The GitHub connector is not yet authorized — please ask the Replit project owner to connect GitHub in the integrations panel. Read-only access to public repos is available.";
           let sha: string | undefined;
           try {
             const { data: existing } = await gh.repos.getContent({ owner: args.owner, repo: args.repo, path: args.path, ref: args.branch || "main" });
@@ -641,6 +642,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
         case "github_delete_file": {
           const gh = await getUncachableGitHubClient();
+          if (isPublicFallbackMode()) return "Error: Delete access requires GitHub authorization. The GitHub connector is not yet authorized.";
           const { data: existing } = await gh.repos.getContent({ owner: args.owner, repo: args.repo, path: args.path, ref: args.branch || "main" });
           if (Array.isArray(existing)) return "Error: Cannot delete a directory. Delete individual files.";
           const { data } = await gh.repos.deleteFile({
