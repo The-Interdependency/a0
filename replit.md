@@ -48,7 +48,7 @@ A mobile-first AI agent app powered by dual AI brains (Grok + Gemini), with full
 
 ### Agent (`/`)
 - Autonomous AI agent with Gemini function-calling (up to 8 tool rounds per request)
-- 9 tools: run_command, read_file, write_file, list_files, search_files, list_gmail, read_gmail, send_gmail, list_drive
+- 11 tools: run_command, read_file, write_file, list_files, search_files, list_gmail, read_gmail, send_gmail, list_drive, web_search, fetch_url
 - Tool actions displayed in real-time (amber indicators for calls, results inline)
 - Task sidebar (replaces conversation list), auto-titling
 - Agent decides which tools to use — no manual model toggle
