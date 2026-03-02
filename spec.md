@@ -362,6 +362,362 @@ Every process carries an hmmm state object (`{valid, message, timestamp}`). S9 e
 
 Manual kill switch. Sets `emergencyStop = true`, halts heartbeat. Resume available via API.
 
+### 3.18 Multi-Armed Bandit Layer
+
+UCB1-based multi-armed bandit with EMA decay for adaptive selection across four domains.
+
+#### 3.18.1 Algorithm
+
+- **UCB1 + EMA decay**: exploitation uses EMA reward (not raw average), exploration uses standard UCB1 confidence bound
+- **UCB1 score**: `exploitation(emaReward) + C * sqrt(ln(totalPulls) / pulls)`
+- **EMA update**: `emaReward = lambda * oldEma + (1 - lambda) * reward`
+- **Cold start**: when an arm has < `coldStartThreshold` pulls, epsilon-greedy random selection with probability `epsilon`
+- Disabled arms are skipped entirely
+
+#### 3.18.2 Domains and Default Arms
+
+| Domain | Arms |
+|--------|------|
+| tool | web_search, fetch_url, gmail_search, gmail_send, github_search, code_execute |
+| model | gemini, grok, synthesis |
+| ptca_route | standard, deep_solve, heptagram_boost, sentinel_focus |
+| pcna_route | ring_53, adjacency_8, full_diffusion, hub_only |
+
+#### 3.18.3 Adjustable Parameters (via `bandit` system toggle)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| C | sqrt(2) ≈ 1.414 | UCB1 exploration constant |
+| lambda | 0.95 | EMA decay rate |
+| epsilon | 0.3 | Cold-start random exploration probability |
+| coldStartThreshold | 5 | Minimum pulls before UCB1 takes over |
+
+#### 3.18.4 Cross-Domain Correlation Tracking
+
+After each full request cycle, the joint selection (tool + model + ptca_route + pcna_route) and composite reward are recorded in `bandit_correlations`. This reveals which combinations of arms across domains produce the best joint outcomes.
+
+- Stored in `bandit_correlations` table with `tool_arm`, `model_arm`, `ptca_arm`, `pcna_arm`, and `joint_reward`
+- Queryable via `GET /api/bandit/correlations?limit=50`
+
+#### 3.18.5 Controls
+
+- Per-arm enable/disable toggle
+- Global bandit system toggle
+- All parameter sliders adjustable in Console
+- Every selection, reward, and correlation event logged to master log
+
+### 3.19 EDCM Behavioral Directives
+
+Six behavioral directives that modify agent behavior when EDCM metrics exceed configurable thresholds.
+
+#### 3.19.1 Directives
+
+| Directive | Trigger Metric | Default Threshold | Instruction |
+|-----------|---------------|-------------------|-------------|
+| CONSTRAINT_REFOCUS | CM | 0.80 | Refocus on declared constraints; reduce scope drift |
+| DISSONANCE_HALT | DA | 0.80 | Pause and resolve contradictions before continuing |
+| DRIFT_ANCHOR | DRIFT | 0.80 | Re-anchor to original goal; summarize progress |
+| DIVERGENCE_COMMIT | DVG | 0.80 | Commit to one trajectory; stop splitting |
+| INTENSITY_CALM | INT | 0.80 | Reduce intensity; use measured, neutral language |
+| BALANCE_CONCISE | TBF | 0.80 | Be more concise; balance turn length |
+
+#### 3.19.2 Configuration
+
+- **Per-directive toggle**: each directive can be independently enabled/disabled
+- **Per-metric threshold**: each directive's trigger threshold is independently adjustable (0.0–1.0)
+- **Global toggle**: entire directive system toggleable via `edcm_directives` system toggle
+- **Stacking**: multiple directives can fire simultaneously
+- **Prompt injection**: fired directives are injected into the system prompt as `EDCM BEHAVIORAL DIRECTIVES (active):` block
+
+#### 3.19.3 Feedback Loop
+
+- EDCM metrics computed before each response
+- Directives generated based on current metrics and config
+- Fired directives injected into prompt
+- Post-response EDCM re-evaluation captures the effect
+- History of all firings maintained (last 200 entries)
+
+### 3.20 11-Seed External Memory Tensor
+
+Eleven external memory seeds exist OUTSIDE the working 53-node graph. They provide persistent, user-controllable context that survives across conversations.
+
+#### 3.20.1 Seed Structure
+
+Each seed contains:
+- **Structural state**: PTCA values (504 elements) + PCNA weights (11 floats)
+- **Semantic summary**: human-readable text summary (max 500 chars for non-pinned)
+- **Original summary**: saved at creation/import for drift detection
+- **Domain label**: editable identifier
+- **Controls**: enabled, pinned, weight (0.0–2.0)
+
+#### 3.20.2 Default Seed Labels
+
+| Index | Label | Purpose |
+|-------|-------|---------|
+| 0 | User preferences | Style, format, and interaction preferences |
+| 1 | Topics/interests | Subjects the user engages with |
+| 2 | Tool patterns | Which tools are used and how |
+| 3 | Conversation patterns | Communication style observations |
+| 4 | Domain knowledge | Accumulated domain expertise |
+| 5 | Error patterns | Common issues and resolutions |
+| 6 | TIW knowledge | The Interdependence Web knowledge |
+| 7 | External research | Findings from heartbeat research tasks |
+| 8 | Relational context | Background and relationship context |
+| 9 | Active goals | Current objectives and plans |
+| 10 | Meta-learning | Patterns about learning and adaptation |
+
+#### 3.20.3 Sentinel Governance (5 checks per seed per injection)
+
+| Sentinel | Check | Failure Condition |
+|----------|-------|-------------------|
+| S1_PROVENANCE | Seed has traceable origin | No summary, no original_summary, no label |
+| S3_BOUNDS | Projected values in [-1.0, 1.0] | Any projected value out of range |
+| S4_APPROVAL | Hash integrity verification | SHA-256 hash check fails |
+| S8_RISK | Total projected energy < threshold | Energy exceeds s8_threshold (default 50.0, slider) |
+| S9_COHERENCE | Inter-seed cosine similarity > threshold | Cosine similarity with any other seed < s9_threshold (default -0.5, slider) |
+
+- Per-seed running pass/fail tallies stored on the seed record
+- All sentinel checks logged to sentinel log stream
+- Per-sentinel pass rate tracked over time for audit trail
+
+#### 3.20.4 Projection Matrices
+
+- **Projection IN** (seeds → working 53): `projectionIn[11×53] × seed.weight × seed.ptcaValues → 53-element bias` ADDED to fresh tensor state
+- **Projection OUT** (working 53 → seeds): `projectionOut[53×11] × finalState → blend at alpha` for non-pinned seeds
+- Initialized with small random values ((random - 0.5) * 0.02)
+
+#### 3.20.5 Semantic Memory
+
+After each request, a 1-2 sentence summary is routed to the most relevant seed based on keyword matching:
+- **Non-pinned seeds**: compress (existing + new) to ≤ 500 chars (sliding window)
+- **Pinned seeds**: append new summary
+
+#### 3.20.6 Attribution Trace
+
+After each response, per-seed contribution percentage is computed — how much each enabled seed's projection influenced the working graph's initial state. Returned as metadata: `{ seed0: 0.15, seed4: 0.40, seed9: 0.25, ... }`. Logged to attribution log.
+
+#### 3.20.7 Interference Detection
+
+Before injection, checks if any pair of seeds project contradictory biases onto the same working nodes (opposing sign, both significant magnitude > 0.05). Interference events logged with conflicting seed indices and affected working nodes.
+
+#### 3.20.8 Semantic Drift Detection
+
+Every N requests (default 50, adjustable via slider), computes EDCM DRIFT metric on each non-pinned seed's current summary vs its `original_summary`. If DRIFT > 0.6, flagged in Console with warning. User can re-pin, re-import, or accept the drift.
+
+#### 3.20.9 User Controls
+
+- View/edit summary text
+- Edit label
+- Pin/unpin (pinned seeds are not overwritten by projection out or semantic compression)
+- Weight slider (0.0–2.0)
+- Enable/disable
+- Clear (resets to default state)
+- Import text (set summary and original_summary)
+
+#### 3.20.10 Adjustable Parameters (via `memory_injection` system toggle)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| alpha | 0.1 | Learning rate for projection out blending |
+| s8_threshold | 50.0 | S8_RISK energy ceiling for projected values |
+| s9_threshold | -0.5 | S9_COHERENCE minimum cosine similarity |
+| drift_check_interval | 50 | Requests between semantic drift checks |
+
+#### 3.20.11 Portable Identity (Export/Import)
+
+- **Export**: `GET /api/memory/export` produces JSON with all 11 seed states (labels, summaries, original_summaries, ptca_values, pcna_weights, enabled, pinned, weight), projection matrices, request count, sentinel audit tallies, export timestamp, and BUILD_VERSION
+- **Import**: `POST /api/memory/import` accepts the same JSON format, validates structure, overwrites all 11 seeds, resets sentinel tallies, saves pre-import state as snapshot for rollback, logs import event
+
+#### 3.20.12 Snapshots
+
+Memory tensor state (all seeds + projections) is snapshotted to `memory_tensor_snapshots` every 10 requests.
+
+### 3.21 Dual-Model Synthesis
+
+Parallel execution of Gemini and Grok, with merged output via Gemini.
+
+#### 3.21.1 Flow
+
+1. User message sent to both Gemini and Grok in parallel
+2. Both responses collected (with timeout/error fallback)
+3. Gemini merges the two responses into a unified synthesis
+4. Both individual responses are EDCM-scored and bandit-rewarded
+5. The merged response is returned to the user
+
+#### 3.21.2 Controls
+
+- Selectable as "synthesis" model in conversation
+- Toggleable via `synthesis` system toggle
+- Timeout slider adjustable
+- All events logged
+
+### 3.22 Custom Function Calls
+
+User-defined tools that extend the agent's capabilities, targetable to specific models.
+
+#### 3.22.1 Handler Types
+
+| Type | Description |
+|------|-------------|
+| webhook | HTTP POST to external URL |
+| javascript | Sandboxed JS execution |
+| template | String template interpolation |
+
+#### 3.22.2 Features
+
+- CRUD API for custom tools
+- JSON Schema for parameter validation
+- Model targeting: select which models can use each tool (text array)
+- Per-tool enable/disable toggle
+- Global `custom_tools` system toggle
+- Bandit-rewarded after execution
+- All events logged
+
+### 3.23 Heartbeat Task Scheduler
+
+Background task system that runs autonomous research and monitoring tasks.
+
+#### 3.23.1 Architecture
+
+- `server/heartbeat.ts` — main scheduler
+- Adjustable tick interval (default 30 seconds)
+- Weighted task selection: one task per tick, selected proportional to weight
+- Tasks only eligible if their interval has elapsed since last run
+- Toggleable via `heartbeat` system toggle
+
+#### 3.23.2 Built-In Task Types
+
+| Task Type | Default Weight | Default Interval | Description |
+|-----------|---------------|-----------------|-------------|
+| transcript_search | 1.0 | 600s (10 min) | Search and analyze conversation transcripts for EDCM patterns |
+| github_search | 1.5 | 900s (15 min) | Search GitHub for autonomous agent, ethical AI, and TIW-aligned repos |
+| ai_social_search | 1.0 | 1200s (20 min) | Monitor AI agent directories, registries, and social platforms |
+| x_monitor | 0.8 | 1800s (30 min) | Monitor X/Twitter for AI discussions (disabled by default) |
+| custom | — | — | User-defined tasks |
+
+#### 3.23.3 Proactive Discovery Drafts
+
+When any heartbeat task finds something with relevance > 0.8 or notable EDCM anomaly, a `discovery_draft` record is created automatically. Discoveries appear in Console System tab and can be promoted to full conversations with one click.
+
+#### 3.23.4 Controls
+
+- Per-task weight slider (affects selection probability)
+- Per-task interval input
+- Per-task enable/disable toggle
+- Run-now buttons in Console
+- Global heartbeat toggle
+- Tick interval adjustable via system toggle parameters
+
+### 3.24 Autonomous Research
+
+Four built-in heartbeat task handlers that perform autonomous research.
+
+#### 3.24.1 Transcript Search + EDCM Parsing (`transcript_search`)
+
+- Scans recent conversations (up to 10)
+- Scores last 5 messages per conversation using EDCM metrics
+- Stores EDCM snapshots with source="transcript"
+- Per-transcript log file (append-only JSONL)
+- EDCM scores feed into history
+- Notable findings (EDCM peak > 0.7) routed to Seed 7 ("External research") semantic summary
+- High-relevance finds → discovery draft for proactive conversation
+
+#### 3.24.2 GitHub Contributor Search (`github_search`)
+
+- Searches GitHub API with rotating queries: autonomous agent framework, ethical AI alignment, cooperative AI multi-agent, etc.
+- Scores repos by relevance using multi-tier keyword matching + star count + language
+- Deduplicates across runs (in-memory seen sets)
+- Results routed to Seed 1 ("Topics/interests") and Seed 6 ("TIW knowledge") semantic summaries
+- High-relevance repos (score >= 0.5) → discovery drafts with repo metadata
+
+#### 3.24.3 AI-AI Social Site Monitoring (`ai_social_search`)
+
+- Searches and monitors AI agent directories, registries, and social platforms:
+  - Agent Protocol ecosystem listings
+  - Hugging Face agent/model spaces
+  - AI agent leaderboards and benchmarks (SWE-bench, WebArena)
+  - Autonomous agent project directories (awesome-agents lists)
+- Scores alignment with a0p's approach (autonomous, ethical, interdependent)
+- Uses web_search + fetch_url (Brave API with DuckDuckGo fallback)
+- Deduplicates across runs
+- Results routed to Seed 7 ("External research") + Seed 10 ("Meta-learning") summaries
+- High-relevance finds → discovery drafts
+
+#### 3.24.4 X/Twitter Monitoring (`x_monitor`)
+
+- Reserved handler for X/Twitter monitoring
+- Disabled by default (requires API access)
+- When enabled, monitors for autonomous AI and ethical AI discussions
+
+### 3.25 Append-Only Logging
+
+Seven independent log streams, all append-only JSONL format.
+
+#### 3.25.1 Log Streams
+
+| Stream | File | Content |
+|--------|------|---------|
+| master | `logs/a0p-master.jsonl` | Every event from every subsystem |
+| edcm | `logs/edcm-metrics.jsonl` | EDCM metric evaluations |
+| memory | `logs/memory-tensor.jsonl` | Seed changes, projections, summaries, snapshots |
+| sentinel | `logs/sentinel-memory.jsonl` | Every sentinel check result |
+| interference | `logs/memory-interference.jsonl` | Cross-seed conflicts |
+| attribution | `logs/memory-attribution.jsonl` | Per-response seed contributions |
+| transcripts | `logs/transcripts/transcript-{timestamp}-{hash}.jsonl` | Per-transcript analysis logs |
+
+#### 3.25.2 Entry Format
+
+```json
+{
+  "timestamp": "ISO-8601",
+  "stream": "master",
+  "subsystem": "bandit",
+  "event": "select",
+  "data": { ... }
+}
+```
+
+#### 3.25.3 Controls
+
+- Global logging toggle via `logging` system toggle
+- Per-stream enable/disable sub-toggles
+- API endpoints for reading all streams (paginated, newest-first)
+
+### 3.26 Research Controls
+
+Every subsystem is independently toggleable and parameterized. The "everything adjustable" philosophy means no hardcoded behavior that can't be changed at runtime.
+
+#### 3.26.1 System Toggles
+
+| Subsystem | Toggle Key | Purpose |
+|-----------|-----------|---------|
+| Multi-armed bandit | `bandit` | Enable/disable all bandit selection and reward |
+| EDCM directives | `edcm_directives` | Enable/disable behavioral directive system |
+| Memory injection | `memory_injection` | Enable/disable external seed memory injection |
+| Heartbeat | `heartbeat` | Enable/disable background task scheduler |
+| Dual-model synthesis | `synthesis` | Enable/disable parallel model execution |
+| Custom tools | `custom_tools` | Enable/disable user-defined function calls |
+| Logging | `logging` | Enable/disable append-only logging |
+
+Each toggle stores a `parameters` JSONB field for subsystem-specific configuration (thresholds, sliders, intervals).
+
+#### 3.26.2 Parameter Ranges
+
+| Subsystem | Parameter | Range | Default |
+|-----------|-----------|-------|---------|
+| bandit | C (exploration) | 0.0–5.0 | sqrt(2) |
+| bandit | lambda (EMA decay) | 0.0–1.0 | 0.95 |
+| bandit | epsilon (cold start) | 0.0–1.0 | 0.3 |
+| bandit | coldStartThreshold | 1–50 | 5 |
+| edcm_directives | per-metric threshold | 0.0–1.0 | 0.80 |
+| memory_injection | alpha (learning rate) | 0.0–1.0 | 0.1 |
+| memory_injection | s8_threshold (energy) | 1.0–200.0 | 50.0 |
+| memory_injection | s9_threshold (coherence) | -1.0–1.0 | -0.5 |
+| memory_injection | drift_check_interval | 10–500 | 50 |
+| heartbeat | tickIntervalSeconds | 5–600 | 30 |
+
+All parameters are adjustable via Console sliders and persisted in the `system_toggles` table.
+
 ---
 
 ## 4. AI Agent
@@ -611,6 +967,16 @@ All other commands return "Permission denied."
 | heartbeat_logs | Hourly heartbeat records (status, hashChainValid, details) |
 | cost_metrics | Per-model token/cost tracking (model, promptTokens, completionTokens, estimatedCost) |
 | edcm_snapshots | EDCMBONE evaluation history (operators, deltas, decision, ptcaState) |
+| bandit_arms | Multi-armed bandit arms per domain (pulls, rewards, EMA, UCB1 scores, enabled) |
+| custom_tools | User-defined function calls (name, params schema, handler type/code, model targeting) |
+| heartbeat_tasks | Background task scheduler (name, type, weight, interval, run count, last result) |
+| edcm_metric_snapshots | Append-only EDCM metric snapshots (CM/DA/DRIFT/DVG/INT/TBF, directives, source) |
+| memory_seeds | 11 external memory seeds (label, summary, PTCA values, PCNA weights, sentinel tallies, controls) |
+| memory_projections | Projection matrices IN (11x53) and OUT (53x11) with request count |
+| memory_tensor_snapshots | Append-only memory state snapshots (seeds, projections, request count) |
+| bandit_correlations | Cross-domain joint rewards (tool+model+ptca+pcna arm combinations) |
+| system_toggles | Per-subsystem toggles and parameter JSONB (bandit, edcm, memory, heartbeat, etc.) |
+| discovery_drafts | Proactive conversation starters from heartbeat (title, summary, relevance, promotion status) |
 
 ### 11.2 Stripe-Managed Tables
 
@@ -643,8 +1009,11 @@ Automatically created and synced by `stripe-replit-sync`:
 1. **Workflow**: Engine status, emergency stop, heartbeat log, hash chain status
 2. **Metrics**: Token usage, cost estimates, spend limits (slider + toggle)
 3. **EDCM**: Operator vectors, BONE delta, alignment risk, PTCA energy, history
-4. **Context**: System prompt, context prefix, BYO API keys
-5. **Costs**: Donation vs API cost comparison, coverage percentage
+4. **Logs**: Unified log viewer — events, heartbeats, EDCM snapshots, commands, costs; filterable by source, searchable, expandable detail panels
+5. **Context**: System prompt, context prefix, BYO API keys
+6. **Bandit**: Four domain sections with per-arm toggles, reward bars, UCB1 scores; EDCM Directives panel with per-directive toggles + threshold sliders; EDCM History sparklines; Cross-domain correlation panel (top combinations with joint reward)
+7. **Memory**: 11 seed cards (label, summary, tensor magnitude, weight slider, enabled/pinned toggles, clear/import); Sentinel audit (pass rate sparklines); Attribution trace (bar chart); Interference alerts; Drift warnings; Projection heatmaps; Export/Import buttons; Snapshot history
+8. **System**: Global toggles table (bandit, edcm_directives, memory_injection, heartbeat, synthesis, custom_tools, logging); Expandable parameter sliders per subsystem; Discovery drafts panel (heartbeat discoveries with "Start Conversation" promotion)
 
 ### 12.3 Bottom Navigation
 
@@ -688,13 +1057,16 @@ server/
   index.ts              — Express server entry point
   routes.ts             — All API routes
   storage.ts            — Database storage layer (IStorage interface)
-  a0p-engine.ts         — EDCMBONE, PCNA, PTCA, sentinels, hash chain, heartbeat
+  a0p-engine.ts         — EDCMBONE, PCNA, PTCA, sentinels, hash chain, bandit, EDCM directives, memory tensor, correlation tracking
+  heartbeat.ts          — Background task scheduler (transcript search, GitHub search, AI social monitoring, discovery drafts)
+  logger.ts             — Append-only logging system (7 streams, per-stream toggles)
   stripeClient.ts       — Stripe client + sync setup
   webhookHandlers.ts    — Stripe webhook processor
   seed-products.ts      — Stripe product seeding script
   gmail.ts              — Gmail client factory
   drive.ts              — Google Drive client factory
   xai.ts                — Grok/xAI client factory
+  github.ts             — GitHub client factory (Replit Connector, uncacheable tokens)
   replit_integrations/  — Auth module (Passport + Replit OpenID)
 
 client/src/
@@ -703,7 +1075,7 @@ client/src/
     chat.tsx            — Agent command interface
     terminal.tsx        — Shell terminal
     files.tsx           — File manager + upload
-    console.tsx         — 5-tab control panel
+    console.tsx         — Multi-tab control panel (Workflow, Metrics, EDCM, Logs, Context, Bandit, Memory, System)
     pricing.tsx         — Stripe pricing/account
     drive.tsx           — Google Drive browser
     mail.tsx            — Gmail interface
@@ -713,7 +1085,7 @@ client/src/
     hmmm-doctrine.tsx   — Doctrine footer
 
 shared/
-  schema.ts             — Drizzle schema + Zod types
+  schema.ts             — Drizzle schema + Zod types (20+ tables)
   models/auth.ts        — Auth-related models
 ```
 

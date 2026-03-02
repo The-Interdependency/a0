@@ -9,13 +9,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownContent } from "@/lib/markdown";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Plus, Send, Trash2, Bot, User, ChevronRight,
   PanelLeftOpen, PanelLeftClose, Terminal as TermIcon,
   FileText, Mail, HardDrive, Search, Pencil,
-  Activity, Shield, Zap,
+  Activity, Shield, Zap, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Conversation, Message } from "@shared/schema";
+
+const CHAT_MODELS = [
+  { id: "agent", label: "Agent (Tools)", icon: Shield },
+  { id: "gemini", label: "Gemini", icon: Zap },
+  { id: "grok", label: "Grok", icon: Zap },
+  { id: "synthesis", label: "Synthesis", icon: Layers },
+] as const;
 
 const TOOL_ICONS: Record<string, typeof TermIcon> = {
   run_command: TermIcon,
@@ -57,6 +71,8 @@ export default function ChatPage() {
   const [streamContent, setStreamContent] = useState("");
   const [toolActions, setToolActions] = useState<ToolAction[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>("agent");
+  const [synthesisPhase, setSynthesisPhase] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -79,8 +95,8 @@ export default function ChatPage() {
   const messages = convDetail?.messages || [];
 
   const createConv = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/conversations", { title: "New Task", model: "agent" });
+    mutationFn: async (model?: string) => {
+      const res = await apiRequest("POST", "/api/conversations", { title: "New Task", model: model || selectedModel });
       return await res.json() as Conversation;
     },
     onSuccess: (conv: Conversation) => {
@@ -107,7 +123,7 @@ export default function ChatPage() {
     let convId = activeConvId;
 
     if (!convId) {
-      const conv = await createConv.mutateAsync();
+      const conv = await createConv.mutateAsync(selectedModel);
       convId = conv.id;
     }
 
@@ -116,6 +132,7 @@ export default function ChatPage() {
     setStreaming(true);
     setStreamContent("");
     setToolActions([]);
+    setSynthesisPhase(null);
 
     qc.setQueryData(
       ["/api/conversations", convId],
@@ -132,7 +149,7 @@ export default function ChatPage() {
       const response = await fetch(`/api/conversations/${convId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: userMsg }),
+        body: JSON.stringify({ content: userMsg, model: selectedModel }),
       });
 
       if (!response.ok) throw new Error("Failed to send");
@@ -152,6 +169,9 @@ export default function ChatPage() {
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
+              if (data.synthesis && data.phase) {
+                setSynthesisPhase(data.phase);
+              }
               if (data.content) {
                 accumulated += data.content;
                 setStreamContent(accumulated);
@@ -166,6 +186,7 @@ export default function ChatPage() {
                 setStreaming(false);
                 setStreamContent("");
                 setToolActions([]);
+                setSynthesisPhase(null);
                 qc.invalidateQueries({ queryKey: ["/api/conversations", convId] });
                 qc.invalidateQueries({ queryKey: ["/api/conversations"] });
               }
@@ -178,6 +199,7 @@ export default function ChatPage() {
       setStreaming(false);
       setStreamContent("");
       setToolActions([]);
+      setSynthesisPhase(null);
     }
   }
 
@@ -205,7 +227,7 @@ export default function ChatPage() {
           </Button>
         </div>
         <div className="p-2">
-          <Button className="w-full justify-start gap-2" variant="secondary" onClick={() => createConv.mutate()} data-testid="button-new-task">
+          <Button className="w-full justify-start gap-2" variant="secondary" onClick={() => createConv.mutate(undefined)} data-testid="button-new-task">
             <Plus className="w-4 h-4" />
             New Task
           </Button>
@@ -265,6 +287,21 @@ export default function ChatPage() {
               </span>
             </div>
           </div>
+          <Select value={selectedModel} onValueChange={setSelectedModel}>
+            <SelectTrigger className="w-[130px] text-[11px]" data-testid="select-model">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CHAT_MODELS.map((m) => (
+                <SelectItem key={m.id} value={m.id} data-testid={`model-option-${m.id}`}>
+                  <span className="flex items-center gap-1.5">
+                    <m.icon className="w-3 h-3" />
+                    {m.label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Badge variant="secondary" className="text-[9px] gap-1 font-mono" data-testid="badge-engine-status">
             <Activity className="w-2.5 h-2.5" />
             EDCM
@@ -341,11 +378,21 @@ export default function ChatPage() {
             {streaming && !streamContent && toolActions.length === 0 && (
               <div className="flex gap-2 items-start">
                 <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Shield className="w-3.5 h-3.5 text-primary" />
+                  {selectedModel === "synthesis" ? (
+                    <Layers className="w-3.5 h-3.5 text-primary" />
+                  ) : (
+                    <Shield className="w-3.5 h-3.5 text-primary" />
+                  )}
                 </div>
                 <div className="bg-card border border-border rounded-xl px-3 py-2">
                   <div className="flex gap-1 items-center h-5">
-                    <span className="text-xs text-muted-foreground mr-1">thinking</span>
+                    <span className="text-xs text-muted-foreground mr-1">
+                      {synthesisPhase === "parallel"
+                        ? "querying Gemini + Grok"
+                        : synthesisPhase === "merging"
+                        ? "merging responses"
+                        : "thinking"}
+                    </span>
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0ms]" />
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:150ms]" />
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:300ms]" />
