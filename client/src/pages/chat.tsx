@@ -65,7 +65,23 @@ interface ToolAction {
 export default function ChatPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [activeConvId, setActiveConvId] = useState<number | null>(null);
+  const [activeConvId, setActiveConvIdState] = useState<number | null>(() => {
+    const stored = localStorage.getItem("a0p-active-conv");
+    if (stored) {
+      const parsed = parseInt(stored, 10);
+      return isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  });
+
+  const setActiveConvId = (id: number | null) => {
+    setActiveConvIdState(id);
+    if (id !== null) {
+      localStorage.setItem("a0p-active-conv", String(id));
+    } else {
+      localStorage.removeItem("a0p-active-conv");
+    }
+  };
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
@@ -113,6 +129,15 @@ export default function ChatPage() {
       setActiveConvId(null);
     },
   });
+
+  useEffect(() => {
+    if (!convsLoading && activeConvId !== null) {
+      const exists = conversations.some((c) => c.id === activeConvId);
+      if (!exists) {
+        setActiveConvId(null);
+      }
+    }
+  }, [convsLoading, conversations]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -453,8 +478,8 @@ function ToolActionsDisplay({ actions }: { actions: ToolAction[] }) {
           );
         }
         return (
-          <div key={i} className="ml-8 rounded-md bg-background border border-border p-2 max-h-32 overflow-auto" data-testid={`tool-result-${i}`}>
-            <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-all">
+          <div key={i} className="ml-8 rounded-md bg-background border border-border p-2 max-h-32 overflow-auto min-w-0" data-testid={`tool-result-${i}`}>
+            <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-all max-w-full">
               {action.result?.slice(0, 1000) || "(no output)"}
             </pre>
           </div>
@@ -478,7 +503,7 @@ function AgentMessage({ message, isStreaming }: { message: Message; isStreaming?
       </div>
       <div
         className={cn(
-          "max-w-[85%] rounded-xl px-3 py-2 text-sm",
+          "max-w-[85%] rounded-xl px-3 py-2 text-sm overflow-hidden min-w-0",
           isUser
             ? "bg-primary text-primary-foreground rounded-tr-sm"
             : "bg-card border border-border rounded-tl-sm"
@@ -488,7 +513,7 @@ function AgentMessage({ message, isStreaming }: { message: Message; isStreaming?
         {isUser ? (
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         ) : (
-          <div className="break-words [&_.markdown-content]:text-sm [&_.code-block]:bg-black/20 [&_.code-block]:rounded-md [&_.code-block]:p-2 [&_.code-block]:text-xs [&_.code-block]:overflow-x-auto [&_.code-block]:my-1 [&_.code-block]:font-mono [&_.inline-code]:bg-black/20 [&_.inline-code]:px-1 [&_.inline-code]:rounded [&_.inline-code]:text-xs [&_.inline-code]:font-mono [&_.md-h1]:text-base [&_.md-h1]:font-bold [&_.md-h1]:mb-1 [&_.md-h2]:text-sm [&_.md-h2]:font-bold [&_.md-h2]:mb-1 [&_.md-h3]:text-sm [&_.md-h3]:font-semibold [&_.md-h3]:mb-0.5 [&_.md-ul]:pl-4 [&_.md-li]:list-disc">
+          <div className="break-words min-w-0 [&_.markdown-content]:text-sm [&_.markdown-content]:min-w-0 [&_.code-block]:bg-black/20 [&_.code-block]:rounded-md [&_.code-block]:p-2 [&_.code-block]:text-xs [&_.code-block]:overflow-x-auto [&_.code-block]:my-1 [&_.code-block]:font-mono [&_.code-block]:max-w-full [&_.inline-code]:bg-black/20 [&_.inline-code]:px-1 [&_.inline-code]:rounded [&_.inline-code]:text-xs [&_.inline-code]:font-mono [&_.inline-code]:break-all [&_.md-h1]:text-base [&_.md-h1]:font-bold [&_.md-h1]:mb-1 [&_.md-h2]:text-sm [&_.md-h2]:font-bold [&_.md-h2]:mb-1 [&_.md-h3]:text-sm [&_.md-h3]:font-semibold [&_.md-h3]:mb-0.5 [&_.md-ul]:pl-4 [&_.md-li]:list-disc">
             <MarkdownContent content={message.content} />
             {isStreaming && (
               <span className="inline-block w-0.5 h-3.5 bg-current ml-0.5 animate-pulse" />

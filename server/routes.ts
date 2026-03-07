@@ -4,6 +4,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { readdir, readFile, rename, stat, writeFile, mkdir } from "fs/promises";
 import path from "path";
+import archiver from "archiver";
 import multer from "multer";
 import { storage } from "./storage";
 import { getUncachableGmailClient } from "./gmail";
@@ -17,7 +18,7 @@ import {
   processA0Request, verifyHashChain, startHeartbeat, stopHeartbeat,
   emergencyStopEngine, resumeEngine, ENGINE_STATUS,
   trackCost, estimateCost, edcmDisposition, ptcaSolve,
-  computeEdcmMetrics,
+  computeEdcmMetrics, checkSpendLimit, getTokenRates, invalidateTokenRatesCache,
   generateEdcmDirectives, buildDirectivePromptInjection,
   getEdcmDirectiveConfig, getEdcmDirectiveHistory,
   getMemoryState, performMemoryInjection, performMemoryProjectionOut,
@@ -35,6 +36,7 @@ import {
   readLogStream, listTranscripts, readTranscriptLog,
   getLogStats, getStreamToggles, setStreamToggle, setLoggingEnabled,
   logMaster, logEdcm, type LogStream,
+  logAiTranscript, readAiTranscripts, listAiTranscriptFiles,
 } from "./logger";
 import {
   initializeHeartbeatTasks, startHeartbeatScheduler, stopHeartbeatScheduler,
@@ -457,10 +459,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     messages: { role: string; content: string }[],
     sysPrompt: string,
     maxTokens: number,
-    timeoutMs: number
+    timeoutMs: number,
+    conversationId?: number,
+    messageId?: number
   ): Promise<{ content: string; promptTokens: number; completionTokens: number }> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const startTime = Date.now();
     try {
       const geminiHistory = messages.slice(0, -1).map((m: any) => ({
         role: m.role === "assistant" ? "model" : "user",
@@ -476,9 +481,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const text = result.text || "";
       const promptTokens = Math.ceil(messages.reduce((s: number, m: any) => s + m.content.length, 0) / 4);
       const completionTokens = Math.ceil(text.length / 4);
+      const latencyMs = Date.now() - startTime;
+      logAiTranscript({
+        timestamp: new Date().toISOString(),
+        conversationId,
+        messageId,
+        model: "gemini",
+        request: { systemPrompt: sysPrompt, messages },
+        response: text,
+        tokens: { prompt: promptTokens, completion: completionTokens, total: promptTokens + completionTokens },
+        latencyMs,
+        status: "success",
+      }).catch(() => {});
       return { content: text, promptTokens, completionTokens };
-    } catch (e) {
+    } catch (e: any) {
       clearTimeout(timeout);
+      const latencyMs = Date.now() - startTime;
+      logAiTranscript({
+        timestamp: new Date().toISOString(),
+        conversationId,
+        messageId,
+        model: "gemini",
+        request: { systemPrompt: sysPrompt, messages },
+        response: "",
+        tokens: { prompt: 0, completion: 0, total: 0 },
+        latencyMs,
+        status: "error",
+        error: e.message,
+      }).catch(() => {});
       throw e;
     }
   }
@@ -488,10 +518,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     sysPrompt: string,
     maxTokens: number,
     temperature: number | undefined,
-    timeoutMs: number
+    timeoutMs: number,
+    conversationId?: number,
+    messageId?: number
   ): Promise<{ content: string; promptTokens: number; completionTokens: number }> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const startTime = Date.now();
     try {
       const client = getGrokClient();
       const chatMsgs = [
@@ -507,13 +540,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       clearTimeout(timeout);
       const text = result.choices[0]?.message?.content || "";
       const usage = result.usage;
-      return {
-        content: text,
-        promptTokens: usage?.prompt_tokens || 0,
-        completionTokens: usage?.completion_tokens || 0,
-      };
-    } catch (e) {
+      const promptTokens = usage?.prompt_tokens || 0;
+      const completionTokens = usage?.completion_tokens || 0;
+      const latencyMs = Date.now() - startTime;
+      logAiTranscript({
+        timestamp: new Date().toISOString(),
+        conversationId,
+        messageId,
+        model: "grok",
+        request: { systemPrompt: sysPrompt, messages },
+        response: text,
+        tokens: { prompt: promptTokens, completion: completionTokens, total: promptTokens + completionTokens },
+        latencyMs,
+        status: "success",
+      }).catch(() => {});
+      return { content: text, promptTokens, completionTokens };
+    } catch (e: any) {
       clearTimeout(timeout);
+      const latencyMs = Date.now() - startTime;
+      logAiTranscript({
+        timestamp: new Date().toISOString(),
+        conversationId,
+        messageId,
+        model: "grok",
+        request: { systemPrompt: sysPrompt, messages },
+        response: "",
+        tokens: { prompt: 0, completion: 0, total: 0 },
+        latencyMs,
+        status: "error",
+        error: e.message,
+      }).catch(() => {});
       throw e;
     }
   }
@@ -521,7 +577,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   async function mergeResponsesViaGemini(
     geminiResponse: string,
     grokResponse: string,
-    originalQuery: string
+    originalQuery: string,
+    conversationId?: number,
+    messageId?: number
   ): Promise<string> {
     const mergePrompt = `You are a synthesis engine. Two AI models have independently answered the same query. Your job is to produce a single, coherent, high-quality merged response that combines the best insights from both.
 
@@ -541,12 +599,45 @@ INSTRUCTIONS:
 - Do not mention that this is a synthesis or that two models were used
 - Produce a single unified response`;
 
-    const result = await geminiAI.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: mergePrompt }] }],
-      config: { maxOutputTokens: 8192 },
-    });
-    return result.text || geminiResponse || grokResponse;
+    const startTime = Date.now();
+    try {
+      const result = await geminiAI.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: mergePrompt }] }],
+        config: { maxOutputTokens: 8192 },
+      });
+      const text = result.text || geminiResponse || grokResponse;
+      const promptTokens = Math.ceil(mergePrompt.length / 4);
+      const completionTokens = Math.ceil(text.length / 4);
+      const latencyMs = Date.now() - startTime;
+      logAiTranscript({
+        timestamp: new Date().toISOString(),
+        conversationId,
+        messageId,
+        model: "synthesis-merge",
+        request: { mergePrompt },
+        response: text,
+        tokens: { prompt: promptTokens, completion: completionTokens, total: promptTokens + completionTokens },
+        latencyMs,
+        status: "success",
+      }).catch(() => {});
+      return text;
+    } catch (e: any) {
+      const latencyMs = Date.now() - startTime;
+      logAiTranscript({
+        timestamp: new Date().toISOString(),
+        conversationId,
+        messageId,
+        model: "synthesis-merge",
+        request: { mergePrompt },
+        response: "",
+        tokens: { prompt: 0, completion: 0, total: 0 },
+        latencyMs,
+        status: "error",
+        error: e.message,
+      }).catch(() => {});
+      throw e;
+    }
   }
 
   app.post("/api/ai/complete", async (req: Request, res: Response) => {
@@ -617,6 +708,7 @@ INSTRUCTIONS:
       }
 
       if (model === "gemini") {
+        const startTime = Date.now();
         const geminiHistory = messages.slice(0, -1).map((m: any) => ({
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }],
@@ -630,7 +722,17 @@ INSTRUCTIONS:
         const text = result.text || "";
         const promptTokens = Math.ceil(messages.reduce((s: number, m: any) => s + m.content.length, 0) / 4);
         const completionTokens = Math.ceil(text.length / 4);
+        const latencyMs = Date.now() - startTime;
         await trackCost(userId === "default" ? null : userId, "gemini", promptTokens, completionTokens);
+        logAiTranscript({
+          timestamp: new Date().toISOString(),
+          model: "gemini",
+          request: { systemPrompt: sysPrompt, messages },
+          response: text,
+          tokens: { prompt: promptTokens, completion: completionTokens, total: promptTokens + completionTokens },
+          latencyMs,
+          status: "success",
+        }).catch(() => {});
         return res.json({
           model: "gemini-2.5-flash",
           content: text,
@@ -639,6 +741,7 @@ INSTRUCTIONS:
       }
 
       if (model === "grok") {
+        const startTime = Date.now();
         const client = getGrokClient();
         const chatMsgs = [
           { role: "system" as const, content: sysPrompt },
@@ -652,13 +755,25 @@ INSTRUCTIONS:
         });
         const text = result.choices[0]?.message?.content || "";
         const usage = result.usage;
-        await trackCost(userId === "default" ? null : userId, "grok", usage?.prompt_tokens || 0, usage?.completion_tokens || 0);
+        const grokPromptTokens = usage?.prompt_tokens || 0;
+        const grokCompletionTokens = usage?.completion_tokens || 0;
+        const latencyMs = Date.now() - startTime;
+        await trackCost(userId === "default" ? null : userId, "grok", grokPromptTokens, grokCompletionTokens);
+        logAiTranscript({
+          timestamp: new Date().toISOString(),
+          model: "grok",
+          request: { systemPrompt: sysPrompt, messages },
+          response: text,
+          tokens: { prompt: grokPromptTokens, completion: grokCompletionTokens, total: grokPromptTokens + grokCompletionTokens },
+          latencyMs,
+          status: "success",
+        }).catch(() => {});
         return res.json({
           model: "grok-3-mini",
           content: text,
           usage: {
-            promptTokens: usage?.prompt_tokens || 0,
-            completionTokens: usage?.completion_tokens || 0,
+            promptTokens: grokPromptTokens,
+            completionTokens: grokCompletionTokens,
             totalTokens: usage?.total_tokens || 0,
           },
         });
@@ -675,6 +790,7 @@ INSTRUCTIONS:
         });
       }
 
+      const startTime = Date.now();
       const client = getOpenAICompatClient(provider!, byoKey!);
       const chatMsgs = [
         { role: "system" as const, content: sysPrompt },
@@ -690,14 +806,26 @@ INSTRUCTIONS:
 
       const text = result.choices[0]?.message?.content || "";
       const usage = result.usage;
-      await trackCost(userId === "default" ? null : userId, provider!, usage?.prompt_tokens || 0, usage?.completion_tokens || 0);
+      const byoPromptTokens = usage?.prompt_tokens || 0;
+      const byoCompletionTokens = usage?.completion_tokens || 0;
+      const latencyMs = Date.now() - startTime;
+      await trackCost(userId === "default" ? null : userId, provider!, byoPromptTokens, byoCompletionTokens);
+      logAiTranscript({
+        timestamp: new Date().toISOString(),
+        model: `${provider}/${modelId}`,
+        request: { systemPrompt: sysPrompt, messages },
+        response: text,
+        tokens: { prompt: byoPromptTokens, completion: byoCompletionTokens, total: byoPromptTokens + byoCompletionTokens },
+        latencyMs,
+        status: "success",
+      }).catch(() => {});
       return res.json({
         model: modelId,
         provider,
         content: text,
         usage: {
-          promptTokens: usage?.prompt_tokens || 0,
-          completionTokens: usage?.completion_tokens || 0,
+          promptTokens: byoPromptTokens,
+          completionTokens: byoCompletionTokens,
           totalTokens: usage?.total_tokens || 0,
         },
       });
@@ -727,6 +855,7 @@ INSTRUCTIONS:
       res.flushHeaders();
 
       let fullResponse = "";
+      const streamStartTime = Date.now();
 
       if (model === "synthesis") {
         const synthConfig = await getSynthesisConfig();
@@ -860,6 +989,16 @@ INSTRUCTIONS:
       const completionTokens = Math.ceil(fullResponse.length / 4);
       const resolvedProvider = model.includes("/") ? model.split("/")[0] : model;
       await trackCost(userId === "default" ? null : userId, resolvedProvider, promptTokens, completionTokens);
+      const streamLatencyMs = Date.now() - streamStartTime;
+      logAiTranscript({
+        timestamp: new Date().toISOString(),
+        model: resolvedProvider,
+        request: { systemPrompt: sysPrompt, messages },
+        response: fullResponse,
+        tokens: { prompt: promptTokens, completion: completionTokens, total: promptTokens + completionTokens },
+        latencyMs: streamLatencyMs,
+        status: "success",
+      }).catch(() => {});
 
       res.write(`data: ${JSON.stringify({ done: true, usage: { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens } })}\n\n`);
       res.end();
@@ -874,10 +1013,10 @@ INSTRUCTIONS:
     }
   });
 
-  app.post("/api/ai/estimate", (req, res) => {
+  app.post("/api/ai/estimate", async (req, res) => {
     const { model, promptLength, maxTokens } = req.body;
     if (!model || !promptLength) return res.status(400).json({ error: "model and promptLength required" });
-    const cost = estimateCost(model.includes("/") ? model.split("/")[0] : model, promptLength, maxTokens || 2048);
+    const cost = await estimateCost(model.includes("/") ? model.split("/")[0] : model, promptLength, maxTokens || 2048);
     res.json({ model, estimatedCost: cost });
   });
 
@@ -986,6 +1125,31 @@ INSTRUCTIONS:
       name: "github_push_zip",
       description: "Extract a previously uploaded zip file and push all its contents to a GitHub repository. Each file in the zip becomes a commit. Ideal for uploading an entire website at once.",
       parameters: { type: "object" as const, properties: { uploadFilename: { type: "string" as const, description: "Filename of the uploaded zip (from the uploads/ directory)" }, owner: { type: "string" as const, description: "Repository owner" }, repo: { type: "string" as const, description: "Repository name" }, basePath: { type: "string" as const, description: "Base path in repo to push files to (default: root)" }, message: { type: "string" as const, description: "Commit message" }, branch: { type: "string" as const, description: "Branch name (default: main)" } }, required: ["uploadFilename", "owner", "repo", "message"] },
+    },
+    {
+      name: "set_brain_preset",
+      description: "Switch the active brain pipeline preset for the current session. Use to change how models collaborate (e.g., single model, dual synthesis, deep research pipeline).",
+      parameters: { type: "object" as const, properties: { presetName: { type: "string" as const, description: "Name or ID of the brain preset to activate" } }, required: ["presetName"] },
+    },
+    {
+      name: "get_brain_presets",
+      description: "List all saved brain pipeline presets with their configurations",
+      parameters: { type: "object" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "set_default_brain",
+      description: "Change the default brain preset used for new conversations",
+      parameters: { type: "object" as const, properties: { presetName: { type: "string" as const, description: "Name or ID of the preset to set as default" } }, required: ["presetName"] },
+    },
+    {
+      name: "set_synthesis_weights",
+      description: "Adjust per-model merge weights for the active brain preset",
+      parameters: { type: "object" as const, properties: { weights: { type: "object" as const, description: "Model weights object, e.g. { gemini: 0.7, grok: 0.3 }" } }, required: ["weights"] },
+    },
+    {
+      name: "get_synthesis_config",
+      description: "Return the current active brain pipeline configuration including stages, weights, and thresholds",
+      parameters: { type: "object" as const, properties: {}, required: [] as string[] },
     },
     {
       name: "web_search",
@@ -1225,6 +1389,52 @@ INSTRUCTIONS:
             }
           }
           return `Pushed ${results.length} files from ${zipFilename} to ${args.owner}/${args.repo}:\n${results.join("\n")}`;
+        }
+        case "set_brain_preset": {
+          const name = (args.presetName || "").trim();
+          if (!name) return "Error: presetName is required";
+          const allPresets = await getBrainPresets();
+          const found = allPresets.find((p: any) => p.id === name || p.name.toLowerCase() === name.toLowerCase());
+          if (!found) return `Error: Preset '${name}' not found. Available: ${allPresets.map((p: any) => p.name).join(", ")}`;
+          await storage.upsertSystemToggle("active_brain_preset", true, { presetId: found.id });
+          return `Brain preset activated: ${found.name} (${found.id}) — ${found.stages.length} stage(s), merge: ${found.mergeStrategy}`;
+        }
+        case "get_brain_presets": {
+          const allPresets = await getBrainPresets();
+          const activeToggle = await storage.getSystemToggle("active_brain_preset");
+          const activeId = (activeToggle?.parameters as any)?.presetId;
+          return allPresets.map((p: any) =>
+            `${p.id === activeId ? "* " : "  "}${p.name} (${p.id}) — ${p.description} [${p.stages.length} stages, ${p.isDefault ? "DEFAULT" : ""}]`
+          ).join("\n");
+        }
+        case "set_default_brain": {
+          const name = (args.presetName || "").trim();
+          if (!name) return "Error: presetName is required";
+          const allPresets = await getBrainPresets();
+          const found = allPresets.find((p: any) => p.id === name || p.name.toLowerCase() === name.toLowerCase());
+          if (!found) return `Error: Preset '${name}' not found. Available: ${allPresets.map((p: any) => p.name).join(", ")}`;
+          for (let i = 0; i < allPresets.length; i++) {
+            allPresets[i] = { ...allPresets[i], isDefault: allPresets[i].id === found.id };
+          }
+          await storage.upsertSystemToggle("brain_presets", true, allPresets);
+          return `Default brain preset set to: ${found.name}`;
+        }
+        case "set_synthesis_weights": {
+          const weights = args.weights;
+          if (!weights || typeof weights !== "object") return "Error: weights object required";
+          const allPresets = await getBrainPresets();
+          const activeToggle = await storage.getSystemToggle("active_brain_preset");
+          const activeId = (activeToggle?.parameters as any)?.presetId;
+          const idx = allPresets.findIndex((p: any) => p.id === activeId);
+          if (idx >= 0) {
+            allPresets[idx] = { ...allPresets[idx], weights };
+            await storage.upsertSystemToggle("brain_presets", true, allPresets);
+          }
+          return `Synthesis weights updated: ${JSON.stringify(weights)}`;
+        }
+        case "get_synthesis_config": {
+          const activePreset = await getActiveBrainPreset();
+          return JSON.stringify(activePreset, null, 2);
         }
         case "web_search": {
           const q = (args.query || "").trim();
@@ -2274,6 +2484,53 @@ IMPORTANT RULES:
     }
   });
 
+  app.get("/api/metrics/token-rates", async (_req, res) => {
+    try {
+      const rates = await getTokenRates();
+      res.json(rates);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/metrics/token-rates", async (req, res) => {
+    try {
+      const { rates } = req.body;
+      if (!rates || typeof rates !== "object") return res.status(400).json({ error: "rates object required" });
+      await storage.upsertSystemToggle("token_rates", true, rates);
+      invalidateTokenRatesCache();
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/metrics/spend-limit", async (_req, res) => {
+    try {
+      const toggle = await storage.getSystemToggle("spend_limit_monthly");
+      const summary = await storage.getCostSummary();
+      const params = (toggle?.parameters || {}) as any;
+      res.json({
+        enabled: toggle?.enabled || false,
+        limit: params.limit || 50,
+        mode: params.mode || "warn",
+        currentSpend: summary.costThisMonth,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/metrics/spend-limit", async (req, res) => {
+    try {
+      const { enabled, limit, mode } = req.body;
+      await storage.upsertSystemToggle("spend_limit_monthly", enabled !== false, { limit: limit || 50, mode: mode || "warn" });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ============ EDCM SNAPSHOTS ============
 
   app.get("/api/edcm/snapshots", async (_req, res) => {
@@ -2519,6 +2776,51 @@ IMPORTANT RULES:
     }
   });
 
+  const BUILTIN_HEARTBEAT_TASKS = ["transcript_search", "github_search", "ai_social_search", "x_monitor"];
+
+  app.post("/api/heartbeat/tasks", async (req, res) => {
+    try {
+      const { name, description, taskType, weight, intervalSeconds, enabled, handlerCode } = req.body;
+      if (!name || !taskType) {
+        return res.status(400).json({ error: "name and taskType are required" });
+      }
+      const existing = await storage.getHeartbeatTask(name);
+      if (existing) {
+        return res.status(409).json({ error: `Task with name "${name}" already exists` });
+      }
+      const task = await storage.upsertHeartbeatTask({
+        name,
+        description: description || "",
+        taskType,
+        weight: weight ?? 1.0,
+        intervalSeconds: intervalSeconds ?? 300,
+        enabled: enabled ?? true,
+        ...(handlerCode ? { lastResult: `handler:${handlerCode}` } : {}),
+      });
+      res.json(task);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/heartbeat/tasks/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tasks = await storage.getHeartbeatTasks();
+      const task = tasks.find(t => t.id === id);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      if (BUILTIN_HEARTBEAT_TASKS.includes(task.name)) {
+        return res.status(403).json({ error: `Cannot delete built-in task "${task.name}"` });
+      }
+      await storage.deleteHeartbeatTask(id);
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.patch("/api/heartbeat/tasks/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -2527,6 +2829,8 @@ IMPORTANT RULES:
       if (req.body.weight !== undefined) updates.weight = req.body.weight;
       if (req.body.intervalSeconds !== undefined) updates.intervalSeconds = req.body.intervalSeconds;
       if (req.body.description !== undefined) updates.description = req.body.description;
+      if (req.body.taskType !== undefined) updates.taskType = req.body.taskType;
+      if (req.body.handlerCode !== undefined) updates.lastResult = `handler:${req.body.handlerCode}`;
       await storage.updateHeartbeatTask(id, updates);
       const tasks = await storage.getHeartbeatTasks();
       res.json(tasks);
@@ -2553,6 +2857,15 @@ IMPORTANT RULES:
   app.post("/api/heartbeat/stop", (_req, res) => {
     stopHeartbeatScheduler();
     res.json({ ok: true, running: false });
+  });
+
+  app.get("/api/heartbeat/stats", async (_req, res) => {
+    try {
+      const stats = await storage.getActivityStats();
+      res.json(stats);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.patch("/api/heartbeat/tick-interval", async (req, res) => {
@@ -2639,6 +2952,28 @@ IMPORTANT RULES:
       }
       const entries = await readTranscriptLog(filename);
       res.json({ entries, total: entries.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/ai-transcripts", async (req, res) => {
+    try {
+      const date = req.query.date as string | undefined;
+      const model = req.query.model as string | undefined;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const result = await readAiTranscripts({ date, model, offset, limit });
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/ai-transcripts/files", async (_req, res) => {
+    try {
+      const files = await listAiTranscriptFiles();
+      res.json(files);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -2857,6 +3192,471 @@ IMPORTANT RULES:
     }
   });
 
+  // ============ CREDENTIALS & SECRETS ENDPOINTS ============
+
+  app.get("/api/credentials", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const creds = await storage.getUserCredentials(userId);
+      const masked = creds.map((c: any) => ({
+        ...c,
+        fields: c.fields?.map((f: any) => ({
+          ...f,
+          value: f.value ? `${f.value.slice(0, 4)}${"*".repeat(Math.max(0, Math.min(f.value.length - 8, 20)))}${f.value.length > 8 ? f.value.slice(-4) : ""}` : "",
+        })),
+      }));
+      res.json(masked);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/credentials", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { serviceName, category, template, fields } = req.body;
+      if (!serviceName || !fields || !Array.isArray(fields)) {
+        return res.status(400).json({ error: "serviceName and fields array required" });
+      }
+      const credential = {
+        id: `cred_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        serviceName,
+        category: category || "custom",
+        template: template || "custom",
+        fields: fields.map((f: any) => ({
+          label: f.label || f.key,
+          key: f.key || f.label?.toLowerCase().replace(/\s+/g, "_"),
+          value: f.value || "",
+        })),
+        createdAt: new Date().toISOString(),
+      };
+      await storage.addUserCredential(userId, credential);
+      await logMaster("credentials", "credential_added", { serviceName, category, fieldCount: fields.length });
+      res.json({ ok: true, credential: { ...credential, fields: credential.fields.map((f: any) => ({ ...f, value: "***" })) } });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/credentials/:id", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { id } = req.params;
+      await storage.deleteUserCredential(userId, id);
+      await logMaster("credentials", "credential_deleted", { credentialId: id });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/secrets", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const secrets = await storage.getUserSecrets(userId);
+      const masked = secrets.map((s: any) => ({
+        ...s,
+        value: s.value ? `${s.value.slice(0, 4)}${"*".repeat(Math.max(0, Math.min(s.value.length - 8, 20)))}${s.value.length > 8 ? s.value.slice(-4) : ""}` : "",
+      }));
+      res.json(masked);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/secrets", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { name, key, value, category } = req.body;
+      if (!key || !value) {
+        return res.status(400).json({ error: "key and value required" });
+      }
+      const secret = {
+        name: name || key,
+        key,
+        value,
+        category: category || "general",
+        createdAt: new Date().toISOString(),
+      };
+      await storage.addUserSecret(userId, secret);
+      await logMaster("secrets", "secret_added", { key, category: secret.category });
+      res.json({ ok: true, secret: { ...secret, value: "***" } });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/secrets/:key", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { key } = req.params;
+      await storage.deleteUserSecret(userId, key);
+      await logMaster("secrets", "secret_deleted", { key });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ BRAIN PRESETS ENDPOINTS ============
+
+  const DEFAULT_BRAIN_PRESETS = [
+    {
+      id: "a0_dual",
+      name: "a0 Dual",
+      description: "Gemini + Grok generate in parallel, then Gemini merges both outputs (current default)",
+      stages: [
+        { order: 0, model: "gemini", role: "generate", input: "user_query", timeoutMs: 30000, weight: 0.5 },
+        { order: 0, model: "grok", role: "generate", input: "user_query", timeoutMs: 30000, weight: 0.5 },
+        { order: 1, model: "gemini", role: "synthesize", input: "all_outputs", timeoutMs: 30000, weight: 1.0 },
+      ],
+      mergeStrategy: "synthesis",
+      weights: { gemini: 0.5, grok: 0.5 },
+      thresholds: { mergeThreshold: 0.18, softforkThreshold: 0.30 },
+      isDefault: true,
+      builtin: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: "quick_answer",
+      name: "Quick Answer",
+      description: "Gemini only — single stage, no synthesis",
+      stages: [
+        { order: 0, model: "gemini", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 },
+      ],
+      mergeStrategy: "last",
+      weights: { gemini: 1.0 },
+      thresholds: { mergeThreshold: 0.18, softforkThreshold: 0.30 },
+      isDefault: false,
+      builtin: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: "grok_solo",
+      name: "Grok Solo",
+      description: "Grok only — single stage, direct response",
+      stages: [
+        { order: 0, model: "grok", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 },
+      ],
+      mergeStrategy: "last",
+      weights: { grok: 1.0 },
+      thresholds: { mergeThreshold: 0.18, softforkThreshold: 0.30 },
+      isDefault: false,
+      builtin: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: "hub_first",
+      name: "Hub-First",
+      description: "Hub Model A generates, then a0 Gemini synthesizes",
+      stages: [
+        { order: 0, model: "hub", role: "generate", input: "user_query", timeoutMs: 30000, weight: 0.6 },
+        { order: 1, model: "gemini", role: "synthesize", input: "all_outputs", timeoutMs: 30000, weight: 1.0 },
+      ],
+      mergeStrategy: "synthesis",
+      weights: { hub: 0.6, gemini: 0.4 },
+      thresholds: { mergeThreshold: 0.18, softforkThreshold: 0.30 },
+      isDefault: false,
+      builtin: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: "deep_research",
+      name: "Deep Research",
+      description: "Gemini generates → Grok reviews → Gemini refines and synthesizes",
+      stages: [
+        { order: 0, model: "gemini", role: "generate", input: "user_query", timeoutMs: 45000, weight: 0.4 },
+        { order: 1, model: "grok", role: "review", input: "previous_output", timeoutMs: 30000, weight: 0.3 },
+        { order: 2, model: "gemini", role: "synthesize", input: "all_outputs", timeoutMs: 30000, weight: 0.3 },
+      ],
+      mergeStrategy: "synthesis",
+      weights: { gemini: 0.6, grok: 0.4 },
+      thresholds: { mergeThreshold: 0.18, softforkThreshold: 0.30 },
+      isDefault: false,
+      builtin: true,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+
+  async function getBrainPresets(): Promise<any[]> {
+    const toggle = await storage.getSystemToggle("brain_presets");
+    if (toggle?.parameters && Array.isArray(toggle.parameters)) {
+      return toggle.parameters;
+    }
+    await storage.upsertSystemToggle("brain_presets", true, DEFAULT_BRAIN_PRESETS);
+    return DEFAULT_BRAIN_PRESETS;
+  }
+
+  async function getActiveBrainPreset(): Promise<any> {
+    const presets = await getBrainPresets();
+    const activeToggle = await storage.getSystemToggle("active_brain_preset");
+    const activeId = (activeToggle?.parameters as any)?.presetId;
+    if (activeId) {
+      const found = presets.find((p: any) => p.id === activeId);
+      if (found) return found;
+    }
+    return presets.find((p: any) => p.isDefault) || presets[0] || DEFAULT_BRAIN_PRESETS[0];
+  }
+
+  app.get("/api/brain/presets", async (_req, res) => {
+    try {
+      const presets = await getBrainPresets();
+      const activeToggle = await storage.getSystemToggle("active_brain_preset");
+      const activeId = (activeToggle?.parameters as any)?.presetId;
+      res.json({ presets, activePresetId: activeId || presets.find((p: any) => p.isDefault)?.id || "a0_dual" });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/brain/presets", async (req, res) => {
+    try {
+      const { name, description, stages, mergeStrategy, weights, thresholds } = req.body;
+      if (!name || !stages || !Array.isArray(stages) || stages.length === 0) {
+        return res.status(400).json({ error: "name and stages array required" });
+      }
+      const presets = await getBrainPresets();
+      const preset = {
+        id: `preset_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        description: description || "",
+        stages: stages.map((s: any, i: number) => ({
+          order: s.order ?? i,
+          model: s.model || "gemini",
+          role: s.role || "generate",
+          input: s.input || "user_query",
+          timeoutMs: s.timeoutMs || 30000,
+          weight: s.weight ?? 1.0,
+        })),
+        mergeStrategy: mergeStrategy || "last",
+        weights: weights || {},
+        thresholds: thresholds || { mergeThreshold: 0.18, softforkThreshold: 0.30 },
+        isDefault: false,
+        builtin: false,
+        createdAt: new Date().toISOString(),
+      };
+      presets.push(preset);
+      await storage.upsertSystemToggle("brain_presets", true, presets);
+      await logMaster("brain", "preset_created", { presetId: preset.id, name });
+      res.json(preset);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/brain/presets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const presets = await getBrainPresets();
+      const idx = presets.findIndex((p: any) => p.id === id);
+      if (idx < 0) return res.status(404).json({ error: "Preset not found" });
+      const updates = req.body;
+      presets[idx] = { ...presets[idx], ...updates, id: presets[idx].id, builtin: presets[idx].builtin };
+      await storage.upsertSystemToggle("brain_presets", true, presets);
+      await logMaster("brain", "preset_updated", { presetId: id });
+      res.json(presets[idx]);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/brain/presets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const presets = await getBrainPresets();
+      const preset = presets.find((p: any) => p.id === id);
+      if (!preset) return res.status(404).json({ error: "Preset not found" });
+      if (preset.builtin) return res.status(400).json({ error: "Cannot delete built-in presets" });
+      const filtered = presets.filter((p: any) => p.id !== id);
+      await storage.upsertSystemToggle("brain_presets", true, filtered);
+      await logMaster("brain", "preset_deleted", { presetId: id });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/brain/presets/:id/activate", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const presets = await getBrainPresets();
+      const preset = presets.find((p: any) => p.id === id);
+      if (!preset) return res.status(404).json({ error: "Preset not found" });
+      await storage.upsertSystemToggle("active_brain_preset", true, { presetId: id });
+      await logMaster("brain", "preset_activated", { presetId: id, name: preset.name });
+      res.json({ ok: true, preset });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/brain/presets/:id/default", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const presets = await getBrainPresets();
+      const idx = presets.findIndex((p: any) => p.id === id);
+      if (idx < 0) return res.status(404).json({ error: "Preset not found" });
+      for (let i = 0; i < presets.length; i++) {
+        presets[i] = { ...presets[i], isDefault: presets[i].id === id };
+      }
+      await storage.upsertSystemToggle("brain_presets", true, presets);
+      await logMaster("brain", "default_set", { presetId: id, name: presets[idx].name });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/brain/config", async (_req, res) => {
+    try {
+      const activePreset = await getActiveBrainPreset();
+      res.json({ activePreset });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/brain/weights", async (req, res) => {
+    try {
+      const { weights } = req.body;
+      if (!weights || typeof weights !== "object") {
+        return res.status(400).json({ error: "weights object required" });
+      }
+      const presets = await getBrainPresets();
+      const activeToggle = await storage.getSystemToggle("active_brain_preset");
+      const activeId = (activeToggle?.parameters as any)?.presetId;
+      const idx = presets.findIndex((p: any) => p.id === activeId);
+      if (idx >= 0) {
+        presets[idx] = { ...presets[idx], weights };
+        await storage.upsertSystemToggle("brain_presets", true, presets);
+      }
+      await logMaster("brain", "weights_updated", { weights });
+      res.json({ ok: true, weights });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  async function executePipeline(
+    preset: any,
+    messages: { role: string; content: string }[],
+    sysPrompt: string,
+    maxTokens: number,
+    temperature: number | undefined,
+    conversationId?: number,
+    messageId?: number,
+    userId?: string,
+  ): Promise<{ content: string; mergeMethod: string; totalPrompt: number; totalCompletion: number }> {
+    const stages = preset.stages || [];
+    if (stages.length === 0) {
+      throw new Error("Preset has no stages configured");
+    }
+
+    const orderGroups: Record<number, any[]> = {};
+    for (const stage of stages) {
+      const order = stage.order ?? 0;
+      if (!orderGroups[order]) orderGroups[order] = [];
+      orderGroups[order].push(stage);
+    }
+
+    const sortedOrders = Object.keys(orderGroups).map(Number).sort((a, b) => a - b);
+    const stageOutputs: { model: string; role: string; content: string; promptTokens: number; completionTokens: number }[] = [];
+    let totalPrompt = 0;
+    let totalCompletion = 0;
+
+    for (const order of sortedOrders) {
+      const group = orderGroups[order];
+      const tasks = group.map(async (stage: any) => {
+        let stageInput: string;
+        const originalQuery = messages[messages.length - 1]?.content || "";
+
+        if (stage.input === "previous_output" && stageOutputs.length > 0) {
+          const prevOutput = stageOutputs[stageOutputs.length - 1].content;
+          stageInput = `Original query: ${originalQuery}\n\nPrevious model output:\n${prevOutput}`;
+          if (stage.role === "review") {
+            stageInput += "\n\nPlease review the above response for accuracy, completeness, and quality. Point out any issues and suggest improvements.";
+          } else if (stage.role === "refine") {
+            stageInput += "\n\nPlease refine and improve the above response, incorporating any feedback.";
+          }
+        } else if (stage.input === "all_outputs" && stageOutputs.length > 0) {
+          const allOutputs = stageOutputs.map((o, i) => `[${o.model} - ${o.role}]:\n${o.content}`).join("\n\n---\n\n");
+          stageInput = `Original query: ${originalQuery}\n\nPrevious stage outputs:\n${allOutputs}`;
+          if (stage.role === "synthesize") {
+            stageInput += "\n\nPlease synthesize the above outputs into a single coherent, high-quality response. Combine the best insights from all outputs. Do not mention that multiple models were used.";
+          }
+        } else {
+          stageInput = originalQuery;
+        }
+
+        const stageMessages = [
+          ...messages.slice(0, -1),
+          { role: "user" as const, content: stageInput },
+        ];
+
+        const model = stage.model || "gemini";
+        const timeoutMs = stage.timeoutMs || 30000;
+
+        if (model === "gemini") {
+          const result = await callGeminiForSynthesis(stageMessages, sysPrompt, maxTokens || 8192, timeoutMs, conversationId, messageId);
+          return { model: "gemini", role: stage.role, content: result.content, promptTokens: result.promptTokens, completionTokens: result.completionTokens };
+        } else if (model === "grok") {
+          const result = await callGrokForSynthesis(stageMessages, sysPrompt, maxTokens || 16384, temperature, timeoutMs, conversationId, messageId);
+          return { model: "grok", role: stage.role, content: result.content, promptTokens: result.promptTokens, completionTokens: result.completionTokens };
+        } else if (model === "hub") {
+          const uid = userId || "default";
+          const creds = await storage.getUserCredentials(uid);
+          const hubCred = creds.find((c: any) => c.template === "ai_hub" || c.category === "ai_hub");
+          if (hubCred) {
+            const endpoint = hubCred.fields?.find((f: any) => f.key === "endpoint")?.value;
+            const apiKey = hubCred.fields?.find((f: any) => f.key === "api_key")?.value;
+            const defaultModel = hubCred.fields?.find((f: any) => f.key === "default_model")?.value;
+            if (endpoint && apiKey) {
+              const hubClient = new OpenAI({ apiKey, baseURL: endpoint });
+              const chatMsgs = [
+                { role: "system" as const, content: sysPrompt },
+                ...stageMessages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
+              ];
+              const result = await hubClient.chat.completions.create({
+                model: defaultModel || "default",
+                messages: chatMsgs,
+                max_tokens: maxTokens || 8192,
+              });
+              const text = result.choices[0]?.message?.content || "";
+              const pt = result.usage?.prompt_tokens || 0;
+              const ct = result.usage?.completion_tokens || 0;
+              return { model: "hub", role: stage.role, content: text, promptTokens: pt, completionTokens: ct };
+            }
+          }
+          const fallbackResult = await callGeminiForSynthesis(stageMessages, sysPrompt, maxTokens || 8192, timeoutMs, conversationId, messageId);
+          return { model: "gemini(hub-fallback)", role: stage.role, content: fallbackResult.content, promptTokens: fallbackResult.promptTokens, completionTokens: fallbackResult.completionTokens };
+        } else {
+          const fallbackResult = await callGeminiForSynthesis(stageMessages, sysPrompt, maxTokens || 8192, timeoutMs, conversationId, messageId);
+          return { model: "gemini(fallback)", role: stage.role, content: fallbackResult.content, promptTokens: fallbackResult.promptTokens, completionTokens: fallbackResult.completionTokens };
+        }
+      });
+
+      const results = await Promise.allSettled(tasks);
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          stageOutputs.push(result.value);
+          totalPrompt += result.value.promptTokens;
+          totalCompletion += result.value.completionTokens;
+          const resolvedProvider = result.value.model.split("(")[0];
+          if (userId) await trackCost(userId === "default" ? null : userId, resolvedProvider, result.value.promptTokens, result.value.completionTokens);
+        }
+      }
+    }
+
+    if (stageOutputs.length === 0) {
+      throw new Error("All pipeline stages failed");
+    }
+
+    const finalOutput = stageOutputs[stageOutputs.length - 1].content;
+    const mergeMethod = stageOutputs.length > 1 ? `pipeline(${stageOutputs.map(s => `${s.model}:${s.role}`).join("→")})` : stageOutputs[0].model;
+
+    return { content: finalOutput, mergeMethod, totalPrompt, totalCompletion };
+  }
+
   // ============ EDCM DIRECTIVES ENDPOINTS ============
 
   app.get("/api/edcm/directives", async (_req, res) => {
@@ -2876,6 +3676,285 @@ IMPORTANT RULES:
       res.json({ snapshots, directiveHistory });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ DATA EXPORT ENDPOINTS ============
+
+  app.get("/api/export/transcripts", async (req: Request, res: Response) => {
+    try {
+      const from = req.query.from as string | undefined;
+      const to = req.query.to as string | undefined;
+      const model = req.query.model as string | undefined;
+      const format = (req.query.format as string) || "jsonl";
+
+      const aiDir = path.resolve("logs/ai-transcripts");
+      let files: string[];
+      try {
+        const allFiles = await readdir(aiDir);
+        files = allFiles.filter(f => f.startsWith("ai-transcript-") && f.endsWith(".jsonl")).sort();
+      } catch {
+        files = [];
+      }
+
+      if (from || to) {
+        files = files.filter(f => {
+          const match = f.match(/ai-transcript-(\d{4}-\d{2}-\d{2})\.jsonl/);
+          if (!match) return false;
+          const date = match[1];
+          if (from && date < from) return false;
+          if (to && date > to) return false;
+          return true;
+        });
+      }
+
+      let allEntries: any[] = [];
+      for (const file of files) {
+        try {
+          const content = await readFile(path.join(aiDir, file), "utf-8");
+          const lines = content.trim().split("\n").filter(Boolean);
+          for (const line of lines) {
+            try {
+              const entry = JSON.parse(line);
+              if (model && entry.model !== model) continue;
+              allEntries.push(entry);
+            } catch {}
+          }
+        } catch {}
+      }
+
+      if (format === "json") {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Content-Disposition", "attachment; filename=ai-transcripts.json");
+        res.json(allEntries);
+      } else {
+        res.setHeader("Content-Type", "application/x-ndjson");
+        res.setHeader("Content-Disposition", "attachment; filename=ai-transcripts.jsonl");
+        res.send(allEntries.map(e => JSON.stringify(e)).join("\n"));
+      }
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/export/conversations", async (req: Request, res: Response) => {
+    try {
+      const id = req.query.id ? parseInt(req.query.id as string) : undefined;
+
+      if (id) {
+        const conv = await storage.getConversation(id);
+        if (!conv) return res.status(404).json({ error: "Conversation not found" });
+        const msgs = await storage.getMessages(id);
+        const exportData = {
+          ...conv,
+          messages: msgs.map(m => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            model: m.model,
+            createdAt: m.createdAt,
+            metadata: m.metadata,
+          })),
+        };
+        res.setHeader("Content-Disposition", `attachment; filename=conversation-${id}.json`);
+        return res.json(exportData);
+      }
+
+      const convs = await storage.getConversations();
+      const exportData = [];
+      for (const conv of convs) {
+        const msgs = await storage.getMessages(conv.id);
+        exportData.push({
+          ...conv,
+          messages: msgs.map(m => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            model: m.model,
+            createdAt: m.createdAt,
+            metadata: m.metadata,
+          })),
+        });
+      }
+      res.setHeader("Content-Disposition", "attachment; filename=conversations.json");
+      res.json(exportData);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/export/credentials", async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const creds = await storage.getUserCredentials(userId);
+      const sanitized = creds.map((c: any) => ({
+        id: c.id,
+        serviceName: c.serviceName,
+        category: c.category,
+        template: c.template,
+        fields: c.fields?.map((f: any) => ({
+          label: f.label,
+          key: f.key,
+        })),
+        createdAt: c.createdAt,
+      }));
+
+      const secrets = await storage.getUserSecrets(userId);
+      const sanitizedSecrets = secrets.map((s: any) => ({
+        name: s.name,
+        key: s.key,
+        category: s.category,
+        createdAt: s.createdAt,
+      }));
+
+      res.setHeader("Content-Disposition", "attachment; filename=credentials-inventory.json");
+      res.json({ credentials: sanitized, secrets: sanitizedSecrets });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/export/config", async (_req: Request, res: Response) => {
+    try {
+      const [
+        toggles,
+        banditArmsList,
+        edcmSnaps,
+        memSeeds,
+        heartbeatTasksList,
+        costSummary,
+      ] = await Promise.all([
+        storage.getSystemToggles(),
+        storage.getBanditArms(),
+        storage.getEdcmMetricSnapshots(50),
+        storage.getMemorySeeds(),
+        storage.getHeartbeatTasks(),
+        storage.getCostSummary(),
+      ]);
+
+      const configSnapshot = {
+        exportedAt: new Date().toISOString(),
+        systemToggles: toggles.map(t => ({
+          subsystem: t.subsystem,
+          enabled: t.enabled,
+          parameters: t.parameters,
+        })),
+        banditArms: banditArmsList.map(a => ({
+          domain: a.domain,
+          armName: a.armName,
+          enabled: a.enabled,
+          pulls: a.pulls,
+          totalReward: a.totalReward,
+          avgReward: a.avgReward,
+          ucbScore: a.ucbScore,
+          emaReward: a.emaReward,
+        })),
+        edcmRecentSnapshots: edcmSnaps.slice(0, 20),
+        memorySeeds: memSeeds.map(s => ({
+          seedIndex: s.seedIndex,
+          category: s.category,
+          summary: s.summary,
+          enabled: s.enabled,
+          activationWeight: s.activationWeight,
+          decayFactor: s.decayFactor,
+        })),
+        heartbeatTasks: heartbeatTasksList.map(t => ({
+          name: t.name,
+          description: t.description,
+          taskType: t.taskType,
+          enabled: t.enabled,
+          weight: t.weight,
+          intervalSeconds: t.intervalSeconds,
+        })),
+        costSummary,
+      };
+
+      res.setHeader("Content-Disposition", "attachment; filename=system-config.json");
+      res.json(configSnapshot);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/export/all", async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+
+      const aiDir = path.resolve("logs/ai-transcripts");
+      let transcriptEntries: any[] = [];
+      try {
+        const files = await readdir(aiDir);
+        const jsonlFiles = files.filter(f => f.startsWith("ai-transcript-") && f.endsWith(".jsonl")).sort();
+        for (const file of jsonlFiles) {
+          const content = await readFile(path.join(aiDir, file), "utf-8");
+          const lines = content.trim().split("\n").filter(Boolean);
+          for (const line of lines) {
+            try { transcriptEntries.push(JSON.parse(line)); } catch {}
+          }
+        }
+      } catch {}
+
+      const convs = await storage.getConversations();
+      const conversationsExport = [];
+      for (const conv of convs) {
+        const msgs = await storage.getMessages(conv.id);
+        conversationsExport.push({
+          ...conv,
+          messages: msgs.map(m => ({
+            id: m.id, role: m.role, content: m.content, model: m.model, createdAt: m.createdAt, metadata: m.metadata,
+          })),
+        });
+      }
+
+      const creds = await storage.getUserCredentials(userId);
+      const sanitizedCreds = creds.map((c: any) => ({
+        id: c.id, serviceName: c.serviceName, category: c.category, template: c.template,
+        fields: c.fields?.map((f: any) => ({ label: f.label, key: f.key })),
+        createdAt: c.createdAt,
+      }));
+      const secrets = await storage.getUserSecrets(userId);
+      const sanitizedSecrets = secrets.map((s: any) => ({
+        name: s.name, key: s.key, category: s.category, createdAt: s.createdAt,
+      }));
+
+      const [toggles, banditArmsList, edcmSnaps, memSeeds, heartbeatTasksList, costSummary] = await Promise.all([
+        storage.getSystemToggles(), storage.getBanditArms(), storage.getEdcmMetricSnapshots(50),
+        storage.getMemorySeeds(), storage.getHeartbeatTasks(), storage.getCostSummary(),
+      ]);
+
+      const configSnapshot = {
+        exportedAt: new Date().toISOString(),
+        systemToggles: toggles.map(t => ({ subsystem: t.subsystem, enabled: t.enabled, parameters: t.parameters })),
+        banditArms: banditArmsList.map(a => ({
+          domain: a.domain, armName: a.armName, enabled: a.enabled, pulls: a.pulls,
+          totalReward: a.totalReward, avgReward: a.avgReward, ucbScore: a.ucbScore, emaReward: a.emaReward,
+        })),
+        edcmRecentSnapshots: edcmSnaps.slice(0, 20),
+        memorySeeds: memSeeds.map(s => ({
+          seedIndex: s.seedIndex, category: s.category, summary: s.summary, enabled: s.enabled,
+          activationWeight: s.activationWeight, decayFactor: s.decayFactor,
+        })),
+        heartbeatTasks: heartbeatTasksList.map(t => ({
+          name: t.name, description: t.description, taskType: t.taskType, enabled: t.enabled,
+          weight: t.weight, intervalSeconds: t.intervalSeconds,
+        })),
+        costSummary,
+      };
+
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", "attachment; filename=a0p-export.zip");
+
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      archive.pipe(res);
+      archive.append(JSON.stringify(transcriptEntries, null, 2), { name: "ai-transcripts.json" });
+      archive.append(JSON.stringify(conversationsExport, null, 2), { name: "conversations.json" });
+      archive.append(JSON.stringify({ credentials: sanitizedCreds, secrets: sanitizedSecrets }, null, 2), { name: "credentials-inventory.json" });
+      archive.append(JSON.stringify(configSnapshot, null, 2), { name: "system-config.json" });
+      await archive.finalize();
+    } catch (e: any) {
+      if (!res.headersSent) {
+        res.status(500).json({ error: e.message });
+      }
     }
   });
 

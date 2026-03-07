@@ -223,3 +223,12 @@
     inset: -1px;
   }
 }
+
+.markdown-content pre.code-block {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.markdown-content code.inline-code {
+  word-break: break-all;
+}

@@ -105,7 +105,11 @@ export const costMetrics = pgTable("cost_metrics", {
   model: text("model").notNull(),
   promptTokens: integer("prompt_tokens").notNull().default(0),
   completionTokens: integer("completion_tokens").notNull().default(0),
+  cacheTokens: integer("cache_tokens").notNull().default(0),
   estimatedCost: real("estimated_cost").notNull().default(0),
+  conversationId: integer("conversation_id"),
+  stage: text("stage"),
+  pipelinePreset: text("pipeline_preset"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

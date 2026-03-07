@@ -14,8 +14,9 @@ import { Input } from "@/components/ui/input";
 import {
   Activity, AlertTriangle, Brain, ChevronDown, ChevronRight, DollarSign, Download, FileText, Filter,
   Heart, Key, OctagonX, Play, RefreshCw, ScrollText, Shield, Upload, Zap, Check, X, Wrench, Plus, Trash2, ToggleLeft, TestTube,
-  Clock, Sparkles, Target, Settings,
+  Clock, Sparkles, Target, Settings, Lock, Eye, EyeOff, ArrowUpDown, ArrowLeftRight, Cpu, GitBranch, Star,
 } from "lucide-react";
+import { useSliderOrientation } from "@/hooks/use-slider-orientation";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -31,9 +32,12 @@ const TABS = [
   { id: "metrics", label: "Metrics", icon: DollarSign },
   { id: "edcm", label: "EDCM", icon: Brain },
   { id: "memory", label: "Memory", icon: Brain },
+  { id: "brain", label: "Brain", icon: Cpu },
   { id: "system", label: "System", icon: Settings },
   { id: "heartbeat", label: "Heartbeat", icon: Clock },
   { id: "tools", label: "Tools", icon: Wrench },
+  { id: "credentials", label: "Credentials", icon: Lock },
+  { id: "export", label: "Export", icon: Download },
   { id: "logs", label: "Logs", icon: ScrollText },
   { id: "context", label: "Context", icon: FileText },
 ] as const;
@@ -42,12 +46,21 @@ type TabId = typeof TABS[number]["id"];
 
 export default function ConsolePage() {
   const [activeTab, setActiveTab] = useState<TabId>("workflow");
+  const { orientation, toggleOrientation, isVertical } = useSliderOrientation();
 
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0">
         <Shield className="w-4 h-4 text-primary flex-shrink-0" />
         <span className="font-semibold text-sm flex-1">a0p Console</span>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={toggleOrientation}
+          data-testid="button-toggle-slider-orientation"
+        >
+          {isVertical ? <ArrowUpDown className="w-4 h-4" /> : <ArrowLeftRight className="w-4 h-4" />}
+        </Button>
       </header>
 
       <div className="flex border-b border-border bg-card overflow-x-auto flex-shrink-0">
@@ -71,13 +84,16 @@ export default function ConsolePage() {
 
       <div className="flex-1 overflow-hidden">
         {activeTab === "workflow" && <WorkflowTab />}
-        {activeTab === "bandit" && <BanditTab />}
-        {activeTab === "metrics" && <MetricsTab />}
+        {activeTab === "bandit" && <BanditTab orientation={orientation} isVertical={isVertical} />}
+        {activeTab === "metrics" && <MetricsTab orientation={orientation} isVertical={isVertical} />}
         {activeTab === "edcm" && <EdcmTab />}
-        {activeTab === "memory" && <MemoryTab />}
-        {activeTab === "system" && <SystemTab />}
-        {activeTab === "heartbeat" && <HeartbeatTab />}
+        {activeTab === "memory" && <MemoryTab orientation={orientation} isVertical={isVertical} />}
+        {activeTab === "brain" && <BrainTab orientation={orientation} isVertical={isVertical} />}
+        {activeTab === "system" && <SystemTab orientation={orientation} isVertical={isVertical} />}
+        {activeTab === "heartbeat" && <HeartbeatTab orientation={orientation} isVertical={isVertical} />}
         {activeTab === "tools" && <CustomToolsTab />}
+        {activeTab === "credentials" && <CredentialsTab />}
+        {activeTab === "export" && <ExportTab />}
         {activeTab === "logs" && <LogsTab />}
         {activeTab === "context" && <ContextTab />}
       </div>
@@ -252,7 +268,12 @@ function WorkflowTab() {
 
 const BANDIT_DOMAINS = ["tool", "model", "ptca_route", "pcna_route"] as const;
 
-function BanditTab() {
+interface SliderOrientationProps {
+  orientation: "vertical" | "horizontal";
+  isVertical: boolean;
+}
+
+function BanditTab({ orientation, isVertical }: SliderOrientationProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -417,7 +438,7 @@ function BanditTab() {
           {directives.length === 0 ? (
             <p className="text-xs text-muted-foreground">No directive configuration loaded.</p>
           ) : (
-            <div className="space-y-2">
+            <div className={cn(isVertical ? "grid grid-cols-2 gap-2" : "space-y-2")}>
               {directives.map((dir: any) => (
                 <div key={dir.type} className="rounded-md border border-border p-2.5 space-y-1.5" data-testid={`directive-${dir.type}`}>
                   <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -444,8 +465,10 @@ function BanditTab() {
                       {dir.fired ? "FIRED" : "idle"}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0">Threshold</span>
+                  <div className={cn(
+                    isVertical ? "flex flex-col items-center gap-1" : "flex items-center gap-2"
+                  )}>
+                    <span className="text-[10px] text-muted-foreground flex-shrink-0">{isVertical ? "" : "Threshold"}</span>
                     <Slider
                       value={[dir.threshold ?? 0.8]}
                       onValueChange={([val]) => {
@@ -460,10 +483,11 @@ function BanditTab() {
                       min={0}
                       max={1}
                       step={0.05}
-                      className="flex-1"
+                      orientation={orientation}
+                      className={cn(isVertical ? "h-[120px]" : "flex-1")}
                       data-testid={`slider-threshold-${dir.type}`}
                     />
-                    <span className="text-[10px] font-mono w-10 text-right">{(dir.threshold ?? 0.8).toFixed(2)}</span>
+                    <span className="text-[10px] font-mono text-right">{(dir.threshold ?? 0.8).toFixed(2)}</span>
                   </div>
                   <p className="text-[9px] text-muted-foreground">{dir.description || `Fires when ${dir.metric} exceeds threshold`}</p>
                 </div>
@@ -550,94 +574,419 @@ function BanditTab() {
   );
 }
 
-function MetricsTab() {
-  const [costLimit, setCostLimit] = useState([50]);
-  const [limitsEnabled, setLimitsEnabled] = useState(false);
+function MetricsTab({ orientation, isVertical }: SliderOrientationProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editingRate, setEditingRate] = useState<string | null>(null);
+  const [rateForm, setRateForm] = useState({ prompt: "", completion: "", cache: "" });
+  const [newModelName, setNewModelName] = useState("");
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   const { data: summary, isLoading } = useQuery<{
     totalCost: number;
     totalPromptTokens: number;
     totalCompletionTokens: number;
-    byModel: Record<string, { cost: number; promptTokens: number; completionTokens: number }>;
+    totalCacheTokens: number;
+    costThisMonth: number;
+    costToday: number;
+    byModel: Record<string, { cost: number; promptTokens: number; completionTokens: number; cacheTokens: number; calls: number }>;
+    byStage: Record<string, { cost: number; promptTokens: number; completionTokens: number; calls: number }>;
+    byConversation: { conversationId: number; cost: number; tokens: number; calls: number }[];
+    dailyUsage: { date: string; promptTokens: number; completionTokens: number; cost: number }[];
   }>({
     queryKey: ["/api/metrics/costs"],
     refetchInterval: 15000,
   });
 
+  const { data: tokenRates } = useQuery<Record<string, { prompt: number; completion: number; cache: number }>>({
+    queryKey: ["/api/metrics/token-rates"],
+  });
+
+  const { data: spendLimit } = useQuery<{ enabled: boolean; limit: number; mode: string; currentSpend: number }>({
+    queryKey: ["/api/metrics/spend-limit"],
+    refetchInterval: 30000,
+  });
+
+  const updateRatesMutation = useMutation({
+    mutationFn: (rates: Record<string, { prompt: number; completion: number; cache: number }>) =>
+      apiRequest("POST", "/api/metrics/token-rates", { rates }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics/token-rates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics/costs"] });
+      toast({ title: "Token rates updated" });
+      setEditingRate(null);
+      setNewModelName("");
+    },
+  });
+
+  const updateSpendLimitMutation = useMutation({
+    mutationFn: (data: { enabled: boolean; limit: number; mode: string }) =>
+      apiRequest("POST", "/api/metrics/spend-limit", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/metrics/spend-limit"] });
+      toast({ title: "Spend limit updated" });
+    },
+  });
+
   if (isLoading) return <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
 
-  const totalTokens = (summary?.totalPromptTokens || 0) + (summary?.totalCompletionTokens || 0);
+  const totalTokens = (summary?.totalPromptTokens || 0) + (summary?.totalCompletionTokens || 0) + (summary?.totalCacheTokens || 0);
+  const maxDailyCost = Math.max(0.0001, ...((summary?.dailyUsage || []).map(d => d.cost)));
+
+  function startEditRate(model: string) {
+    const rates = tokenRates || {};
+    const r = rates[model] || { prompt: 0, completion: 0, cache: 0 };
+    setRateForm({
+      prompt: (r.prompt * 1_000_000).toFixed(4),
+      completion: (r.completion * 1_000_000).toFixed(4),
+      cache: (r.cache * 1_000_000).toFixed(4),
+    });
+    setEditingRate(model);
+  }
+
+  function saveRate(model: string) {
+    const updated = { ...(tokenRates || {}) };
+    updated[model] = {
+      prompt: parseFloat(rateForm.prompt) / 1_000_000,
+      completion: parseFloat(rateForm.completion) / 1_000_000,
+      cache: parseFloat(rateForm.cache) / 1_000_000,
+    };
+    updateRatesMutation.mutate(updated);
+  }
+
+  function addNewModel() {
+    if (!newModelName.trim()) return;
+    startEditRate(newModelName.trim());
+    setNewModelName("");
+  }
+
+  function deleteRate(model: string) {
+    const updated = { ...(tokenRates || {}) };
+    delete updated[model];
+    updateRatesMutation.mutate(updated);
+  }
 
   return (
     <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="font-semibold text-sm mb-3">Token Usage</h3>
-          <div className="grid grid-cols-3 gap-3 text-center">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-emerald-400" />
+            Summary
+          </h3>
+          <div className="grid grid-cols-2 gap-3 text-center">
             <div>
-              <p className="text-2xl font-bold font-mono" data-testid="text-total-tokens">
+              <p className="text-xl font-bold font-mono" data-testid="text-total-tokens">
                 {totalTokens.toLocaleString()}
               </p>
-              <p className="text-xs text-muted-foreground">Total Tokens</p>
+              <p className="text-[10px] text-muted-foreground">Total Tokens</p>
             </div>
             <div>
-              <p className="text-2xl font-bold font-mono text-blue-400">
-                {(summary?.totalPromptTokens || 0).toLocaleString()}
+              <p className="text-xl font-bold font-mono" data-testid="text-total-cost">
+                ${(summary?.totalCost || 0).toFixed(4)}
               </p>
-              <p className="text-xs text-muted-foreground">Prompt</p>
+              <p className="text-[10px] text-muted-foreground">Total Cost</p>
             </div>
             <div>
-              <p className="text-2xl font-bold font-mono text-emerald-400">
-                {(summary?.totalCompletionTokens || 0).toLocaleString()}
+              <p className="text-lg font-bold font-mono text-blue-400" data-testid="text-cost-month">
+                ${(summary?.costThisMonth || 0).toFixed(4)}
               </p>
-              <p className="text-xs text-muted-foreground">Completion</p>
+              <p className="text-[10px] text-muted-foreground">This Month</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold font-mono text-emerald-400" data-testid="text-cost-today">
+                ${(summary?.costToday || 0).toFixed(4)}
+              </p>
+              <p className="text-[10px] text-muted-foreground">Today</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+            <div>
+              <p className="text-sm font-mono text-blue-400">{(summary?.totalPromptTokens || 0).toLocaleString()}</p>
+              <p className="text-[9px] text-muted-foreground">Prompt</p>
+            </div>
+            <div>
+              <p className="text-sm font-mono text-emerald-400">{(summary?.totalCompletionTokens || 0).toLocaleString()}</p>
+              <p className="text-[9px] text-muted-foreground">Completion</p>
+            </div>
+            <div>
+              <p className="text-sm font-mono text-amber-400">{(summary?.totalCacheTokens || 0).toLocaleString()}</p>
+              <p className="text-[9px] text-muted-foreground">Cache</p>
             </div>
           </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="font-semibold text-sm mb-3">Cost Estimate</h3>
-          <p className="text-3xl font-bold font-mono" data-testid="text-total-cost">
-            ${(summary?.totalCost || 0).toFixed(4)}
-          </p>
-          <div className="mt-3 space-y-2">
-            {summary?.byModel && Object.entries(summary.byModel).map(([model, data]) => (
-              <div key={model} className="flex items-center justify-between text-xs">
-                <Badge variant="secondary">{model}</Badge>
-                <span className="font-mono">${data.cost.toFixed(4)} ({(data.promptTokens + data.completionTokens).toLocaleString()} tok)</span>
+          <button
+            className="w-full flex items-center justify-between text-sm font-semibold"
+            onClick={() => setExpandedSection(expandedSection === "model" ? null : "model")}
+            data-testid="button-toggle-model-breakdown"
+          >
+            <span className="flex items-center gap-2"><Cpu className="w-4 h-4 text-purple-400" /> Per-Model Breakdown</span>
+            {expandedSection === "model" ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+          {expandedSection === "model" && summary?.byModel && (
+            <div className="mt-3 space-y-1.5">
+              <div className="grid grid-cols-6 gap-1 text-[9px] font-mono text-muted-foreground px-1">
+                <span className="col-span-1">Model</span>
+                <span className="text-right">Calls</span>
+                <span className="text-right">Prompt</span>
+                <span className="text-right">Compl.</span>
+                <span className="text-right">Cache</span>
+                <span className="text-right">Cost</span>
+              </div>
+              {Object.entries(summary.byModel).map(([model, data]) => (
+                <div key={model} className="grid grid-cols-6 gap-1 text-[10px] font-mono items-center px-1" data-testid={`model-row-${model}`}>
+                  <Badge variant="secondary" className="text-[9px] col-span-1 justify-start">{model}</Badge>
+                  <span className="text-right">{data.calls}</span>
+                  <span className="text-right">{data.promptTokens.toLocaleString()}</span>
+                  <span className="text-right">{data.completionTokens.toLocaleString()}</span>
+                  <span className="text-right">{(data.cacheTokens || 0).toLocaleString()}</span>
+                  <span className="text-right">${data.cost.toFixed(4)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <button
+            className="w-full flex items-center justify-between text-sm font-semibold"
+            onClick={() => setExpandedSection(expandedSection === "stage" ? null : "stage")}
+            data-testid="button-toggle-stage-breakdown"
+          >
+            <span className="flex items-center gap-2"><GitBranch className="w-4 h-4 text-blue-400" /> Per-Stage Breakdown</span>
+            {expandedSection === "stage" ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+          {expandedSection === "stage" && summary?.byStage && (
+            <div className="mt-3 space-y-1.5">
+              {Object.entries(summary.byStage).map(([stage, data]) => (
+                <div key={stage} className="flex items-center justify-between gap-2 text-xs" data-testid={`stage-row-${stage}`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge variant="secondary" className="text-[9px]">{stage}</Badge>
+                    <span className="text-muted-foreground text-[10px]">{data.calls} calls</span>
+                  </div>
+                  <span className="font-mono text-[10px] flex-shrink-0">
+                    {(data.promptTokens + data.completionTokens).toLocaleString()} tok &middot; ${data.cost.toFixed(4)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <button
+            className="w-full flex items-center justify-between text-sm font-semibold"
+            onClick={() => setExpandedSection(expandedSection === "conv" ? null : "conv")}
+            data-testid="button-toggle-conv-breakdown"
+          >
+            <span className="flex items-center gap-2"><ScrollText className="w-4 h-4 text-amber-400" /> Per-Conversation Cost</span>
+            {expandedSection === "conv" ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+          {expandedSection === "conv" && (
+            <div className="mt-3 space-y-1">
+              {(summary?.byConversation || []).length === 0 ? (
+                <p className="text-xs text-muted-foreground">No conversation cost data yet.</p>
+              ) : (
+                (summary?.byConversation || []).map((conv) => (
+                  <div key={conv.conversationId} className="flex items-center justify-between gap-2 text-[10px] font-mono" data-testid={`conv-cost-${conv.conversationId}`}>
+                    <span className="text-muted-foreground">Conv #{conv.conversationId}</span>
+                    <span>{conv.tokens.toLocaleString()} tok &middot; {conv.calls} calls &middot; ${conv.cost.toFixed(4)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-blue-400" />
+            Daily Usage (30d)
+          </h3>
+          {(summary?.dailyUsage || []).length === 0 ? (
+            <p className="text-xs text-muted-foreground">No daily usage data yet.</p>
+          ) : (
+            <div className="space-y-1">
+              <div className="flex items-end gap-px h-20" data-testid="chart-daily-usage">
+                {(summary?.dailyUsage || []).map((day) => (
+                  <div
+                    key={day.date}
+                    className="flex-1 bg-primary rounded-t min-w-[3px] transition-all"
+                    style={{ height: `${Math.max(2, (day.cost / maxDailyCost) * 100)}%` }}
+                    title={`${day.date}: $${day.cost.toFixed(4)}`}
+                  />
+                ))}
+              </div>
+              <div className="flex justify-between text-[9px] text-muted-foreground font-mono">
+                <span>{(summary?.dailyUsage || [])[0]?.date?.slice(5) || ""}</span>
+                <span>{(summary?.dailyUsage || [])[(summary?.dailyUsage || []).length - 1]?.date?.slice(5) || ""}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Settings className="w-4 h-4 text-muted-foreground" />
+            Rate Cards ($/1M tokens)
+          </h3>
+          <div className="space-y-2">
+            {tokenRates && Object.entries(tokenRates).map(([model, rates]) => (
+              <div key={model} className="rounded-md border border-border p-2 space-y-1" data-testid={`rate-card-${model}`}>
+                {editingRate === model ? (
+                  <div className="space-y-1.5">
+                    <span className="text-xs font-mono font-bold">{model}</span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div>
+                        <label className="text-[9px] text-muted-foreground">Prompt</label>
+                        <Input
+                          value={rateForm.prompt}
+                          onChange={(e) => setRateForm({ ...rateForm, prompt: e.target.value })}
+                          className="text-xs h-7"
+                          data-testid={`input-rate-prompt-${model}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-muted-foreground">Completion</label>
+                        <Input
+                          value={rateForm.completion}
+                          onChange={(e) => setRateForm({ ...rateForm, completion: e.target.value })}
+                          className="text-xs h-7"
+                          data-testid={`input-rate-completion-${model}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-muted-foreground">Cache</label>
+                        <Input
+                          value={rateForm.cache}
+                          onChange={(e) => setRateForm({ ...rateForm, cache: e.target.value })}
+                          className="text-xs h-7"
+                          data-testid={`input-rate-cache-${model}`}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Button size="sm" onClick={() => saveRate(model)} disabled={updateRatesMutation.isPending} data-testid={`button-save-rate-${model}`}>
+                        <Check className="w-3 h-3 mr-1" /> Save
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => setEditingRate(null)} data-testid={`button-cancel-rate-${model}`}>
+                        <X className="w-3 h-3 mr-1" /> Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-mono font-bold">{model}</span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[9px] font-mono text-muted-foreground">
+                        P=${(rates.prompt * 1_000_000).toFixed(2)} C=${(rates.completion * 1_000_000).toFixed(2)} Ca=${(rates.cache * 1_000_000).toFixed(2)}
+                      </span>
+                      <Button size="icon" variant="ghost" onClick={() => startEditRate(model)} data-testid={`button-edit-rate-${model}`}>
+                        <Settings className="w-3 h-3" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => deleteRate(model)} data-testid={`button-delete-rate-${model}`}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="New model name..."
+                value={newModelName}
+                onChange={(e) => setNewModelName(e.target.value)}
+                className="text-xs flex-1"
+                data-testid="input-new-rate-model"
+              />
+              <Button size="sm" onClick={addNewModel} disabled={!newModelName.trim()} data-testid="button-add-rate-model">
+                <Plus className="w-3 h-3 mr-1" /> Add
+              </Button>
+            </div>
           </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm">Spend Limits</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Enabled</span>
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            Spend Limits
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs">Enforcement</span>
               <Switch
-                checked={limitsEnabled}
-                onCheckedChange={setLimitsEnabled}
-                data-testid="toggle-limits"
+                checked={spendLimit?.enabled || false}
+                onCheckedChange={(enabled) =>
+                  updateSpendLimitMutation.mutate({ enabled, limit: spendLimit?.limit || 50, mode: spendLimit?.mode || "warn" })
+                }
+                data-testid="toggle-spend-limit"
               />
             </div>
-          </div>
-          <div className={cn(!limitsEnabled && "opacity-40 pointer-events-none")}>
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span>Monthly limit</span>
-              <span className="font-mono font-bold">${costLimit[0]}</span>
-            </div>
-            <Slider
-              value={costLimit}
-              onValueChange={setCostLimit}
-              min={1}
-              max={200}
-              step={1}
-              data-testid="slider-cost-limit"
-            />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-              <span>$1</span>
-              <span>$200</span>
+            <div className={cn(!(spendLimit?.enabled) && "opacity-40 pointer-events-none", "space-y-3")}>
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span>Mode</span>
+                <Select
+                  value={spendLimit?.mode || "warn"}
+                  onValueChange={(mode) =>
+                    updateSpendLimitMutation.mutate({ enabled: spendLimit?.enabled || false, limit: spendLimit?.limit || 50, mode })
+                  }
+                >
+                  <SelectTrigger className="w-32 text-xs" data-testid="select-spend-mode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="warn">Warn Only</SelectItem>
+                    <SelectItem value="hard_stop">Hard Stop</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between text-xs mb-2">
+                  <span>Monthly limit</span>
+                  <span className="font-mono font-bold">${spendLimit?.limit || 50}</span>
+                </div>
+                <div className={cn(isVertical ? "flex items-center justify-center gap-2" : "")}>
+                  <Slider
+                    value={[spendLimit?.limit || 50]}
+                    onValueChange={([val]) =>
+                      updateSpendLimitMutation.mutate({ enabled: spendLimit?.enabled || false, limit: val, mode: spendLimit?.mode || "warn" })
+                    }
+                    min={1}
+                    max={500}
+                    step={1}
+                    orientation={orientation}
+                    className={cn(isVertical ? "h-[160px]" : "")}
+                    data-testid="slider-spend-limit"
+                  />
+                </div>
+                <div className={cn("flex text-[10px] text-muted-foreground mt-1", isVertical ? "justify-center gap-3" : "justify-between")}>
+                  <span>$1</span>
+                  <span>$500</span>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span>Current month usage</span>
+                  <span className="font-mono text-[10px]">
+                    ${(spendLimit?.currentSpend || 0).toFixed(4)} / ${spendLimit?.limit || 50}
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-background rounded-full overflow-hidden" data-testid="progress-spend">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all",
+                      (spendLimit?.currentSpend || 0) >= (spendLimit?.limit || 50) ? "bg-red-500" :
+                      (spendLimit?.currentSpend || 0) >= (spendLimit?.limit || 50) * 0.8 ? "bg-amber-500" : "bg-emerald-500"
+                    )}
+                    style={{ width: `${Math.min(100, ((spendLimit?.currentSpend || 0) / (spendLimit?.limit || 50)) * 100)}%` }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1139,7 +1488,7 @@ const HANDLER_TYPES = [
   { value: "template", label: "Template ({{vars}})" },
 ];
 
-function MemoryTab() {
+function MemoryTab({ orientation, isVertical }: SliderOrientationProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputNodeRef = { current: null as HTMLInputElement | null };
@@ -1418,18 +1767,21 @@ function MemoryTab() {
                       </p>
                     )}
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground w-12 flex-shrink-0">Weight</span>
+                    <div className={cn(
+                      isVertical ? "flex flex-col items-center gap-1" : "flex items-center gap-2"
+                    )}>
+                      <span className="text-[10px] text-muted-foreground flex-shrink-0">Weight</span>
                       <Slider
                         value={[seed.weight]}
                         onValueChange={([val]) => updateSeedMutation.mutate({ index: seed.seedIndex, updates: { weight: val } })}
                         min={0}
                         max={2}
                         step={0.1}
-                        className="flex-1"
+                        orientation={orientation}
+                        className={cn(isVertical ? "h-[120px]" : "flex-1")}
                         data-testid={`slider-weight-${seed.seedIndex}`}
                       />
-                      <span className="text-[10px] font-mono w-8 text-right">{seed.weight.toFixed(1)}</span>
+                      <span className="text-[10px] font-mono text-right">{seed.weight.toFixed(1)}</span>
                     </div>
 
                     <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
@@ -1674,7 +2026,445 @@ const SUBSYSTEM_PARAMS: Record<string, { label: string; params: { key: string; l
   logging: { label: "Logging", params: [] },
 };
 
-function SystemTab() {
+const STAGE_ROLES = ["generate", "review", "refine", "synthesize"];
+const STAGE_MODELS = ["gemini", "grok", "hub"];
+const STAGE_INPUTS = ["user_query", "previous_output", "all_outputs"];
+
+function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editingPreset, setEditingPreset] = useState<any | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [formName, setFormName] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+  const [formMerge, setFormMerge] = useState("last");
+  const [formStages, setFormStages] = useState<any[]>([{ order: 0, model: "gemini", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 }]);
+
+  const { data: brainData, isLoading } = useQuery<{ presets: any[]; activePresetId: string }>({
+    queryKey: ["/api/brain/presets"],
+    refetchInterval: 10000,
+  });
+
+  const presets = brainData?.presets || [];
+  const activePresetId = brainData?.activePresetId || "a0_dual";
+
+  const activateMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/brain/presets/${id}/activate`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brain/presets"] });
+      toast({ title: "Brain preset activated" });
+    },
+  });
+
+  const setDefaultMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/brain/presets/${id}/default`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brain/presets"] });
+      toast({ title: "Default preset updated" });
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/brain/presets", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brain/presets"] });
+      toast({ title: "Preset created" });
+      resetForm();
+    },
+    onError: (e: any) => toast({ title: "Create failed", description: e.message, variant: "destructive" }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: any }) => apiRequest("PATCH", `/api/brain/presets/${id}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brain/presets"] });
+      toast({ title: "Preset updated" });
+      setEditingPreset(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/brain/presets/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brain/presets"] });
+      toast({ title: "Preset deleted" });
+    },
+    onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
+
+  const updateWeightsMutation = useMutation({
+    mutationFn: (weights: Record<string, number>) => apiRequest("POST", "/api/brain/weights", { weights }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brain/presets"] });
+      toast({ title: "Weights updated" });
+    },
+  });
+
+  function resetForm() {
+    setShowNewForm(false);
+    setFormName("");
+    setFormDesc("");
+    setFormMerge("last");
+    setFormStages([{ order: 0, model: "gemini", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 }]);
+  }
+
+  function addStage() {
+    const maxOrder = Math.max(...formStages.map(s => s.order), -1);
+    setFormStages([...formStages, { order: maxOrder + 1, model: "gemini", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 }]);
+  }
+
+  function removeStage(idx: number) {
+    if (formStages.length <= 1) return;
+    setFormStages(formStages.filter((_, i) => i !== idx));
+  }
+
+  function updateStage(idx: number, key: string, value: any) {
+    const updated = [...formStages];
+    updated[idx] = { ...updated[idx], [key]: value };
+    setFormStages(updated);
+  }
+
+  function handleSubmit() {
+    if (!formName.trim()) return;
+    const weights: Record<string, number> = {};
+    for (const s of formStages) {
+      if (!weights[s.model]) weights[s.model] = 0;
+      weights[s.model] += s.weight;
+    }
+    const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+    for (const k of Object.keys(weights)) weights[k] = weights[k] / totalWeight;
+
+    createMutation.mutate({
+      name: formName.trim(),
+      description: formDesc.trim(),
+      stages: formStages,
+      mergeStrategy: formMerge,
+      weights,
+      thresholds: { mergeThreshold: 0.18, softforkThreshold: 0.30 },
+    });
+  }
+
+  function startEditing(preset: any) {
+    setEditingPreset({ ...preset });
+    setShowNewForm(false);
+  }
+
+  if (isLoading) return <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
+
+  const activePreset = presets.find(p => p.id === activePresetId);
+
+  return (
+    <ScrollArea className="h-full px-3 py-3">
+      <div className="space-y-4 pb-4">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Cpu className="w-4 h-4 text-primary" />
+            Active Brain Pipeline
+          </h3>
+          {activePreset ? (
+            <div className="space-y-3" data-testid="brain-active-preset">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm font-medium">{activePreset.name}</span>
+                  <Badge variant="default" className="text-[9px]">ACTIVE</Badge>
+                  {activePreset.isDefault && <Badge variant="secondary" className="text-[9px]">DEFAULT</Badge>}
+                </div>
+                <Badge variant="secondary" className="text-[9px] font-mono">{activePreset.mergeStrategy}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">{activePreset.description}</p>
+
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-muted-foreground font-medium">Pipeline Stages</span>
+                <div className="flex items-center gap-1 flex-wrap" data-testid="brain-pipeline-visual">
+                  {activePreset.stages.map((stage: any, idx: number) => {
+                    const prevStage = idx > 0 ? activePreset.stages[idx - 1] : null;
+                    const isParallel = prevStage && prevStage.order === stage.order;
+                    return (
+                      <div key={idx} className="flex items-center gap-1">
+                        {idx > 0 && !isParallel && <GitBranch className="w-3 h-3 text-muted-foreground rotate-90" />}
+                        {isParallel && <span className="text-[9px] text-muted-foreground">||</span>}
+                        <div className={cn(
+                          "rounded-md border px-2 py-1 text-[10px] font-mono",
+                          stage.model === "gemini" ? "border-blue-500/30 bg-blue-500/10 text-blue-400" :
+                          stage.model === "grok" ? "border-orange-500/30 bg-orange-500/10 text-orange-400" :
+                          "border-purple-500/30 bg-purple-500/10 text-purple-400"
+                        )}>
+                          <span className="font-semibold">{stage.model}</span>
+                          <span className="text-muted-foreground ml-1">({stage.role})</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {activePreset.weights && Object.keys(activePreset.weights).length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-muted-foreground font-medium">Model Weights</span>
+                  <div className={cn(isVertical ? "grid grid-cols-2 gap-3" : "space-y-2")}>
+                    {Object.entries(activePreset.weights).map(([model, weight]) => (
+                      <div key={model} className={cn(
+                        isVertical ? "flex flex-col items-center gap-1" : "flex items-center gap-2"
+                      )}>
+                        <span className={cn("text-[10px] font-mono flex-shrink-0", !isVertical && "w-16")}>{model}</span>
+                        <Slider
+                          value={[weight as number]}
+                          onValueChange={([val]) => {
+                            const newWeights = { ...activePreset.weights, [model]: val };
+                            updateWeightsMutation.mutate(newWeights);
+                          }}
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          orientation={orientation}
+                          className={cn(isVertical ? "h-[120px]" : "flex-1")}
+                          data-testid={`slider-brain-weight-${model}`}
+                        />
+                        <span className="text-[10px] font-mono">{(weight as number).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <div>
+                  <span className="text-muted-foreground">Merge Threshold</span>
+                  <p className="font-mono">{activePreset.thresholds?.mergeThreshold ?? 0.18}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Softfork Threshold</span>
+                  <p className="font-mono">{activePreset.thresholds?.softforkThreshold ?? 0.30}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">No active preset. Select one below.</p>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <GitBranch className="w-4 h-4 text-muted-foreground" />
+              All Presets
+            </h3>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { setShowNewForm(!showNewForm); setEditingPreset(null); }}
+              data-testid="button-new-brain-preset"
+            >
+              <Plus className="w-3 h-3 mr-1" /> New Preset
+            </Button>
+          </div>
+
+          {showNewForm && (
+            <div className="rounded-md border border-border p-3 mb-3 space-y-2" data-testid="brain-preset-form">
+              <Input
+                placeholder="Preset name"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                data-testid="input-brain-preset-name"
+              />
+              <Textarea
+                placeholder="Description"
+                value={formDesc}
+                onChange={(e) => setFormDesc(e.target.value)}
+                className="resize-none text-xs"
+                rows={2}
+                data-testid="input-brain-preset-desc"
+              />
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px]">Merge Strategy</Label>
+                <Select value={formMerge} onValueChange={setFormMerge}>
+                  <SelectTrigger className="w-32" data-testid="select-brain-merge">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="last">Last Output</SelectItem>
+                    <SelectItem value="synthesis">Synthesis</SelectItem>
+                    <SelectItem value="weighted">Weighted</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-muted-foreground font-medium">Pipeline Stages</span>
+                  <Button size="sm" variant="ghost" onClick={addStage} data-testid="button-add-stage">
+                    <Plus className="w-3 h-3 mr-1" /> Stage
+                  </Button>
+                </div>
+                {formStages.map((stage, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 flex-wrap" data-testid={`brain-stage-${idx}`}>
+                    <Input
+                      type="number"
+                      value={stage.order}
+                      onChange={(e) => updateStage(idx, "order", parseInt(e.target.value) || 0)}
+                      className="w-12 text-xs"
+                      data-testid={`input-stage-order-${idx}`}
+                    />
+                    <Select value={stage.model} onValueChange={(v) => updateStage(idx, "model", v)}>
+                      <SelectTrigger className="w-20" data-testid={`select-stage-model-${idx}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STAGE_MODELS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={stage.role} onValueChange={(v) => updateStage(idx, "role", v)}>
+                      <SelectTrigger className="w-24" data-testid={`select-stage-role-${idx}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STAGE_ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={stage.input} onValueChange={(v) => updateStage(idx, "input", v)}>
+                      <SelectTrigger className="w-28" data-testid={`select-stage-input-${idx}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STAGE_INPUTS.map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Button size="icon" variant="ghost" onClick={() => removeStage(idx)} disabled={formStages.length <= 1} data-testid={`button-remove-stage-${idx}`}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Button size="sm" onClick={handleSubmit} disabled={createMutation.isPending || !formName.trim()} data-testid="button-save-brain-preset">
+                  {createMutation.isPending ? "Saving..." : "Save Preset"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={resetForm} data-testid="button-cancel-brain-preset">Cancel</Button>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {presets.map((preset: any) => {
+              const isActive = preset.id === activePresetId;
+              const isEditing = editingPreset?.id === preset.id;
+
+              return (
+                <div
+                  key={preset.id}
+                  className={cn("rounded-md border p-2.5 space-y-1.5", isActive ? "border-primary/50" : "border-border")}
+                  data-testid={`brain-preset-${preset.id}`}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-medium truncate">{preset.name}</span>
+                      {isActive && <Badge variant="default" className="text-[9px]">ACTIVE</Badge>}
+                      {preset.isDefault && <Badge variant="secondary" className="text-[9px]">DEFAULT</Badge>}
+                      {preset.builtin && <Badge variant="secondary" className="text-[9px]">Built-in</Badge>}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {!isActive && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => activateMutation.mutate(preset.id)}
+                          disabled={activateMutation.isPending}
+                          data-testid={`button-activate-brain-${preset.id}`}
+                        >
+                          <Play className="w-3 h-3 mr-1" /> Activate
+                        </Button>
+                      )}
+                      {!preset.isDefault && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setDefaultMutation.mutate(preset.id)}
+                          disabled={setDefaultMutation.isPending}
+                          data-testid={`button-default-brain-${preset.id}`}
+                        >
+                          <Star className="w-3 h-3" />
+                        </Button>
+                      )}
+                      {!preset.builtin && (
+                        <>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => isEditing ? setEditingPreset(null) : startEditing(preset)}
+                            data-testid={`button-edit-brain-${preset.id}`}
+                          >
+                            <Settings className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => deleteMutation.mutate(preset.id)}
+                            disabled={deleteMutation.isPending}
+                            data-testid={`button-delete-brain-${preset.id}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">{preset.description}</p>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {preset.stages?.map((stage: any, idx: number) => {
+                      const prevStage = idx > 0 ? preset.stages[idx - 1] : null;
+                      const isParallel = prevStage && prevStage.order === stage.order;
+                      return (
+                        <div key={idx} className="flex items-center gap-0.5">
+                          {idx > 0 && !isParallel && <span className="text-[9px] text-muted-foreground mx-0.5">&rarr;</span>}
+                          {isParallel && <span className="text-[9px] text-muted-foreground mx-0.5">||</span>}
+                          <span className={cn(
+                            "text-[9px] font-mono px-1 py-0.5 rounded",
+                            stage.model === "gemini" ? "bg-blue-500/10 text-blue-400" :
+                            stage.model === "grok" ? "bg-orange-500/10 text-orange-400" :
+                            "bg-purple-500/10 text-purple-400"
+                          )}>
+                            {stage.model}:{stage.role}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {isEditing && (
+                    <div className="border-t border-border pt-2 mt-2 space-y-2">
+                      <Input
+                        value={editingPreset.name}
+                        onChange={(e) => setEditingPreset({ ...editingPreset, name: e.target.value })}
+                        className="text-xs"
+                        data-testid="input-edit-brain-name"
+                      />
+                      <Textarea
+                        value={editingPreset.description}
+                        onChange={(e) => setEditingPreset({ ...editingPreset, description: e.target.value })}
+                        className="resize-none text-xs"
+                        rows={2}
+                        data-testid="input-edit-brain-desc"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => updateMutation.mutate({ id: editingPreset.id, updates: { name: editingPreset.name, description: editingPreset.description } })}
+                        disabled={updateMutation.isPending}
+                        data-testid="button-save-edit-brain"
+                      >
+                        Save Changes
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
+function SystemTab({ orientation, isVertical }: SliderOrientationProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
@@ -1755,12 +2545,14 @@ function SystemTab() {
                   </div>
 
                   {isExpanded && config.params.length > 0 && (
-                    <div className="px-2.5 pb-2.5 space-y-2 border-t border-border pt-2">
+                    <div className={cn("px-2.5 pb-2.5 border-t border-border pt-2", isVertical ? "grid grid-cols-2 gap-3" : "space-y-2")}>
                       {config.params.map((p) => {
                         const currentVal = params[p.key] ?? p.default;
                         return (
-                          <div key={p.key} className="flex items-center gap-2">
-                            <span className="text-[10px] text-muted-foreground w-32 flex-shrink-0">{p.label}</span>
+                          <div key={p.key} className={cn(
+                            isVertical ? "flex flex-col items-center gap-1" : "flex items-center gap-2"
+                          )}>
+                            <span className={cn("text-[10px] text-muted-foreground flex-shrink-0", !isVertical && "w-32")}>{p.label}</span>
                             <Slider
                               value={[currentVal]}
                               onValueChange={([val]) => {
@@ -1770,10 +2562,11 @@ function SystemTab() {
                               min={p.min}
                               max={p.max}
                               step={p.step}
-                              className="flex-1"
+                              orientation={orientation}
+                              className={cn(isVertical ? "h-[120px]" : "flex-1")}
                               data-testid={`slider-param-${sub}-${p.key}`}
                             />
-                            <span className="text-[10px] font-mono w-14 text-right">{typeof currentVal === "number" ? currentVal.toFixed(p.step < 1 ? 2 : 0) : currentVal}</span>
+                            <span className="text-[10px] font-mono text-right">{typeof currentVal === "number" ? currentVal.toFixed(p.step < 1 ? 2 : 0) : currentVal}</span>
                           </div>
                         );
                       })}
@@ -1836,9 +2629,34 @@ function SystemTab() {
   );
 }
 
-function HeartbeatTab() {
+function HeartbeatTab({ orientation, isVertical }: SliderOrientationProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const BUILTIN_TASKS = ["transcript_search", "github_search", "ai_social_search", "x_monitor"];
+
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [formName, setFormName] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+  const [formType, setFormType] = useState("custom");
+  const [formWeight, setFormWeight] = useState(1.0);
+  const [formInterval, setFormInterval] = useState(300);
+  const [formEnabled, setFormEnabled] = useState(true);
+  const [formHandlerCode, setFormHandlerCode] = useState("");
+
+  const { data: activityStats } = useQuery<{
+    heartbeatRuns: number;
+    transcripts: number;
+    conversations: number;
+    events: number;
+    drafts: number;
+    promotions: number;
+    edcmSnapshots: number;
+    memorySnapshots: number;
+  }>({
+    queryKey: ["/api/heartbeat/stats"],
+    refetchInterval: 10000,
+  });
 
   const { data: status } = useQuery<{ running: boolean; tickIntervalMs: number }>({
     queryKey: ["/api/heartbeat/status"],
@@ -1855,11 +2673,38 @@ function HeartbeatTab() {
     refetchInterval: 10000,
   });
 
+  const createTaskMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/heartbeat/tasks", data),
+    onSuccess: () => {
+      toast({ title: "Task created" });
+      queryClient.invalidateQueries({ queryKey: ["/api/heartbeat/tasks"] });
+      resetForm();
+    },
+    onError: (e: any) => {
+      toast({ title: "Create failed", description: e.message, variant: "destructive" });
+    },
+  });
+
   const updateTaskMutation = useMutation({
     mutationFn: ({ id, updates }: { id: number; updates: any }) =>
       apiRequest("PATCH", `/api/heartbeat/tasks/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/heartbeat/tasks"] });
+      if (editingTaskId !== null) {
+        setEditingTaskId(null);
+        toast({ title: "Task updated" });
+      }
+    },
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/heartbeat/tasks/${id}`),
+    onSuccess: () => {
+      toast({ title: "Task deleted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/heartbeat/tasks"] });
+    },
+    onError: (e: any) => {
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -1890,11 +2735,203 @@ function HeartbeatTab() {
     },
   });
 
+  function resetForm() {
+    setShowNewForm(false);
+    setEditingTaskId(null);
+    setFormName("");
+    setFormDesc("");
+    setFormType("custom");
+    setFormWeight(1.0);
+    setFormInterval(300);
+    setFormEnabled(true);
+    setFormHandlerCode("");
+  }
+
+  function startEditing(task: any) {
+    setEditingTaskId(task.id);
+    setFormName(task.name);
+    setFormDesc(task.description || "");
+    setFormType(task.taskType);
+    setFormWeight(task.weight);
+    setFormInterval(task.intervalSeconds);
+    setFormEnabled(task.enabled);
+    setFormHandlerCode(task.lastResult?.startsWith("handler:") ? task.lastResult.slice(8) : "");
+    setShowNewForm(false);
+  }
+
+  function handleSubmit() {
+    if (editingTaskId !== null) {
+      updateTaskMutation.mutate({
+        id: editingTaskId,
+        updates: {
+          description: formDesc,
+          taskType: formType,
+          weight: formWeight,
+          intervalSeconds: formInterval,
+          enabled: formEnabled,
+          ...(formType === "custom" ? { handlerCode: formHandlerCode } : {}),
+        },
+      });
+    } else {
+      createTaskMutation.mutate({
+        name: formName,
+        description: formDesc,
+        taskType: formType,
+        weight: formWeight,
+        intervalSeconds: formInterval,
+        enabled: formEnabled,
+        ...(formType === "custom" ? { handlerCode: formHandlerCode } : {}),
+      });
+    }
+  }
+
   const totalWeight = tasks.reduce((sum: number, t: any) => sum + (t.enabled ? t.weight : 0), 0);
+
+  const taskForm = (
+    <div className="rounded-md border border-border p-3 space-y-3" data-testid="heartbeat-task-form">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h4 className="text-xs font-semibold">{editingTaskId !== null ? "Edit Task" : "New Task"}</h4>
+        <Button size="icon" variant="ghost" onClick={resetForm} data-testid="button-cancel-task-form">
+          <X className="w-3 h-3" />
+        </Button>
+      </div>
+      {editingTaskId === null && (
+        <div>
+          <Label className="text-[10px]">Name</Label>
+          <Input
+            value={formName}
+            onChange={(e) => setFormName(e.target.value)}
+            placeholder="my_custom_task"
+            className="text-xs font-mono mt-0.5"
+            data-testid="input-task-name"
+          />
+        </div>
+      )}
+      <div>
+        <Label className="text-[10px]">Description</Label>
+        <Input
+          value={formDesc}
+          onChange={(e) => setFormDesc(e.target.value)}
+          placeholder="What this task does..."
+          className="text-xs mt-0.5"
+          data-testid="input-task-desc"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-[10px]">Task Type</Label>
+          <Select value={formType} onValueChange={setFormType}>
+            <SelectTrigger className="text-xs mt-0.5" data-testid="select-task-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="custom">Custom</SelectItem>
+              <SelectItem value="transcript_search">Transcript Search</SelectItem>
+              <SelectItem value="github_search">GitHub Search</SelectItem>
+              <SelectItem value="ai_social_search">AI Social Search</SelectItem>
+              <SelectItem value="x_monitor">X Monitor</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-[10px]">Interval (seconds)</Label>
+          <Input
+            type="number"
+            value={formInterval}
+            onChange={(e) => setFormInterval(parseInt(e.target.value) || 300)}
+            className="text-xs font-mono mt-0.5"
+            data-testid="input-task-interval"
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex-1 min-w-[120px]">
+          <Label className="text-[10px]">Weight</Label>
+          <div className={cn(
+            isVertical ? "flex flex-col items-center gap-1 mt-0.5" : "flex items-center gap-2 mt-0.5"
+          )}>
+            <Slider
+              value={[formWeight]}
+              onValueChange={([v]) => setFormWeight(v)}
+              min={0}
+              max={5}
+              step={0.1}
+              orientation={orientation}
+              className={cn(isVertical ? "h-[120px]" : "flex-1")}
+              data-testid="slider-task-weight"
+            />
+            <span className="text-[10px] font-mono text-right">{formWeight.toFixed(1)}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 pt-3">
+          <Switch
+            checked={formEnabled}
+            onCheckedChange={setFormEnabled}
+            data-testid="toggle-task-enabled"
+          />
+          <Label className="text-[10px]">Enabled</Label>
+        </div>
+      </div>
+      {formType === "custom" && (
+        <div>
+          <Label className="text-[10px]">Handler Code</Label>
+          <Textarea
+            value={formHandlerCode}
+            onChange={(e) => setFormHandlerCode(e.target.value)}
+            placeholder="// JavaScript handler code for custom task execution..."
+            className="text-xs font-mono mt-0.5 min-h-[80px]"
+            data-testid="textarea-handler-code"
+          />
+        </div>
+      )}
+      <Button
+        size="sm"
+        onClick={handleSubmit}
+        disabled={(!formName && editingTaskId === null) || createTaskMutation.isPending || updateTaskMutation.isPending}
+        className="w-full gap-1"
+        data-testid="button-submit-task"
+      >
+        <Check className="w-3 h-3" />
+        {editingTaskId !== null ? "Save Changes" : "Create Task"}
+      </Button>
+    </div>
+  );
 
   return (
     <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            Activity Stats
+          </h3>
+          {activityStats ? (
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: "Heartbeat Runs", value: activityStats.heartbeatRuns, testId: "stat-heartbeat-runs" },
+                { label: "Messages", value: activityStats.transcripts, testId: "stat-transcripts" },
+                { label: "Conversations", value: activityStats.conversations, testId: "stat-conversations" },
+                { label: "Chain Events", value: activityStats.events, testId: "stat-events" },
+                { label: "Discovery Drafts", value: activityStats.drafts, testId: "stat-drafts" },
+                { label: "Promotions", value: activityStats.promotions, testId: "stat-promotions" },
+                { label: "EDCM Snapshots", value: activityStats.edcmSnapshots, testId: "stat-edcm-snapshots" },
+                { label: "Memory Snapshots", value: activityStats.memorySnapshots, testId: "stat-memory-snapshots" },
+              ].map((stat) => (
+                <div
+                  key={stat.testId}
+                  className="rounded-md border border-border p-2.5 flex items-center justify-between gap-2"
+                  data-testid={stat.testId}
+                >
+                  <span className="text-[10px] text-muted-foreground">{stat.label}</span>
+                  <span className="text-sm font-mono font-bold">{stat.value.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Skeleton className="h-24 w-full" />
+          )}
+        </div>
+
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <h3 className="font-semibold text-sm flex items-center gap-2">
@@ -1932,18 +2969,36 @@ function HeartbeatTab() {
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-emerald-400" />
-            Task List
-          </h3>
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-400" />
+              Task List
+            </h3>
+            {!showNewForm && editingTaskId === null && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowNewForm(true)}
+                className="gap-1"
+                data-testid="button-new-task"
+              >
+                <Plus className="w-3 h-3" />
+                New Task
+              </Button>
+            )}
+          </div>
+          {(showNewForm || editingTaskId !== null) && taskForm}
           {tasksLoading ? (
             <Skeleton className="h-32 w-full" />
-          ) : tasks.length === 0 ? (
+          ) : tasks.length === 0 && !showNewForm ? (
             <p className="text-xs text-muted-foreground">No heartbeat tasks configured.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 mt-3">
               {tasks.map((task: any) => {
+                const isBuiltin = BUILTIN_TASKS.includes(task.name);
+                const isEditing = editingTaskId === task.id;
                 const weightPct = totalWeight > 0 && task.enabled ? ((task.weight / totalWeight) * 100).toFixed(1) : "0";
+                if (isEditing) return null;
                 return (
                   <div
                     key={task.id}
@@ -1951,7 +3006,7 @@ function HeartbeatTab() {
                     data-testid={`heartbeat-task-${task.name}`}
                   >
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
                         <Switch
                           checked={task.enabled}
                           onCheckedChange={(enabled) =>
@@ -1961,23 +3016,49 @@ function HeartbeatTab() {
                         />
                         <span className="font-mono text-xs font-bold truncate">{task.name}</span>
                         <Badge variant="secondary" className="text-[9px]">{task.taskType}</Badge>
+                        {isBuiltin && <Badge variant="outline" className="text-[8px]">Built-in</Badge>}
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => runNowMutation.mutate(task.name)}
-                        disabled={runNowMutation.isPending}
-                        data-testid={`button-run-${task.name}`}
-                      >
-                        <Play className="w-3 h-3 mr-1" />
-                        Run Now
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        {!isBuiltin && (
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => startEditing(task)}
+                              data-testid={`button-edit-${task.name}`}
+                            >
+                              <Settings className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => deleteTaskMutation.mutate(task.id)}
+                              disabled={deleteTaskMutation.isPending}
+                              data-testid={`button-delete-${task.name}`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => runNowMutation.mutate(task.name)}
+                          disabled={runNowMutation.isPending}
+                          data-testid={`button-run-${task.name}`}
+                        >
+                          <Play className="w-3 h-3 mr-1" />
+                          Run Now
+                        </Button>
+                      </div>
                     </div>
                     <p className="text-[10px] text-muted-foreground">{task.description}</p>
                     <div className="grid grid-cols-3 gap-2 text-[10px]">
                       <div>
                         <span className="text-muted-foreground">Weight</span>
-                        <div className="flex items-center gap-1 mt-0.5">
+                        <div className={cn(
+                          isVertical ? "flex flex-col items-center gap-1 mt-0.5" : "flex items-center gap-1 mt-0.5"
+                        )}>
                           <Slider
                             value={[task.weight]}
                             onValueChange={([val]) =>
@@ -1986,10 +3067,11 @@ function HeartbeatTab() {
                             min={0}
                             max={5}
                             step={0.1}
-                            className="flex-1"
+                            orientation={orientation}
+                            className={cn(isVertical ? "h-[120px]" : "flex-1")}
                             data-testid={`slider-weight-${task.name}`}
                           />
-                          <span className="font-mono w-8 text-right">{task.weight.toFixed(1)}</span>
+                          <span className="font-mono text-right">{task.weight.toFixed(1)}</span>
                         </div>
                       </div>
                       <div>
@@ -2017,7 +3099,7 @@ function HeartbeatTab() {
                     {task.lastRun && (
                       <div className="text-[10px] text-muted-foreground">
                         Last run: {new Date(task.lastRun).toLocaleString()}
-                        {task.lastResult && (
+                        {task.lastResult && !task.lastResult.startsWith("handler:") && (
                           <span className="block truncate">{task.lastResult}</span>
                         )}
                       </div>
@@ -2541,22 +3623,534 @@ function CustomToolsTab() {
   );
 }
 
-function ContextTab() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
+const CREDENTIAL_TEMPLATES = [
+  {
+    id: "ai_hub",
+    name: "Multi-Model AI Hub",
+    category: "ai",
+    fields: [
+      { label: "Endpoint URL", key: "endpoint_url" },
+      { label: "API Key", key: "api_key" },
+      { label: "Default Model", key: "default_model" },
+    ],
+  },
+  {
+    id: "google_cloud",
+    name: "Google Cloud Project",
+    category: "cloud",
+    fields: [
+      { label: "Project ID", key: "project_id" },
+      { label: "API Key", key: "api_key" },
+      { label: "Service Account JSON", key: "service_account_json" },
+    ],
+  },
+  {
+    id: "firebase",
+    name: "Firebase",
+    category: "cloud",
+    fields: [
+      { label: "Project ID", key: "project_id" },
+      { label: "API Key", key: "api_key" },
+      { label: "Auth Domain", key: "auth_domain" },
+    ],
+  },
+  {
+    id: "aws",
+    name: "AWS",
+    category: "cloud",
+    fields: [
+      { label: "Access Key ID", key: "access_key_id" },
+      { label: "Secret Access Key", key: "secret_access_key" },
+      { label: "Region", key: "region" },
+    ],
+  },
+  {
+    id: "custom",
+    name: "Custom Service",
+    category: "custom",
+    fields: [],
+  },
+] as const;
 
-  const { data: serverCtx } = useQuery<{ systemPrompt: string; contextPrefix: string }>({
-    queryKey: ["/api/context"],
+function CredentialsTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [showNewCred, setShowNewCred] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [credServiceName, setCredServiceName] = useState("");
+  const [credFields, setCredFields] = useState<{ label: string; key: string; value: string }[]>([]);
+  const [customFieldLabel, setCustomFieldLabel] = useState("");
+
+  const [showNewSecret, setShowNewSecret] = useState(false);
+  const [secretName, setSecretName] = useState("");
+  const [secretKey, setSecretKey] = useState("");
+  const [secretValue, setSecretValue] = useState("");
+  const [secretCategory, setSecretCategory] = useState("general");
+
+  const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set());
+
+  const { data: credentials = [], isLoading: credsLoading } = useQuery<any[]>({
+    queryKey: ["/api/credentials"],
+  });
+
+  const { data: secrets = [], isLoading: secretsLoading } = useQuery<any[]>({
+    queryKey: ["/api/secrets"],
   });
 
   const { data: savedKeys = {} } = useQuery<Record<string, string>>({
     queryKey: ["/api/keys"],
   });
 
+  const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
+
+  const saveKeyMutation = useMutation({
+    mutationFn: async ({ provider, key }: { provider: string; key: string }) => {
+      await apiRequest("POST", "/api/keys", { provider, key });
+    },
+    onSuccess: (_, { provider, key }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/keys"] });
+      setKeyInputs((prev) => ({ ...prev, [provider]: "" }));
+      toast({ title: key ? `${provider} key saved` : `${provider} key removed` });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const addCredMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/credentials", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/credentials"] });
+      setShowNewCred(false);
+      resetCredForm();
+      toast({ title: "Credential saved" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteCredMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/credentials/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/credentials"] });
+      toast({ title: "Credential deleted" });
+    },
+  });
+
+  const addSecretMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/secrets", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/secrets"] });
+      setShowNewSecret(false);
+      setSecretName("");
+      setSecretKey("");
+      setSecretValue("");
+      setSecretCategory("general");
+      toast({ title: "Secret saved" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteSecretMutation = useMutation({
+    mutationFn: (key: string) => apiRequest("DELETE", `/api/secrets/${encodeURIComponent(key)}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/secrets"] });
+      toast({ title: "Secret deleted" });
+    },
+  });
+
+  function resetCredForm() {
+    setSelectedTemplate("");
+    setCredServiceName("");
+    setCredFields([]);
+    setCustomFieldLabel("");
+  }
+
+  function handleTemplateSelect(templateId: string) {
+    setSelectedTemplate(templateId);
+    const tmpl = CREDENTIAL_TEMPLATES.find((t) => t.id === templateId);
+    if (tmpl) {
+      setCredServiceName(tmpl.id === "custom" ? "" : tmpl.name);
+      setCredFields(tmpl.fields.map((f) => ({ label: f.label, key: f.key, value: "" })));
+    }
+  }
+
+  function addCustomField() {
+    if (!customFieldLabel.trim()) return;
+    const key = customFieldLabel.trim().toLowerCase().replace(/\s+/g, "_");
+    setCredFields((prev) => [...prev, { label: customFieldLabel.trim(), key, value: "" }]);
+    setCustomFieldLabel("");
+  }
+
+  function removeCustomField(idx: number) {
+    setCredFields((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function toggleFieldVisibility(fieldId: string) {
+    setVisibleFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(fieldId)) next.delete(fieldId); else next.add(fieldId);
+      return next;
+    });
+  }
+
+  function handleSaveCred() {
+    if (!credServiceName.trim()) return;
+    if (credFields.length === 0) return;
+    const tmpl = CREDENTIAL_TEMPLATES.find((t) => t.id === selectedTemplate);
+    addCredMutation.mutate({
+      serviceName: credServiceName.trim(),
+      category: tmpl?.category || "custom",
+      template: selectedTemplate || "custom",
+      fields: credFields,
+    });
+  }
+
+  return (
+    <ScrollArea className="h-full px-3 py-3">
+      <div className="space-y-4 pb-4">
+        <div className="rounded-lg border border-primary/20 bg-card p-4">
+          <h3 className="font-semibold text-sm mb-1 flex items-center gap-2">
+            <Key className="w-4 h-4 text-primary" />
+            AI Provider Keys
+          </h3>
+          <p className="text-[10px] text-muted-foreground mb-3">
+            Bring your own keys for additional AI providers. Gemini and Grok are built-in.
+          </p>
+          <div className="space-y-3">
+            {AI_PROVIDERS.map((p) => {
+              const existing = savedKeys[p.id];
+              return (
+                <div key={p.id} className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">{p.label}</span>
+                    {existing && (
+                      <div className="flex items-center gap-1">
+                        <Badge variant="secondary" className="text-[9px] font-mono">{existing}</Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => saveKeyMutation.mutate({ provider: p.id, key: "" })}
+                          data-testid={`button-remove-key-${p.id}`}
+                        >
+                          <X className="w-3 h-3 text-destructive" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      placeholder={p.placeholder}
+                      value={keyInputs[p.id] || ""}
+                      onChange={(e) => setKeyInputs((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                      className="text-xs font-mono"
+                      data-testid={`input-key-${p.id}`}
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={!keyInputs[p.id]?.trim() || saveKeyMutation.isPending}
+                      onClick={() => saveKeyMutation.mutate({ provider: p.id, key: keyInputs[p.id]!.trim() })}
+                      data-testid={`button-save-key-${p.id}`}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 rounded bg-background p-2">
+            <p className="text-[9px] text-muted-foreground">
+              Built-in: Gemini 2.5 Flash, Grok-3 Mini. BYO keys enable future model routing.
+              Keys are stored server-side per session.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-400" />
+              Service Credentials
+            </h3>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { setShowNewCred(!showNewCred); if (showNewCred) resetCredForm(); }}
+              data-testid="button-new-credential"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              {showNewCred ? "Cancel" : "Add Service"}
+            </Button>
+          </div>
+
+          {showNewCred && (
+            <div className="rounded-md border border-border p-3 space-y-3 mb-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Template</Label>
+                <Select value={selectedTemplate} onValueChange={handleTemplateSelect}>
+                  <SelectTrigger className="text-xs" data-testid="select-credential-template">
+                    <SelectValue placeholder="Choose a template..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CREDENTIAL_TEMPLATES.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedTemplate && (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Service Name</Label>
+                    <Input
+                      value={credServiceName}
+                      onChange={(e) => setCredServiceName(e.target.value)}
+                      className="text-xs"
+                      placeholder="My AI Hub"
+                      data-testid="input-credential-name"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">Fields</Label>
+                    {credFields.map((field, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground w-28 flex-shrink-0 truncate">{field.label}</span>
+                        <Input
+                          type="password"
+                          value={field.value}
+                          onChange={(e) => {
+                            const updated = [...credFields];
+                            updated[idx] = { ...updated[idx], value: e.target.value };
+                            setCredFields(updated);
+                          }}
+                          className="text-xs font-mono"
+                          placeholder={`Enter ${field.label.toLowerCase()}`}
+                          data-testid={`input-cred-field-${field.key}`}
+                        />
+                        {selectedTemplate === "custom" && (
+                          <Button size="icon" variant="ghost" onClick={() => removeCustomField(idx)} data-testid={`button-remove-field-${idx}`}>
+                            <X className="w-3 h-3 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {selectedTemplate === "custom" && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={customFieldLabel}
+                        onChange={(e) => setCustomFieldLabel(e.target.value)}
+                        className="text-xs"
+                        placeholder="New field label"
+                        data-testid="input-custom-field-label"
+                        onKeyDown={(e) => { if (e.key === "Enter") addCustomField(); }}
+                      />
+                      <Button size="sm" variant="outline" onClick={addCustomField} data-testid="button-add-custom-field">
+                        <Plus className="w-3 h-3 mr-1" />
+                        Add
+                      </Button>
+                    </div>
+                  )}
+
+                  <Button
+                    className="w-full"
+                    onClick={handleSaveCred}
+                    disabled={!credServiceName.trim() || credFields.length === 0 || addCredMutation.isPending}
+                    data-testid="button-save-credential"
+                  >
+                    <Check className="w-4 h-4 mr-1" />
+                    {addCredMutation.isPending ? "Saving..." : "Save Credential"}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+
+          {credsLoading ? (
+            <Skeleton className="h-20 w-full" />
+          ) : credentials.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No service credentials configured. Add one using a template above.</p>
+          ) : (
+            <div className="space-y-2">
+              {credentials.map((cred: any) => (
+                <div key={cred.id} className="rounded-md border border-border p-2.5 space-y-1.5" data-testid={`card-credential-${cred.id}`}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-xs font-medium truncate" data-testid={`text-cred-name-${cred.id}`}>{cred.serviceName}</span>
+                      <Badge variant="secondary" className="text-[9px]">{cred.category}</Badge>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => deleteCredMutation.mutate(cred.id)}
+                      disabled={deleteCredMutation.isPending}
+                      data-testid={`button-delete-cred-${cred.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                  <div className="space-y-1">
+                    {cred.fields?.map((field: any, idx: number) => {
+                      const fieldId = `${cred.id}-${field.key}`;
+                      const isVisible = visibleFields.has(fieldId);
+                      return (
+                        <div key={idx} className="flex items-center gap-2 text-[10px]">
+                          <span className="text-muted-foreground w-28 flex-shrink-0 truncate">{field.label}</span>
+                          <span className="font-mono flex-1 truncate" data-testid={`text-cred-field-${cred.id}-${field.key}`}>
+                            {isVisible ? field.value : field.value?.replace(/./g, "*").slice(0, 20) || "***"}
+                          </span>
+                          <button onClick={() => toggleFieldVisibility(fieldId)} className="flex-shrink-0 text-muted-foreground" data-testid={`button-toggle-visibility-${cred.id}-${field.key}`}>
+                            {isVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="text-[9px] text-muted-foreground">
+                    Added {new Date(cred.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              Quick Secrets
+            </h3>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowNewSecret(!showNewSecret)}
+              data-testid="button-new-secret"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              {showNewSecret ? "Cancel" : "Add Secret"}
+            </Button>
+          </div>
+
+          {showNewSecret && (
+            <div className="rounded-md border border-border p-3 space-y-2 mb-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Name</Label>
+                <Input
+                  value={secretName}
+                  onChange={(e) => setSecretName(e.target.value)}
+                  className="text-xs"
+                  placeholder="My Token"
+                  data-testid="input-secret-name"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Key</Label>
+                <Input
+                  value={secretKey}
+                  onChange={(e) => setSecretKey(e.target.value)}
+                  className="text-xs font-mono"
+                  placeholder="MY_TOKEN"
+                  data-testid="input-secret-key"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Value</Label>
+                <Input
+                  type="password"
+                  value={secretValue}
+                  onChange={(e) => setSecretValue(e.target.value)}
+                  className="text-xs font-mono"
+                  placeholder="secret_value_here"
+                  data-testid="input-secret-value"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Category</Label>
+                <Select value={secretCategory} onValueChange={setSecretCategory}>
+                  <SelectTrigger className="text-xs" data-testid="select-secret-category">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="general">General</SelectItem>
+                    <SelectItem value="api">API</SelectItem>
+                    <SelectItem value="auth">Auth</SelectItem>
+                    <SelectItem value="infra">Infrastructure</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                className="w-full"
+                onClick={() => addSecretMutation.mutate({ name: secretName, key: secretKey, value: secretValue, category: secretCategory })}
+                disabled={!secretKey.trim() || !secretValue.trim() || addSecretMutation.isPending}
+                data-testid="button-save-secret"
+              >
+                <Check className="w-4 h-4 mr-1" />
+                {addSecretMutation.isPending ? "Saving..." : "Save Secret"}
+              </Button>
+            </div>
+          )}
+
+          {secretsLoading ? (
+            <Skeleton className="h-20 w-full" />
+          ) : secrets.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No quick secrets stored. Add one-off tokens and keys above.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {secrets.map((s: any) => {
+                const fieldId = `secret-${s.key}`;
+                const isVisible = visibleFields.has(fieldId);
+                return (
+                  <div key={s.key} className="flex items-center gap-2 rounded-md border border-border p-2" data-testid={`card-secret-${s.key}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium truncate" data-testid={`text-secret-name-${s.key}`}>{s.name}</span>
+                        <Badge variant="secondary" className="text-[9px]">{s.category}</Badge>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-mono text-muted-foreground">{s.key}</span>
+                        <span className="text-[10px] font-mono" data-testid={`text-secret-value-${s.key}`}>
+                          {isVisible ? s.value : "****"}
+                        </span>
+                        <button onClick={() => toggleFieldVisibility(fieldId)} className="text-muted-foreground" data-testid={`button-toggle-secret-${s.key}`}>
+                          {isVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        </button>
+                      </div>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => deleteSecretMutation.mutate(s.key)}
+                      disabled={deleteSecretMutation.isPending}
+                      data-testid={`button-delete-secret-${s.key}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
+function ContextTab() {
+  const { toast } = useToast();
+
+  const { data: serverCtx } = useQuery<{ systemPrompt: string; contextPrefix: string }>({
+    queryKey: ["/api/context"],
+  });
+
   const [systemPrompt, setSystemPrompt] = useState("");
   const [contextPrefix, setContextPrefix] = useState("");
   const [loaded, setLoaded] = useState(false);
-  const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (serverCtx && !loaded) {
@@ -2569,18 +4163,6 @@ function ContextTab() {
   const saveMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/context", { systemPrompt, contextPrefix }),
     onSuccess: () => toast({ title: "Context saved and active" }),
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  const saveKeyMutation = useMutation({
-    mutationFn: async ({ provider, key }: { provider: string; key: string }) => {
-      await apiRequest("POST", "/api/keys", { provider, key });
-    },
-    onSuccess: (_, { provider, key }) => {
-      qc.invalidateQueries({ queryKey: ["/api/keys"] });
-      setKeyInputs((prev) => ({ ...prev, [provider]: "" }));
-      toast({ title: key ? `${provider} key saved` : `${provider} key removed` });
-    },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
@@ -2619,68 +4201,6 @@ function ContextTab() {
           {saveMutation.isPending ? "Saving..." : "Save Context"}
         </Button>
 
-        <div className="rounded-lg border border-primary/20 bg-card p-4">
-          <h3 className="font-semibold text-sm mb-1 flex items-center gap-2">
-            <Key className="w-4 h-4 text-primary" />
-            BYO API Keys
-          </h3>
-          <p className="text-[10px] text-muted-foreground mb-3">
-            Bring your own keys for additional AI providers. Gemini and Grok are built-in.
-          </p>
-          <div className="space-y-3">
-            {AI_PROVIDERS.map((p) => {
-              const existing = savedKeys[p.id];
-              return (
-                <div key={p.id} className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">{p.label}</span>
-                    {existing && (
-                      <div className="flex items-center gap-1">
-                        <Badge variant="secondary" className="text-[9px] font-mono">{existing}</Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 w-5 p-0"
-                          onClick={() => saveKeyMutation.mutate({ provider: p.id, key: "" })}
-                          data-testid={`button-remove-key-${p.id}`}
-                        >
-                          <X className="w-3 h-3 text-destructive" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      type="password"
-                      placeholder={p.placeholder}
-                      value={keyInputs[p.id] || ""}
-                      onChange={(e) => setKeyInputs((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                      className="h-8 text-xs font-mono"
-                      data-testid={`input-key-${p.id}`}
-                    />
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="h-8 px-3"
-                      disabled={!keyInputs[p.id]?.trim() || saveKeyMutation.isPending}
-                      onClick={() => saveKeyMutation.mutate({ provider: p.id, key: keyInputs[p.id]!.trim() })}
-                      data-testid={`button-save-key-${p.id}`}
-                    >
-                      Save
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-3 rounded bg-background p-2">
-            <p className="text-[9px] text-muted-foreground">
-              Built-in: Gemini 2.5 Flash, Grok-3 Mini. BYO keys enable future model routing.
-              Keys are stored server-side per session — never sent to third parties until you select a model.
-            </p>
-          </div>
-        </div>
-
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="font-semibold text-sm mb-2">Full Prompt Preview</h3>
           <div className="bg-background rounded p-3 font-mono text-[10px] text-muted-foreground whitespace-pre-wrap max-h-48 overflow-auto" data-testid="text-prompt-preview">
@@ -2692,7 +4212,7 @@ function ContextTab() {
   );
 }
 
-type LogSource = "all" | "events" | "heartbeat" | "edcm" | "commands" | "costs";
+type LogSource = "all" | "events" | "heartbeat" | "edcm" | "commands" | "costs" | "ai-transcripts";
 
 const LOG_SOURCES: { id: LogSource; label: string; color: string }[] = [
   { id: "all", label: "All", color: "text-foreground" },
@@ -2701,6 +4221,7 @@ const LOG_SOURCES: { id: LogSource; label: string; color: string }[] = [
   { id: "edcm", label: "EDCM", color: "text-purple-400" },
   { id: "commands", label: "Commands", color: "text-emerald-400" },
   { id: "costs", label: "Costs", color: "text-amber-400" },
+  { id: "ai-transcripts", label: "AI Transcripts", color: "text-cyan-400" },
 ];
 
 interface UnifiedLogEntry {
@@ -2710,6 +4231,245 @@ interface UnifiedLogEntry {
   summary: string;
   status?: string;
   detail: any;
+}
+
+function ExportTab() {
+  const { toast } = useToast();
+  const [transcriptFrom, setTranscriptFrom] = useState("");
+  const [transcriptTo, setTranscriptTo] = useState("");
+  const [transcriptModel, setTranscriptModel] = useState("all");
+  const [transcriptFormat, setTranscriptFormat] = useState("jsonl");
+  const [convId, setConvId] = useState("");
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const { data: conversations = [] } = useQuery<any[]>({
+    queryKey: ["/api/conversations"],
+  });
+
+  const { data: aiFiles = [] } = useQuery<any[]>({
+    queryKey: ["/api/ai-transcripts/files"],
+  });
+
+  function triggerDownload(url: string, filename: string, key: string) {
+    setDownloading(key);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => setDownloading(null), 1500);
+    toast({ title: `Downloading ${filename}` });
+  }
+
+  function downloadTranscripts() {
+    const params = new URLSearchParams();
+    if (transcriptFrom) params.set("from", transcriptFrom);
+    if (transcriptTo) params.set("to", transcriptTo);
+    if (transcriptModel && transcriptModel !== "all") params.set("model", transcriptModel);
+    params.set("format", transcriptFormat);
+    triggerDownload(`/api/export/transcripts?${params}`, `ai-transcripts.${transcriptFormat === "json" ? "json" : "jsonl"}`, "transcripts");
+  }
+
+  function downloadConversations() {
+    const params = new URLSearchParams();
+    if (convId) params.set("id", convId);
+    const fname = convId ? `conversation-${convId}.json` : "conversations.json";
+    triggerDownload(`/api/export/conversations?${params}`, fname, "conversations");
+  }
+
+  function downloadCredentials() {
+    triggerDownload("/api/export/credentials", "credentials-inventory.json", "credentials");
+  }
+
+  function downloadConfig() {
+    triggerDownload("/api/export/config", "system-config.json", "config");
+  }
+
+  function downloadAll() {
+    triggerDownload("/api/export/all", "a0p-export.zip", "all");
+  }
+
+  const totalTranscriptSize = aiFiles.reduce((s: number, f: any) => s + (f.size || 0), 0);
+
+  return (
+    <ScrollArea className="h-full px-3 py-3">
+      <div className="space-y-4 pb-4">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <Download className="w-4 h-4 text-primary" />
+            Data Export
+          </h3>
+          <Button
+            onClick={downloadAll}
+            disabled={downloading === "all"}
+            data-testid="button-download-all"
+          >
+            <Download className="w-4 h-4 mr-1" />
+            {downloading === "all" ? "Preparing..." : "Download All (ZIP)"}
+          </Button>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <h4 className="font-semibold text-sm flex items-center gap-2">
+                <ScrollText className="w-4 h-4 text-blue-400" />
+                AI Transcripts
+              </h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {aiFiles.length} file{aiFiles.length !== 1 ? "s" : ""} ({totalTranscriptSize > 1024 ? `${(totalTranscriptSize / 1024).toFixed(1)} KB` : `${totalTranscriptSize} B`})
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadTranscripts}
+              disabled={downloading === "transcripts"}
+              data-testid="button-download-transcripts"
+            >
+              <Download className="w-3 h-3 mr-1" />
+              {downloading === "transcripts" ? "..." : "Download"}
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[10px] text-muted-foreground">From</Label>
+              <Input
+                type="date"
+                value={transcriptFrom}
+                onChange={(e) => setTranscriptFrom(e.target.value)}
+                data-testid="input-transcript-from"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">To</Label>
+              <Input
+                type="date"
+                value={transcriptTo}
+                onChange={(e) => setTranscriptTo(e.target.value)}
+                data-testid="input-transcript-to"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Model</Label>
+              <Select value={transcriptModel} onValueChange={setTranscriptModel}>
+                <SelectTrigger data-testid="select-transcript-model">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Models</SelectItem>
+                  <SelectItem value="gemini">Gemini</SelectItem>
+                  <SelectItem value="grok">Grok</SelectItem>
+                  <SelectItem value="synthesis-merge">Synthesis Merge</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Format</Label>
+              <Select value={transcriptFormat} onValueChange={setTranscriptFormat}>
+                <SelectTrigger data-testid="select-transcript-format">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="jsonl">JSONL</SelectItem>
+                  <SelectItem value="json">JSON</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <h4 className="font-semibold text-sm flex items-center gap-2">
+                <FileText className="w-4 h-4 text-green-400" />
+                Chat Conversations
+              </h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {conversations.length} conversation{conversations.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadConversations}
+              disabled={downloading === "conversations"}
+              data-testid="button-download-conversations"
+            >
+              <Download className="w-3 h-3 mr-1" />
+              {downloading === "conversations" ? "..." : "Download"}
+            </Button>
+          </div>
+          <div>
+            <Label className="text-[10px] text-muted-foreground">Conversation (leave empty for all)</Label>
+            <Select value={convId || "all"} onValueChange={(v) => setConvId(v === "all" ? "" : v)}>
+              <SelectTrigger data-testid="select-conversation-id">
+                <SelectValue placeholder="All conversations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Conversations</SelectItem>
+                {conversations.map((c: any) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    #{c.id} - {c.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <h4 className="font-semibold text-sm flex items-center gap-2">
+                <Lock className="w-4 h-4 text-amber-400" />
+                Credentials Inventory
+              </h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Names, categories, and field labels only (no secret values)
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadCredentials}
+              disabled={downloading === "credentials"}
+              data-testid="button-download-credentials"
+            >
+              <Download className="w-3 h-3 mr-1" />
+              {downloading === "credentials" ? "..." : "Download"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <h4 className="font-semibold text-sm flex items-center gap-2">
+                <Settings className="w-4 h-4 text-purple-400" />
+                System Configuration
+              </h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Toggles, bandit arms, EDCM, memory seeds, heartbeat, costs
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadConfig}
+              disabled={downloading === "config"}
+              data-testid="button-download-config"
+            >
+              <Download className="w-3 h-3 mr-1" />
+              {downloading === "config" ? "..." : "Download"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </ScrollArea>
+  );
 }
 
 function LogsTab() {
@@ -2742,6 +4502,12 @@ function LogsTab() {
     queryKey: ["/api/metrics/costs/history"],
     refetchInterval: 15000,
   });
+
+  const { data: aiTranscriptsData } = useQuery<{ entries: any[]; total: number }>({
+    queryKey: ["/api/ai-transcripts"],
+    refetchInterval: 10000,
+  });
+  const aiTranscripts = aiTranscriptsData?.entries || [];
 
   const unified: UnifiedLogEntry[] = [];
 
@@ -2803,6 +4569,19 @@ function LogsTab() {
     });
   }
 
+  for (const t of aiTranscripts) {
+    const tokStr = `${t.tokens?.total?.toLocaleString() || 0} tok`;
+    const latStr = t.latencyMs ? `${(t.latencyMs / 1000).toFixed(1)}s` : "";
+    unified.push({
+      id: `ait-${t.timestamp}-${t.model}`,
+      source: "ai-transcripts",
+      ts: new Date(t.timestamp),
+      summary: `${t.model} — ${t.status}${latStr ? ` ${latStr}` : ""} (${tokStr})`,
+      status: t.status === "success" ? "OK" : "ERROR",
+      detail: t,
+    });
+  }
+
   unified.sort((a, b) => b.ts.getTime() - a.ts.getTime());
 
   const filtered = unified.filter((entry) => {
@@ -2828,6 +4607,7 @@ function LogsTab() {
     queryClient.invalidateQueries({ queryKey: ["/api/edcm/snapshots"] });
     queryClient.invalidateQueries({ queryKey: ["/api/terminal/history"] });
     queryClient.invalidateQueries({ queryKey: ["/api/metrics/costs/history"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/ai-transcripts"] });
   };
 
   const sourceColor = (s: LogSource) => LOG_SOURCES.find((l) => l.id === s)?.color || "text-foreground";
@@ -3149,6 +4929,63 @@ function LogDetail({ entry }: { entry: UnifiedLogEntry }) {
             <span className="text-muted-foreground">Completion Tokens</span>
             <p className="font-mono">{d.completionTokens?.toLocaleString()}</p>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (entry.source === "ai-transcripts") {
+    return (
+      <div className="space-y-2 pt-2">
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <span className="text-muted-foreground">Model</span>
+            <p className="font-mono" data-testid="text-ait-model">{d.model}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Status</span>
+            <p className={cn("font-mono", d.status === "success" ? "text-green-400" : "text-red-400")} data-testid="text-ait-status">{d.status}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Latency</span>
+            <p className="font-mono">{d.latencyMs ? `${(d.latencyMs / 1000).toFixed(2)}s` : "--"}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Total Tokens</span>
+            <p className="font-mono">{d.tokens?.total?.toLocaleString() || 0}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Prompt Tokens</span>
+            <p className="font-mono">{d.tokens?.prompt?.toLocaleString() || 0}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Completion Tokens</span>
+            <p className="font-mono">{d.tokens?.completion?.toLocaleString() || 0}</p>
+          </div>
+          {d.conversationId && (
+            <div>
+              <span className="text-muted-foreground">Conversation</span>
+              <p className="font-mono">#{d.conversationId}</p>
+            </div>
+          )}
+          {d.error && (
+            <div className="col-span-2">
+              <span className="text-muted-foreground">Error</span>
+              <p className="font-mono text-red-400 text-[10px]">{d.error}</p>
+            </div>
+          )}
+        </div>
+        <div className="rounded bg-background p-2">
+          <span className="text-[10px] text-muted-foreground font-medium">Request</span>
+          <pre className="text-[9px] font-mono text-muted-foreground mt-1 whitespace-pre-wrap max-h-40 overflow-auto" data-testid="text-ait-request">
+            {typeof d.request === "string" ? d.request : JSON.stringify(d.request, null, 2)}
+          </pre>
+        </div>
+        <div className="rounded bg-background p-2">
+          <span className="text-[10px] text-muted-foreground font-medium">Response</span>
+          <pre className="text-[9px] font-mono text-muted-foreground mt-1 whitespace-pre-wrap max-h-60 overflow-auto" data-testid="text-ait-response">
+            {d.response || "(empty)"}
+          </pre>
         </div>
       </div>
     );

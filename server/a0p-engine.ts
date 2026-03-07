@@ -911,24 +911,87 @@ export function resumeEngine() {
   startHeartbeat();
 }
 
-const COST_RATES: Record<string, { prompt: number; completion: number }> = {
-  "gemini": { prompt: 0.075 / 1_000_000, completion: 0.30 / 1_000_000 },
-  "grok": { prompt: 0.30 / 1_000_000, completion: 0.50 / 1_000_000 },
+const DEFAULT_COST_RATES: Record<string, { prompt: number; completion: number; cache: number }> = {
+  "gemini": { prompt: 0.075 / 1_000_000, completion: 0.30 / 1_000_000, cache: 0.01875 / 1_000_000 },
+  "grok": { prompt: 0.30 / 1_000_000, completion: 0.50 / 1_000_000, cache: 0.075 / 1_000_000 },
 };
 
-export function estimateCost(model: string, promptTokens: number, completionTokens: number): number {
-  const rates = COST_RATES[model] || COST_RATES["gemini"];
-  return rates.prompt * promptTokens + rates.completion * completionTokens;
+let cachedTokenRates: Record<string, { prompt: number; completion: number; cache: number }> | null = null;
+let tokenRatesCacheTime = 0;
+const TOKEN_RATES_CACHE_TTL = 60000;
+
+export async function getTokenRates(): Promise<Record<string, { prompt: number; completion: number; cache: number }>> {
+  if (cachedTokenRates && Date.now() - tokenRatesCacheTime < TOKEN_RATES_CACHE_TTL) {
+    return cachedTokenRates;
+  }
+  try {
+    const toggle = await storage.getSystemToggle("token_rates");
+    if (toggle?.parameters && typeof toggle.parameters === "object") {
+      cachedTokenRates = { ...DEFAULT_COST_RATES, ...(toggle.parameters as any) };
+    } else {
+      cachedTokenRates = { ...DEFAULT_COST_RATES };
+    }
+  } catch {
+    cachedTokenRates = { ...DEFAULT_COST_RATES };
+  }
+  tokenRatesCacheTime = Date.now();
+  return cachedTokenRates!;
 }
 
-export async function trackCost(userId: string | null, model: string, promptTokens: number, completionTokens: number) {
-  const cost = estimateCost(model, promptTokens, completionTokens);
+export function invalidateTokenRatesCache() {
+  cachedTokenRates = null;
+  tokenRatesCacheTime = 0;
+}
+
+export async function estimateCost(model: string, promptTokens: number, completionTokens: number, cacheTokens: number = 0): Promise<number> {
+  const rates = await getTokenRates();
+  const modelRates = rates[model] || rates["gemini"] || DEFAULT_COST_RATES["gemini"];
+  return modelRates.prompt * promptTokens + modelRates.completion * completionTokens + modelRates.cache * cacheTokens;
+}
+
+export interface TrackCostOptions {
+  conversationId?: number;
+  stage?: string;
+  pipelinePreset?: string;
+  cacheTokens?: number;
+}
+
+export async function checkSpendLimit(userId: string | null): Promise<{ allowed: boolean; mode: string; currentSpend: number; limit: number }> {
+  try {
+    const toggle = await storage.getSystemToggle("spend_limit_monthly");
+    if (!toggle?.enabled) return { allowed: true, mode: "disabled", currentSpend: 0, limit: 0 };
+    const params = (toggle.parameters || {}) as any;
+    const limit = params.limit || 50;
+    const mode = params.mode || "warn";
+
+    const summary = await storage.getCostSummary();
+    const currentSpend = summary.costThisMonth || 0;
+
+    if (currentSpend >= limit) {
+      if (mode === "hard_stop") {
+        return { allowed: false, mode, currentSpend, limit };
+      }
+      console.warn(`[a0p:spend] Monthly spend limit exceeded: $${currentSpend.toFixed(4)} / $${limit}. Mode: ${mode}`);
+    }
+    return { allowed: true, mode, currentSpend, limit };
+  } catch {
+    return { allowed: true, mode: "error", currentSpend: 0, limit: 0 };
+  }
+}
+
+export async function trackCost(userId: string | null, model: string, promptTokens: number, completionTokens: number, options?: TrackCostOptions) {
+  const cacheTokens = options?.cacheTokens || 0;
+  const cost = await estimateCost(model, promptTokens, completionTokens, cacheTokens);
   await storage.addCostMetric({
     userId,
     model,
     promptTokens,
     completionTokens,
+    cacheTokens,
     estimatedCost: cost,
+    conversationId: options?.conversationId || null,
+    stage: options?.stage || null,
+    pipelinePreset: options?.pipelinePreset || null,
   });
   return cost;
 }

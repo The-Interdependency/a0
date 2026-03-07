@@ -52,7 +52,14 @@ export interface IStorage {
 
   addCostMetric(metric: Omit<CostMetric, "id" | "createdAt">): Promise<CostMetric>;
   getCostMetrics(userId?: string): Promise<CostMetric[]>;
-  getCostSummary(): Promise<{ totalCost: number; totalPromptTokens: number; totalCompletionTokens: number; byModel: Record<string, { cost: number; promptTokens: number; completionTokens: number }> }>;
+  getCostSummary(): Promise<{
+    totalCost: number; totalPromptTokens: number; totalCompletionTokens: number; totalCacheTokens: number;
+    costThisMonth: number; costToday: number;
+    byModel: Record<string, { cost: number; promptTokens: number; completionTokens: number; cacheTokens: number; calls: number }>;
+    byStage: Record<string, { cost: number; promptTokens: number; completionTokens: number; calls: number }>;
+    byConversation: { conversationId: number; cost: number; tokens: number; calls: number }[];
+    dailyUsage: { date: string; promptTokens: number; completionTokens: number; cost: number }[];
+  }>;
 
   addEdcmSnapshot(snap: Omit<EdcmSnapshot, "id" | "createdAt">): Promise<EdcmSnapshot>;
   getEdcmSnapshots(limit?: number): Promise<EdcmSnapshot[]>;
@@ -73,6 +80,7 @@ export interface IStorage {
   getHeartbeatTask(name: string): Promise<HeartbeatTask | undefined>;
   upsertHeartbeatTask(data: InsertHeartbeatTask): Promise<HeartbeatTask>;
   updateHeartbeatTask(id: number, updates: Partial<HeartbeatTask>): Promise<void>;
+  deleteHeartbeatTask(id: number): Promise<void>;
 
   addEdcmMetricSnapshot(snap: InsertEdcmMetricSnapshot): Promise<EdcmMetricSnapshot>;
   getEdcmMetricSnapshots(limit?: number): Promise<EdcmMetricSnapshot[]>;
@@ -98,6 +106,27 @@ export interface IStorage {
   getDiscoveryDrafts(limit?: number): Promise<DiscoveryDraft[]>;
   createDiscoveryDraft(data: InsertDiscoveryDraft): Promise<DiscoveryDraft>;
   promoteDiscoveryDraft(id: number, conversationId: number): Promise<void>;
+
+  getActivityStats(): Promise<{
+    heartbeatRuns: number;
+    transcripts: number;
+    conversations: number;
+    events: number;
+    drafts: number;
+    promotions: number;
+    edcmSnapshots: number;
+    memorySnapshots: number;
+  }>;
+
+  getUserCredentials(userId: string): Promise<any[]>;
+  addUserCredential(userId: string, credential: any): Promise<any>;
+  deleteUserCredential(userId: string, credentialId: string): Promise<void>;
+  getUserCredentialFieldValue(userId: string, serviceId: string, fieldKey: string): Promise<string | undefined>;
+
+  getUserSecrets(userId: string): Promise<any[]>;
+  addUserSecret(userId: string, secret: any): Promise<any>;
+  deleteUserSecret(userId: string, secretKey: string): Promise<void>;
+  getUserSecretValue(userId: string, key: string): Promise<string | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -211,18 +240,67 @@ export class DatabaseStorage implements IStorage {
 
   async getCostSummary() {
     const all = await db.select().from(costMetrics);
-    const byModel: Record<string, { cost: number; promptTokens: number; completionTokens: number }> = {};
-    let totalCost = 0, totalPromptTokens = 0, totalCompletionTokens = 0;
+    const byModel: Record<string, { cost: number; promptTokens: number; completionTokens: number; cacheTokens: number; calls: number }> = {};
+    const byStage: Record<string, { cost: number; promptTokens: number; completionTokens: number; calls: number }> = {};
+    const convMap: Record<number, { cost: number; tokens: number; calls: number }> = {};
+    const dailyMap: Record<string, { promptTokens: number; completionTokens: number; cost: number }> = {};
+    let totalCost = 0, totalPromptTokens = 0, totalCompletionTokens = 0, totalCacheTokens = 0;
+    let costThisMonth = 0, costToday = 0;
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStr = now.toISOString().slice(0, 10);
+
     for (const m of all) {
       totalCost += m.estimatedCost;
       totalPromptTokens += m.promptTokens;
       totalCompletionTokens += m.completionTokens;
-      if (!byModel[m.model]) byModel[m.model] = { cost: 0, promptTokens: 0, completionTokens: 0 };
+      totalCacheTokens += m.cacheTokens || 0;
+
+      const createdAt = new Date(m.createdAt);
+      if (createdAt >= monthStart) costThisMonth += m.estimatedCost;
+      const dayStr = createdAt.toISOString().slice(0, 10);
+      if (dayStr === todayStr) costToday += m.estimatedCost;
+
+      if (!byModel[m.model]) byModel[m.model] = { cost: 0, promptTokens: 0, completionTokens: 0, cacheTokens: 0, calls: 0 };
       byModel[m.model].cost += m.estimatedCost;
       byModel[m.model].promptTokens += m.promptTokens;
       byModel[m.model].completionTokens += m.completionTokens;
+      byModel[m.model].cacheTokens += m.cacheTokens || 0;
+      byModel[m.model].calls += 1;
+
+      const stage = m.stage || "unknown";
+      if (!byStage[stage]) byStage[stage] = { cost: 0, promptTokens: 0, completionTokens: 0, calls: 0 };
+      byStage[stage].cost += m.estimatedCost;
+      byStage[stage].promptTokens += m.promptTokens;
+      byStage[stage].completionTokens += m.completionTokens;
+      byStage[stage].calls += 1;
+
+      if (m.conversationId) {
+        if (!convMap[m.conversationId]) convMap[m.conversationId] = { cost: 0, tokens: 0, calls: 0 };
+        convMap[m.conversationId].cost += m.estimatedCost;
+        convMap[m.conversationId].tokens += m.promptTokens + m.completionTokens;
+        convMap[m.conversationId].calls += 1;
+      }
+
+      if (!dailyMap[dayStr]) dailyMap[dayStr] = { promptTokens: 0, completionTokens: 0, cost: 0 };
+      dailyMap[dayStr].promptTokens += m.promptTokens;
+      dailyMap[dayStr].completionTokens += m.completionTokens;
+      dailyMap[dayStr].cost += m.estimatedCost;
     }
-    return { totalCost, totalPromptTokens, totalCompletionTokens, byModel };
+
+    const byConversation = Object.entries(convMap)
+      .map(([id, data]) => ({ conversationId: parseInt(id), ...data }))
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, 50);
+
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const dailyUsage = Object.entries(dailyMap)
+      .filter(([date]) => date >= thirtyDaysAgo)
+      .map(([date, data]) => ({ date, ...data }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return { totalCost, totalPromptTokens, totalCompletionTokens, totalCacheTokens, costThisMonth, costToday, byModel, byStage, byConversation, dailyUsage };
   }
 
   async addEdcmSnapshot(snap: Omit<EdcmSnapshot, "id" | "createdAt">) {
@@ -314,6 +392,10 @@ export class DatabaseStorage implements IStorage {
 
   async updateHeartbeatTask(id: number, updates: Partial<HeartbeatTask>) {
     await db.update(heartbeatTasks).set(updates).where(eq(heartbeatTasks.id, id));
+  }
+
+  async deleteHeartbeatTask(id: number) {
+    await db.delete(heartbeatTasks).where(eq(heartbeatTasks.id, id));
   }
 
   async addEdcmMetricSnapshot(snap: InsertEdcmMetricSnapshot) {
@@ -414,6 +496,84 @@ export class DatabaseStorage implements IStorage {
 
   async promoteDiscoveryDraft(id: number, conversationId: number) {
     await db.update(discoveryDrafts).set({ promotedToConversation: true, conversationId }).where(eq(discoveryDrafts.id, id));
+  }
+
+  async getActivityStats() {
+    const [hbResult] = await db.select({ count: sql<number>`count(*)::int` }).from(heartbeatLogs);
+    const [convResult] = await db.select({ count: sql<number>`count(*)::int` }).from(conversations);
+    const [evResult] = await db.select({ count: sql<number>`count(*)::int` }).from(events);
+    const [draftResult] = await db.select({ count: sql<number>`count(*)::int` }).from(discoveryDrafts);
+    const [promoResult] = await db.select({ count: sql<number>`count(*)::int` }).from(discoveryDrafts).where(eq(discoveryDrafts.promotedToConversation, true));
+    const [edcmResult] = await db.select({ count: sql<number>`count(*)::int` }).from(edcmMetricSnapshots);
+    const [memResult] = await db.select({ count: sql<number>`count(*)::int` }).from(memoryTensorSnapshots);
+    const [msgResult] = await db.select({ count: sql<number>`count(*)::int` }).from(messages);
+    return {
+      heartbeatRuns: hbResult.count,
+      transcripts: msgResult.count,
+      conversations: convResult.count,
+      events: evResult.count,
+      drafts: draftResult.count,
+      promotions: promoResult.count,
+      edcmSnapshots: edcmResult.count,
+      memorySnapshots: memResult.count,
+    };
+  }
+
+  async getUserCredentials(userId: string): Promise<any[]> {
+    const toggle = await this.getSystemToggle(`user_credentials_${userId}`);
+    return (toggle?.parameters as any[]) || [];
+  }
+
+  async addUserCredential(userId: string, credential: any): Promise<any> {
+    const existing = await this.getUserCredentials(userId);
+    const updated = [...existing, credential];
+    await this.upsertSystemToggle(`user_credentials_${userId}`, true, updated);
+    return credential;
+  }
+
+  async deleteUserCredential(userId: string, credentialId: string): Promise<void> {
+    const existing = await this.getUserCredentials(userId);
+    const filtered = existing.filter((c: any) => c.id !== credentialId);
+    await this.upsertSystemToggle(`user_credentials_${userId}`, true, filtered);
+  }
+
+  async getUserCredentialFieldValue(userId: string, serviceId: string, fieldKey: string): Promise<string | undefined> {
+    const creds = await this.getUserCredentials(userId);
+    const service = creds.find((c: any) => c.id === serviceId);
+    if (!service) return undefined;
+    const field = service.fields?.find((f: any) => f.key === fieldKey);
+    return field?.value;
+  }
+
+  async getUserSecrets(userId: string): Promise<any[]> {
+    const toggle = await this.getSystemToggle(`user_secrets_${userId}`);
+    return (toggle?.parameters as any[]) || [];
+  }
+
+  async addUserSecret(userId: string, secret: any): Promise<any> {
+    const existing = await this.getUserSecrets(userId);
+    const idx = existing.findIndex((s: any) => s.key === secret.key);
+    let updated: any[];
+    if (idx >= 0) {
+      updated = [...existing];
+      updated[idx] = secret;
+    } else {
+      updated = [...existing, secret];
+    }
+    await this.upsertSystemToggle(`user_secrets_${userId}`, true, updated);
+    return secret;
+  }
+
+  async deleteUserSecret(userId: string, secretKey: string): Promise<void> {
+    const existing = await this.getUserSecrets(userId);
+    const filtered = existing.filter((s: any) => s.key !== secretKey);
+    await this.upsertSystemToggle(`user_secrets_${userId}`, true, filtered);
+  }
+
+  async getUserSecretValue(userId: string, key: string): Promise<string | undefined> {
+    const secrets = await this.getUserSecrets(userId);
+    const secret = secrets.find((s: any) => s.key === key);
+    return secret?.value;
   }
 }
 

@@ -1,8 +1,10 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAuth } from "@/hooks/use-auth";
+import { Loader2 } from "lucide-react";
 import ChatPage from "@/pages/chat";
 import TerminalPage from "@/pages/terminal";
 import FilesPage from "@/pages/files";
@@ -34,6 +36,24 @@ function Router() {
   );
 }
 
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isLoading, isAuthenticated } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen w-screen bg-background" data-testid="auth-loading-spinner">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppShell() {
   const [location] = useLocation();
   const isPublicPage = location === "/splash" || location === "/login";
@@ -49,15 +69,17 @@ function AppShell() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-background text-foreground overflow-hidden">
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-hidden">
-          <Router />
+    <AuthGate>
+      <div className="flex flex-col h-screen w-screen bg-background text-foreground overflow-hidden">
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-hidden">
+            <Router />
+          </div>
+          <HmmmDoctrine />
         </div>
-        <HmmmDoctrine />
+        <BottomNav />
       </div>
-      <BottomNav />
-    </div>
+    </AuthGate>
   );
 }
 

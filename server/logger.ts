@@ -4,6 +4,7 @@ import { createHash } from "crypto";
 
 const LOGS_DIR = path.resolve("logs");
 const TRANSCRIPTS_DIR = path.join(LOGS_DIR, "transcripts");
+const AI_TRANSCRIPTS_DIR = path.join(LOGS_DIR, "ai-transcripts");
 
 const LOG_STREAMS = {
   master: "a0p-master.jsonl",
@@ -33,6 +34,7 @@ let streamToggles: Record<string, boolean> = {
   interference: true,
   attribution: true,
   transcripts: true,
+  "ai-transcripts": true,
 };
 
 let initialized = false;
@@ -41,6 +43,7 @@ async function ensureDirs() {
   if (initialized) return;
   await mkdir(LOGS_DIR, { recursive: true });
   await mkdir(TRANSCRIPTS_DIR, { recursive: true });
+  await mkdir(AI_TRANSCRIPTS_DIR, { recursive: true });
   initialized = true;
 }
 
@@ -271,4 +274,98 @@ export async function getLogStats(): Promise<Record<string, { size: number; line
     }
   }
   return stats;
+}
+
+export interface AiTranscriptEntry {
+  timestamp: string;
+  conversationId?: number;
+  messageId?: number;
+  model: string;
+  request: any;
+  response: string;
+  tokens: { prompt: number; completion: number; total: number };
+  latencyMs: number;
+  status: "success" | "error";
+  error?: string;
+}
+
+function getAiTranscriptFilePath(): string {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  return path.join(AI_TRANSCRIPTS_DIR, `ai-transcript-${dateStr}.jsonl`);
+}
+
+export async function logAiTranscript(entry: AiTranscriptEntry): Promise<void> {
+  if (!isStreamEnabled("ai-transcripts")) return;
+  await ensureDirs();
+  const filePath = getAiTranscriptFilePath();
+  try {
+    await appendFile(filePath, JSON.stringify(entry) + "\n", "utf-8");
+  } catch (e) {
+    console.error("Logger ai-transcript write error:", e);
+  }
+}
+
+export async function readAiTranscripts(options: {
+  date?: string;
+  model?: string;
+  offset?: number;
+  limit?: number;
+} = {}): Promise<{ entries: AiTranscriptEntry[]; total: number }> {
+  await ensureDirs();
+  try {
+    let files: string[];
+    if (options.date) {
+      files = [`ai-transcript-${options.date}.jsonl`];
+    } else {
+      const allFiles = await readdir(AI_TRANSCRIPTS_DIR);
+      files = allFiles.filter(f => f.startsWith("ai-transcript-") && f.endsWith(".jsonl")).sort().reverse();
+    }
+
+    let allEntries: AiTranscriptEntry[] = [];
+    for (const file of files) {
+      const filePath = path.join(AI_TRANSCRIPTS_DIR, file);
+      try {
+        const content = await readFile(filePath, "utf-8");
+        const lines = content.trim().split("\n").filter(Boolean);
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line) as AiTranscriptEntry;
+            if (options.model && entry.model !== options.model) continue;
+            allEntries.push(entry);
+          } catch {}
+        }
+      } catch (e: any) {
+        if (e.code !== "ENOENT") throw e;
+      }
+    }
+
+    allEntries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const total = allEntries.length;
+    const offset = options.offset || 0;
+    const limit = options.limit || 50;
+    const slice = allEntries.slice(offset, offset + limit);
+    return { entries: slice, total };
+  } catch (e: any) {
+    if (e.code === "ENOENT") return { entries: [], total: 0 };
+    throw e;
+  }
+}
+
+export async function listAiTranscriptFiles(): Promise<{ filename: string; size: number; date: string }[]> {
+  await ensureDirs();
+  try {
+    const files = await readdir(AI_TRANSCRIPTS_DIR);
+    const transcriptFiles = files.filter(f => f.startsWith("ai-transcript-") && f.endsWith(".jsonl")).sort().reverse();
+    const results = [];
+    for (const f of transcriptFiles) {
+      const filePath = path.join(AI_TRANSCRIPTS_DIR, f);
+      const s = await stat(filePath);
+      const dateMatch = f.match(/ai-transcript-(\d{4}-\d{2}-\d{2})\.jsonl/);
+      results.push({ filename: f, size: s.size, date: dateMatch ? dateMatch[1] : "" });
+    }
+    return results;
+  } catch {
+    return [];
+  }
 }

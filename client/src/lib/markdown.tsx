@@ -28,7 +28,7 @@ export function MarkdownContent({ content }: { content: string }) {
   const html = useMemo(() => renderMarkdown(content), [content]);
   return (
     <div
-      className="markdown-content"
+      className="markdown-content overflow-hidden min-w-0"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
