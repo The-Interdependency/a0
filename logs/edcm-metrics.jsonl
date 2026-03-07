@@ -63,3 +63,4 @@
 {"timestamp":"2026-03-07T21:05:45.471Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"a7f2bb920983","conversationsScanned":10,"totalMessages":92,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-07T21:16:15.281Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"91628eea361b","conversationsScanned":10,"totalMessages":92,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-07T22:41:05.903Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"90bd7f75273e","conversationsScanned":10,"totalMessages":92,"highEdcmCount":0,"findingsCount":0}}
+{"timestamp":"2026-03-07T22:51:30.955Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"17e317995c38","conversationsScanned":10,"totalMessages":92,"highEdcmCount":0,"findingsCount":0}}
