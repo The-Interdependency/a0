@@ -41,6 +41,7 @@ const TABS = [
   { id: "logs", label: "Logs", icon: ScrollText },
   { id: "context", label: "Context", icon: FileText },
   { id: "omega", label: "Omega", icon: Gauge },
+  { id: "psi", label: "Psi", icon: Eye },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -98,6 +99,7 @@ export default function ConsolePage() {
         {activeTab === "logs" && <LogsTab />}
         {activeTab === "context" && <ContextTab />}
         {activeTab === "omega" && <OmegaTab orientation={orientation} isVertical={isVertical} />}
+        {activeTab === "psi" && <PsiTab />}
       </div>
     </div>
   );
@@ -1231,7 +1233,7 @@ function EdcmTab() {
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
               <span className="text-muted-foreground">Axes</span>
-              <p className="font-mono" data-testid="text-ptca-axes">53 × 9 × 8 × 7</p>
+              <p className="font-mono" data-testid="text-ptca-axes">53 × 11 × 8 × 7</p>
             </div>
             <div>
               <span className="text-muted-foreground">Geometry</span>
@@ -1325,41 +1327,41 @@ function EdcmTab() {
           </h3>
           <div className="space-y-2 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">S5 Window</span>
-              <span className="font-mono" data-testid="text-s5-window">
-                {liveSentinelCtx?.S5_context ? `${liveSentinelCtx.S5_context.window?.type || "turns"} / W=${liveSentinelCtx.S5_context.window?.W || 32}` : "turns / W=32"}
+              <span className="text-muted-foreground">S4 Window</span>
+              <span className="font-mono" data-testid="text-s4-window">
+                {liveSentinelCtx?.S4_context ? `${liveSentinelCtx.S4_context.window?.type || "turns"} / W=${liveSentinelCtx.S4_context.window?.W || 32}` : "turns / W=32"}
               </span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">S5 Retrieval</span>
-              <span className="font-mono">{liveSentinelCtx?.S5_context?.retrieval_mode || "none"}</span>
+              <span className="text-muted-foreground">S4 Retrieval</span>
+              <span className="font-mono">{liveSentinelCtx?.S4_context?.retrieval_mode || "none"}</span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">S5 Hygiene</span>
+              <span className="text-muted-foreground">S4 Hygiene</span>
               <span className="font-mono">strip_secrets=true, redact_keys=true</span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">S6 Identity</span>
+              <span className="text-muted-foreground">S5 Identity</span>
               <span className="font-mono">
-                {liveSentinelCtx?.S6_identity ? `actor_map ${liveSentinelCtx.S6_identity.actor_map_version} (conf: ${liveSentinelCtx.S6_identity.confidence})` : "actor_map v1 (conf: 0.98)"}
+                {liveSentinelCtx?.S5_identity ? `actor_map ${liveSentinelCtx.S5_identity.actor_map_version} (conf: ${liveSentinelCtx.S5_identity.confidence})` : "actor_map v1 (conf: 0.98)"}
               </span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">S7 Memory</span>
+              <span className="text-muted-foreground">S6 Memory</span>
               <span className="font-mono">
-                {liveSentinelCtx?.S7_memory ? `store=${liveSentinelCtx.S7_memory.store_allowed}, retention=${liveSentinelCtx.S7_memory.retention}` : "store=false, retention=session"}
+                {liveSentinelCtx?.S6_memory ? `store=${liveSentinelCtx.S6_memory.store_allowed}, retention=${liveSentinelCtx.S6_memory.retention}` : "store=false, retention=session"}
               </span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">S8 Risk</span>
-              <span className="font-mono" data-testid="text-s8-risk">
-                {liveSentinelCtx?.S8_risk ? `score=${liveSentinelCtx.S8_risk.score}, flags=[${(liveSentinelCtx.S8_risk.flags || []).join(",")}]` : "score=0.12, flags=[]"}
+              <span className="text-muted-foreground">S7 Risk</span>
+              <span className="font-mono" data-testid="text-s7-risk">
+                {liveSentinelCtx?.S7_risk ? `score=${liveSentinelCtx.S7_risk.score}, flags=[${(liveSentinelCtx.S7_risk.flags || []).join(",")}]` : "score=0.12, flags=[]"}
               </span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">S9 Audit</span>
+              <span className="text-muted-foreground">S8 Audit</span>
               <span className="font-mono">
-                {liveSentinelCtx?.S9_audit ? `${liveSentinelCtx.S9_audit.evidence_events?.length || 0} events logged` : "evidence logged"}
+                {liveSentinelCtx?.S8_audit ? `${liveSentinelCtx.S8_audit.evidence_events?.length || 0} events logged` : "evidence logged"}
               </span>
             </div>
           </div>
@@ -3513,6 +3515,11 @@ function CustomToolsTab() {
                         disabled
                       </Badge>
                     )}
+                    {tool.isGenerated && (
+                      <Badge variant="secondary" className="text-[9px] bg-pink-500/20 text-pink-400 flex-shrink-0" data-testid={`badge-generated-${tool.id}`}>
+                        Generated
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <Button
@@ -4214,7 +4221,7 @@ function ContextTab() {
   );
 }
 
-type LogSource = "all" | "events" | "heartbeat" | "edcm" | "commands" | "costs" | "ai-transcripts" | "omega";
+type LogSource = "all" | "events" | "heartbeat" | "edcm" | "commands" | "costs" | "ai-transcripts" | "omega" | "psi";
 
 const LOG_SOURCES: { id: LogSource; label: string; color: string }[] = [
   { id: "all", label: "All", color: "text-foreground" },
@@ -4225,6 +4232,7 @@ const LOG_SOURCES: { id: LogSource; label: string; color: string }[] = [
   { id: "costs", label: "Costs", color: "text-amber-400" },
   { id: "ai-transcripts", label: "AI Transcripts", color: "text-cyan-400" },
   { id: "omega", label: "Omega", color: "text-orange-400" },
+  { id: "psi", label: "Psi", color: "text-pink-400" },
 ];
 
 interface UnifiedLogEntry {
@@ -4766,6 +4774,12 @@ function LogsTab() {
   });
   const omegaLogs = omegaLogsData?.entries || [];
 
+  const { data: psiLogsData } = useQuery<{ entries: any[]; total: number }>({
+    queryKey: ["/api/logs/psi", { limit: 100 }],
+    refetchInterval: 10000,
+  });
+  const psiLogs = psiLogsData?.entries || [];
+
   const unified: UnifiedLogEntry[] = [];
 
   for (const ev of events) {
@@ -4847,6 +4861,17 @@ function LogsTab() {
       ts: new Date(ol.timestamp),
       summary: `[${d.event || ol.event || "omega"}] ${d.driver || d.dimension || d.mode || d.goalId || ""}${d.totalEnergy != null ? ` E=${d.totalEnergy.toFixed?.(4) || d.totalEnergy}` : ""}`,
       detail: ol,
+    });
+  }
+
+  for (const pl of psiLogs) {
+    const d = pl.data || {};
+    unified.push({
+      id: `psi-${pl.timestamp}-${pl.seq || Math.random()}`,
+      source: "psi",
+      ts: new Date(pl.timestamp),
+      summary: `[${d.event || pl.event || "psi"}] ${d.dimension !== undefined ? `dim=${d.dimension}` : ""}${d.mode || ""}${d.totalEnergy != null ? ` E=${d.totalEnergy.toFixed?.(4) || d.totalEnergy}` : ""}`,
+      detail: pl,
     });
   }
 
@@ -5059,9 +5084,9 @@ function LogDetail({ entry }: { entry: UnifiedLogEntry }) {
           <div className="rounded bg-background p-2">
             <span className="text-[10px] text-muted-foreground font-medium">Sentinel Context</span>
             <div className="text-[10px] font-mono mt-1 space-y-0.5">
-              <div>S5: {p.sentinelContext.S5_context?.window?.type || "turns"}/W={p.sentinelContext.S5_context?.window?.W || 32}, retrieval={p.sentinelContext.S5_context?.retrieval_mode || "none"}</div>
-              <div>S8 risk: {p.sentinelContext.S8_risk?.score}</div>
-              <div>S9 audit: {p.sentinelContext.S9_audit?.evidence_events?.length || 0} events</div>
+              <div>S4: {p.sentinelContext.S4_context?.window?.type || "turns"}/W={p.sentinelContext.S4_context?.window?.W || 32}, retrieval={p.sentinelContext.S4_context?.retrieval_mode || "none"}</div>
+              <div>S7 risk: {p.sentinelContext.S7_risk?.score}</div>
+              <div>S8 audit: {p.sentinelContext.S8_audit?.evidence_events?.length || 0} events</div>
             </div>
           </div>
         )}
@@ -5263,5 +5288,252 @@ function LogDetail({ entry }: { entry: UnifiedLogEntry }) {
     <div className="pt-2">
       <pre className="text-[9px] font-mono text-muted-foreground whitespace-pre-wrap max-h-40 overflow-auto">{JSON.stringify(d, null, 2)}</pre>
     </div>
+  );
+}
+
+function PsiTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: psiState, isLoading } = useQuery<any>({
+    queryKey: ["/api/psi/state"],
+    refetchInterval: 5000,
+  });
+  const { data: triadState } = useQuery<any>({
+    queryKey: ["/api/triad/state"],
+    refetchInterval: 5000,
+  });
+
+  const solveMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/psi/solve"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/psi/state"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/triad/state"] });
+      toast({ title: "Ψ solve step executed" });
+    },
+  });
+
+  const modeMutation = useMutation({
+    mutationFn: (mode: string) => apiRequest("POST", "/api/psi/mode", { mode }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/psi/state"] });
+      toast({ title: "Self-model mode updated" });
+    },
+  });
+
+  const boostMutation = useMutation({
+    mutationFn: ({ dimension, amount }: { dimension: number; amount: number }) =>
+      apiRequest("POST", "/api/psi/boost", { dimension, amount }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/psi/state"] });
+    },
+  });
+
+  const biasMutation = useMutation({
+    mutationFn: ({ dimension, bias }: { dimension: number; bias: number }) =>
+      apiRequest("POST", "/api/psi/bias", { dimension, bias }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/psi/state"] });
+    },
+  });
+
+  if (isLoading) return <div className="p-4"><Skeleton className="h-64 w-full" /></div>;
+
+  const labels = psiState?.labels || [];
+  const thresholds = psiState?.thresholds || [];
+  const energies = psiState?.dimensionEnergies || [];
+  const biases = psiState?.dimensionBiases || [];
+  const mode = psiState?.mode || "operational";
+  const history = psiState?.energyHistory || [];
+  const omegaPairings = psiState?.omegaPairings || [];
+
+  const modeDescriptions: Record<string, string> = {
+    reflective: "Heightened Integrity, Coherence, Self-Awareness — introspective focus",
+    operational: "Balanced — no biases applied",
+    transparent: "Heightened Agency, Identity, Confidence — open communication",
+    guarded: "Heightened Vigilance, Compliance, Prudence — cautious posture",
+  };
+
+  const aboveThreshold = energies.filter((e: number, i: number) => e >= (thresholds[i] || 0)).length;
+  const statusText = aboveThreshold >= 9
+    ? "Self-model fully coherent — all dimensions healthy"
+    : aboveThreshold >= 6
+    ? "Self-model stable — most dimensions above threshold"
+    : aboveThreshold >= 3
+    ? "Self-model degraded — multiple dimensions below threshold"
+    : "Self-model critical — most dimensions below threshold";
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="p-3 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Eye className="w-4 h-4 text-pink-400" />
+            <span className="font-semibold text-sm" data-testid="text-psi-header">PTCA-Ψ Self-Model Tensor</span>
+            <Badge variant="secondary" className="text-[10px]" data-testid="badge-psi-energy">
+              E = {(psiState?.totalEnergy || 0).toFixed(6)}
+            </Badge>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => solveMutation.mutate()}
+            disabled={solveMutation.isPending}
+            data-testid="button-psi-solve"
+          >
+            <Zap className="w-3 h-3 mr-1" />
+            Solve
+          </Button>
+        </div>
+
+        <div className="rounded border border-border p-3 space-y-2">
+          <span className="text-xs font-medium text-muted-foreground">Self-Model Mode</span>
+          <div className="flex gap-2 flex-wrap">
+            {["reflective", "operational", "transparent", "guarded"].map((m) => (
+              <Button
+                key={m}
+                size="sm"
+                variant={mode === m ? "default" : "outline"}
+                onClick={() => modeMutation.mutate(m)}
+                disabled={modeMutation.isPending}
+                className="text-xs capitalize"
+                data-testid={`button-psi-mode-${m}`}
+              >
+                {m}
+              </Button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground" data-testid="text-psi-mode-desc">
+            {modeDescriptions[mode] || ""}
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <span className="text-xs font-medium text-muted-foreground">Sentinel → Ψ → Ω Bridge</span>
+          {labels.map((label: string, i: number) => {
+            const energy = energies[i] || 0;
+            const threshold = thresholds[i] || 0;
+            const bias = biases[i] || 0;
+            const omega = omegaPairings[i];
+            const pct = Math.min(100, Math.max(0, energy * 100));
+            const threshPct = threshold * 100;
+            const isAbove = energy >= threshold;
+
+            return (
+              <div key={i} className="flex items-center gap-2 py-1 border-b border-border/50 last:border-0" data-testid={`row-psi-dim-${i}`}>
+                <Badge
+                  variant="outline"
+                  className={cn("text-[9px] w-8 justify-center flex-shrink-0", isAbove ? "text-green-400 border-green-400/30" : "text-red-400 border-red-400/30")}
+                  data-testid={`badge-sentinel-${i}`}
+                >
+                  S{i}
+                </Badge>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-medium" data-testid={`text-psi-label-${i}`}>
+                      Ψ{i} {label}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground" data-testid={`text-psi-energy-${i}`}>
+                      {energy.toFixed(4)}/{threshold}
+                    </span>
+                  </div>
+                  <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={cn("h-full rounded-full transition-all", isAbove ? "bg-pink-400" : "bg-pink-400/40")}
+                      style={{ width: `${pct}%` }}
+                    />
+                    <div
+                      className="absolute top-0 h-full w-0.5 bg-white/60"
+                      style={{ left: `${threshPct}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="text-[8px] text-muted-foreground">bias:</span>
+                    <input
+                      type="range"
+                      min="-100"
+                      max="100"
+                      value={Math.round(bias * 100)}
+                      onChange={(e) => biasMutation.mutate({ dimension: i, bias: parseInt(e.target.value) / 100 })}
+                      className="h-1 w-16 accent-pink-400"
+                      data-testid={`slider-psi-bias-${i}`}
+                    />
+                    <span className="text-[8px] text-muted-foreground">{bias.toFixed(2)}</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-4 px-1 text-[8px]"
+                      onClick={() => boostMutation.mutate({ dimension: i, amount: 3 })}
+                      data-testid={`button-psi-boost-${i}`}
+                    >
+                      +
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex-shrink-0 text-right w-20">
+                  <span className="text-[9px] text-muted-foreground" data-testid={`text-omega-pairing-${i}`}>
+                    {omega?.omegaLabel || "—"}
+                  </span>
+                  {omega?.inverse && (
+                    <Badge variant="outline" className="text-[7px] ml-1 text-yellow-400 border-yellow-400/30">INV</Badge>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {triadState && (
+          <div className="rounded border border-border p-3">
+            <span className="text-xs font-medium text-muted-foreground">Triad Energy Summary</span>
+            <div className="grid grid-cols-3 gap-3 mt-2">
+              <div className="text-center" data-testid="text-triad-ptca">
+                <div className="text-[10px] text-muted-foreground">PTCA (Cognitive)</div>
+                <div className="text-sm font-mono font-bold">{(triadState.ptca?.energy || 0).toFixed(4)}</div>
+                <div className="text-[9px] text-muted-foreground">{triadState.ptca?.axes}</div>
+              </div>
+              <div className="text-center" data-testid="text-triad-psi">
+                <div className="text-[10px] text-pink-400">PTCA-Ψ (Self-Model)</div>
+                <div className="text-sm font-mono font-bold">{(triadState.psi?.totalEnergy || 0).toFixed(4)}</div>
+                <div className="text-[9px] text-muted-foreground">{triadState.psi?.mode}</div>
+              </div>
+              <div className="text-center" data-testid="text-triad-omega">
+                <div className="text-[10px] text-orange-400">PTCA-Ω (Autonomy)</div>
+                <div className="text-sm font-mono font-bold">{(triadState.omega?.totalEnergy || 0).toFixed(4)}</div>
+                <div className="text-[9px] text-muted-foreground">{triadState.omega?.mode}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {history.length > 0 && (
+          <div className="rounded border border-border p-3">
+            <span className="text-xs font-medium text-muted-foreground">Ψ Energy History (last {history.length})</span>
+            <div className="flex items-end gap-0.5 mt-2 h-12">
+              {history.map((e: number, i: number) => {
+                const max = Math.max(...history, 0.001);
+                const h = (e / max) * 100;
+                return (
+                  <div
+                    key={i}
+                    className="flex-1 bg-pink-400/60 rounded-t min-w-[3px]"
+                    style={{ height: `${h}%` }}
+                    title={e.toFixed(6)}
+                    data-testid={`bar-psi-history-${i}`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="rounded border border-border p-2">
+          <p className="text-[10px] text-muted-foreground" data-testid="text-psi-status">
+            {statusText} ({aboveThreshold}/{labels.length} above threshold)
+          </p>
+        </div>
+      </div>
+    </ScrollArea>
   );
 }

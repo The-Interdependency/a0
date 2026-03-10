@@ -159,6 +159,7 @@ export const customTools = pgTable("custom_tools", {
   handlerType: text("handler_type").notNull(),
   handlerCode: text("handler_code").notNull(),
   enabled: boolean("enabled").notNull().default(true),
+  isGenerated: boolean("is_generated").notNull().default(false),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

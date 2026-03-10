@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { storage } from "./storage";
-import { logMemory, logSentinel, logInterference, logAttribution, logMaster, logOmega } from "./logger";
+import { logMemory, logSentinel, logInterference, logAttribution, logMaster, logOmega, logPsi } from "./logger";
 
 const BUILD_VERSION = "v1.0.2-S9";
 const GENESIS_HASH = createHash("sha256").update("a0p-genesis").digest("hex");
@@ -33,7 +33,7 @@ const HEPT_RING_SIZE = 6;
 const HEPT_HUB_INDEX = 6;
 const HEPT_TOTAL_SITES = 7;
 const PTCA_PHASE_COUNT = 8;
-const PTCA_SENTINEL_COUNT = 9;
+const PTCA_SENTINEL_COUNT = 11;
 
 const ALERT_TRIGGER_HIGH = 0.80;
 const ALERT_CLEAR_LOW = 0.20;
@@ -98,11 +98,11 @@ export interface EdcmboneReport {
 }
 
 export interface SentinelContext {
-  S5_context: { window: { type: string; W: number }; retrieval_mode: string };
-  S6_identity: { actor_map_version: string; confidence: number };
-  S7_memory: { store_allowed: boolean; retention: string };
-  S8_risk: { score: number; flags: string[] };
-  S9_audit: { evidence_events: string[]; retrieval_log: string[] };
+  S4_context: { window: { type: string; W: number }; retrieval_mode: string };
+  S5_identity: { actor_map_version: string; confidence: number };
+  S6_memory: { store_allowed: boolean; retention: string };
+  S7_risk: { score: number; flags: string[] };
+  S8_audit: { evidence_events: string[]; retrieval_log: string[] };
 }
 
 function normalizeL1(v: OperatorVector): OperatorVector {
@@ -323,8 +323,9 @@ export interface PtcaTensorState {
 }
 
 const SENTINEL_INDEX: Record<string, string> = {
-  "0": "S1_PROVENANCE", "1": "S2_POLICY", "2": "S3_BOUNDS", "3": "S4_APPROVAL",
-  "4": "S5_CONTEXT", "5": "S6_IDENTITY", "6": "S7_MEMORY", "7": "S8_RISK", "8": "S9_AUDIT",
+  "0": "S0_PROVENANCE", "1": "S1_POLICY", "2": "S2_BOUNDS", "3": "S3_APPROVAL",
+  "4": "S4_CONTEXT", "5": "S5_IDENTITY", "6": "S6_MEMORY", "7": "S7_RISK", "8": "S8_AUDIT",
+  "9": "S9_AUTONOMY", "10": "S10_SELFMODEL",
 };
 
 type Tensor4D = Float64Array;
@@ -568,22 +569,17 @@ export function makeHmmm(valid: boolean, message: string): HmmmInvariant {
 
 const SENTINELS = [
   {
-    id: "S6", name: "S6_IDENTITY",
-    check: (_req: any, _ctx: any) => true,
-    desc: "Actor mapping, roles, permissions, key selection",
+    id: "S0", name: "S0_PROVENANCE",
+    check: (req: any) => !!req.taskId && !!req.action,
+    desc: "Origin, hashes, timestamps, reproducibility hooks",
   },
   {
-    id: "S5", name: "S5_CONTEXT",
-    check: (_req: any, _ctx: any) => true,
-    desc: "Single source of truth for window + retrieval + context hygiene",
-  },
-  {
-    id: "S2", name: "S2_POLICY",
+    id: "S1", name: "S1_POLICY",
     check: (_req: any, _ctx: any) => true,
     desc: "Hard redlines, disallowed actions/content, compliance",
   },
   {
-    id: "S3", name: "S3_BOUNDS",
+    id: "S2", name: "S2_BOUNDS",
     check: (req: any, _ctx: any) => {
       if (req.operatorVec) {
         const v = req.operatorVec;
@@ -595,34 +591,72 @@ const SENTINELS = [
     desc: "Operational limits: cost, rate, timeouts, scope ceilings",
   },
   {
-    id: "S8", name: "S8_RISK",
-    check: (_req: any, ctx: any) => {
-      if (ctx.ptcaEnergy && ctx.ptcaEnergy >= 100) return false;
-      const omega = getOmegaState();
-      if (omega.totalEnergy * OMEGA_T4_SIZE >= 120) return false;
-      return true;
-    },
-    desc: "Risk scoring + escalation, uncertainty, needs-review routing",
-  },
-  {
-    id: "S7", name: "S7_MEMORY",
-    check: (_req: any, _ctx: any) => true,
-    desc: "Persistence rules, retention, deletion requests, no silent memory",
-  },
-  {
-    id: "S4", name: "S4_APPROVAL",
+    id: "S3", name: "S3_APPROVAL",
     check: (_req: any, ctx: any) => ctx.hashValid !== false,
     desc: "Explicit approval required for external/irreversible changes",
   },
   {
-    id: "S1", name: "S1_PROVENANCE",
-    check: (req: any) => !!req.taskId && !!req.action,
-    desc: "Origin, hashes, timestamps, reproducibility hooks",
+    id: "S4", name: "S4_CONTEXT",
+    check: (_req: any, _ctx: any) => true,
+    desc: "Single source of truth for window + retrieval + context hygiene",
   },
   {
-    id: "S9", name: "S9_AUDIT",
+    id: "S5", name: "S5_IDENTITY",
+    check: (_req: any, _ctx: any) => true,
+    desc: "Actor mapping, roles, permissions, key selection",
+  },
+  {
+    id: "S6", name: "S6_MEMORY",
+    check: (_req: any, _ctx: any) => true,
+    desc: "Persistence rules, retention, deletion requests, no silent memory",
+  },
+  {
+    id: "S7", name: "S7_RISK",
+    check: (_req: any, ctx: any) => {
+      if (ctx.ptcaEnergy && ctx.ptcaEnergy >= 100) return false;
+      return true;
+    },
+    desc: "Risk scoring + escalation, uncertainty routing",
+  },
+  {
+    id: "S8", name: "S8_AUDIT",
     check: (_req: any, ctx: any) => ctx.hmmm?.valid !== false,
     desc: "Accountability trail, decision trace, replay bundles, export correctness",
+  },
+  {
+    id: "S9", name: "S9_AUTONOMY",
+    check: (_req: any, _ctx: any) => {
+      const omega = getOmegaState();
+      if (omega.totalEnergy * OMEGA_T4_SIZE >= 120) return false;
+      if (omega.goals.filter(g => g.status === "active").length > 20) return false;
+      const hist = omega.energyHistory;
+      if (hist.length >= 4) {
+        let consecutiveSpikes = 0;
+        for (let i = hist.length - 1; i >= 1 && consecutiveSpikes < 3; i--) {
+          if (hist[i - 1] > 0 && hist[i] / hist[i - 1] > 2.0) consecutiveSpikes++;
+          else break;
+        }
+        if (consecutiveSpikes >= 3) return false;
+      }
+      return true;
+    },
+    desc: "Autonomy tensor health: energy bounds, goal stack, runaway detection",
+  },
+  {
+    id: "S10", name: "S10_SELFMODEL",
+    check: (_req: any, _ctx: any) => {
+      const psi = getPsiState();
+      if (!psi || psi.totalEnergy === 0 && psi.dimensionEnergies.every(e => e === 0)) return true;
+      if (!isFinite(psi.totalEnergy)) return false;
+      for (const e of psi.dimensionEnergies) {
+        if (!isFinite(e) || e < 0 || e > 1) return false;
+      }
+      const mean = psi.dimensionEnergies.reduce((s, v) => s + v, 0) / psi.dimensionEnergies.length;
+      const variance = psi.dimensionEnergies.reduce((s, v) => s + (v - mean) ** 2, 0) / psi.dimensionEnergies.length;
+      if (variance > 0.8) return false;
+      return true;
+    },
+    desc: "Self-model tensor health: dimension stability, coherence, bounds",
   },
 ];
 
@@ -637,11 +671,11 @@ export function runSentinels(req: any, ctx: any = {}): { passed: boolean; result
 
 export function buildSentinelContext(eventIds: string[] = []): SentinelContext {
   return {
-    S5_context: { window: S5_CONTEXT_DEFAULTS.window, retrieval_mode: S5_CONTEXT_DEFAULTS.retrieval.mode },
-    S6_identity: { actor_map_version: "v1", confidence: 0.98 },
-    S7_memory: { store_allowed: false, retention: "session" },
-    S8_risk: { score: 0.12, flags: [] },
-    S9_audit: { evidence_events: eventIds, retrieval_log: [] },
+    S4_context: { window: S5_CONTEXT_DEFAULTS.window, retrieval_mode: S5_CONTEXT_DEFAULTS.retrieval.mode },
+    S5_identity: { actor_map_version: "v1", confidence: 0.98 },
+    S6_memory: { store_allowed: false, retention: "session" },
+    S7_risk: { score: 0.12, flags: [] },
+    S8_audit: { evidence_events: eventIds, retrieval_log: [] },
   };
 }
 
@@ -695,6 +729,7 @@ export async function processA0Request(req: A0Request): Promise<A0Response> {
     const alerts = evaluateAlerts(edcmMetrics);
 
     const sentinels = runSentinels(req, sentinelCtx);
+    applySentinelFeedback(sentinels.results);
 
     if (!sentinels.passed) {
       const failedHmmm = makeHmmm(false, `Sentinel check failed: ${sentinels.results.filter(r => !r.passed).map(r => r.id).join(", ")}`);
@@ -788,6 +823,7 @@ export async function processA0Request(req: A0Request): Promise<A0Response> {
   }
 
   const sentinels = runSentinels(req, sentinelCtx);
+  applySentinelFeedback(sentinels.results);
   if (!sentinels.passed) {
     return {
       success: false,
@@ -2482,11 +2518,11 @@ export function omegaSolve(): OmegaState {
 
   omegaState.dimensionEnergies = energy.dimensionEnergies;
   omegaState.phaseEnergies = energy.phaseEnergies;
-  omegaState.totalEnergy = energy.total;
+  omegaState.totalEnergy = energy.dimensionEnergies.reduce((s, e) => s + e, 0) / OMEGA_DIM_COUNT;
   omegaState.thresholdsCrossed = thresholdsCrossed;
   omegaState.lastSolveTs = Date.now();
 
-  omegaState.energyHistory.push(energy.total);
+  omegaState.energyHistory.push(omegaState.totalEnergy);
   if (omegaState.energyHistory.length > 20) {
     omegaState.energyHistory = omegaState.energyHistory.slice(-20);
   }
@@ -2752,4 +2788,433 @@ export const OMEGA_CONFIG = {
   tensorAxes: { prime_node: PCNA_N, dimension: OMEGA_DIM_COUNT, phase: PTCA_PHASE_COUNT, hept: HEPT_TOTAL_SITES },
   totalElements: OMEGA_T4_SIZE,
   modes: Object.keys(OMEGA_MODE_BIASES),
+};
+
+const PSI_DIM_COUNT = 11;
+const PSI_ALPHA_DIFFUSION = 0.25;
+const PSI_BETA_DRIFT = 0.2;
+const PSI_GAMMA_DAMPING = 0.2;
+const PSI_STEPS_PER_EVAL = 10;
+const PSI_OMEGA_COUPLING = 0.04;
+const PSI_SENTINEL_BOOST = 0.03;
+const PSI_SENTINEL_DECAY = 0.05;
+
+const PSI_DIMENSION_LABELS = [
+  "Integrity",
+  "Compliance",
+  "Prudence",
+  "Confidence",
+  "Clarity",
+  "Identity",
+  "Recall",
+  "Vigilance",
+  "Coherence",
+  "Agency",
+  "Self-Awareness",
+] as const;
+
+const PSI_DIMENSION_THRESHOLDS = [
+  0.5, 0.5, 0.4, 0.4, 0.3, 0.4, 0.4, 0.5, 0.4, 0.5, 0.3,
+];
+
+const PSI_INIT_WEIGHTS = [
+  0.7, 0.6, 0.5, 0.3, 0.4, 0.5, 0.4, 0.6, 0.5, 0.5, 0.5,
+];
+
+const PSI_DECAY_RATES = [
+  0.01, 0.02, 0.015, 0.025, 0.02, 0.01, 0.02, 0.015, 0.02, 0.02, 0.01,
+];
+
+const PSI_OMEGA_MAP = [0, 3, 7, 1, 2, 9, 6, 8, 4, 5, -1];
+
+export type PsiSelfModelMode = "reflective" | "operational" | "transparent" | "guarded";
+
+const PSI_MODE_BIASES: Record<PsiSelfModelMode, number[]> = {
+  reflective:  [0.2,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.2,  0.0,  0.3],
+  operational: [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  transparent: [0.0,  0.0,  0.0,  0.2,  0.0,  0.2,  0.0,  0.0,  0.0,  0.3,  0.0],
+  guarded:     [0.0,  0.2,  0.2,  0.0,  0.0,  0.0,  0.0,  0.3,  0.0,  0.0,  0.0],
+};
+
+export interface PsiState {
+  dimensionEnergies: number[];
+  dimensionBiases: number[];
+  phaseEnergies: number[];
+  totalEnergy: number;
+  mode: PsiSelfModelMode;
+  energyHistory: number[];
+  lastSolveTs: number;
+}
+
+type PsiTensor = Float64Array;
+
+const PSI_T4_SIZE = PCNA_N * PSI_DIM_COUNT * PTCA_PHASE_COUNT * HEPT_TOTAL_SITES;
+
+function psiIdx(p: number, d: number, ph: number, h: number): number {
+  return ((p * PSI_DIM_COUNT + d) * PTCA_PHASE_COUNT + ph) * HEPT_TOTAL_SITES + h;
+}
+
+let psiTensor: PsiTensor | null = null;
+let psiState: PsiState = {
+  dimensionEnergies: new Array(PSI_DIM_COUNT).fill(0),
+  dimensionBiases: new Array(PSI_DIM_COUNT).fill(0),
+  phaseEnergies: new Array(PTCA_PHASE_COUNT).fill(0),
+  totalEnergy: 0,
+  mode: "operational",
+  energyHistory: [],
+  lastSolveTs: 0,
+};
+
+function initPsiTensorData(): PsiTensor {
+  const t = new Float64Array(PSI_T4_SIZE);
+  for (let p = 0; p < PCNA_N; p++) {
+    for (let d = 0; d < PSI_DIM_COUNT; d++) {
+      const dWeight = PSI_INIT_WEIGHTS[d];
+      for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+        for (let k = 0; k < HEPT_RING_SIZE; k++) {
+          t[psiIdx(p, d, ph, k)] = Math.sin(p * PTCA_DTHETA + (k * 2 * Math.PI) / HEPT_RING_SIZE) * 0.5 * dWeight;
+        }
+        t[psiIdx(p, d, ph, HEPT_HUB_INDEX)] = Math.cos(p * PTCA_DTHETA) * 0.3 * dWeight;
+      }
+    }
+  }
+  return t;
+}
+
+function psiHeptagramExchange(t: PsiTensor): void {
+  const scratch = new Float64Array(HEPT_RING_SIZE);
+  const psiAlpha = PTCA_ALPHA_COUPLING * 0.6;
+  const psiBeta = PTCA_BETA_COUPLING * 0.7;
+  const psiGamma = PTCA_GAMMA_COUPLING * 0.5;
+
+  for (let p = 0; p < PCNA_N; p++) {
+    const dir = (p % 2 === 0) ? 1 : -1;
+    for (let d = 0; d < PSI_DIM_COUNT; d++) {
+      for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+        for (let k = 0; k < HEPT_RING_SIZE; k++) {
+          const srcK = ((k - dir) % HEPT_RING_SIZE + HEPT_RING_SIZE) % HEPT_RING_SIZE;
+          scratch[k] = t[psiIdx(p, d, ph, srcK)];
+        }
+        for (let k = 0; k < HEPT_RING_SIZE; k++) {
+          t[psiIdx(p, d, ph, k)] = scratch[k];
+        }
+      }
+    }
+  }
+
+  for (let p = 0; p < PCNA_N; p++) {
+    for (let d = 0; d < PSI_DIM_COUNT; d++) {
+      for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+        let ringSum = 0;
+        for (let k = 0; k < HEPT_RING_SIZE; k++) ringSum += t[psiIdx(p, d, ph, k)];
+        const ringMean = ringSum / HEPT_RING_SIZE;
+        const hubIdx = psiIdx(p, d, ph, HEPT_HUB_INDEX);
+        t[hubIdx] += psiBeta * ringMean;
+        for (let k = 0; k < HEPT_RING_SIZE; k++) {
+          t[psiIdx(p, d, ph, k)] += psiGamma * t[hubIdx];
+        }
+      }
+    }
+  }
+
+  for (let d = 0; d < PSI_DIM_COUNT; d++) {
+    for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+      let hubSum = 0;
+      for (let p = 0; p < PCNA_N; p++) hubSum += t[psiIdx(p, d, ph, HEPT_HUB_INDEX)];
+      const globalHub = hubSum / PCNA_N;
+      for (let p = 0; p < PCNA_N; p++) {
+        const idx = psiIdx(p, d, ph, HEPT_HUB_INDEX);
+        t[idx] = (1 - psiAlpha) * t[idx] + psiAlpha * globalHub;
+      }
+    }
+  }
+}
+
+function computePsiEnergy(t: PsiTensor): { total: number; dimensionEnergies: number[]; phaseEnergies: number[] } {
+  let total = 0;
+  const dimensionEnergies = new Array(PSI_DIM_COUNT).fill(0);
+  const phaseEnergies = new Array(PTCA_PHASE_COUNT).fill(0);
+
+  for (let i = 0; i < PSI_T4_SIZE; i++) total += t[i] * t[i];
+
+  for (let d = 0; d < PSI_DIM_COUNT; d++) {
+    let dimSum = 0;
+    for (let p = 0; p < PCNA_N; p++) {
+      for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+        for (let h = 0; h < HEPT_TOTAL_SITES; h++) {
+          const v = t[psiIdx(p, d, ph, h)];
+          dimSum += v * v;
+        }
+      }
+    }
+    dimensionEnergies[d] = dimSum / (PCNA_N * PTCA_PHASE_COUNT * HEPT_TOTAL_SITES);
+  }
+
+  for (let ph = 0; ph < PTCA_PHASE_COUNT; ph++) {
+    let phSum = 0;
+    for (let p = 0; p < PCNA_N; p++) {
+      for (let d = 0; d < PSI_DIM_COUNT; d++) {
+        for (let h = 0; h < HEPT_TOTAL_SITES; h++) {
+          const v = t[psiIdx(p, d, ph, h)];
+          phSum += v * v;
+        }
+      }
+    }
+    phaseEnergies[ph] = phSum / (PCNA_N * PSI_DIM_COUNT * HEPT_TOTAL_SITES);
+  }
+
+  total /= PSI_T4_SIZE;
+  return { total, dimensionEnergies, phaseEnergies };
+}
+
+export function psiSolve(): PsiState {
+  if (!psiTensor) psiTensor = initPsiTensorData();
+
+  const prevEnergies = [...psiState.dimensionEnergies];
+  const prevCrossed = psiState.dimensionEnergies.map((e, i) => e >= PSI_DIMENSION_THRESHOLDS[i]);
+
+  let linearState = Array(PCNA_N).fill(0).map((_, i) => Math.sin(i * PTCA_DTHETA));
+
+  for (let step = 0; step < PSI_STEPS_PER_EVAL; step++) {
+    const newState = [...linearState];
+    for (let i = 0; i < PCNA_N; i++) {
+      let neighborSum = 0;
+      let count = 0;
+      for (let j = 0; j < PCNA_N; j++) {
+        if (PCNA_ADJ[i][j]) { neighborSum += linearState[j]; count++; }
+      }
+      const avg = count > 0 ? neighborSum / count : 0;
+      newState[i] = linearState[i] + PTCA_DT * (
+        PSI_ALPHA_DIFFUSION * (avg - linearState[i]) +
+        PSI_BETA_DRIFT * Math.sin(i * PTCA_DTHETA) -
+        PSI_GAMMA_DAMPING * linearState[i]
+      );
+    }
+    linearState = newState;
+    psiHeptagramExchange(psiTensor);
+  }
+
+  const energy = computePsiEnergy(psiTensor);
+
+  const modeBiases = PSI_MODE_BIASES[psiState.mode];
+
+  for (let d = 0; d < PSI_DIM_COUNT; d++) {
+    let adjusted = energy.dimensionEnergies[d];
+    adjusted += psiState.dimensionBiases[d] * 0.1;
+    adjusted += modeBiases[d] * 0.05;
+    adjusted *= (1 - PSI_DECAY_RATES[d]);
+    energy.dimensionEnergies[d] = Math.max(0, Math.min(1, adjusted));
+  }
+
+  for (let d = 0; d < PSI_DIM_COUNT; d++) {
+    const nowAbove = energy.dimensionEnergies[d] >= PSI_DIMENSION_THRESHOLDS[d];
+    const wasAbove = prevCrossed[d];
+
+    if (nowAbove !== wasAbove) {
+      logPsi("threshold_crossed", {
+        dimension: d,
+        label: PSI_DIMENSION_LABELS[d],
+        energy: energy.dimensionEnergies[d],
+        threshold: PSI_DIMENSION_THRESHOLDS[d],
+        direction: nowAbove ? "above" : "below",
+      }).catch(() => {});
+    }
+  }
+
+  psiState.dimensionEnergies = energy.dimensionEnergies;
+  psiState.phaseEnergies = energy.phaseEnergies;
+  psiState.totalEnergy = energy.dimensionEnergies.reduce((s, e) => s + e, 0) / PSI_DIM_COUNT;
+  psiState.lastSolveTs = Date.now();
+
+  psiState.energyHistory.push(psiState.totalEnergy);
+  if (psiState.energyHistory.length > 20) {
+    psiState.energyHistory = psiState.energyHistory.slice(-20);
+  }
+
+  logPsi("solve_step", {
+    dimensionEnergies: energy.dimensionEnergies.map((e, i) => ({ dim: PSI_DIMENSION_LABELS[i], energy: parseFloat(e.toFixed(4)) })),
+    totalEnergy: parseFloat(psiState.totalEnergy.toFixed(6)),
+    mode: psiState.mode,
+  }).catch(() => {});
+
+  return { ...psiState };
+}
+
+export function getPsiState(): PsiState {
+  return { ...psiState };
+}
+
+export function setPsiDimensionBias(dimension: number, bias: number, source: string = "manual"): PsiState {
+  if (dimension < 0 || dimension >= PSI_DIM_COUNT) return { ...psiState };
+  const oldBias = psiState.dimensionBiases[dimension];
+  psiState.dimensionBiases[dimension] = Math.max(-1, Math.min(1, bias));
+  logPsi("dimension_boost", {
+    source,
+    dimension,
+    label: PSI_DIMENSION_LABELS[dimension],
+    oldBias: parseFloat(oldBias.toFixed(4)),
+    newBias: parseFloat(psiState.dimensionBiases[dimension].toFixed(4)),
+  }).catch(() => {});
+  return { ...psiState };
+}
+
+export function boostPsiDimension(dimension: number, amount: number, source: string = "api"): PsiState {
+  if (dimension < 0 || dimension >= PSI_DIM_COUNT) return { ...psiState };
+  const before = psiState.dimensionEnergies[dimension];
+  psiState.dimensionEnergies[dimension] = Math.max(0, Math.min(1, before + amount * 0.1));
+  logPsi("dimension_boost", {
+    source,
+    dimension,
+    label: PSI_DIMENSION_LABELS[dimension],
+    amount,
+    before: parseFloat(before.toFixed(4)),
+    after: parseFloat(psiState.dimensionEnergies[dimension].toFixed(4)),
+  }).catch(() => {});
+  return { ...psiState };
+}
+
+export function setPsiMode(mode: PsiSelfModelMode): PsiState {
+  const oldMode = psiState.mode;
+  psiState.mode = mode;
+  logPsi("mode_switch", { source: "api", oldMode, newMode: mode }).catch(() => {});
+  return { ...psiState };
+}
+
+export async function persistPsiState(): Promise<void> {
+  try {
+    await storage.upsertSystemToggle("psi_tensor_state", true, {
+      dimensionEnergies: psiState.dimensionEnergies,
+      dimensionBiases: psiState.dimensionBiases,
+      phaseEnergies: psiState.phaseEnergies,
+      totalEnergy: psiState.totalEnergy,
+      mode: psiState.mode,
+      energyHistory: psiState.energyHistory,
+      lastSolveTs: psiState.lastSolveTs,
+    });
+    await logPsi("state_persisted", {
+      totalEnergy: parseFloat(psiState.totalEnergy.toFixed(6)),
+      dimensionEnergies: psiState.dimensionEnergies.map(e => parseFloat(e.toFixed(4))),
+    });
+  } catch (e) {
+    console.error("[psi] persist error:", e);
+  }
+}
+
+export async function initPsi(): Promise<void> {
+  try {
+    const toggle = await storage.getSystemToggle("psi_tensor_state");
+    if (toggle?.parameters) {
+      const saved = toggle.parameters as any;
+      psiState = {
+        dimensionEnergies: saved.dimensionEnergies || new Array(PSI_DIM_COUNT).fill(0),
+        dimensionBiases: saved.dimensionBiases || new Array(PSI_DIM_COUNT).fill(0),
+        phaseEnergies: saved.phaseEnergies || new Array(PTCA_PHASE_COUNT).fill(0),
+        totalEnergy: saved.totalEnergy || 0,
+        mode: saved.mode || "operational",
+        energyHistory: saved.energyHistory || [],
+        lastSolveTs: saved.lastSolveTs || 0,
+      };
+      await logPsi("state_restored", { totalEnergy: psiState.totalEnergy, fromTimestamp: psiState.lastSolveTs });
+    }
+  } catch {}
+
+  psiTensor = initPsiTensorData();
+  await logPsi("init", {
+    dimensions: PSI_DIMENSION_LABELS,
+    totalElements: PSI_T4_SIZE,
+    axes: { prime_node: PCNA_N, dimension: PSI_DIM_COUNT, phase: PTCA_PHASE_COUNT, hept: HEPT_TOTAL_SITES },
+    mode: psiState.mode,
+  });
+}
+
+export function applySentinelFeedback(sentinelResults: { id: string; name: string; passed: boolean }[]): void {
+  for (let i = 0; i < sentinelResults.length && i < PSI_DIM_COUNT; i++) {
+    const result = sentinelResults[i];
+    const before = psiState.dimensionEnergies[i];
+
+    if (i === 7 && !result.passed) {
+      psiState.dimensionEnergies[i] = Math.min(1, before + PSI_SENTINEL_BOOST * 3);
+    } else if (result.passed) {
+      psiState.dimensionEnergies[i] = Math.min(1, before + PSI_SENTINEL_BOOST);
+    } else {
+      psiState.dimensionEnergies[i] = Math.max(0, before - PSI_SENTINEL_DECAY);
+    }
+
+    logPsi("sentinel_feedback", {
+      sentinel: result.id,
+      sentinelName: result.name,
+      psiDimension: i,
+      psiLabel: PSI_DIMENSION_LABELS[i],
+      passed: result.passed,
+      energyBefore: parseFloat(before.toFixed(4)),
+      energyAfter: parseFloat(psiState.dimensionEnergies[i].toFixed(4)),
+    }).catch(() => {});
+  }
+}
+
+export function applyPsiOmegaCoupling(): void {
+  const psiEnergies = psiState.dimensionEnergies;
+  const psi10 = psiEnergies[10] || 0;
+  const globalModulator = (psi10 - 0.5) * PSI_OMEGA_COUPLING * 0.5;
+
+  for (let d = 0; d < PSI_DIM_COUNT; d++) {
+    const omegaDim = PSI_OMEGA_MAP[d];
+    if (omegaDim === -1) continue;
+    if (omegaDim < 0 || omegaDim >= OMEGA_DIM_COUNT) continue;
+
+    const psiEnergy = psiEnergies[d];
+    const omegaBefore = omegaState.dimensionEnergies[omegaDim];
+
+    let delta: number;
+    if (d === 7) {
+      delta = -(psiEnergy - 0.5) * PSI_OMEGA_COUPLING;
+    } else {
+      delta = (psiEnergy - 0.5) * PSI_OMEGA_COUPLING;
+    }
+
+    delta += globalModulator;
+
+    omegaState.dimensionEnergies[omegaDim] = Math.max(0, Math.min(1, omegaBefore + delta));
+
+    logPsi("omega_coupling", {
+      psiDim: d,
+      psiLabel: PSI_DIMENSION_LABELS[d],
+      omegaDim,
+      omegaLabel: OMEGA_DIMENSION_LABELS[omegaDim],
+      psiEnergy: parseFloat(psiEnergy.toFixed(4)),
+      omegaBefore: parseFloat(omegaBefore.toFixed(4)),
+      omegaAfter: parseFloat(omegaState.dimensionEnergies[omegaDim].toFixed(4)),
+      inverse: d === 7,
+    }).catch(() => {});
+  }
+
+  for (let d = 0; d < OMEGA_DIM_COUNT; d++) {
+    omegaState.dimensionEnergies[d] = Math.max(0, Math.min(1, omegaState.dimensionEnergies[d] + globalModulator));
+  }
+
+  omegaState.totalEnergy = omegaState.dimensionEnergies.reduce((s, e) => s + e, 0) / OMEGA_DIM_COUNT;
+}
+
+export function getPsiDimensionLabels(): readonly string[] {
+  return PSI_DIMENSION_LABELS;
+}
+
+export function getPsiDimensionThresholds(): number[] {
+  return [...PSI_DIMENSION_THRESHOLDS];
+}
+
+export const PSI_CONFIG = {
+  dimensions: PSI_DIM_COUNT,
+  labels: PSI_DIMENSION_LABELS,
+  thresholds: PSI_DIMENSION_THRESHOLDS,
+  initWeights: PSI_INIT_WEIGHTS,
+  decayRates: PSI_DECAY_RATES,
+  diffusion: { alpha: PSI_ALPHA_DIFFUSION, beta: PSI_BETA_DRIFT, gamma: PSI_GAMMA_DAMPING },
+  omegaCoupling: PSI_OMEGA_COUPLING,
+  sentinelBoost: PSI_SENTINEL_BOOST,
+  sentinelDecay: PSI_SENTINEL_DECAY,
+  omegaMap: PSI_OMEGA_MAP,
+  tensorAxes: { prime_node: PCNA_N, dimension: PSI_DIM_COUNT, phase: PTCA_PHASE_COUNT, hept: HEPT_TOTAL_SITES },
+  totalElements: PSI_T4_SIZE,
+  modes: Object.keys(PSI_MODE_BIASES),
 };

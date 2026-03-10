@@ -1,6 +1,6 @@
 import { storage } from "./storage";
-import { logMaster, logTranscript, logEdcm, logOmega } from "./logger";
-import { computeEdcmMetrics, updateSemanticMemory, omegaSolve, applyCrossTensorCoupling, applyMemoryBridge, persistOmegaState, getOmegaState } from "./a0p-engine";
+import { logMaster, logTranscript, logEdcm, logOmega, logPsi } from "./logger";
+import { computeEdcmMetrics, updateSemanticMemory, omegaSolve, applyCrossTensorCoupling, applyMemoryBridge, persistOmegaState, getOmegaState, psiSolve, applyPsiOmegaCoupling, persistPsiState, ptcaSolveDetailed } from "./a0p-engine";
 import { getUncachableGitHubClient } from "./github";
 import { createHash } from "crypto";
 import type { HeartbeatTask } from "@shared/schema";
@@ -1000,11 +1000,21 @@ async function tick(): Promise<void> {
     const enabled = await isHeartbeatEnabled();
     if (!enabled) return;
 
+    const psiResult = psiSolve();
     const omegaResult = omegaSolve();
-    applyCrossTensorCoupling(omegaResult.totalEnergy);
+    applyPsiOmegaCoupling();
+    const ptcaResult = ptcaSolveDetailed([]);
+    applyCrossTensorCoupling(ptcaResult.energy);
     await applyMemoryBridge();
 
     const omega = getOmegaState();
+
+    await logPsi("triad_sync", {
+      psiEnergy: parseFloat(psiResult.totalEnergy.toFixed(6)),
+      omegaEnergy: parseFloat(omega.totalEnergy.toFixed(6)),
+      psiMode: psiResult.mode,
+      omegaMode: omega.mode,
+    });
 
     await logOmega("task_selection", {
       driver: "heartbeat_tick",
@@ -1102,7 +1112,56 @@ async function tick(): Promise<void> {
       }
     }
 
+    const { getPsiState } = await import("./a0p-engine");
+    const psiNow = getPsiState();
+    if (omega.dimensionEnergies[8] >= 0.5) {
+      const conf = psiNow.dimensionEnergies[3] || 0;
+      const clar = psiNow.dimensionEnergies[4] || 0;
+      const iden = psiNow.dimensionEnergies[5] || 0;
+      if (conf >= 0.4 && clar >= 0.3 && iden >= 0.4) {
+        try {
+          const hubConnections: { name: string; toolName: string; desc: string }[] = [];
+          if (process.env.XAI_API_KEY) hubConnections.push({ name: "xai-grok", toolName: "query_xai_hub", desc: "Query the xAI Grok hub model for general knowledge and analysis" });
+          try {
+            const toggles = await storage.getSystemToggles();
+            const hubToggle = toggles.find((t: any) => t.key === "hub_connections");
+            if (hubToggle?.parameters && Array.isArray((hubToggle.parameters as any).hubs)) {
+              for (const h of (hubToggle.parameters as any).hubs) {
+                const hName = (h.name || "unknown").replace(/[^a-z0-9]/gi, "_").toLowerCase();
+                hubConnections.push({ name: h.name || "unknown", toolName: `query_${hName}`, desc: `Query the ${h.name} hub model (${h.model || "N/A"})` });
+              }
+            }
+          } catch {}
+
+          if (hubConnections.length > 0) {
+            const existingTools = await storage.getCustomTools();
+            let generatedCount = existingTools.filter(t => t.isGenerated).length;
+            for (const hub of hubConnections) {
+              if (generatedCount >= 20) break;
+              const exists = existingTools.some(t => t.name === hub.toolName);
+              if (!exists) {
+                await storage.createCustomTool({
+                  userId: "system",
+                  name: hub.toolName,
+                  description: hub.desc,
+                  handlerType: "javascript",
+                  handlerCode: `// Auto-generated hub tool for ${hub.name}\n// Hub provider: ${hub.name}`,
+                  enabled: true,
+                  isGenerated: true,
+                });
+                generatedCount++;
+                await logOmega("self_initiate", { type: "tool_generation", hubName: hub.name, toolName: hub.toolName });
+              }
+            }
+          }
+        } catch (err: any) {
+          await logMaster("heartbeat", "tool_generation_error", { error: err.message }).catch(() => {});
+        }
+      }
+    }
+
     await persistOmegaState();
+    await persistPsiState();
   } catch (err: any) {
     console.error("[heartbeat] Tick error:", err);
     await logMaster("heartbeat", "tick_error", { error: err.message }).catch(() => {});

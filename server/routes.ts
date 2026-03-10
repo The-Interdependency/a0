@@ -29,12 +29,16 @@ import {
   initializeMemorySeeds, getMemoryRequestCounter,
   banditSelect, banditReward, banditGetStats, banditToggleArm, initializeBanditArms,
   recordCorrelation, getTopCorrelations,
+  ptcaSolveDetailed,
   initOmega, omegaSolve, applyCrossTensorCoupling, applyMemoryBridge,
   applyBanditCoupling, applyEdcmFeedback, persistOmegaState,
   getOmegaState, setOmegaMode, boostOmegaDimension, setOmegaDimensionBias,
   addOmegaGoal, completeOmegaGoal, removeOmegaGoal,
   getOmegaDimensionLabels, getOmegaDimensionThresholds, OMEGA_CONFIG,
   type OmegaAutonomyMode,
+  initPsi, psiSolve, getPsiState, setPsiMode, boostPsiDimension, setPsiDimensionBias,
+  persistPsiState, getPsiDimensionLabels, getPsiDimensionThresholds, PSI_CONFIG,
+  type PsiSelfModelMode, type PsiState,
   type A0Request,
   type MemoryAttribution,
 } from "./a0p-engine";
@@ -1197,6 +1201,36 @@ INSTRUCTIONS:
       description: "Fetch and read the content of a web page. Returns the page text content cleaned of HTML tags. Use after web_search to read specific pages in detail.",
       parameters: { type: "object" as const, properties: { url: { type: "string" as const, description: "Full URL to fetch (https://...)" } }, required: ["url"] },
     },
+    {
+      name: "get_psi_state",
+      description: "Get the current PTCA-Ψ self-model tensor state: all 11 introspective dimension energies (Integrity, Compliance, Prudence, Confidence, Clarity, Identity, Recall, Vigilance, Coherence, Agency, Self-Awareness), mode, sentinel pairings, and omega pairings",
+      parameters: { type: "object" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "boost_psi_dimension",
+      description: "Temporarily boost a PTCA-Ψ self-model dimension energy. Dimensions: 0=Integrity, 1=Compliance, 2=Prudence, 3=Confidence, 4=Clarity, 5=Identity, 6=Recall, 7=Vigilance, 8=Coherence, 9=Agency, 10=Self-Awareness",
+      parameters: { type: "object" as const, properties: { dimension: { type: "number" as const, description: "Dimension index 0-10" }, amount: { type: "number" as const, description: "Boost amount (1-10 scale)" } }, required: ["dimension", "amount"] },
+    },
+    {
+      name: "set_selfmodel_mode",
+      description: "Set PTCA-Ψ self-model mode: reflective (heightened integrity/coherence/self-awareness), operational (balanced), transparent (heightened agency/identity/confidence), guarded (heightened vigilance/compliance/prudence)",
+      parameters: { type: "object" as const, properties: { mode: { type: "string" as const, description: "Mode: reflective, operational, transparent, or guarded" } }, required: ["mode"] },
+    },
+    {
+      name: "get_triad_state",
+      description: "Get the combined state of all three PTCA tensors: PTCA (cognitive), PTCA-Ψ (self-model), and PTCA-Ω (autonomy). Shows total energies, modes, and dimension energies for each.",
+      parameters: { type: "object" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "generate_tool",
+      description: "Autonomously generate a new custom tool. Requires Ψ self-assessment gates (Confidence≥0.4, Clarity≥0.3, Identity≥0.4). Can optionally connect to a hub AI model.",
+      parameters: { type: "object" as const, properties: { name: { type: "string" as const, description: "Tool name (snake_case)" }, description: { type: "string" as const, description: "What the tool does" }, hubProvider: { type: "string" as const, description: "Optional: hub credential name for AI-backed tool" }, handlerType: { type: "string" as const, description: "Handler type: javascript, webhook, or template" }, parametersSchema: { type: "object" as const, description: "JSON schema for tool parameters" } }, required: ["name", "description"] },
+    },
+    {
+      name: "list_hub_connections",
+      description: "List available hub AI model connections from stored credentials (names and endpoints only, no keys exposed)",
+      parameters: { type: "object" as const, properties: {}, required: [] as string[] },
+    },
   ];
 
   async function executeAgentTool(toolName: string, args: any): Promise<string> {
@@ -1637,6 +1671,92 @@ INSTRUCTIONS:
             clearTimeout(timeout);
             return `Error fetching URL: ${e.message}`;
           }
+        }
+        case "get_psi_state": {
+          const pState = getPsiState();
+          const pLabels = getPsiDimensionLabels();
+          const pThresholds = getPsiDimensionThresholds();
+          const dims = pLabels.map((label, i) => `Ψ${i} ${label}: ${pState.dimensionEnergies[i]?.toFixed(4) || 0} (threshold: ${pThresholds[i]})`).join("\n");
+          return `PTCA-Ψ Self-Model State:\nMode: ${pState.mode}\nTotal Energy: ${pState.totalEnergy.toFixed(6)}\n\nDimensions:\n${dims}`;
+        }
+        case "boost_psi_dimension": {
+          const dim = args.dimension;
+          const amt = args.amount || 1;
+          if (typeof dim !== "number" || dim < 0 || dim > 10) return "Error: dimension must be 0-10";
+          const state = boostPsiDimension(dim, amt, "agent_tool");
+          const labels = getPsiDimensionLabels();
+          return `Boosted Ψ${dim} ${labels[dim]} by ${amt}. New energy: ${state.dimensionEnergies[dim]?.toFixed(4)}`;
+        }
+        case "set_selfmodel_mode": {
+          const mode = (args.mode || "").trim();
+          const validModes = ["reflective", "operational", "transparent", "guarded"];
+          if (!validModes.includes(mode)) return `Error: Invalid mode. Valid: ${validModes.join(", ")}`;
+          const state = setPsiMode(mode as PsiSelfModelMode);
+          return `Self-model mode set to "${state.mode}". Total energy: ${state.totalEnergy.toFixed(6)}`;
+        }
+        case "get_triad_state": {
+          const psi = getPsiState();
+          const omega = getOmegaState();
+          const psiLabels = getPsiDimensionLabels();
+          const omegaLabels = getOmegaDimensionLabels();
+          const psiDims = psiLabels.map((l, i) => `  Ψ${i} ${l}: ${psi.dimensionEnergies[i]?.toFixed(4) || 0}`).join("\n");
+          const omegaDims = omegaLabels.map((l, i) => `  A${i+1} ${l}: ${omega.dimensionEnergies[i]?.toFixed(4) || 0}`).join("\n");
+          return `TRIAD STATE:\n\nPTCA (Cognitive): 53×11×8×7\n\nPTCA-Ψ (Self-Model): mode=${psi.mode}, energy=${psi.totalEnergy.toFixed(6)}\n${psiDims}\n\nPTCA-Ω (Autonomy): mode=${omega.mode}, energy=${omega.totalEnergy.toFixed(6)}\n${omegaDims}`;
+        }
+        case "generate_tool": {
+          const psi = getPsiState();
+          const psiLabels = getPsiDimensionLabels();
+          const conf = psi.dimensionEnergies[3] || 0;
+          const clar = psi.dimensionEnergies[4] || 0;
+          const iden = psi.dimensionEnergies[5] || 0;
+          if (conf < 0.4 || clar < 0.3 || iden < 0.4) {
+            const { logPsi: lp } = await import("./logger");
+            await lp("tool_generation_blocked", { reason: "psi_gate_fail", psi3: conf, psi4: clar, psi5: iden });
+            return `Tool generation blocked by Ψ self-assessment gates:\n  Ψ3 Confidence: ${conf.toFixed(4)} (need ≥0.4)\n  Ψ4 Clarity: ${clar.toFixed(4)} (need ≥0.3)\n  Ψ5 Identity: ${iden.toFixed(4)} (need ≥0.4)`;
+          }
+          const existingTools = await storage.getCustomTools();
+          const generatedCount = existingTools.filter((t: any) => t.isGenerated).length;
+          if (generatedCount >= 20) {
+            return "Tool generation blocked: maximum of 20 generated tools reached. Remove unused generated tools first.";
+          }
+          const toolName2 = (args.name || "").trim().replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+          if (!toolName2) return "Error: tool name is required";
+          const existing = existingTools.find((t: any) => t.name === toolName2);
+          if (existing) return `Error: tool "${toolName2}" already exists`;
+          const handlerCode = args.hubProvider
+            ? `// Auto-generated hub tool for ${args.hubProvider}\n// Hub provider: ${args.hubProvider}`
+            : "// Custom tool handler";
+          const newTool = await storage.createCustomTool({
+            userId: "system",
+            name: toolName2,
+            description: args.description || "",
+            handlerType: args.handlerType || "javascript",
+            handlerCode,
+            parametersSchema: args.parametersSchema || {},
+            enabled: true,
+            isGenerated: true,
+          });
+          const { logOmega: lo } = await import("./logger");
+          await lo("tool_generated", { name: toolName2, hubProvider: args.hubProvider || null, handlerType: args.handlerType || "javascript", psiGate: { confidence: conf, clarity: clar, identity: iden } });
+          return `Tool "${toolName2}" generated successfully (id: ${newTool.id}). Ψ gates passed: Confidence=${conf.toFixed(4)}, Clarity=${clar.toFixed(4)}, Identity=${iden.toFixed(4)}`;
+        }
+        case "list_hub_connections": {
+          const { logOmega: lo2 } = await import("./logger");
+          const hubConnections: { name: string; endpoint: string; model: string }[] = [];
+          try {
+            const toggles = await storage.getSystemToggles();
+            const hubToggle = toggles.find((t: any) => t.key === "hub_connections");
+            if (hubToggle?.parameters && Array.isArray((hubToggle.parameters as any).hubs)) {
+              for (const h of (hubToggle.parameters as any).hubs) {
+                hubConnections.push({ name: h.name || "unknown", endpoint: h.endpoint || "N/A", model: h.model || "N/A" });
+              }
+            }
+          } catch {}
+          if (process.env.XAI_API_KEY) hubConnections.push({ name: "xai-grok", endpoint: "https://api.x.ai/v1", model: "grok-3-mini-fast" });
+          await lo2("hub_connections_listed", { count: hubConnections.length });
+          if (hubConnections.length === 0) return "No hub AI model connections found. The system can use integrated AI models (xAI, Gemini) as hub connections.";
+          const hubList = hubConnections.map(h => `- ${h.name}: ${h.endpoint} (model: ${h.model})`).join("\n");
+          return `Hub connections (${hubConnections.length}):\n${hubList}`;
         }
         default:
           return `Unknown tool: ${toolName}`;
@@ -2834,6 +2954,12 @@ IMPORTANT RULES:
     console.error("[a0p:omega] Failed to initialize PTCA-Ω:", err);
   });
 
+  initPsi().then(() => {
+    console.log("[a0p:psi] PTCA-Ψ self-model tensor initialized");
+  }).catch((err) => {
+    console.error("[a0p:psi] Failed to initialize PTCA-Ψ:", err);
+  });
+
   // ============ HEARTBEAT SCHEDULER ============
 
   initializeHeartbeatTasks().then(() => {
@@ -2988,7 +3114,7 @@ IMPORTANT RULES:
 
   // ============ APPEND-ONLY LOGS ============
 
-  const VALID_STREAMS: LogStream[] = ["master", "edcm", "memory", "sentinel", "interference", "attribution", "omega"];
+  const VALID_STREAMS: LogStream[] = ["master", "edcm", "memory", "sentinel", "interference", "attribution", "omega", "psi"];
 
   app.get("/api/logs/stats", async (_req, res) => {
     try {
@@ -4140,6 +4266,111 @@ IMPORTANT RULES:
       const state = omegaSolve();
       await persistOmegaState();
       res.json({ ok: true, state });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ PSI SELF-MODEL ENDPOINTS ============
+
+  app.get("/api/psi/state", async (_req, res) => {
+    try {
+      const state = getPsiState();
+      const labels = getPsiDimensionLabels();
+      const thresholds = getPsiDimensionThresholds();
+      const omegaLabels = getOmegaDimensionLabels();
+      const psiOmegaMap = PSI_CONFIG.omegaMap;
+      res.json({
+        ...state,
+        labels,
+        thresholds,
+        config: PSI_CONFIG,
+        sentinelPairings: labels.map((label, i) => ({ psiDim: i, psiLabel: label, sentinelId: `S${i}` })),
+        omegaPairings: labels.map((label, i) => ({
+          psiDim: i,
+          psiLabel: label,
+          omegaDim: psiOmegaMap[i],
+          omegaLabel: psiOmegaMap[i] >= 0 ? omegaLabels[psiOmegaMap[i]] : "ALL (global modulator)",
+          inverse: i === 7,
+        })),
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/psi/bias", async (req, res) => {
+    try {
+      const { dimension, bias } = req.body;
+      if (typeof dimension !== "number" || typeof bias !== "number") {
+        return res.status(400).json({ error: "dimension and bias required" });
+      }
+      const state = setPsiDimensionBias(dimension, bias, "api");
+      res.json({ ok: true, state });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/psi/mode", async (req, res) => {
+    try {
+      const { mode } = req.body;
+      const validModes = ["reflective", "operational", "transparent", "guarded"];
+      if (!validModes.includes(mode)) {
+        return res.status(400).json({ error: `Invalid mode. Valid: ${validModes.join(", ")}` });
+      }
+      const state = setPsiMode(mode as PsiSelfModelMode);
+      res.json({ ok: true, state });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/psi/solve", async (_req, res) => {
+    try {
+      const state = psiSolve();
+      await persistPsiState();
+      res.json({ ok: true, state });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/psi/boost", async (req, res) => {
+    try {
+      const { dimension, amount } = req.body;
+      if (typeof dimension !== "number" || typeof amount !== "number") {
+        return res.status(400).json({ error: "dimension and amount required" });
+      }
+      const state = boostPsiDimension(dimension, amount, "api");
+      res.json({ ok: true, state });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/triad/state", async (_req, res) => {
+    try {
+      const psi = getPsiState();
+      const omega = getOmegaState();
+      const ptca = ptcaSolveDetailed([]);
+      const psiLabels = getPsiDimensionLabels();
+      const omegaLabels = getOmegaDimensionLabels();
+      res.json({
+        ptca: { axes: "53×11×8×7", sentinelCount: 11, energy: ptca.energy, heptagramEnergy: ptca.heptagramEnergy },
+        psi: {
+          totalEnergy: psi.totalEnergy,
+          mode: psi.mode,
+          dimensionEnergies: psi.dimensionEnergies,
+          labels: psiLabels,
+        },
+        omega: {
+          totalEnergy: omega.totalEnergy,
+          mode: omega.mode,
+          dimensionEnergies: omega.dimensionEnergies,
+          labels: omegaLabels,
+        },
+      });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

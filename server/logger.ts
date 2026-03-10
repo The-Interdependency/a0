@@ -14,6 +14,7 @@ const LOG_STREAMS = {
   interference: "memory-interference.jsonl",
   attribution: "memory-attribution.jsonl",
   omega: "omega-autonomy.jsonl",
+  psi: "psi-selfmodel.jsonl",
 } as const;
 
 export type LogStream = keyof typeof LOG_STREAMS;
@@ -35,6 +36,7 @@ let streamToggles: Record<string, boolean> = {
   interference: true,
   attribution: true,
   omega: true,
+  psi: true,
   transcripts: true,
   "ai-transcripts": true,
 };
@@ -183,6 +185,19 @@ export async function logOmega(event: string, data: Record<string, any>): Promis
     }
   } catch (e) {
     console.error("Logger omega write error:", e);
+  }
+}
+
+export async function logPsi(event: string, data: Record<string, any>): Promise<void> {
+  if (!isStreamEnabled("psi")) return;
+  const entry = buildEntry("psi", "psi_selfmodel", event, data);
+  try {
+    await appendToFile(getStreamPath("psi"), entry);
+    if (isStreamEnabled("master")) {
+      await appendToFile(getStreamPath("master"), entry);
+    }
+  } catch (e) {
+    console.error("Logger psi write error:", e);
   }
 }
 
