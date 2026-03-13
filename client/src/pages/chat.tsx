@@ -533,15 +533,15 @@ function AgentMessage({ message, isStreaming }: { message: Message; isStreaming?
           <button
             onClick={() => pinContent(message.content, "Pinned Response")}
             className={cn(
-              "self-start flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors",
+              "self-start flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-colors active:scale-95",
               isPinned
                 ? "text-primary bg-primary/10"
-                : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-primary hover:bg-primary/10"
+                : "text-muted-foreground/60 bg-muted/40 active:bg-primary/10 active:text-primary"
             )}
             data-testid={`button-pin-${message.id}`}
             title="Pin this response"
           >
-            <Pin className="w-2.5 h-2.5" />
+            <Pin className="w-3 h-3" />
             {isPinned ? "pinned" : "pin"}
           </button>
         )}
