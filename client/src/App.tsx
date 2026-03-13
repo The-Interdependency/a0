@@ -17,6 +17,8 @@ import SplashPage from "@/pages/splash";
 import LoginPage from "@/pages/login";
 import TopNav from "@/components/top-nav";
 import HmmmDoctrine from "@/components/hmmm-doctrine";
+import PopoutPanel from "@/components/popout-panel";
+import { PopoutProvider } from "@/lib/popout-context";
 
 function Router() {
   return (
@@ -78,6 +80,7 @@ function AppShell() {
           </div>
           <HmmmDoctrine />
         </div>
+        <PopoutPanel />
       </div>
     </AuthGate>
   );
@@ -87,8 +90,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AppShell />
-        <Toaster />
+        <PopoutProvider>
+          <AppShell />
+          <Toaster />
+        </PopoutProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

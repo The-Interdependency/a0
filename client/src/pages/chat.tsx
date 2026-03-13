@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownContent } from "@/lib/markdown";
+import { usePopout } from "@/lib/popout-context";
 import {
   Select,
   SelectContent,
@@ -19,7 +20,7 @@ import {
   Plus, Send, Trash2, Bot, User, ChevronRight,
   PanelLeftOpen, PanelLeftClose, Terminal as TermIcon,
   FileText, Mail, HardDrive, Search, Pencil,
-  Activity, Shield, Zap, Layers,
+  Activity, Shield, Zap, Layers, Pin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Conversation, Message } from "@shared/schema";
@@ -494,8 +495,11 @@ function ToolActionsDisplay({ actions }: { actions: ToolAction[] }) {
 
 function AgentMessage({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
   const isUser = message.role === "user";
+  const { pinContent, content: pinnedContent } = usePopout();
+  const isPinned = pinnedContent === message.content;
+
   return (
-    <div className={cn("flex gap-2 items-start", isUser && "flex-row-reverse")}>
+    <div className={cn("flex gap-2 items-start group", isUser && "flex-row-reverse")}>
       <div
         className={cn(
           "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5",
@@ -504,24 +508,42 @@ function AgentMessage({ message, isStreaming }: { message: Message; isStreaming?
       >
         {isUser ? <User className="w-3.5 h-3.5 text-secondary-foreground" /> : <Shield className="w-3.5 h-3.5 text-primary" />}
       </div>
-      <div
-        className={cn(
-          "max-w-[85%] rounded-xl px-3 py-2 text-sm overflow-hidden min-w-0",
-          isUser
-            ? "bg-primary text-primary-foreground rounded-tr-sm"
-            : "bg-card border border-border rounded-tl-sm"
-        )}
-        data-testid={`message-${message.id}`}
-      >
-        {isUser ? (
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
-        ) : (
-          <div className="break-words min-w-0 [&_.markdown-content]:text-sm [&_.markdown-content]:min-w-0 [&_.code-block]:bg-black/20 [&_.code-block]:rounded-md [&_.code-block]:p-2 [&_.code-block]:text-xs [&_.code-block]:overflow-x-auto [&_.code-block]:my-1 [&_.code-block]:font-mono [&_.code-block]:max-w-full [&_.inline-code]:bg-black/20 [&_.inline-code]:px-1 [&_.inline-code]:rounded [&_.inline-code]:text-xs [&_.inline-code]:font-mono [&_.inline-code]:break-all [&_.md-h1]:text-base [&_.md-h1]:font-bold [&_.md-h1]:mb-1 [&_.md-h2]:text-sm [&_.md-h2]:font-bold [&_.md-h2]:mb-1 [&_.md-h3]:text-sm [&_.md-h3]:font-semibold [&_.md-h3]:mb-0.5 [&_.md-ul]:pl-4 [&_.md-li]:list-disc">
-            <MarkdownContent content={message.content} />
-            {isStreaming && (
-              <span className="inline-block w-0.5 h-3.5 bg-current ml-0.5 animate-pulse" />
+      <div className="flex flex-col gap-1 max-w-[85%] min-w-0">
+        <div
+          className={cn(
+            "rounded-xl px-3 py-2 text-sm overflow-hidden min-w-0",
+            isUser
+              ? "bg-primary text-primary-foreground rounded-tr-sm"
+              : "bg-card border border-border rounded-tl-sm"
+          )}
+          data-testid={`message-${message.id}`}
+        >
+          {isUser ? (
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          ) : (
+            <div className="break-words min-w-0 [&_.markdown-content]:text-sm [&_.markdown-content]:min-w-0 [&_.code-block]:bg-black/20 [&_.code-block]:rounded-md [&_.code-block]:p-2 [&_.code-block]:text-xs [&_.code-block]:overflow-x-auto [&_.code-block]:my-1 [&_.code-block]:font-mono [&_.code-block]:max-w-full [&_.inline-code]:bg-black/20 [&_.inline-code]:px-1 [&_.inline-code]:rounded [&_.inline-code]:text-xs [&_.inline-code]:font-mono [&_.inline-code]:break-all [&_.md-h1]:text-base [&_.md-h1]:font-bold [&_.md-h1]:mb-1 [&_.md-h2]:text-sm [&_.md-h2]:font-bold [&_.md-h2]:mb-1 [&_.md-h3]:text-sm [&_.md-h3]:font-semibold [&_.md-h3]:mb-0.5 [&_.md-ul]:pl-4 [&_.md-li]:list-disc">
+              <MarkdownContent content={message.content} />
+              {isStreaming && (
+                <span className="inline-block w-0.5 h-3.5 bg-current ml-0.5 animate-pulse" />
+              )}
+            </div>
+          )}
+        </div>
+        {!isUser && !isStreaming && (
+          <button
+            onClick={() => pinContent(message.content, "Pinned Response")}
+            className={cn(
+              "self-start flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors",
+              isPinned
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-primary hover:bg-primary/10"
             )}
-          </div>
+            data-testid={`button-pin-${message.id}`}
+            title="Pin this response"
+          >
+            <Pin className="w-2.5 h-2.5" />
+            {isPinned ? "pinned" : "pin"}
+          </button>
         )}
       </div>
     </div>
