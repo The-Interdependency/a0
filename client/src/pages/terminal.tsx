@@ -95,7 +95,7 @@ export default function TerminalPage() {
       </header>
 
       {/* Output */}
-      <ScrollArea className="flex-1 px-3 pr-5 py-2">
+      <ScrollArea className="flex-1 px-3 py-2">
         {sortedHistory.length === 0 && !execCmd.isPending && (
           <div className="py-8 text-center text-muted-foreground">
             <TermIcon className="w-8 h-8 mx-auto mb-2 opacity-30" />

@@ -231,7 +231,7 @@ function WorkflowTab() {
     : "--";
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center justify-between mb-3">
@@ -428,7 +428,7 @@ function BanditTab({ orientation, isVertical }: SliderOrientationProps) {
   const edcmSnapshots = edcmHistory?.snapshots || [];
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         {BANDIT_DOMAINS.map((domain) => {
           const arms = armsByDomain[domain] || [];
@@ -746,7 +746,7 @@ function MetricsTab({ orientation, isVertical }: SliderOrientationProps) {
   }
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
@@ -1164,7 +1164,7 @@ function EdcmTab() {
   const liveSentinelCtx = engineReport?.sentinelContext || engineReport?.sentinel_context;
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
 
         <div className="rounded-lg border border-border bg-card p-4">
@@ -1704,7 +1704,7 @@ function MemoryTab({ orientation, isVertical }: SliderOrientationProps) {
   const driftWarnings = Array.isArray(driftResults) ? driftResults.filter((d: any) => d.driftScore > 0.6) : [];
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <h3 className="font-semibold text-sm flex items-center gap-2">
@@ -2233,7 +2233,7 @@ function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
   const activePreset = presets.find(p => p.id === activePresetId);
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
@@ -2585,7 +2585,7 @@ function SystemTab({ orientation, isVertical }: SliderOrientationProps) {
   const subsystems = Object.keys(SUBSYSTEM_PARAMS);
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
@@ -2977,7 +2977,7 @@ function HeartbeatTab({ orientation, isVertical }: SliderOrientationProps) {
   );
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
@@ -3449,7 +3449,7 @@ function CustomToolsTab() {
   if (isLoading) return <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
 
         <div className="rounded-lg border border-border bg-card p-3 space-y-2">
@@ -3962,7 +3962,7 @@ function CredentialsTab() {
   }
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="rounded-lg border border-primary/20 bg-card p-4">
           <h3 className="font-semibold text-sm mb-1 flex items-center gap-2">
@@ -4324,7 +4324,7 @@ function ContextTab() {
   });
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="font-semibold text-sm mb-2">System Prompt</h3>
@@ -4452,7 +4452,7 @@ function ExportTab() {
   const totalTranscriptSize = aiFiles.reduce((s: number, f: any) => s + (f.size || 0), 0);
 
   return (
-    <ScrollArea className="h-full px-3 pr-5 py-3">
+    <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <h3 className="font-semibold text-sm flex items-center gap-2">
