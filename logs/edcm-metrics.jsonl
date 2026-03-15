@@ -145,3 +145,4 @@
 {"timestamp":"2026-03-15T00:32:32.840Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"9fd6165f52a6","conversationsScanned":10,"totalMessages":92,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-15T00:42:33.117Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"d262c5ae21d3","conversationsScanned":10,"totalMessages":92,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-15T00:52:33.557Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"e636f06afd61","conversationsScanned":10,"totalMessages":92,"highEdcmCount":0,"findingsCount":0}}
+{"timestamp":"2026-03-15T01:02:33.816Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"cbee31bc0c1f","conversationsScanned":10,"totalMessages":92,"highEdcmCount":0,"findingsCount":0}}
