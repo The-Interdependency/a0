@@ -1239,6 +1239,30 @@ INSTRUCTIONS:
       parameters: { type: "object" as const, properties: { slug: { type: "string" as const, description: "Slug identifier of the transcript source" } }, required: ["slug"] },
     },
     {
+      name: "fetch_transcript_url",
+      description: "Fetch transcript content from a public URL (raw JSON export, pastebin, GitHub raw file, direct link, etc.) and save it into a transcript source so it can be scanned with scan_transcript_source. Supports ChatGPT JSON exports, Claude JSON exports, JSONL, plain text, and JSON arrays of messages.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          url: { type: "string" as const, description: "Public URL of the transcript file to fetch" },
+          sourceSlug: { type: "string" as const, description: "Slug of an existing transcript source to save the file into (use list_transcript_sources to see available slugs)" },
+          filename: { type: "string" as const, description: "Optional filename to save as (e.g. chat.json). Defaults to the last segment of the URL." },
+        },
+        required: ["url", "sourceSlug"],
+      },
+    },
+    {
+      name: "create_transcript_source",
+      description: "Create a new named transcript source that files can be saved into. Returns the slug used to reference it.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          displayName: { type: "string" as const, description: "Human-readable name for the source (e.g. 'ChatGPT March', 'Claude Work', 'Slack Export')" },
+        },
+        required: ["displayName"],
+      },
+    },
+    {
       name: "set_brain_preset",
       description: "Switch the active brain pipeline preset for the current session. Use to change how models collaborate (e.g., single model, dual synthesis, deep research pipeline).",
       parameters: { type: "object" as const, properties: { presetName: { type: "string" as const, description: "Name or ID of the brain preset to activate" } }, required: ["presetName"] },
@@ -1672,6 +1696,52 @@ INSTRUCTIONS:
             `  [${s.file}] peak=${((s.peak || 0) * 100).toFixed(0)}%: "${s.text.slice(0, 120)}"`
           ).join("\n");
           return `EDCM Report for source "${slug}" (scanned ${report.createdAt ? new Date(report.createdAt).toISOString() : "unknown"}):\n${report.messageCount} messages\nCM=${(report.avgCm * 100).toFixed(1)}% DA=${(report.avgDa * 100).toFixed(1)}% DRIFT=${(report.avgDrift * 100).toFixed(1)}% DVG=${(report.avgDvg * 100).toFixed(1)}% INT=${(report.avgInt * 100).toFixed(1)}% TBF=${(report.avgTbf * 100).toFixed(1)}%\nPeak: ${report.peakMetricName} @ ${(report.peakMetric * 100).toFixed(1)}%\nDirectives fired: ${dirFired}\nTop snippets:\n${snippets || "  (none above threshold)"}`;
+        }
+        case "create_transcript_source": {
+          const displayName = (args.displayName || "").trim();
+          if (!displayName) return "Error: displayName is required";
+          const slug = displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) + "-" + Date.now().toString(36);
+          const existing = await storage.getTranscriptSource(slug);
+          if (existing) return `Error: source with slug "${slug}" already exists`;
+          const srcDir = path.join(process.cwd(), "uploads", "transcripts", slug);
+          await mkdir(srcDir, { recursive: true });
+          const newSrc = await storage.createTranscriptSource({ displayName, slug });
+          return `Transcript source created: "${displayName}" (slug: ${newSrc.slug}). Upload files with fetch_transcript_url or through the UI.`;
+        }
+        case "fetch_transcript_url": {
+          const url = (args.url || "").trim();
+          const sourceSlug = (args.sourceSlug || "").trim();
+          if (!url) return "Error: url is required";
+          if (!sourceSlug) return "Error: sourceSlug is required";
+          const src = await storage.getTranscriptSource(sourceSlug);
+          if (!src) return `Error: transcript source "${sourceSlug}" not found. Use list_transcript_sources to see existing sources or create_transcript_source to create one.`;
+          let rawFilename = (args.filename || "").trim();
+          if (!rawFilename) {
+            const urlPath = url.split("?")[0].split("/").filter(Boolean).pop() || "transcript";
+            rawFilename = urlPath.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+            if (!rawFilename.includes(".")) rawFilename += ".json";
+          }
+          const safeFilename = rawFilename.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const srcDir = path.join(process.cwd(), "uploads", "transcripts", sourceSlug);
+          await mkdir(srcDir, { recursive: true });
+          let fetchedContent: string;
+          try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 20000);
+            const resp = await fetch(url, { signal: controller.signal, headers: { "User-Agent": "a0p-agent/1.0", "Accept": "application/json, text/plain, */*" } });
+            clearTimeout(timer);
+            if (!resp.ok) return `Error: HTTP ${resp.status} from ${url}`;
+            fetchedContent = await resp.text();
+          } catch (fetchErr: any) {
+            return `Error fetching URL: ${fetchErr.message}`;
+          }
+          if (!fetchedContent || fetchedContent.length < 10) return "Error: fetched content is empty or too short to be a transcript";
+          if (fetchedContent.length > 50_000_000) return `Error: file too large (${(fetchedContent.length / 1024 / 1024).toFixed(1)} MB). Maximum is 50 MB.`;
+          const destPath = path.join(srcDir, safeFilename);
+          await writeFile(destPath, fetchedContent, "utf-8");
+          const filesNow = (await readdir(srcDir)).length;
+          await storage.updateTranscriptSource(sourceSlug, { fileCount: filesNow });
+          return `Fetched and saved "${safeFilename}" (${(fetchedContent.length / 1024).toFixed(1)} KB) into source "${src.displayName}" (slug: ${sourceSlug}). Source now has ${filesNow} file(s). Run scan_transcript_source with slug "${sourceSlug}" to generate an EDCM report.`;
         }
         case "set_brain_preset": {
           const name = (args.presetName || "").trim();
