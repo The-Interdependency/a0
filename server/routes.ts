@@ -1727,7 +1727,7 @@ INSTRUCTIONS:
           let fetchedContent: string;
           try {
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 20000);
+            const timer = setTimeout(() => controller.abort(), 120000);
             const resp = await fetch(url, { signal: controller.signal, headers: { "User-Agent": "a0p-agent/1.0", "Accept": "application/json, text/plain, */*" } });
             clearTimeout(timer);
             if (!resp.ok) return `Error: HTTP ${resp.status} from ${url}`;
@@ -1736,7 +1736,7 @@ INSTRUCTIONS:
             return `Error fetching URL: ${fetchErr.message}`;
           }
           if (!fetchedContent || fetchedContent.length < 10) return "Error: fetched content is empty or too short to be a transcript";
-          if (fetchedContent.length > 50_000_000) return `Error: file too large (${(fetchedContent.length / 1024 / 1024).toFixed(1)} MB). Maximum is 50 MB.`;
+          if (fetchedContent.length > 500_000_000) return `Error: file too large (${(fetchedContent.length / 1024 / 1024).toFixed(1)} MB). Maximum is 500 MB.`;
           const destPath = path.join(srcDir, safeFilename);
           await writeFile(destPath, fetchedContent, "utf-8");
           const filesNow = (await readdir(srcDir)).length;
