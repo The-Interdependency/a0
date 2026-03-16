@@ -1224,6 +1224,21 @@ INSTRUCTIONS:
       parameters: { type: "object" as const, properties: { uploadFilename: { type: "string" as const, description: "Filename of the uploaded zip (from the uploads/ directory)" }, owner: { type: "string" as const, description: "Repository owner" }, repo: { type: "string" as const, description: "Repository name" }, basePath: { type: "string" as const, description: "Base path in repo to push files to (default: root)" }, message: { type: "string" as const, description: "Commit message" }, branch: { type: "string" as const, description: "Branch name (default: main)" } }, required: ["uploadFilename", "owner", "repo", "message"] },
     },
     {
+      name: "list_transcript_sources",
+      description: "List all transcript sources (uploaded conversation files from ChatGPT, Claude, etc.) along with their file counts, last scan time, and EDCM report summary if available.",
+      parameters: { type: "object" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "scan_transcript_source",
+      description: "Run an EDCM cognitive-metric scan on all uploaded files within a transcript source. Returns the resulting report: per-metric averages (CM, DA, DRIFT, DVG, INT, TBF), peak metric, directives fired, and top flagged snippets.",
+      parameters: { type: "object" as const, properties: { slug: { type: "string" as const, description: "Slug identifier of the transcript source to scan" } }, required: ["slug"] },
+    },
+    {
+      name: "get_transcript_report",
+      description: "Retrieve the latest EDCM scan report for a specific transcript source without re-scanning. Returns null if no scan has been run yet.",
+      parameters: { type: "object" as const, properties: { slug: { type: "string" as const, description: "Slug identifier of the transcript source" } }, required: ["slug"] },
+    },
+    {
       name: "set_brain_preset",
       description: "Switch the active brain pipeline preset for the current session. Use to change how models collaborate (e.g., single model, dual synthesis, deep research pipeline).",
       parameters: { type: "object" as const, properties: { presetName: { type: "string" as const, description: "Name or ID of the brain preset to activate" } }, required: ["presetName"] },
@@ -1574,6 +1589,89 @@ INSTRUCTIONS:
             }
           }
           return `Pushed ${results.length} files from ${zipFilename} to ${args.owner}/${args.repo}:\n${results.join("\n")}`;
+        }
+        case "list_transcript_sources": {
+          const sources = await storage.getTranscriptSources();
+          if (sources.length === 0) return "No transcript sources yet. Create one in the Console → Memory → EDCM tab.";
+          const rows = await Promise.all(sources.map(async (src) => {
+            const report = await storage.getLatestTranscriptReport(src.slug);
+            const reportSummary = report
+              ? `scanned: CM=${(report.avgCm * 100).toFixed(0)}% DA=${(report.avgDa * 100).toFixed(0)}% DRIFT=${(report.avgDrift * 100).toFixed(0)}% DVG=${(report.avgDvg * 100).toFixed(0)}% INT=${(report.avgInt * 100).toFixed(0)}% TBF=${(report.avgTbf * 100).toFixed(0)}% peak=${report.peakMetricName}@${(report.peakMetric * 100).toFixed(0)}% msgs=${report.messageCount}`
+              : "not yet scanned";
+            return `• [${src.slug}] "${src.displayName}" — ${src.fileCount} file(s) — ${reportSummary}`;
+          }));
+          return rows.join("\n");
+        }
+        case "scan_transcript_source": {
+          const slug = (args.slug || "").trim();
+          if (!slug) return "Error: slug is required";
+          const source = await storage.getTranscriptSource(slug);
+          if (!source) return `Error: transcript source "${slug}" not found`;
+          const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, slug);
+          let files: string[] = [];
+          try { files = await readdir(dirPath); } catch {}
+          if (files.length === 0) return "Error: no files in this source — upload files first";
+          const metrics = { cm: 0, da: 0, drift: 0, dvg: 0, int: 0, tbf: 0 };
+          let messageCount = 0;
+          let peakMetric = 0;
+          let peakMetricName = "";
+          const directiveCounts: Record<string, number> = {};
+          const topSnippets: Array<{ text: string; peak: number; file: string }> = [];
+          const fileBreakdown: Array<{ file: string; messages: number; avgPeak: number }> = [];
+          for (const filename of files) {
+            const filePath = path.join(dirPath, filename);
+            let content = "";
+            try { content = await readFile(filePath, "utf-8"); } catch { continue; }
+            const messages = extractMessagesFromFile(content, filename);
+            let filePeakSum = 0;
+            for (const text of messages) {
+              if (!text || text.length < 10) continue;
+              const m = computeEdcmMetrics(text);
+              metrics.cm += m.CM.value; metrics.da += m.DA.value; metrics.drift += m.DRIFT.value;
+              metrics.dvg += m.DVG.value; metrics.int += m.INT.value; metrics.tbf += m.TBF.value;
+              messageCount++;
+              const peak = Math.max(m.CM.value, m.DA.value, m.DRIFT.value, m.DVG.value, m.INT.value, m.TBF.value);
+              filePeakSum += peak;
+              if (peak > peakMetric) {
+                peakMetric = peak;
+                if (m.CM.value === peak) peakMetricName = "CM"; else if (m.DA.value === peak) peakMetricName = "DA";
+                else if (m.DRIFT.value === peak) peakMetricName = "DRIFT"; else if (m.DVG.value === peak) peakMetricName = "DVG";
+                else if (m.INT.value === peak) peakMetricName = "INT"; else peakMetricName = "TBF";
+              }
+              if (m.CM.value > 0.8) directiveCounts["CONSTRAINT_REFOCUS"] = (directiveCounts["CONSTRAINT_REFOCUS"] || 0) + 1;
+              if (m.DA.value > 0.8) directiveCounts["DISSONANCE_HALT"] = (directiveCounts["DISSONANCE_HALT"] || 0) + 1;
+              if (m.DRIFT.value > 0.8) directiveCounts["DRIFT_ANCHOR"] = (directiveCounts["DRIFT_ANCHOR"] || 0) + 1;
+              if (m.DVG.value > 0.8) directiveCounts["DIVERGENCE_COMMIT"] = (directiveCounts["DIVERGENCE_COMMIT"] || 0) + 1;
+              if (m.INT.value > 0.8) directiveCounts["INTENSITY_CALM"] = (directiveCounts["INTENSITY_CALM"] || 0) + 1;
+              if (m.TBF.value > 0.8) directiveCounts["BALANCE_CONCISE"] = (directiveCounts["BALANCE_CONCISE"] || 0) + 1;
+              if (peak > 0.6 && topSnippets.length < 10) topSnippets.push({ text: text.slice(0, 200), peak, file: filename });
+            }
+            if (messages.length > 0) fileBreakdown.push({ file: filename, messages: messages.length, avgPeak: filePeakSum / messages.length });
+          }
+          const n = Math.max(1, messageCount);
+          const report = await storage.addTranscriptReport({
+            sourceSlug: slug, messageCount,
+            avgCm: metrics.cm / n, avgDa: metrics.da / n, avgDrift: metrics.drift / n,
+            avgDvg: metrics.dvg / n, avgInt: metrics.int / n, avgTbf: metrics.tbf / n,
+            peakMetric, peakMetricName, directivesFired: directiveCounts,
+            topSnippets: topSnippets.sort((a, b) => b.peak - a.peak), fileBreakdown,
+          });
+          await storage.updateTranscriptSource(slug, { lastScannedAt: new Date(), fileCount: files.length });
+          const dirFired = Object.entries(directiveCounts).map(([d, c]) => `${d}×${c}`).join(", ") || "none";
+          return `Scan complete for "${source.displayName}": ${messageCount} messages across ${files.length} file(s)\nCM=${(report.avgCm * 100).toFixed(1)}% DA=${(report.avgDa * 100).toFixed(1)}% DRIFT=${(report.avgDrift * 100).toFixed(1)}% DVG=${(report.avgDvg * 100).toFixed(1)}% INT=${(report.avgInt * 100).toFixed(1)}% TBF=${(report.avgTbf * 100).toFixed(1)}%\nPeak: ${peakMetricName} @ ${(peakMetric * 100).toFixed(1)}%\nDirectives fired: ${dirFired}`;
+        }
+        case "get_transcript_report": {
+          const slug = (args.slug || "").trim();
+          if (!slug) return "Error: slug is required";
+          const report = await storage.getLatestTranscriptReport(slug);
+          if (!report) return `No scan report found for source "${slug}". Run scan_transcript_source first.`;
+          const dirFired = report.directivesFired && Object.keys(report.directivesFired as object).length > 0
+            ? Object.entries(report.directivesFired as Record<string, number>).map(([d, c]) => `${d}×${c}`).join(", ")
+            : "none";
+          const snippets = (report.topSnippets as any[] || []).slice(0, 3).map((s: any) =>
+            `  [${s.file}] peak=${((s.peak || 0) * 100).toFixed(0)}%: "${s.text.slice(0, 120)}"`
+          ).join("\n");
+          return `EDCM Report for source "${slug}" (scanned ${report.createdAt ? new Date(report.createdAt).toISOString() : "unknown"}):\n${report.messageCount} messages\nCM=${(report.avgCm * 100).toFixed(1)}% DA=${(report.avgDa * 100).toFixed(1)}% DRIFT=${(report.avgDrift * 100).toFixed(1)}% DVG=${(report.avgDvg * 100).toFixed(1)}% INT=${(report.avgInt * 100).toFixed(1)}% TBF=${(report.avgTbf * 100).toFixed(1)}%\nPeak: ${report.peakMetricName} @ ${(report.peakMetric * 100).toFixed(1)}%\nDirectives fired: ${dirFired}\nTop snippets:\n${snippets || "  (none above threshold)"}`;
         }
         case "set_brain_preset": {
           const name = (args.presetName || "").trim();
