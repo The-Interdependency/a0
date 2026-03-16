@@ -6,6 +6,7 @@ import {
   banditArms, customTools, heartbeatTasks, edcmMetricSnapshots,
   memorySeeds, memoryProjections, memoryTensorSnapshots,
   banditCorrelations, systemToggles, discoveryDrafts,
+  transcriptSources, transcriptReports,
   type Conversation, type InsertConversation,
   type Message, type InsertMessage,
   type AutomationTask, type InsertAutomationTask,
@@ -21,6 +22,8 @@ import {
   type BanditCorrelation,
   type SystemToggle,
   type DiscoveryDraft, type InsertDiscoveryDraft,
+  type TranscriptSource, type InsertTranscriptSource,
+  type TranscriptReport, type InsertTranscriptReport,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -127,6 +130,16 @@ export interface IStorage {
   addUserSecret(userId: string, secret: any): Promise<any>;
   deleteUserSecret(userId: string, secretKey: string): Promise<void>;
   getUserSecretValue(userId: string, key: string): Promise<string | undefined>;
+
+  getTranscriptSources(): Promise<TranscriptSource[]>;
+  getTranscriptSource(slug: string): Promise<TranscriptSource | undefined>;
+  createTranscriptSource(data: InsertTranscriptSource): Promise<TranscriptSource>;
+  updateTranscriptSource(slug: string, updates: Partial<TranscriptSource>): Promise<void>;
+  deleteTranscriptSource(slug: string): Promise<void>;
+
+  addTranscriptReport(data: InsertTranscriptReport): Promise<TranscriptReport>;
+  getLatestTranscriptReport(sourceSlug: string): Promise<TranscriptReport | undefined>;
+  getTranscriptReports(sourceSlug: string, limit?: number): Promise<TranscriptReport[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -574,6 +587,49 @@ export class DatabaseStorage implements IStorage {
     const secrets = await this.getUserSecrets(userId);
     const secret = secrets.find((s: any) => s.key === key);
     return secret?.value;
+  }
+
+  async getTranscriptSources(): Promise<TranscriptSource[]> {
+    return db.select().from(transcriptSources).orderBy(transcriptSources.createdAt);
+  }
+
+  async getTranscriptSource(slug: string): Promise<TranscriptSource | undefined> {
+    const [s] = await db.select().from(transcriptSources).where(eq(transcriptSources.slug, slug));
+    return s;
+  }
+
+  async createTranscriptSource(data: InsertTranscriptSource): Promise<TranscriptSource> {
+    const [s] = await db.insert(transcriptSources).values(data).returning();
+    return s;
+  }
+
+  async updateTranscriptSource(slug: string, updates: Partial<TranscriptSource>): Promise<void> {
+    await db.update(transcriptSources).set(updates).where(eq(transcriptSources.slug, slug));
+  }
+
+  async deleteTranscriptSource(slug: string): Promise<void> {
+    await db.delete(transcriptSources).where(eq(transcriptSources.slug, slug));
+    await db.delete(transcriptReports).where(eq(transcriptReports.sourceSlug, slug));
+  }
+
+  async addTranscriptReport(data: InsertTranscriptReport): Promise<TranscriptReport> {
+    const [r] = await db.insert(transcriptReports).values(data).returning();
+    return r;
+  }
+
+  async getLatestTranscriptReport(sourceSlug: string): Promise<TranscriptReport | undefined> {
+    const [r] = await db.select().from(transcriptReports)
+      .where(eq(transcriptReports.sourceSlug, sourceSlug))
+      .orderBy(desc(transcriptReports.createdAt))
+      .limit(1);
+    return r;
+  }
+
+  async getTranscriptReports(sourceSlug: string, limit = 10): Promise<TranscriptReport[]> {
+    return db.select().from(transcriptReports)
+      .where(eq(transcriptReports.sourceSlug, sourceSlug))
+      .orderBy(desc(transcriptReports.createdAt))
+      .limit(limit);
   }
 }
 

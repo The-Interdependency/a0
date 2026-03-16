@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -1140,6 +1140,216 @@ function MetricRow({ metricKey, value, evidence }: { metricKey: string; value: n
   );
 }
 
+function TranscriptSourcesSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
+  const [expandedReport, setExpandedReport] = useState<string | null>(null);
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const { data: sources = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/transcripts/sources"],
+    refetchInterval: 15000,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (displayName: string) => apiRequest("POST", "/api/transcripts/sources", { displayName }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/transcripts/sources"] });
+      setNewName(""); setCreating(false);
+      toast({ title: "Source created" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (slug: string) => apiRequest("DELETE", `/api/transcripts/sources/${slug}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/transcripts/sources"] });
+      toast({ title: "Source deleted" });
+    },
+  });
+
+  const scanMutation = useMutation({
+    mutationFn: (slug: string) => apiRequest("POST", `/api/transcripts/sources/${slug}/scan`),
+    onSuccess: (_, slug) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/transcripts/sources"] });
+      setExpandedReport(slug);
+      toast({ title: "Scan complete" });
+    },
+    onError: (e: any) => toast({ title: "Scan failed", description: (e as any).message, variant: "destructive" }),
+  });
+
+  const uploadFiles = async (slug: string, files: FileList) => {
+    const formData = new FormData();
+    for (const f of Array.from(files)) formData.append("files", f);
+    try {
+      const res = await fetch(`/api/transcripts/sources/${slug}/upload`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error(await res.text());
+      queryClient.invalidateQueries({ queryKey: ["/api/transcripts/sources"] });
+      toast({ title: `Uploaded ${files.length} file(s)` });
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const METRIC_COLORS: Record<string, string> = {
+    CM: "text-yellow-400", DA: "text-red-400", DRIFT: "text-blue-400",
+    DVG: "text-purple-400", INT: "text-orange-400", TBF: "text-green-400",
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="font-semibold text-sm flex items-center gap-2">
+          <FileText className="w-4 h-4 text-blue-400" />
+          Transcript Sources
+        </h3>
+        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setCreating(v => !v)} data-testid="button-new-source">
+          <Plus className="w-3 h-3 mr-1" /> New Source
+        </Button>
+      </div>
+
+      {creating && (
+        <div className="flex gap-2 items-center">
+          <Input
+            className="h-7 text-xs"
+            placeholder="Source name (e.g. ChatGPT, Claude, Work)"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && newName.trim()) createMutation.mutate(newName.trim()); }}
+            autoFocus
+            data-testid="input-new-source-name"
+          />
+          <Button size="sm" className="h-7 text-xs" onClick={() => newName.trim() && createMutation.mutate(newName.trim())} disabled={createMutation.isPending} data-testid="button-create-source">
+            Create
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setCreating(false)}>
+            <X className="w-3 h-3" />
+          </Button>
+        </div>
+      )}
+
+      {isLoading && <Skeleton className="h-12 w-full" />}
+
+      {!isLoading && sources.length === 0 && (
+        <p className="text-xs text-muted-foreground">No transcript sources yet. Create one to upload and scan external conversation files.</p>
+      )}
+
+      <div className="space-y-2">
+        {sources.map((src: any) => {
+          const report = src.latestReport;
+          const isExpanded = expandedSlug === src.slug;
+          const showReport = expandedReport === src.slug && report;
+          return (
+            <div key={src.slug} className="rounded border border-border bg-background p-3 space-y-2" data-testid={`card-source-${src.slug}`}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+                  onClick={() => setExpandedSlug(isExpanded ? null : src.slug)}
+                  data-testid={`button-expand-source-${src.slug}`}
+                >
+                  {isExpanded ? <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" /> : <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
+                  <span className="font-medium text-xs truncate">{src.displayName}</span>
+                  <Badge variant="secondary" className="text-[9px] ml-1">{src.fileCount} file{src.fileCount !== 1 ? "s" : ""}</Badge>
+                  {src.lastScannedAt && <Badge variant="outline" className="text-[9px]">scanned</Badge>}
+                </button>
+                <div className="flex gap-1 flex-shrink-0">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".json,.jsonl,.txt,.csv"
+                    ref={el => { fileRefs.current[src.slug] = el; }}
+                    className="hidden"
+                    onChange={e => { if (e.target.files?.length) uploadFiles(src.slug, e.target.files); e.target.value = ""; }}
+                    data-testid={`input-upload-${src.slug}`}
+                  />
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-[10px]" onClick={() => fileRefs.current[src.slug]?.click()} data-testid={`button-upload-${src.slug}`}>
+                    <Upload className="w-3 h-3 mr-1" /> Upload
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-[10px]" onClick={() => scanMutation.mutate(src.slug)} disabled={scanMutation.isPending || src.fileCount === 0} data-testid={`button-scan-${src.slug}`}>
+                    <Cpu className="w-3 h-3 mr-1" /> {scanMutation.isPending ? "Scanning…" : "Scan"}
+                  </Button>
+                  {report && (
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => setExpandedReport(showReport ? null : src.slug)} data-testid={`button-report-${src.slug}`}>
+                      <Eye className="w-3 h-3 mr-1" /> Report
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px] text-destructive" onClick={() => deleteMutation.mutate(src.slug)} data-testid={`button-delete-source-${src.slug}`}>
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+
+              {showReport && report && (
+                <div className="border-t border-border pt-2 space-y-2">
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <span className="text-[10px] text-muted-foreground">{report.messageCount} messages scanned</span>
+                    {report.peakMetricName && (
+                      <Badge variant="outline" className={`text-[9px] ${METRIC_COLORS[report.peakMetricName] || ""}`}>
+                        peak: {report.peakMetricName} {(report.peakMetric * 100).toFixed(0)}%
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { key: "CM", val: report.avgCm, label: "Constraint" },
+                      { key: "DA", val: report.avgDa, label: "Dissonance" },
+                      { key: "DRIFT", val: report.avgDrift, label: "Drift" },
+                      { key: "DVG", val: report.avgDvg, label: "Divergence" },
+                      { key: "INT", val: report.avgInt, label: "Intensity" },
+                      { key: "TBF", val: report.avgTbf, label: "Balance" },
+                    ].map(({ key, val, label }) => (
+                      <div key={key} className="text-center p-1.5 rounded bg-card border border-border">
+                        <p className={`font-mono font-bold text-[10px] ${METRIC_COLORS[key]}`}>{key}</p>
+                        <p className="text-[9px] text-muted-foreground">{label}</p>
+                        <p className="font-mono text-xs">{((val || 0) * 100).toFixed(1)}%</p>
+                        <div className="w-full bg-muted rounded-full h-1 mt-1">
+                          <div className="bg-primary rounded-full h-1" style={{ width: `${(val || 0) * 100}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {report.directivesFired && Object.keys(report.directivesFired).length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-muted-foreground font-medium">Directives fired:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(report.directivesFired as Record<string, number>).map(([dir, count]) => (
+                          <Badge key={dir} variant="secondary" className="text-[9px]">{dir} ×{count}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {report.topSnippets && (report.topSnippets as any[]).length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-muted-foreground font-medium">Top flagged snippets:</p>
+                      {(report.topSnippets as any[]).slice(0, 3).map((s: any, i: number) => (
+                        <div key={i} className="text-[9px] bg-muted rounded p-1.5 font-mono leading-relaxed">
+                          <span className="text-muted-foreground">[{s.file}] peak={((s.peak || 0) * 100).toFixed(0)}%</span>
+                          <br />
+                          {s.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {isExpanded && !showReport && (
+                <p className="text-[10px] text-muted-foreground">
+                  {src.fileCount === 0 ? "Upload files to begin." : report ? "Scan complete. Click Report to view results." : "Files ready. Click Scan to generate EDCM report."}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function EdcmTab() {
   const { data: snapshots = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/edcm/snapshots"],
@@ -1166,6 +1376,8 @@ function EdcmTab() {
   return (
     <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
+
+        <TranscriptSourcesSection />
 
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">

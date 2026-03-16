@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { readdir, readFile, rename, stat, writeFile, mkdir } from "fs/promises";
+import { readdir, readFile, rename, stat, writeFile, mkdir, unlink, rm } from "fs/promises";
 import path from "path";
 import archiver from "archiver";
 import multer from "multer";
@@ -4168,6 +4168,283 @@ IMPORTANT RULES:
       const snapshots = await storage.getEdcmMetricSnapshots(limit);
       const directiveHistory = getEdcmDirectiveHistory();
       res.json({ snapshots, directiveHistory });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ TRANSCRIPT SOURCES ENDPOINTS ============
+
+  const TRANSCRIPT_SOURCES_DIR = path.join(process.cwd(), "uploads", "transcripts");
+  mkdir(TRANSCRIPT_SOURCES_DIR, { recursive: true }).catch(() => {});
+
+  function slugify(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+  }
+
+  function extractMessagesFromFile(content: string, filename: string): string[] {
+    const texts: string[] = [];
+    const lower = filename.toLowerCase();
+    try {
+      if (lower.endsWith(".jsonl")) {
+        for (const line of content.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const obj = JSON.parse(trimmed);
+            const text = obj.content || obj.text || obj.message || obj.body || "";
+            if (typeof text === "string" && text.trim()) texts.push(text.trim());
+          } catch {}
+        }
+        return texts;
+      }
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (item.mapping) {
+            for (const node of Object.values(item.mapping) as any[]) {
+              const msg = node?.message;
+              if (msg?.content?.parts) {
+                const text = msg.content.parts.filter((p: any) => typeof p === "string").join(" ").trim();
+                if (text) texts.push(text);
+              }
+            }
+          } else if (typeof item.content === "string" && item.content.trim()) {
+            texts.push(item.content.trim());
+          } else if (typeof item.text === "string" && item.text.trim()) {
+            texts.push(item.text.trim());
+          }
+        }
+        return texts;
+      }
+      if (parsed.chat_messages) {
+        for (const msg of parsed.chat_messages) {
+          const text = msg.text || msg.content || "";
+          if (typeof text === "string" && text.trim()) texts.push(text.trim());
+        }
+        return texts;
+      }
+      if (parsed.mapping) {
+        for (const node of Object.values(parsed.mapping) as any[]) {
+          const msg = (node as any)?.message;
+          if (msg?.content?.parts) {
+            const text = msg.content.parts.filter((p: any) => typeof p === "string").join(" ").trim();
+            if (text) texts.push(text);
+          }
+        }
+        return texts;
+      }
+      if (parsed.messages && Array.isArray(parsed.messages)) {
+        for (const msg of parsed.messages) {
+          const text = msg.content || msg.text || "";
+          if (typeof text === "string" && text.trim()) texts.push(text.trim());
+        }
+        return texts;
+      }
+    } catch {}
+    for (const para of content.split(/\n{2,}/)) {
+      const trimmed = para.trim();
+      if (trimmed.length > 20) texts.push(trimmed);
+    }
+    return texts;
+  }
+
+  app.get("/api/transcripts/sources", async (_req, res) => {
+    try {
+      const sources = await storage.getTranscriptSources();
+      const result = await Promise.all(sources.map(async (src) => {
+        const report = await storage.getLatestTranscriptReport(src.slug);
+        const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, src.slug);
+        let fileCount = 0;
+        try { fileCount = (await readdir(dirPath)).length; } catch {}
+        return { ...src, fileCount, latestReport: report || null };
+      }));
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/transcripts/sources", async (req, res) => {
+    try {
+      const { displayName } = req.body;
+      if (!displayName?.trim()) return res.status(400).json({ error: "displayName required" });
+      const slug = slugify(displayName.trim());
+      if (!slug) return res.status(400).json({ error: "Invalid name" });
+      const existing = await storage.getTranscriptSource(slug);
+      if (existing) return res.status(409).json({ error: "Source already exists", slug });
+      const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, slug);
+      await mkdir(dirPath, { recursive: true });
+      const source = await storage.createTranscriptSource({ slug, displayName: displayName.trim(), fileCount: 0 });
+      res.json(source);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/transcripts/sources/:slug", async (req, res) => {
+    try {
+      const { slug } = req.params;
+      const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, slug);
+      await rm(dirPath, { recursive: true, force: true });
+      await storage.deleteTranscriptSource(slug);
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  const transcriptUpload = multer({
+    storage: multer.diskStorage({
+      destination: async (req: any, _file, cb) => {
+        const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, req.params.slug);
+        await mkdir(dirPath, { recursive: true });
+        cb(null, dirPath);
+      },
+      filename: (_req, file, cb) => cb(null, file.originalname),
+    }),
+    limits: { fileSize: 50 * 1024 * 1024 },
+  });
+
+  app.post("/api/transcripts/sources/:slug/upload", transcriptUpload.array("files", 20), async (req: any, res) => {
+    try {
+      const { slug } = req.params;
+      const source = await storage.getTranscriptSource(slug);
+      if (!source) return res.status(404).json({ error: "Source not found" });
+      const files = (req.files as any[]) || [];
+      const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, slug);
+      let fileCount = 0;
+      try { fileCount = (await readdir(dirPath)).length; } catch {}
+      await storage.updateTranscriptSource(slug, { fileCount });
+      res.json({ uploaded: files.map((f: any) => f.originalname), fileCount });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/transcripts/sources/:slug/files", async (req, res) => {
+    try {
+      const { slug } = req.params;
+      const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, slug);
+      let files: string[] = [];
+      try { files = await readdir(dirPath); } catch {}
+      const fileInfos = await Promise.all(files.map(async (f) => {
+        const filePath = path.join(dirPath, f);
+        const s = await stat(filePath).catch(() => null);
+        return { name: f, size: s?.size || 0, modified: s?.mtime };
+      }));
+      res.json(fileInfos);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/transcripts/sources/:slug/files/:filename", async (req, res) => {
+    try {
+      const { slug, filename } = req.params;
+      const filePath = path.join(TRANSCRIPT_SOURCES_DIR, slug, filename);
+      const safe = filePath.startsWith(TRANSCRIPT_SOURCES_DIR);
+      if (!safe) return res.status(400).json({ error: "Invalid path" });
+      await unlink(filePath);
+      const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, slug);
+      let fileCount = 0;
+      try { fileCount = (await readdir(dirPath)).length; } catch {}
+      await storage.updateTranscriptSource(slug, { fileCount });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/transcripts/sources/:slug/scan", async (req, res) => {
+    try {
+      const { slug } = req.params;
+      const source = await storage.getTranscriptSource(slug);
+      if (!source) return res.status(404).json({ error: "Source not found" });
+      const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, slug);
+      let files: string[] = [];
+      try { files = await readdir(dirPath); } catch {}
+      if (files.length === 0) return res.status(400).json({ error: "No files in source folder" });
+
+      const metrics = { cm: 0, da: 0, drift: 0, dvg: 0, int: 0, tbf: 0 };
+      let messageCount = 0;
+      let peakMetric = 0;
+      let peakMetricName = "";
+      const directiveCounts: Record<string, number> = {};
+      const topSnippets: Array<{ text: string; peak: number; file: string }> = [];
+      const fileBreakdown: Array<{ file: string; messages: number; avgPeak: number }> = [];
+
+      for (const filename of files) {
+        const filePath = path.join(dirPath, filename);
+        let content = "";
+        try { content = await readFile(filePath, "utf-8"); } catch { continue; }
+        const messages = extractMessagesFromFile(content, filename);
+        let filePeakSum = 0;
+        for (const text of messages) {
+          if (!text || text.length < 10) continue;
+          const m = computeEdcmMetrics(text);
+          metrics.cm += m.CM.value;
+          metrics.da += m.DA.value;
+          metrics.drift += m.DRIFT.value;
+          metrics.dvg += m.DVG.value;
+          metrics.int += m.INT.value;
+          metrics.tbf += m.TBF.value;
+          messageCount++;
+          const peak = Math.max(m.CM.value, m.DA.value, m.DRIFT.value, m.DVG.value, m.INT.value, m.TBF.value);
+          filePeakSum += peak;
+          if (peak > peakMetric) {
+            peakMetric = peak;
+            if (m.CM.value === peak) peakMetricName = "CM";
+            else if (m.DA.value === peak) peakMetricName = "DA";
+            else if (m.DRIFT.value === peak) peakMetricName = "DRIFT";
+            else if (m.DVG.value === peak) peakMetricName = "DVG";
+            else if (m.INT.value === peak) peakMetricName = "INT";
+            else peakMetricName = "TBF";
+          }
+          if (m.CM.value > 0.8) directiveCounts["CONSTRAINT_REFOCUS"] = (directiveCounts["CONSTRAINT_REFOCUS"] || 0) + 1;
+          if (m.DA.value > 0.8) directiveCounts["DISSONANCE_HALT"] = (directiveCounts["DISSONANCE_HALT"] || 0) + 1;
+          if (m.DRIFT.value > 0.8) directiveCounts["DRIFT_ANCHOR"] = (directiveCounts["DRIFT_ANCHOR"] || 0) + 1;
+          if (m.DVG.value > 0.8) directiveCounts["DIVERGENCE_COMMIT"] = (directiveCounts["DIVERGENCE_COMMIT"] || 0) + 1;
+          if (m.INT.value > 0.8) directiveCounts["INTENSITY_CALM"] = (directiveCounts["INTENSITY_CALM"] || 0) + 1;
+          if (m.TBF.value > 0.8) directiveCounts["BALANCE_CONCISE"] = (directiveCounts["BALANCE_CONCISE"] || 0) + 1;
+          if (peak > 0.6 && topSnippets.length < 10) {
+            topSnippets.push({ text: text.slice(0, 200), peak, file: filename });
+          }
+        }
+        if (messages.length > 0) {
+          fileBreakdown.push({ file: filename, messages: messages.length, avgPeak: filePeakSum / messages.length });
+        }
+      }
+
+      const n = Math.max(1, messageCount);
+      const report = await storage.addTranscriptReport({
+        sourceSlug: slug,
+        messageCount,
+        avgCm: metrics.cm / n,
+        avgDa: metrics.da / n,
+        avgDrift: metrics.drift / n,
+        avgDvg: metrics.dvg / n,
+        avgInt: metrics.int / n,
+        avgTbf: metrics.tbf / n,
+        peakMetric,
+        peakMetricName,
+        directivesFired: directiveCounts,
+        topSnippets: topSnippets.sort((a, b) => b.peak - a.peak),
+        fileBreakdown,
+      });
+      await storage.updateTranscriptSource(slug, { lastScannedAt: new Date(), fileCount: files.length });
+      res.json({ report, messageCount, filesScanned: files.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/transcripts/sources/:slug/report", async (req, res) => {
+    try {
+      const { slug } = req.params;
+      const report = await storage.getLatestTranscriptReport(slug);
+      if (!report) return res.status(404).json({ error: "No report yet — run a scan first" });
+      res.json(report);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

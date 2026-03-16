@@ -284,3 +284,38 @@ export const discoveryDrafts = pgTable("discovery_drafts", {
 export const insertDiscoveryDraftSchema = createInsertSchema(discoveryDrafts).omit({ id: true, createdAt: true });
 export type DiscoveryDraft = typeof discoveryDrafts.$inferSelect;
 export type InsertDiscoveryDraft = z.infer<typeof insertDiscoveryDraftSchema>;
+
+export const transcriptSources = pgTable("transcript_sources", {
+  id: serial("id").primaryKey(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 200 }).notNull(),
+  fileCount: integer("file_count").notNull().default(0),
+  lastScannedAt: timestamp("last_scanned_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertTranscriptSourceSchema = createInsertSchema(transcriptSources).omit({ id: true, createdAt: true });
+export type TranscriptSource = typeof transcriptSources.$inferSelect;
+export type InsertTranscriptSource = z.infer<typeof insertTranscriptSourceSchema>;
+
+export const transcriptReports = pgTable("transcript_reports", {
+  id: serial("id").primaryKey(),
+  sourceSlug: varchar("source_slug", { length: 100 }).notNull(),
+  messageCount: integer("message_count").notNull().default(0),
+  avgCm: real("avg_cm").default(0),
+  avgDa: real("avg_da").default(0),
+  avgDrift: real("avg_drift").default(0),
+  avgDvg: real("avg_dvg").default(0),
+  avgInt: real("avg_int").default(0),
+  avgTbf: real("avg_tbf").default(0),
+  peakMetric: real("peak_metric").default(0),
+  peakMetricName: text("peak_metric_name"),
+  directivesFired: jsonb("directives_fired"),
+  topSnippets: jsonb("top_snippets"),
+  fileBreakdown: jsonb("file_breakdown"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertTranscriptReportSchema = createInsertSchema(transcriptReports).omit({ id: true, createdAt: true });
+export type TranscriptReport = typeof transcriptReports.$inferSelect;
+export type InsertTranscriptReport = z.infer<typeof insertTranscriptReportSchema>;
