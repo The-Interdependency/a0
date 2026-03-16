@@ -80,19 +80,98 @@ const TAB_TO_GROUP: Record<TabId, string> = {
   tools: "tools", credentials: "tools", context: "tools", export: "tools",
 };
 
+type TabGroup = { id: string; label: string; icon: any; tabs: Array<{ id: TabId; label: string; icon: any }> };
+
+const FREE_GROUPS: TabGroup[] = [
+  { id: "analysis", label: "Analysis", icon: FileText, tabs: [{ id: "edcm", label: "Transcripts", icon: FileText }] },
+];
+const LEGAL_GROUPS: TabGroup[] = [
+  { id: "cases", label: "Cases", icon: Scale, tabs: [{ id: "edcm", label: "Case Files", icon: Scale }] },
+  { id: "export", label: "Export", icon: Download, tabs: [{ id: "export", label: "Export", icon: Download }] },
+];
+const POLITICAL_GROUPS: TabGroup[] = [
+  { id: "analysis", label: "Analysis", icon: BarChart2, tabs: [{ id: "edcm", label: "Transcripts", icon: BarChart2 }] },
+  { id: "export", label: "Export", icon: Download, tabs: [{ id: "export", label: "Export", icon: Download }] },
+];
+const ALL_GROUPS: TabGroup[] = [...TAB_GROUPS];
+
+const PERSONA_GROUPS: Record<Persona, TabGroup[]> = {
+  free: FREE_GROUPS,
+  legal: LEGAL_GROUPS,
+  researcher: ALL_GROUPS,
+  political: POLITICAL_GROUPS,
+  founder: ALL_GROUPS,
+};
+
+type MetricLabelMap = Record<string, { label: string; desc: string }>;
+const LEGAL_METRIC_LABELS: MetricLabelMap = {
+  CM: { label: "Hedging / Restriction", desc: "How qualified or constrained was the witness's language" },
+  DA: { label: "Inconsistency", desc: "Contradictions within or across statements" },
+  DRIFT: { label: "Coherence Loss", desc: "Where testimony lost structure or wandered from the question" },
+  DVG: { label: "Frame Break", desc: "Moments the witness departed from their established position" },
+  INT: { label: "Pressure / Intensity", desc: "High-stakes or emotionally loaded exchanges" },
+  TBF: { label: "Statement Balance", desc: "Overall structural reliability of the testimony" },
+};
+const POLITICAL_METRIC_LABELS: MetricLabelMap = {
+  CM: { label: "Message Discipline", desc: "How on-message the speaker stayed" },
+  DA: { label: "Narrative Contradiction", desc: "Internal contradictions or pivot points" },
+  DRIFT: { label: "Talking-Point Drift", desc: "Moments the speaker lost the thread" },
+  DVG: { label: "Frame Departure", desc: "Breaks from the speaker's established position" },
+  INT: { label: "Rhetorical Pressure", desc: "High-stakes, emotionally charged moments" },
+  TBF: { label: "Message Consistency", desc: "Overall coherence of the communication" },
+};
+const DEFAULT_METRIC_LABELS: MetricLabelMap = {
+  CM: { label: "Constraint Mismatch", desc: "1 - Jaccard(C_declared, C_observed)" },
+  DA: { label: "Dissonance Accum.", desc: "sigmoid(w·contradictions + retractions + repeats)" },
+  DRIFT: { label: "Drift", desc: "1 - cosine_similarity(x_t, goal)" },
+  DVG: { label: "Divergence", desc: "entropy(topic_distribution) normalized" },
+  INT: { label: "Intensity", desc: "clamp01(caps + punct + lex + tempo)" },
+  TBF: { label: "Turn-Balance", desc: "Gini coefficient on actor token shares" },
+};
+const PERSONA_METRIC_LABELS: Record<Persona, MetricLabelMap> = {
+  free: DEFAULT_METRIC_LABELS,
+  legal: LEGAL_METRIC_LABELS,
+  researcher: DEFAULT_METRIC_LABELS,
+  political: POLITICAL_METRIC_LABELS,
+  founder: DEFAULT_METRIC_LABELS,
+};
+
+const PersonaContext = createContext<Persona>("free");
+const usePersonaCtx = () => useContext(PersonaContext);
+
 export default function ConsolePage() {
+  const { persona } = usePersona();
+  const visibleGroups = PERSONA_GROUPS[persona] ?? ALL_GROUPS;
+  const defaultTab = visibleGroups[0]?.tabs[0]?.id ?? "edcm";
+
   const [activeTab, setActiveTab] = useState<TabId>(() => {
-    return (localStorage.getItem("a0p-console-tab") as TabId) || "workflow";
+    const saved = localStorage.getItem("a0p-console-tab") as TabId;
+    const inGroup = visibleGroups.some(g => g.tabs.some(t => t.id === saved));
+    return inGroup ? saved : defaultTab;
   });
   const [activeGroup, setActiveGroup] = useState<string>(() => {
-    const savedTab = (localStorage.getItem("a0p-console-tab") as TabId) || "workflow";
-    return TAB_TO_GROUP[savedTab] || "agent";
+    const saved = localStorage.getItem("a0p-console-tab") as TabId;
+    const owning = visibleGroups.find(g => g.tabs.some(t => t.id === saved));
+    return owning?.id ?? visibleGroups[0]?.id ?? "agent";
   });
   const { orientation, toggleOrientation, isVertical } = useSliderOrientation();
 
+  useEffect(() => {
+    const groups = PERSONA_GROUPS[persona] ?? ALL_GROUPS;
+    const owning = groups.find(g => g.tabs.some(t => t.id === activeTab));
+    if (owning) {
+      setActiveGroup(owning.id);
+    } else {
+      const firstTab = groups[0]?.tabs[0]?.id ?? "edcm";
+      setActiveTab(firstTab);
+      setActiveGroup(groups[0]?.id ?? "analysis");
+      localStorage.setItem("a0p-console-tab", firstTab);
+    }
+  }, [persona]);
+
   function selectGroup(groupId: string) {
     setActiveGroup(groupId);
-    const group = TAB_GROUPS.find(g => g.id === groupId);
+    const group = visibleGroups.find(g => g.id === groupId);
     if (group && !group.tabs.find(t => t.id === activeTab)) {
       const firstTab = group.tabs[0].id;
       setActiveTab(firstTab);
@@ -105,25 +184,28 @@ export default function ConsolePage() {
     localStorage.setItem("a0p-console-tab", tabId);
   }
 
-  const currentGroup = TAB_GROUPS.find(g => g.id === activeGroup) || TAB_GROUPS[0];
+  const currentGroup = visibleGroups.find(g => g.id === activeGroup) ?? visibleGroups[0];
 
   return (
+    <PersonaContext.Provider value={persona}>
     <div className="flex flex-col h-full">
       <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0">
         <Shield className="w-4 h-4 text-primary flex-shrink-0" />
         <span className="font-semibold text-sm flex-1">Console</span>
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={toggleOrientation}
-          data-testid="button-toggle-slider-orientation"
-        >
-          {isVertical ? <ArrowUpDown className="w-4 h-4" /> : <ArrowLeftRight className="w-4 h-4" />}
-        </Button>
+        {(persona === "researcher" || persona === "founder") && (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={toggleOrientation}
+            data-testid="button-toggle-slider-orientation"
+          >
+            {isVertical ? <ArrowUpDown className="w-4 h-4" /> : <ArrowLeftRight className="w-4 h-4" />}
+          </Button>
+        )}
       </header>
 
       <div className="flex gap-1 px-2 py-1.5 bg-card border-b border-border flex-shrink-0 overflow-x-auto">
-        {TAB_GROUPS.map((group) => (
+        {visibleGroups.map((group) => (
           <button
             key={group.id}
             onClick={() => selectGroup(group.id)}
@@ -142,7 +224,7 @@ export default function ConsolePage() {
       </div>
 
       <div className="flex border-b border-border bg-card overflow-x-auto flex-shrink-0">
-        {currentGroup.tabs.map((tab) => (
+        {currentGroup?.tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => selectTab(tab.id)}
@@ -178,6 +260,7 @@ export default function ConsolePage() {
         {activeTab === "psi" && <PsiTab />}
       </div>
     </div>
+    </PersonaContext.Provider>
   );
 }
 
@@ -1075,14 +1158,7 @@ function MetricsTab({ orientation, isVertical }: SliderOrientationProps) {
   );
 }
 
-const METRIC_LABELS: Record<string, { label: string; desc: string }> = {
-  CM: { label: "Constraint Mismatch", desc: "1 - Jaccard(C_declared, C_observed)" },
-  DA: { label: "Dissonance Accum.", desc: "sigmoid(w·contradictions + retractions + repeats)" },
-  DRIFT: { label: "Drift", desc: "1 - cosine_similarity(x_t, goal)" },
-  DVG: { label: "Divergence", desc: "entropy(topic_distribution) normalized" },
-  INT: { label: "Intensity", desc: "clamp01(caps + punct + lex + tempo)" },
-  TBF: { label: "Turn-Balance", desc: "Gini coefficient on actor token shares" },
-};
+const METRIC_LABELS = DEFAULT_METRIC_LABELS;
 
 const ALERT_NAMES: Record<string, string> = {
   CM: "ALERT_CM_HIGH",
@@ -1100,7 +1176,9 @@ function alertColor(value: number): { bg: string; text: string; label: string } 
 }
 
 function MetricRow({ metricKey, value, evidence }: { metricKey: string; value: number; evidence: string[] }) {
-  const info = METRIC_LABELS[metricKey] || { label: metricKey, desc: "" };
+  const persona = usePersonaCtx();
+  const labels = PERSONA_METRIC_LABELS[persona] ?? DEFAULT_METRIC_LABELS;
+  const info = labels[metricKey] || { label: metricKey, desc: "" };
   const alert = alertColor(value);
   const pct = Math.round(value * 100);
 
@@ -1196,6 +1274,8 @@ function TranscriptSourcesSection() {
     }
   };
 
+  const persona = usePersonaCtx();
+  const metricLabels = PERSONA_METRIC_LABELS[persona] ?? DEFAULT_METRIC_LABELS;
   const METRIC_COLORS: Record<string, string> = {
     CM: "text-yellow-400", DA: "text-red-400", DRIFT: "text-blue-400",
     DVG: "text-purple-400", INT: "text-orange-400", TBF: "text-green-400",
@@ -1296,13 +1376,15 @@ function TranscriptSourcesSection() {
                   </div>
                   <div className="grid grid-cols-3 gap-1.5">
                     {[
-                      { key: "CM", val: report.avgCm, label: "Constraint" },
-                      { key: "DA", val: report.avgDa, label: "Dissonance" },
-                      { key: "DRIFT", val: report.avgDrift, label: "Drift" },
-                      { key: "DVG", val: report.avgDvg, label: "Divergence" },
-                      { key: "INT", val: report.avgInt, label: "Intensity" },
-                      { key: "TBF", val: report.avgTbf, label: "Balance" },
-                    ].map(({ key, val, label }) => (
+                      { key: "CM", val: report.avgCm },
+                      { key: "DA", val: report.avgDa },
+                      { key: "DRIFT", val: report.avgDrift },
+                      { key: "DVG", val: report.avgDvg },
+                      { key: "INT", val: report.avgInt },
+                      { key: "TBF", val: report.avgTbf },
+                    ].map(({ key, val }) => {
+                      const label = metricLabels[key]?.label ?? key;
+                      return (
                       <div key={key} className="text-center p-1.5 rounded bg-card border border-border">
                         <p className={`font-mono font-bold text-[10px] ${METRIC_COLORS[key]}`}>{key}</p>
                         <p className="text-[9px] text-muted-foreground">{label}</p>
@@ -1311,7 +1393,8 @@ function TranscriptSourcesSection() {
                           <div className="bg-primary rounded-full h-1" style={{ width: `${(val || 0) * 100}%` }} />
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   {report.directivesFired && Object.keys(report.directivesFired).length > 0 && (
                     <div className="space-y-1">
