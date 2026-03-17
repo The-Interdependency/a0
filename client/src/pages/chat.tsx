@@ -89,7 +89,13 @@ export default function ChatPage() {
   const [toolActions, setToolActions] = useState<ToolAction[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem("a0p-selected-model") || "agent";
+    const stored = localStorage.getItem("a0p-selected-model");
+    // "gemini" was the old default — migrate to the Grok-backed agent
+    if (!stored || stored === "gemini") {
+      localStorage.setItem("a0p-selected-model", "agent");
+      return "agent";
+    }
+    return stored;
   });
 
   function handleSetModel(model: string) {
