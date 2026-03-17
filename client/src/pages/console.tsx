@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,8 @@ import { Input } from "@/components/ui/input";
 import {
   Activity, AlertTriangle, Brain, ChevronDown, ChevronRight, DollarSign, Download, FileText, Filter,
   Heart, Key, OctagonX, Play, RefreshCw, ScrollText, Shield, Upload, Zap, Check, X, Wrench, Plus, Trash2, ToggleLeft, TestTube,
-  Clock, Sparkles, Target, Settings, Lock, Eye, EyeOff, ArrowUpDown, ArrowLeftRight, Cpu, GitBranch, Star, Gauge, Scale, BarChart2,
+  Clock, Sparkles, Target, Settings, Lock, Eye, EyeOff, ArrowUpDown, ArrowLeftRight, Cpu, GitBranch, Star, Gauge,
 } from "lucide-react";
-import { usePersona, type Persona } from "@/hooks/use-persona";
 import { useSliderOrientation } from "@/hooks/use-slider-orientation";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -82,44 +81,9 @@ const TAB_TO_GROUP: Record<TabId, string> = {
 
 type TabGroup = { id: string; label: string; icon: any; tabs: Array<{ id: TabId; label: string; icon: any }> };
 
-const FREE_GROUPS: TabGroup[] = [
-  { id: "analysis", label: "Analysis", icon: FileText, tabs: [{ id: "edcm", label: "Transcripts", icon: FileText }] },
-];
-const LEGAL_GROUPS: TabGroup[] = [
-  { id: "cases", label: "Cases", icon: Scale, tabs: [{ id: "edcm", label: "Case Files", icon: Scale }] },
-  { id: "export", label: "Export", icon: Download, tabs: [{ id: "export", label: "Export", icon: Download }] },
-];
-const POLITICAL_GROUPS: TabGroup[] = [
-  { id: "analysis", label: "Analysis", icon: BarChart2, tabs: [{ id: "edcm", label: "Transcripts", icon: BarChart2 }] },
-  { id: "export", label: "Export", icon: Download, tabs: [{ id: "export", label: "Export", icon: Download }] },
-];
 const ALL_GROUPS: TabGroup[] = [...TAB_GROUPS];
 
-const PERSONA_GROUPS: Record<Persona, TabGroup[]> = {
-  free: ALL_GROUPS,
-  legal: ALL_GROUPS,
-  researcher: ALL_GROUPS,
-  political: ALL_GROUPS,
-  founder: ALL_GROUPS,
-};
-
 type MetricLabelMap = Record<string, { label: string; desc: string }>;
-const LEGAL_METRIC_LABELS: MetricLabelMap = {
-  CM: { label: "Hedging / Restriction", desc: "How qualified or constrained was the witness's language" },
-  DA: { label: "Inconsistency", desc: "Contradictions within or across statements" },
-  DRIFT: { label: "Coherence Loss", desc: "Where testimony lost structure or wandered from the question" },
-  DVG: { label: "Frame Break", desc: "Moments the witness departed from their established position" },
-  INT: { label: "Pressure / Intensity", desc: "High-stakes or emotionally loaded exchanges" },
-  TBF: { label: "Statement Balance", desc: "Overall structural reliability of the testimony" },
-};
-const POLITICAL_METRIC_LABELS: MetricLabelMap = {
-  CM: { label: "Message Discipline", desc: "How on-message the speaker stayed" },
-  DA: { label: "Narrative Contradiction", desc: "Internal contradictions or pivot points" },
-  DRIFT: { label: "Talking-Point Drift", desc: "Moments the speaker lost the thread" },
-  DVG: { label: "Frame Departure", desc: "Breaks from the speaker's established position" },
-  INT: { label: "Rhetorical Pressure", desc: "High-stakes, emotionally charged moments" },
-  TBF: { label: "Message Consistency", desc: "Overall coherence of the communication" },
-};
 const DEFAULT_METRIC_LABELS: MetricLabelMap = {
   CM: { label: "Constraint Mismatch", desc: "1 - Jaccard(C_declared, C_observed)" },
   DA: { label: "Dissonance Accum.", desc: "sigmoid(w·contradictions + retractions + repeats)" },
@@ -128,20 +92,8 @@ const DEFAULT_METRIC_LABELS: MetricLabelMap = {
   INT: { label: "Intensity", desc: "clamp01(caps + punct + lex + tempo)" },
   TBF: { label: "Turn-Balance", desc: "Gini coefficient on actor token shares" },
 };
-const PERSONA_METRIC_LABELS: Record<Persona, MetricLabelMap> = {
-  free: DEFAULT_METRIC_LABELS,
-  legal: LEGAL_METRIC_LABELS,
-  researcher: DEFAULT_METRIC_LABELS,
-  political: POLITICAL_METRIC_LABELS,
-  founder: DEFAULT_METRIC_LABELS,
-};
-
-const PersonaContext = createContext<Persona>("free");
-const usePersonaCtx = () => useContext(PersonaContext);
-
 export default function ConsolePage() {
-  const { persona } = usePersona();
-  const visibleGroups = PERSONA_GROUPS[persona] ?? ALL_GROUPS;
+  const visibleGroups = ALL_GROUPS;
   const defaultTab = visibleGroups[0]?.tabs[0]?.id ?? "edcm";
 
   const [activeTab, setActiveTab] = useState<TabId>(() => {
@@ -155,19 +107,6 @@ export default function ConsolePage() {
     return owning?.id ?? visibleGroups[0]?.id ?? "agent";
   });
   const { orientation, toggleOrientation, isVertical } = useSliderOrientation();
-
-  useEffect(() => {
-    const groups = PERSONA_GROUPS[persona] ?? ALL_GROUPS;
-    const owning = groups.find(g => g.tabs.some(t => t.id === activeTab));
-    if (owning) {
-      setActiveGroup(owning.id);
-    } else {
-      const firstTab = groups[0]?.tabs[0]?.id ?? "edcm";
-      setActiveTab(firstTab);
-      setActiveGroup(groups[0]?.id ?? "analysis");
-      localStorage.setItem("a0p-console-tab", firstTab);
-    }
-  }, [persona]);
 
   function selectGroup(groupId: string) {
     setActiveGroup(groupId);
@@ -187,21 +126,18 @@ export default function ConsolePage() {
   const currentGroup = visibleGroups.find(g => g.id === activeGroup) ?? visibleGroups[0];
 
   return (
-    <PersonaContext.Provider value={persona}>
     <div className="flex flex-col h-full">
       <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0">
         <Shield className="w-4 h-4 text-primary flex-shrink-0" />
         <span className="font-semibold text-sm flex-1">Console</span>
-        {(persona === "researcher" || persona === "founder") && (
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={toggleOrientation}
-            data-testid="button-toggle-slider-orientation"
-          >
-            {isVertical ? <ArrowUpDown className="w-4 h-4" /> : <ArrowLeftRight className="w-4 h-4" />}
-          </Button>
-        )}
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={toggleOrientation}
+          data-testid="button-toggle-slider-orientation"
+        >
+          {isVertical ? <ArrowUpDown className="w-4 h-4" /> : <ArrowLeftRight className="w-4 h-4" />}
+        </Button>
       </header>
 
       <div className="flex gap-1 px-2 py-1.5 bg-card border-b border-border flex-shrink-0 overflow-x-auto">
@@ -260,7 +196,6 @@ export default function ConsolePage() {
         {activeTab === "psi" && <PsiTab />}
       </div>
     </div>
-    </PersonaContext.Provider>
   );
 }
 
@@ -1176,8 +1111,7 @@ function alertColor(value: number): { bg: string; text: string; label: string } 
 }
 
 function MetricRow({ metricKey, value, evidence }: { metricKey: string; value: number; evidence: string[] }) {
-  const persona = usePersonaCtx();
-  const labels = PERSONA_METRIC_LABELS[persona] ?? DEFAULT_METRIC_LABELS;
+  const labels = DEFAULT_METRIC_LABELS;
   const info = labels[metricKey] || { label: metricKey, desc: "" };
   const alert = alertColor(value);
   const pct = Math.round(value * 100);
@@ -1274,8 +1208,7 @@ function TranscriptSourcesSection() {
     }
   };
 
-  const persona = usePersonaCtx();
-  const metricLabels = PERSONA_METRIC_LABELS[persona] ?? DEFAULT_METRIC_LABELS;
+  const metricLabels = DEFAULT_METRIC_LABELS;
   const METRIC_COLORS: Record<string, string> = {
     CM: "text-yellow-400", DA: "text-red-400", DRIFT: "text-blue-400",
     DVG: "text-purple-400", INT: "text-orange-400", TBF: "text-green-400",
