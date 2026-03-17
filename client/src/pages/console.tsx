@@ -96,10 +96,10 @@ const POLITICAL_GROUPS: TabGroup[] = [
 const ALL_GROUPS: TabGroup[] = [...TAB_GROUPS];
 
 const PERSONA_GROUPS: Record<Persona, TabGroup[]> = {
-  free: FREE_GROUPS,
-  legal: LEGAL_GROUPS,
+  free: ALL_GROUPS,
+  legal: ALL_GROUPS,
   researcher: ALL_GROUPS,
-  political: POLITICAL_GROUPS,
+  political: ALL_GROUPS,
   founder: ALL_GROUPS,
 };
 
