@@ -52,6 +52,7 @@ import {
   isHeartbeatSchedulerRunning, runTaskNow, updateTickInterval,
   getHeartbeatSchedulerStatus,
 } from "./heartbeat";
+import { getSubCoreState, tickSubCore } from "./subcore-instance.js";
 import { STRIPE_ENABLED } from "./index";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
@@ -4947,6 +4948,16 @@ IMPORTANT RULES:
           inverse: i === 7,
         })),
       });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/subcore/state", async (_req, res) => {
+    try {
+      let state = getSubCoreState();
+      if (!state) state = tickSubCore();
+      res.json(state);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
