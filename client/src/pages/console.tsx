@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,6 @@ import {
   Clock, Sparkles, Target, Settings, Lock, Eye, EyeOff, ArrowUpDown, ArrowLeftRight, Cpu, GitBranch, Star, Gauge,
 } from "lucide-react";
 import { useSliderOrientation } from "@/hooks/use-slider-orientation";
-import { usePersona, type Persona } from "@/hooks/use-persona";
-import { Link } from "wouter";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -96,48 +94,8 @@ const DEFAULT_METRIC_LABELS: MetricLabelMap = {
   TBF: { label: "Turn-Balance", desc: "Gini coefficient on actor token shares" },
 };
 
-const PERSONA_METRIC_LABELS: Record<Persona, MetricLabelMap> = {
-  free: DEFAULT_METRIC_LABELS,
-  legal: {
-    CM: { label: "Compliance Margin", desc: "1 - Jaccard(declared_compliance, observed)" },
-    DA: { label: "Due Diligence", desc: "sigmoid(w·contradictions + retractions + omissions)" },
-    DRIFT: { label: "Risk Drift", desc: "1 - cosine_similarity(position, regulatory_goal)" },
-    DVG: { label: "Doc Variance", desc: "entropy(document_type_distribution) normalized" },
-    INT: { label: "Integrity Index", desc: "clamp01(caps + hedging + citation + tempo)" },
-    TBF: { label: "Tribunal Backfire", desc: "Gini coefficient on proceeding actor token shares" },
-  },
-  researcher: {
-    CM: { label: "Concept Mismatch", desc: "1 - Jaccard(hypothesis_stated, hypothesis_observed)" },
-    DA: { label: "Data Accuracy", desc: "sigmoid(w·contradictions + retractions + gaps)" },
-    DRIFT: { label: "Concept Drift", desc: "1 - cosine_similarity(x_t, research_goal)" },
-    DVG: { label: "Divergence", desc: "entropy(topic_distribution) normalized" },
-    INT: { label: "Interpretability", desc: "clamp01(complexity + jargon + abstraction + tempo)" },
-    TBF: { label: "Theoretical Backfire", desc: "Gini coefficient on evidence actor shares" },
-  },
-  political: {
-    CM: { label: "Campaign Momentum", desc: "1 - Jaccard(campaign_promise, campaign_action)" },
-    DA: { label: "Demo Alignment", desc: "sigmoid(w·contradictions + reversals + misalignments)" },
-    DRIFT: { label: "Narrative Drift", desc: "1 - cosine_similarity(x_t, campaign_message)" },
-    DVG: { label: "Division Score", desc: "entropy(political_topic_distribution) normalized" },
-    INT: { label: "Influence Trajectory", desc: "clamp01(rhetoric + call_to_action + urgency + tempo)" },
-    TBF: { label: "Tactical Backfire", desc: "Gini coefficient on political actor token shares" },
-  },
-};
-
-const PERSONA_VISIBLE_GROUPS: Record<Persona, string[]> = {
-  free: ["agent", "system", "tools"],
-  legal: ["agent", "memory", "system", "tools"],
-  researcher: ["agent", "memory", "triad", "system", "tools"],
-  political: ["agent", "memory", "triad", "system", "tools"],
-};
-
-const MetricLabelCtx = createContext<MetricLabelMap>(DEFAULT_METRIC_LABELS);
-
 export default function ConsolePage() {
-  const { persona } = usePersona();
-  const allowedGroups = PERSONA_VISIBLE_GROUPS[persona] ?? PERSONA_VISIBLE_GROUPS.free;
-  const visibleGroups = ALL_GROUPS.filter(g => allowedGroups.includes(g.id));
-  const activeMetricLabels = PERSONA_METRIC_LABELS[persona] ?? DEFAULT_METRIC_LABELS;
+  const visibleGroups = ALL_GROUPS;
   const defaultTab = visibleGroups[0]?.tabs[0]?.id ?? "edcm";
 
   const [activeTab, setActiveTab] = useState<TabId>(() => {
@@ -169,29 +127,11 @@ export default function ConsolePage() {
 
   const currentGroup = visibleGroups.find(g => g.id === activeGroup) ?? visibleGroups[0];
 
-  useEffect(() => {
-    const tabVisible = visibleGroups.some(g => g.tabs.some(t => t.id === activeTab));
-    if (!tabVisible && visibleGroups.length > 0) {
-      const first = visibleGroups[0].tabs[0].id;
-      setActiveTab(first);
-      setActiveGroup(visibleGroups[0].id);
-      localStorage.setItem("a0p-console-tab", first);
-    }
-  }, [persona]);
-
   return (
-    <MetricLabelCtx.Provider value={activeMetricLabels}>
     <div className="flex flex-col h-full">
       <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0">
         <Shield className="w-4 h-4 text-primary flex-shrink-0" />
         <span className="font-semibold text-sm flex-1">Console</span>
-        <Link
-          href="/pricing"
-          className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-          data-testid="link-persona-badge"
-        >
-          {persona}
-        </Link>
         <Button
           size="icon"
           variant="ghost"
@@ -259,7 +199,6 @@ export default function ConsolePage() {
         {activeTab === "psi" && <PsiTab />}
       </div>
     </div>
-    </MetricLabelCtx.Provider>
   );
 }
 
@@ -1173,7 +1112,7 @@ function alertColor(value: number): { bg: string; text: string; label: string } 
 }
 
 function MetricRow({ metricKey, value, evidence }: { metricKey: string; value: number; evidence: string[] }) {
-  const labels = useContext(MetricLabelCtx);
+  const labels = DEFAULT_METRIC_LABELS;
   const info = labels[metricKey] || { label: metricKey, desc: "" };
   const alert = alertColor(value);
   const pct = Math.round(value * 100);
@@ -1270,7 +1209,7 @@ function TranscriptSourcesSection() {
     }
   };
 
-  const metricLabels = useContext(MetricLabelCtx);
+  const metricLabels = DEFAULT_METRIC_LABELS;
   const METRIC_COLORS: Record<string, string> = {
     CM: "text-yellow-400", DA: "text-red-400", DRIFT: "text-blue-400",
     DVG: "text-purple-400", INT: "text-orange-400", TBF: "text-green-400",
@@ -1429,8 +1368,9 @@ function TranscriptSourcesSection() {
   );
 }
 
+const METRIC_LABELS = DEFAULT_METRIC_LABELS;
+
 function EdcmTab() {
-  const METRIC_LABELS = useContext(MetricLabelCtx);
   const { data: snapshots = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/edcm/snapshots"],
     refetchInterval: 10000,

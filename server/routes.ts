@@ -228,42 +228,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Persona system ──────────────────────────────────────────────────────
-  const VALID_PERSONAS = ["free", "legal", "researcher", "political"] as const;
-  type Persona = typeof VALID_PERSONAS[number];
-
-  const PERSONA_PROMPT_BLOCKS: Record<Persona, string> = {
-    free: "",
-    legal: "PERSONA: Legal. Frame all analysis in terms of legal risk, regulatory compliance, and liability. Cite applicable standards and precedents where relevant. Prioritize legal precision over speed. EDCM metrics map to: CM=Compliance Margin, DA=Due Diligence, DRIFT=Risk Drift, DVG=Doc Variance, INT=Integrity Index, TBF=Tribunal Backfire.",
-    researcher: "PERSONA: Researcher. Prioritize empirical rigor, methodology transparency, and evidence-based reasoning. Treat all claims as falsifiable hypotheses. Cite sources where possible. EDCM metrics map to: CM=Concept Mismatch, DA=Data Accuracy, DRIFT=Concept Drift, DVG=Divergence, INT=Interpretability, TBF=Theoretical Backfire.",
-    political: "PERSONA: Political. Frame analysis in electoral, demographic, and campaign strategy terms. Prioritize message coherence, demographic modeling, and tactical analysis. EDCM metrics map to: CM=Campaign Momentum, DA=Demographic Alignment, DRIFT=Narrative Drift, DVG=Division Score, INT=Influence Trajectory, TBF=Tactical Backfire.",
-  };
-
-  app.get("/api/user/persona", async (req, res) => {
-    try {
-      const userId = (req as any).user?.claims?.sub || "default";
-      const toggle = await storage.getSystemToggle(`user_persona_${userId}`);
-      const persona = (toggle?.parameters as { persona?: Persona })?.persona || "free";
-      res.json({ persona });
-    } catch {
-      res.json({ persona: "free" });
-    }
-  });
-
-  app.patch("/api/user/persona", async (req, res) => {
-    try {
-      const userId = (req as any).user?.claims?.sub || "default";
-      const { persona } = req.body;
-      if (!(VALID_PERSONAS as readonly string[]).includes(persona)) {
-        return res.status(400).json({ error: `Invalid persona. Must be one of: ${VALID_PERSONAS.join(", ")}` });
-      }
-      await storage.upsertSystemToggle(`user_persona_${userId}`, true, { persona });
-      res.json({ persona });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
   const DEFAULT_MODEL_SLOTS = {
     a: { label: "A", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
     b: { label: "B", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
@@ -2196,9 +2160,6 @@ INSTRUCTIONS:
       const userId = (req as any).user?.claims?.sub || "default";
       const ctxToggle = await storage.getSystemToggle(`user_context_${userId}`);
       const ctx = (ctxToggle?.parameters as any) || DEFAULT_CONTEXT;
-      const personaToggle = await storage.getSystemToggle(`user_persona_${userId}`);
-      const userPersona = ((personaToggle?.parameters as any)?.persona || "free") as Persona;
-      const personaBlock = PERSONA_PROMPT_BLOCKS[userPersona] || "";
       const allSlots = await getModelSlots();
       const activeSlot = allSlots[activeSlotKey];
       const { client: grokClient, model: agentModel } = buildSlotClient(activeSlot);
@@ -2221,7 +2182,7 @@ INSTRUCTIONS:
 
       const baseAgentSystemPrompt = `${ctx.systemPrompt || DEFAULT_CONTEXT.systemPrompt}
 
-${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}${personaBlock ? `\n\n${personaBlock}` : ""}
+${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}
 
 You are agent zero (a0p) — an autonomous AI agent powered by ${agentModel} (provider: ${agentProvider}). You have tool access and can execute commands, read/write files, search code, check Gmail, browse Google Drive, send emails, search the web, fetch web pages, and manage GitHub repositories.
 
