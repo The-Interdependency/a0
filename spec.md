@@ -795,33 +795,117 @@ Each seed tracks which core last wrote it as a 3-element float vector:
 
 The agent uses Gemini 2.5 Flash with native function-calling (not prompt-based tool use). Each user request can trigger up to 8 tool rounds.
 
-### 4.2 Tools (23)
+### 4.2 Tools (48)
 
-| Tool | Args | Description |
-|------|------|-------------|
-| run_command | command | Execute shell command (sandboxed allowlist, includes python3) |
-| read_file | path | Read file contents |
-| write_file | path, content | Write/create file |
-| list_files | path | List directory contents |
-| search_files | query, path | Search files by name pattern |
-| list_gmail | maxResults | List recent Gmail messages |
-| read_gmail | messageId | Read full Gmail message body |
-| send_gmail | to, subject, body | Send email via Gmail |
-| list_drive | folderId, query | List/search Google Drive files |
-| github_list_repos | owner | List GitHub repos for authenticated user or specific owner |
-| github_get_file | owner, repo, path, branch | Read a file from a GitHub repository |
-| github_list_files | owner, repo, path, branch | List files/dirs in a GitHub repo path |
-| github_create_or_update_file | owner, repo, path, content, message, branch | Create or update file (commits directly, triggers Pages rebuild) |
-| github_delete_file | owner, repo, path, message, branch | Delete a file from a GitHub repository |
-| github_push_zip | uploadFilename, owner, repo, basePath, message, branch | Extract uploaded zip and push all contents to GitHub repo |
-| codespace_list | (none) | List GitHub Codespaces |
-| codespace_create | owner, repo, branch, machine | Create a new Codespace for a repository |
-| codespace_start | codespace_name | Start a stopped Codespace |
-| codespace_stop | codespace_name | Stop a running Codespace |
-| codespace_delete | codespace_name | Delete a Codespace |
-| codespace_exec | codespace_name, command | Execute command in a running Codespace |
-| web_search | query | Search the web for information (DuckDuckGo fallback if Brave unavailable) |
-| fetch_url | url | Fetch and read web page content (HTTPS only, SSRF-protected, 8K char limit) |
+Tools are organized into seven groups. All tools are available to every request (up to 8 rounds of tool calls per request). Custom user-defined tools are appended to this list at runtime if the `custom_tools` toggle is enabled.
+
+#### Shell & File System (5)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| run_command | command | — | Execute shell command (sandboxed allowlist: ls pwd echo cat find grep head tail mkdir touch cp mv rm curl wget python3 node npm npx git sed awk sort wc diff date ps df du whoami uname + user-added commands) |
+| read_file | path | — | Read file contents (relative to project root) |
+| write_file | path, content | — | Write/create file (overwrites) |
+| list_files | — | path | List files and directories (defaults to `.`) |
+| search_files | pattern | path | Search files by regex pattern using grep |
+
+#### Web (2)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| web_search | query | — | Search the web; returns summary answer + result URLs (Brave API, DuckDuckGo fallback) |
+| fetch_url | url | — | Fetch and read a web page (HTTPS only, SSRF-protected, 8K char limit, HTML stripped) |
+
+#### Gmail (3)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| list_gmail | — | maxResults | List recent Gmail inbox messages (default 10) |
+| read_gmail | messageId | — | Read full Gmail message body |
+| send_gmail | to, subject, body | — | Send plain-text email via Gmail |
+
+#### Google Drive (1)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| list_drive | — | folderId | List Google Drive files in folder (defaults to root) |
+
+#### GitHub Repos & Files (5)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| github_list_repos | — | owner | List GitHub repos for authenticated user or specific owner |
+| github_get_file | owner, repo, path | branch | Read a file from a GitHub repository |
+| github_list_files | owner, repo | path, branch | List files/dirs in a GitHub repo path |
+| github_create_or_update_file | owner, repo, path, content, message | branch | Create or update file (commits directly, triggers Pages rebuild) |
+| github_delete_file | owner, repo, path, message | branch | Delete a file from a GitHub repository |
+| github_push_zip | uploadFilename, owner, repo, message | basePath, branch | Extract uploaded zip and push all contents to GitHub repo |
+
+#### GitHub Codespaces (5)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| codespace_list | — | — | List GitHub Codespaces |
+| codespace_create | owner, repo | branch, machine | Create a new Codespace (default machine: basicLinux32gb) |
+| codespace_start | codespace_name | — | Start a stopped Codespace |
+| codespace_stop | codespace_name | — | Stop a running Codespace |
+| codespace_delete | codespace_name | — | Delete a Codespace |
+| codespace_exec | codespace_name, command | — | Execute a command in a running Codespace |
+
+#### Transcript Analysis (5)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| list_transcript_sources | — | — | List all transcript sources with file counts, last scan time, and EDCM report summary |
+| create_transcript_source | displayName | — | Create a new named transcript source; returns its slug |
+| scan_transcript_source | slug | — | Run EDCM cognitive-metric scan on all files in a source; returns per-metric averages, peak, directives fired, top flagged snippets |
+| get_transcript_report | slug | — | Retrieve latest EDCM scan report without re-scanning |
+| fetch_transcript_url | url, sourceSlug | filename | Fetch transcript from a public URL and save into a source (supports ChatGPT/Claude JSON, JSONL, plain text, JSON arrays) |
+
+#### Brain Pipeline (4)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| set_brain_preset | presetName | — | Switch active brain pipeline preset (single model, dual synthesis, deep research, etc.) |
+| get_brain_presets | — | — | List all saved brain presets with configurations |
+| set_default_brain | presetName | — | Change default preset used for new conversations |
+| set_synthesis_weights | weights | — | Adjust per-model merge weights for active preset (e.g. `{ gemini: 0.7, grok: 0.3 }`) |
+| get_synthesis_config | — | — | Return active brain pipeline config including stages, weights, and thresholds |
+
+#### PTCA-Ω Autonomy (5)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| set_goal | description, priority | — | Add a goal to the Ω goal stack (priority 1–10); drives Goal Persistence dimension energy |
+| complete_goal | goalId | — | Mark an Ω goal as completed |
+| list_goals | — | — | List current Ω autonomy goals |
+| get_omega_state | — | — | Get Ω tensor state: all 10 dimension energies, mode, goals, thresholds |
+| boost_dimension | dimension, amount | — | Boost an Ω dimension energy (0=Goal, 1=Initiative, 2=Planning, 3=Verification, 4=Scheduling, 5=Outreach, 6=Learning, 7=Resource, 8=Exploration, 9=Delegation) |
+| set_autonomy_mode | mode | — | Set Ω mode: `active` / `passive` / `economy` / `research` |
+
+#### PTCA-Ψ Self-Model (4)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| get_psi_state | — | — | Get Ψ tensor state: all 11 dimension energies (Integrity, Compliance, Prudence, Confidence, Clarity, Identity, Recall, Vigilance, Coherence, Agency, Self-Awareness), mode, sentinel and omega pairings |
+| boost_psi_dimension | dimension, amount | — | Boost a Ψ dimension energy (0=Integrity … 10=Self-Awareness) |
+| set_selfmodel_mode | mode | — | Set Ψ mode: `reflective` / `operational` / `transparent` / `guarded` |
+| get_triad_state | — | — | Get combined state of all three tensors: PTCA + Ψ + Ω (total energies, modes, per-dimension energies) |
+
+#### Model Registry & Hub (3)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| update_model_registry | provider, data | — | Add or update a provider entry (baseURL, authHeader, requestFormat, streamingFormat, models, notes) |
+| list_model_registry | — | — | Return full model registry: all known providers, endpoints, formats, available models |
+| list_hub_connections | — | — | List available hub AI model connections from stored credentials (names + endpoints only, no keys) |
+
+#### Site & Tool Generation (2)
+
+| Tool | Required Args | Optional Args | Description |
+|------|--------------|--------------|-------------|
+| set_ai_welcome | title, body | — | Update the AI/crawler welcome page (wrapped in HTML template automatically) |
+| generate_tool | name, description | hubProvider, handlerType, parametersSchema | Autonomously generate a new custom tool (Ψ-gated: Confidence≥0.4, Clarity≥0.3, Identity≥0.4; max 20 generated tools) |
 
 ### 4.3 Tool Output
 
