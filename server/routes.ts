@@ -228,33 +228,78 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/agent/model-config", async (_req, res) => {
+  const DEFAULT_MODEL_SLOTS = {
+    a: { label: "A", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
+    b: { label: "B", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
+    c: { label: "C", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
+  };
+
+  async function getModelSlots() {
+    const toggle = await storage.getSystemToggle("model_slots");
+    const saved = (toggle?.parameters as any) || {};
+    const slots: Record<string, any> = {};
+    for (const key of ["a", "b", "c"] as const) {
+      const d = DEFAULT_MODEL_SLOTS[key];
+      const s = saved[key] || {};
+      slots[key] = {
+        label: s.label ?? d.label,
+        provider: s.provider ?? d.provider,
+        model: s.model ?? d.model,
+        baseUrl: s.baseUrl ?? d.baseUrl,
+        apiKey: s.apiKey ?? "",
+      };
+    }
+    return slots;
+  }
+
+  function buildSlotClient(slot: any): { client: OpenAI; model: string } {
+    const apiKey = slot.apiKey || process.env.XAI_API_KEY || "";
+    const baseURL = slot.baseUrl || "https://api.x.ai/v1";
+    return {
+      client: new OpenAI({ apiKey, baseURL }),
+      model: slot.model || "grok-3-mini",
+    };
+  }
+
+  app.get("/api/agent/slots", async (_req, res) => {
     try {
-      const toggle = await storage.getSystemToggle("agent_model_config");
-      const p = (toggle?.parameters as any) || {};
-      res.json({
-        provider: p.provider || "xai",
-        model: p.model || "grok-3-mini",
-        baseUrl: p.baseUrl || "",
-        apiKeySet: !!(p.apiKey),
-      });
+      const slots = await getModelSlots();
+      const safe: Record<string, any> = {};
+      for (const [k, v] of Object.entries(slots)) {
+        safe[k] = { ...v, apiKeySet: !!(v as any).apiKey, apiKey: undefined };
+      }
+      res.json(safe);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  app.patch("/api/agent/model-config", async (req, res) => {
+  app.patch("/api/agent/slots/:slot", async (req, res) => {
     try {
-      const { provider, model, baseUrl, apiKey } = req.body;
-      const existing = await storage.getSystemToggle("agent_model_config");
-      const ep = (existing?.parameters as any) || {};
-      await storage.upsertSystemToggle("agent_model_config", true, {
-        provider: provider ?? ep.provider ?? "xai",
-        model: model ?? ep.model ?? "grok-3-mini",
-        baseUrl: baseUrl ?? ep.baseUrl ?? "",
-        apiKey: apiKey !== undefined ? apiKey : (ep.apiKey || ""),
-      });
+      const { slot } = req.params;
+      if (!["a", "b", "c"].includes(slot)) return res.status(400).json({ error: "Invalid slot. Use a, b, or c." });
+      const { label, provider, model, baseUrl, apiKey } = req.body;
+      const existing = await getModelSlots();
+      const cur = existing[slot] || {};
+      existing[slot] = {
+        label: label ?? cur.label,
+        provider: provider ?? cur.provider,
+        model: model ?? cur.model,
+        baseUrl: baseUrl ?? cur.baseUrl,
+        apiKey: apiKey !== undefined ? apiKey : (cur.apiKey || ""),
+      };
+      await storage.upsertSystemToggle("model_slots", true, existing);
       res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/agent/model-config", async (_req, res) => {
+    try {
+      const slots = await getModelSlots();
+      const s = slots["a"];
+      res.json({ provider: s.provider, model: s.model, baseUrl: s.baseUrl, apiKeySet: !!s.apiKey });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -771,12 +816,9 @@ INSTRUCTIONS:
       const ctxToggle = await storage.getSystemToggle(`user_context_${userId}`);
       const ctx = (ctxToggle?.parameters as any) || DEFAULT_CONTEXT;
       const sysPrompt = customSystem || `${ctx.systemPrompt || DEFAULT_CONTEXT.systemPrompt}\n\n${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}`;
-      const aiCompleteCfgToggle = await storage.getSystemToggle("agent_model_config");
-      const aiCompleteCfg = (aiCompleteCfgToggle?.parameters as any) || {};
-      const aiCompleteModel = aiCompleteCfg.model || "grok-3-mini";
-      const aiCompleteClient = aiCompleteCfg.apiKey && aiCompleteCfg.baseUrl
-        ? new OpenAI({ apiKey: aiCompleteCfg.apiKey, baseURL: aiCompleteCfg.baseUrl })
-        : new OpenAI({ apiKey: aiCompleteCfg.apiKey || process.env.XAI_API_KEY!, baseURL: aiCompleteCfg.baseUrl || "https://api.x.ai/v1" });
+      const aiCompleteSlots = await getModelSlots();
+      const aiCompleteSlot = aiCompleteSlots["a"];
+      const { client: aiCompleteClient, model: aiCompleteModel } = buildSlotClient(aiCompleteSlot);
 
       if (model === "synthesis") {
         const synthConfig = await getSynthesisConfig();
@@ -971,6 +1013,9 @@ INSTRUCTIONS:
       const ctxToggle = await storage.getSystemToggle(`user_context_${userId}`);
       const ctx = (ctxToggle?.parameters as any) || DEFAULT_CONTEXT;
       const sysPrompt = customSystem || `${ctx.systemPrompt || DEFAULT_CONTEXT.systemPrompt}\n\n${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}`;
+      const streamSlots = await getModelSlots();
+      const streamSlot = streamSlots["a"];
+      const { client: aiCompleteClient, model: aiCompleteModel } = buildSlotClient(streamSlot);
 
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
@@ -2092,17 +2137,17 @@ INSTRUCTIONS:
   app.post("/api/conversations/:id/chat", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
-      const { content, model: requestModel } = req.body;
+      const { content, model: requestModel, slot: requestSlot } = req.body;
 
       if (!content?.trim()) return res.status(400).json({ error: "Content required" });
 
       const conv = await storage.getConversation(conversationId);
       if (!conv) return res.status(404).json({ error: "Conversation not found" });
 
-      const chatModel = requestModel || conv.model || "agent";
+      const activeSlotKey = (requestSlot && ["a", "b", "c"].includes(requestSlot)) ? requestSlot : "a";
       const requestStartTime = Date.now();
 
-      await storage.createMessage({ conversationId, role: "user", content, model: chatModel } as InsertMessage);
+      await storage.createMessage({ conversationId, role: "user", content, model: `slot_${activeSlotKey}` } as InsertMessage);
 
       const history = await storage.getMessages(conversationId);
       const prevMessages = history.slice(0, -1);
@@ -2115,23 +2160,19 @@ INSTRUCTIONS:
       const userId = (req as any).user?.claims?.sub || "default";
       const ctxToggle = await storage.getSystemToggle(`user_context_${userId}`);
       const ctx = (ctxToggle?.parameters as any) || DEFAULT_CONTEXT;
-      const agentModelToggle = await storage.getSystemToggle("agent_model_config");
-      const agentModelCfg = (agentModelToggle?.parameters as any) || {};
-      const agentModel = agentModelCfg.model || "grok-3-mini";
-      const agentProvider = agentModelCfg.provider || "xai";
-      const agentBaseUrl = agentModelCfg.baseUrl || "https://api.x.ai/v1";
-      const agentApiKey = agentModelCfg.apiKey || process.env.XAI_API_KEY || "";
-      const modelBandit = await banditSelectWithFallback("model", chatModel);
+      const allSlots = await getModelSlots();
+      const activeSlot = allSlots[activeSlotKey];
+      const { client: grokClient, model: agentModel } = buildSlotClient(activeSlot);
+      const agentProvider = activeSlot.provider || "xai";
+      const modelBandit = await banditSelectWithFallback("model", `slot_${activeSlotKey}`);
       const ptcaBandit = await banditSelectWithFallback("ptca_route", "standard");
       const pcnaBandit = await banditSelectWithFallback("pcna_route", "ring_53");
 
-      const resolvedModel = chatModel === "agent" ? "agent" : (modelBandit?.armName || chatModel);
-
       await logMaster("bandit", "request_selections", {
         conversationId,
-        requestedModel: chatModel,
-        resolvedModel,
-        modelArm: modelBandit?.armName || chatModel,
+        slot: activeSlotKey,
+        model: agentModel,
+        modelArm: modelBandit?.armName || `slot_${activeSlotKey}`,
         modelArmId: modelBandit?.armId || null,
         ptcaArm: ptcaBandit?.armName || "standard",
         ptcaArmId: ptcaBandit?.armId || null,
@@ -2169,169 +2210,12 @@ IMPORTANT RULES:
 
       await logMaster("chat", "augmented_prompt_built", {
         conversationId,
-        chatModel,
+        slot: activeSlotKey,
+        model: agentModel,
         directivesFired,
         memorySeedsUsed,
         promptLength: agentSystemPrompt.length,
       });
-
-      if (chatModel === "synthesis" || chatModel === "gemini" || chatModel === "grok") {
-        const simpleMessages = prevMessages.map(m => ({ role: m.role, content: m.content }));
-        simpleMessages.push({ role: "user", content });
-
-        if (chatModel === "synthesis") {
-          const synthConfig = await getSynthesisConfig();
-          if (!synthConfig.enabled) {
-            res.write(`data: ${JSON.stringify({ error: "Synthesis is disabled. Enable in Console > System.", done: true })}\n\n`);
-            return res.end();
-          }
-          res.write(`data: ${JSON.stringify({ synthesis: true, phase: "parallel" })}\n\n`);
-          const results = await Promise.allSettled([
-            callGeminiForSynthesis(simpleMessages, agentSystemPrompt, 8192, synthConfig.timeoutMs),
-            callGrokForSynthesis(simpleMessages, agentSystemPrompt, 16384, undefined, synthConfig.timeoutMs),
-          ]);
-          const geminiRes = results[0].status === "fulfilled" ? results[0].value : null;
-          const grokRes = results[1].status === "fulfilled" ? results[1].value : null;
-          await logMaster("synthesis", "chat_parallel", {
-            conversationId,
-            geminiOk: !!geminiRes,
-            grokOk: !!grokRes,
-          });
-          let finalContent: string;
-          let mergeMethod: string;
-          if (geminiRes && grokRes) {
-            const gemEdcm = computeEdcmMetrics(geminiRes.content);
-            const grkEdcm = computeEdcmMetrics(grokRes.content);
-            await logMaster("synthesis", "chat_edcm", {
-              gemini: { CM: gemEdcm.CM.value, DA: gemEdcm.DA.value },
-              grok: { CM: grkEdcm.CM.value, DA: grkEdcm.DA.value },
-            });
-            res.write(`data: ${JSON.stringify({ synthesis: true, phase: "merging" })}\n\n`);
-            finalContent = await mergeResponsesViaGemini(geminiRes.content, grokRes.content, content);
-            mergeMethod = "merged";
-          } else if (geminiRes) {
-            finalContent = geminiRes.content;
-            mergeMethod = "gemini_fallback";
-          } else if (grokRes) {
-            finalContent = grokRes.content;
-            mergeMethod = "grok_fallback";
-          } else {
-            res.write(`data: ${JSON.stringify({ error: "Both models failed", done: true })}\n\n`);
-            return res.end();
-          }
-          res.write(`data: ${JSON.stringify({ content: finalContent })}\n\n`);
-          await storage.createMessage({ conversationId, role: "assistant", content: finalContent, model: "synthesis" } as InsertMessage);
-          if (geminiRes) await trackCost(userId === "default" ? null : userId, "gemini", geminiRes.promptTokens, geminiRes.completionTokens);
-          if (grokRes) await trackCost(userId === "default" ? null : userId, "grok", grokRes.promptTokens, grokRes.completionTokens);
-          await logMaster("synthesis", "chat_done", { mergeMethod, conversationId });
-          postResponseMemoryUpdate(conversationId, finalContent).catch(() => {});
-          if (history.length === 1) {
-            const title = content.slice(0, 60).replace(/\n/g, " ") || "New Task";
-            await storage.updateConversationTitle(conversationId, title);
-          }
-
-          const synthLatency = Date.now() - requestStartTime;
-          const synthReward = computeResponseReward(finalContent, synthLatency);
-          await rewardAndLogBandit(modelBandit?.armId || null, synthReward, "model", modelBandit?.armName || "synthesis");
-          await rewardAndLogBandit(ptcaBandit?.armId || null, synthReward, "ptca_route", ptcaBandit?.armName || "standard");
-          await rewardAndLogBandit(pcnaBandit?.armId || null, synthReward, "pcna_route", pcnaBandit?.armName || "ring_53");
-          recordCorrelation(
-            null,
-            modelBandit?.armName || "synthesis",
-            ptcaBandit?.armName || "standard",
-            pcnaBandit?.armName || "ring_53",
-            synthReward
-          ).catch(() => {});
-
-          res.write(`data: ${JSON.stringify({ done: true, mergeMethod })}\n\n`);
-          return res.end();
-        }
-
-        if (chatModel === "gemini") {
-          const gemHist = simpleMessages.slice(0, -1).map((m: any) => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }],
-          }));
-          const lastMsg = simpleMessages[simpleMessages.length - 1];
-          const result = await geminiAI.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: [...gemHist, { role: "user", parts: [{ text: lastMsg.content }] }],
-            config: { systemInstruction: agentSystemPrompt, maxOutputTokens: 8192 },
-          });
-          const text = result.text || "";
-          res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
-          await storage.createMessage({ conversationId, role: "assistant", content: text, model: "gemini" } as InsertMessage);
-          const pt = Math.ceil(simpleMessages.reduce((s, m) => s + m.content.length, 0) / 4);
-          const ct = Math.ceil(text.length / 4);
-          await trackCost(userId === "default" ? null : userId, "gemini", pt, ct);
-          postResponseMemoryUpdate(conversationId, text).catch(() => {});
-          if (history.length === 1) {
-            const title = content.slice(0, 60).replace(/\n/g, " ") || "New Task";
-            await storage.updateConversationTitle(conversationId, title);
-          }
-
-          const gemLatency = Date.now() - requestStartTime;
-          const gemReward = computeResponseReward(text, gemLatency);
-          await rewardAndLogBandit(modelBandit?.armId || null, gemReward, "model", modelBandit?.armName || "gemini");
-          await rewardAndLogBandit(ptcaBandit?.armId || null, gemReward, "ptca_route", ptcaBandit?.armName || "standard");
-          await rewardAndLogBandit(pcnaBandit?.armId || null, gemReward, "pcna_route", pcnaBandit?.armName || "ring_53");
-          recordCorrelation(
-            null,
-            modelBandit?.armName || "gemini",
-            ptcaBandit?.armName || "standard",
-            pcnaBandit?.armName || "ring_53",
-            gemReward
-          ).catch(() => {});
-
-          res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-          return res.end();
-        }
-
-        if (chatModel === "grok") {
-          const grokSimpleClient = agentProvider === "custom" && agentBaseUrl && agentApiKey
-            ? new OpenAI({ apiKey: agentApiKey, baseURL: agentBaseUrl })
-            : new OpenAI({ apiKey: agentApiKey || process.env.XAI_API_KEY!, baseURL: agentBaseUrl });
-          const chatMsgs = [
-            { role: "system" as const, content: agentSystemPrompt },
-            ...simpleMessages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
-          ];
-          const result = await grokSimpleClient.chat.completions.create({
-            model: agentModel,
-            messages: chatMsgs,
-            max_tokens: 16384,
-          });
-          const text = result.choices[0]?.message?.content || "";
-          res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
-          await storage.createMessage({ conversationId, role: "assistant", content: text, model: "grok" } as InsertMessage);
-          const usage = result.usage;
-          await trackCost(userId === "default" ? null : userId, "grok", usage?.prompt_tokens || 0, usage?.completion_tokens || 0);
-          postResponseMemoryUpdate(conversationId, text).catch(() => {});
-          if (history.length === 1) {
-            const title = content.slice(0, 60).replace(/\n/g, " ") || "New Task";
-            await storage.updateConversationTitle(conversationId, title);
-          }
-
-          const grokLatency = Date.now() - requestStartTime;
-          const grokReward = computeResponseReward(text, grokLatency);
-          await rewardAndLogBandit(modelBandit?.armId || null, grokReward, "model", modelBandit?.armName || "grok");
-          await rewardAndLogBandit(ptcaBandit?.armId || null, grokReward, "ptca_route", ptcaBandit?.armName || "standard");
-          await rewardAndLogBandit(pcnaBandit?.armId || null, grokReward, "pcna_route", pcnaBandit?.armName || "ring_53");
-          recordCorrelation(
-            null,
-            modelBandit?.armName || "grok",
-            ptcaBandit?.armName || "standard",
-            pcnaBandit?.armName || "ring_53",
-            grokReward
-          ).catch(() => {});
-
-          res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-          return res.end();
-        }
-      }
-
-      const grokClient = agentProvider === "custom" && agentBaseUrl && agentApiKey
-        ? new OpenAI({ apiKey: agentApiKey, baseURL: agentBaseUrl })
-        : new OpenAI({ apiKey: agentApiKey || process.env.XAI_API_KEY!, baseURL: agentBaseUrl });
 
       const grokTools = AGENT_TOOLS.map(t => ({
         type: "function" as const,
@@ -2444,7 +2328,8 @@ IMPORTANT RULES:
 
       await logMaster("bandit", "request_complete", {
         conversationId,
-        chatModel,
+        slot: activeSlotKey,
+        model: agentModel,
         reward: agentReward,
         latencyMs: agentLatency,
         toolsUsed: toolsUsedInRequest,

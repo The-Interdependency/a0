@@ -10,27 +10,13 @@ import { useToast } from "@/hooks/use-toast";
 import { MarkdownContent } from "@/lib/markdown";
 import { usePopout } from "@/lib/popout-context";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Plus, Send, Trash2, Bot, User, ChevronRight,
   PanelLeftOpen, PanelLeftClose, Terminal as TermIcon,
   FileText, Mail, HardDrive, Search, Pencil,
-  Activity, Shield, Zap, Layers, Pin,
+  Activity, Shield, Pin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Conversation, Message } from "@shared/schema";
-
-const CHAT_MODELS = [
-  { id: "agent", label: "Grok (Agent)", icon: Shield },
-  { id: "grok", label: "Grok", icon: Zap },
-  { id: "gemini", label: "Gemini", icon: Zap },
-  { id: "synthesis", label: "Synthesis", icon: Layers },
-] as const;
 
 const TOOL_ICONS: Record<string, typeof TermIcon> = {
   run_command: TermIcon,
@@ -88,21 +74,20 @@ export default function ChatPage() {
   const [streamContent, setStreamContent] = useState("");
   const [toolActions, setToolActions] = useState<ToolAction[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    const stored = localStorage.getItem("a0p-selected-model");
-    // "gemini" was the old default — migrate to the Grok-backed agent
-    if (!stored || stored === "gemini") {
-      localStorage.setItem("a0p-selected-model", "agent");
-      return "agent";
-    }
-    return stored;
+  const [activeSlot, setActiveSlotState] = useState<"a" | "b" | "c">(() => {
+    const stored = localStorage.getItem("a0p-active-slot");
+    if (stored === "a" || stored === "b" || stored === "c") return stored;
+    return "a";
   });
 
-  function handleSetModel(model: string) {
-    setSelectedModel(model);
-    localStorage.setItem("a0p-selected-model", model);
+  function setActiveSlot(slot: "a" | "b" | "c") {
+    setActiveSlotState(slot);
+    localStorage.setItem("a0p-active-slot", slot);
   }
-  const [synthesisPhase, setSynthesisPhase] = useState<string | null>(null);
+
+  const { data: modelSlots } = useQuery<Record<string, { label: string; provider: string; model: string; baseUrl: string; apiKeySet: boolean }>>({
+    queryKey: ["/api/agent/slots"],
+  });
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -125,8 +110,8 @@ export default function ChatPage() {
   const messages = convDetail?.messages || [];
 
   const createConv = useMutation({
-    mutationFn: async (model?: string) => {
-      const res = await apiRequest("POST", "/api/conversations", { title: "New Task", model: model || selectedModel });
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/conversations", { title: "New Task", model: "agent" });
       return await res.json() as Conversation;
     },
     onSuccess: (conv: Conversation) => {
@@ -162,7 +147,7 @@ export default function ChatPage() {
     let convId = activeConvId;
 
     if (!convId) {
-      const conv = await createConv.mutateAsync(selectedModel);
+      const conv = await createConv.mutateAsync();
       convId = conv.id;
     }
 
@@ -171,7 +156,6 @@ export default function ChatPage() {
     setStreaming(true);
     setStreamContent("");
     setToolActions([]);
-    setSynthesisPhase(null);
 
     qc.setQueryData(
       ["/api/conversations", convId],
@@ -188,7 +172,7 @@ export default function ChatPage() {
       const response = await fetch(`/api/conversations/${convId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: userMsg, model: selectedModel }),
+        body: JSON.stringify({ content: userMsg, slot: activeSlot }),
       });
 
       if (!response.ok) throw new Error("Failed to send");
@@ -208,9 +192,6 @@ export default function ChatPage() {
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.synthesis && data.phase) {
-                setSynthesisPhase(data.phase);
-              }
               if (data.content) {
                 accumulated += data.content;
                 setStreamContent(accumulated);
@@ -225,7 +206,6 @@ export default function ChatPage() {
                 setStreaming(false);
                 setStreamContent("");
                 setToolActions([]);
-                setSynthesisPhase(null);
                 qc.invalidateQueries({ queryKey: ["/api/conversations", convId] });
                 qc.invalidateQueries({ queryKey: ["/api/conversations"] });
               }
@@ -238,7 +218,6 @@ export default function ChatPage() {
       setStreaming(false);
       setStreamContent("");
       setToolActions([]);
-      setSynthesisPhase(null);
     }
   }
 
@@ -299,7 +278,7 @@ export default function ChatPage() {
                 onClick={() => { setActiveConvId(c.id); setSidebarOpen(false); }}
                 data-testid={`task-item-${c.id}`}
               >
-                <Zap className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
+                <Shield className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
                 <span className="text-xs flex-1 truncate py-3">{c.title}</span>
                 <button
                   className="flex-shrink-0 text-muted-foreground/50 active:text-destructive p-2 -mr-1"
@@ -413,21 +392,11 @@ export default function ChatPage() {
             {streaming && !streamContent && toolActions.length === 0 && (
               <div className="flex gap-2 items-start">
                 <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  {selectedModel === "synthesis" ? (
-                    <Layers className="w-3.5 h-3.5 text-primary" />
-                  ) : (
-                    <Shield className="w-3.5 h-3.5 text-primary" />
-                  )}
+                  <Shield className="w-3.5 h-3.5 text-primary" />
                 </div>
                 <div className="bg-card border border-border rounded-xl px-3 py-2">
                   <div className="flex gap-1 items-center h-5">
-                    <span className="text-xs text-muted-foreground mr-1">
-                      {synthesisPhase === "parallel"
-                        ? "querying Gemini + Grok"
-                        : synthesisPhase === "merging"
-                        ? "merging responses"
-                        : "thinking"}
-                    </span>
+                    <span className="text-xs text-muted-foreground mr-1">thinking</span>
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0ms]" />
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:150ms]" />
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:300ms]" />
@@ -458,23 +427,33 @@ export default function ChatPage() {
             </Button>
           </div>
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-            <span className="text-[9px] text-muted-foreground flex-shrink-0">model:</span>
-            {CHAT_MODELS.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => handleSetModel(m.id)}
-                className={cn(
-                  "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors border flex-shrink-0",
-                  selectedModel === m.id
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card text-muted-foreground border-border hover:text-foreground"
-                )}
-                data-testid={`model-pill-${m.id}`}
-              >
-                <m.icon className="w-2.5 h-2.5" />
-                {m.label}
-              </button>
-            ))}
+            <span className="text-[9px] text-muted-foreground flex-shrink-0">slot:</span>
+            {(["a", "b", "c"] as const).map((s) => {
+              const slot = modelSlots?.[s];
+              const label = slot?.label || s.toUpperCase();
+              const model = slot?.model || "—";
+              return (
+                <button
+                  key={s}
+                  onClick={() => setActiveSlot(s)}
+                  title={model}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors border flex-shrink-0",
+                    activeSlot === s
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-card text-muted-foreground border-border hover:text-foreground"
+                  )}
+                  data-testid={`slot-pill-${s}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+            {modelSlots && (
+              <span className="text-[9px] text-muted-foreground ml-1 truncate max-w-[120px]">
+                {modelSlots[activeSlot]?.model || ""}
+              </span>
+            )}
           </div>
         </div>
       </div>
