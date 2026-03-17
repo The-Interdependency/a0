@@ -4,6 +4,7 @@ import { computeEdcmMetrics, updateSemanticMemory, omegaSolve, applyCrossTensorC
 import { getUncachableGitHubClient } from "./github";
 import { createHash } from "crypto";
 import type { HeartbeatTask } from "@shared/schema";
+import { tickSubCore } from "./subcore-instance.js";
 
 const DEFAULT_TICK_INTERVAL_MS = 30_000;
 
@@ -999,6 +1000,8 @@ async function tick(): Promise<void> {
   try {
     const enabled = await isHeartbeatEnabled();
     if (!enabled) return;
+
+    tickSubCore();
 
     const psiResult = psiSolve();
     const omegaResult = omegaSolve();
