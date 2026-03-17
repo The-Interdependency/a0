@@ -10,7 +10,6 @@ import { storage } from "./storage";
 import { getUncachableGmailClient } from "./gmail";
 import { getUncachableGoogleDriveClient } from "./drive";
 import { getUncachableGitHubClient, isPublicFallbackMode } from "./github";
-import { getGrokClient } from "./xai";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import type { InsertConversation, InsertMessage } from "@shared/schema";
@@ -640,13 +639,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const startTime = Date.now();
     try {
-      const client = getGrokClient();
+      const cfgToggle = await storage.getSystemToggle("agent_model_config");
+      const cfg = (cfgToggle?.parameters as any) || {};
+      const synthModel = cfg.model || "grok-3-mini";
+      const synthClient = cfg.apiKey && cfg.baseUrl
+        ? new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseUrl })
+        : new OpenAI({ apiKey: cfg.apiKey || process.env.XAI_API_KEY!, baseURL: cfg.baseUrl || "https://api.x.ai/v1" });
       const chatMsgs = [
         { role: "system" as const, content: sysPrompt },
         ...messages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
       ];
-      const result = await client.chat.completions.create({
-        model: "grok-3-mini",
+      const result = await synthClient.chat.completions.create({
+        model: synthModel,
         messages: chatMsgs,
         max_tokens: maxTokens || 16384,
         ...(temperature != null ? { temperature } : {}),
@@ -767,6 +771,12 @@ INSTRUCTIONS:
       const ctxToggle = await storage.getSystemToggle(`user_context_${userId}`);
       const ctx = (ctxToggle?.parameters as any) || DEFAULT_CONTEXT;
       const sysPrompt = customSystem || `${ctx.systemPrompt || DEFAULT_CONTEXT.systemPrompt}\n\n${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}`;
+      const aiCompleteCfgToggle = await storage.getSystemToggle("agent_model_config");
+      const aiCompleteCfg = (aiCompleteCfgToggle?.parameters as any) || {};
+      const aiCompleteModel = aiCompleteCfg.model || "grok-3-mini";
+      const aiCompleteClient = aiCompleteCfg.apiKey && aiCompleteCfg.baseUrl
+        ? new OpenAI({ apiKey: aiCompleteCfg.apiKey, baseURL: aiCompleteCfg.baseUrl })
+        : new OpenAI({ apiKey: aiCompleteCfg.apiKey || process.env.XAI_API_KEY!, baseURL: aiCompleteCfg.baseUrl || "https://api.x.ai/v1" });
 
       if (model === "synthesis") {
         const synthConfig = await getSynthesisConfig();
@@ -856,13 +866,12 @@ INSTRUCTIONS:
 
       if (model === "grok") {
         const startTime = Date.now();
-        const client = getGrokClient();
         const chatMsgs = [
           { role: "system" as const, content: sysPrompt },
           ...messages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
         ];
-        const result = await client.chat.completions.create({
-          model: "grok-3-mini",
+        const result = await aiCompleteClient.chat.completions.create({
+          model: aiCompleteModel,
           messages: chatMsgs,
           max_tokens: maxTokens || 16384,
           ...(temperature != null ? { temperature } : {}),
@@ -883,7 +892,7 @@ INSTRUCTIONS:
           status: "success",
         }).catch(() => {});
         return res.json({
-          model: "grok-3-mini",
+          model: aiCompleteModel,
           content: text,
           usage: {
             promptTokens: grokPromptTokens,
@@ -1046,13 +1055,12 @@ INSTRUCTIONS:
           }
         }
       } else if (model === "grok") {
-        const client = getGrokClient();
         const chatMsgs = [
           { role: "system" as const, content: sysPrompt },
           ...messages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
         ];
-        const stream = await client.chat.completions.create({
-          model: "grok-3-mini",
+        const stream = await aiCompleteClient.chat.completions.create({
+          model: aiCompleteModel,
           messages: chatMsgs,
           max_tokens: maxTokens || 16384,
           ...(temperature != null ? { temperature } : {}),
@@ -2280,13 +2288,15 @@ IMPORTANT RULES:
         }
 
         if (chatModel === "grok") {
-          const client = getGrokClient();
+          const grokSimpleClient = agentProvider === "custom" && agentBaseUrl && agentApiKey
+            ? new OpenAI({ apiKey: agentApiKey, baseURL: agentBaseUrl })
+            : new OpenAI({ apiKey: agentApiKey || process.env.XAI_API_KEY!, baseURL: agentBaseUrl });
           const chatMsgs = [
             { role: "system" as const, content: agentSystemPrompt },
             ...simpleMessages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
           ];
-          const result = await client.chat.completions.create({
-            model: "grok-3-mini",
+          const result = await grokSimpleClient.chat.completions.create({
+            model: agentModel,
             messages: chatMsgs,
             max_tokens: 16384,
           });
