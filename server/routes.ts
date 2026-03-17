@@ -196,6 +196,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     contextPrefix: "EDCMBONE operator discernment active. PCNA 53-node topology. PTCA explicit-Euler. SHA-256 hash chain. 9 sentinels preflight/postflight. hmmm invariant enforced.",
   };
 
+  const PERSONA_VALUES = ["free", "legal", "researcher", "political"] as const;
+  type Persona = typeof PERSONA_VALUES[number];
+  const PERSONA_PROMPTS: Record<Persona, string> = {
+    free: "",
+    legal: "\n\n[LEGAL MODE] You are operating in legal research mode. Provide legally-oriented analysis, cite relevant law and precedent where applicable, maintain professional legal framing. EDCM metric reframe: CM=Case Merit, DA=Doctrine Accumulation, DRIFT=Jurisdictional Drift.",
+    researcher: "\n\n[RESEARCH MODE] You are operating in research mode. Provide evidence-based, academically rigorous analysis. Support all claims with explicit reasoning chains and source awareness.",
+    political: "\n\n[POLITICAL MODE] You are operating in political analysis mode. Provide balanced, strategically-aware analysis of policy, power dynamics, and political dimensions.",
+  };
+
   const userApiKeysCache: Record<string, Record<string, string>> = {};
 
   async function loadUserApiKeys(userId: string): Promise<Record<string, string>> {
@@ -225,6 +234,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(ctx && ctx.systemPrompt ? ctx : DEFAULT_CONTEXT);
     } catch (e: any) {
       res.json(DEFAULT_CONTEXT);
+    }
+  });
+
+  app.get("/api/user/persona", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const toggle = await storage.getSystemToggle(`user_persona_${userId}`);
+      const persona = (toggle?.parameters as any)?.persona ?? "free";
+      res.json({ persona });
+    } catch {
+      res.json({ persona: "free" });
+    }
+  });
+
+  app.patch("/api/user/persona", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { persona } = req.body;
+      if (!PERSONA_VALUES.includes(persona as Persona)) {
+        return res.status(400).json({ error: `persona must be one of: ${PERSONA_VALUES.join(", ")}` });
+      }
+      await storage.upsertSystemToggle(`user_persona_${userId}`, true, { persona });
+      res.json({ ok: true, persona });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 
@@ -815,7 +849,9 @@ INSTRUCTIONS:
 
       const ctxToggle = await storage.getSystemToggle(`user_context_${userId}`);
       const ctx = (ctxToggle?.parameters as any) || DEFAULT_CONTEXT;
-      const sysPrompt = customSystem || `${ctx.systemPrompt || DEFAULT_CONTEXT.systemPrompt}\n\n${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}`;
+      const personaToggle = await storage.getSystemToggle(`user_persona_${userId}`);
+      const _persona = ((personaToggle?.parameters as any)?.persona ?? "free") as Persona;
+      const sysPrompt = customSystem || `${ctx.systemPrompt || DEFAULT_CONTEXT.systemPrompt}\n\n${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}${PERSONA_PROMPTS[_persona]}`;
       const aiCompleteSlots = await getModelSlots();
       const aiCompleteSlot = aiCompleteSlots["a"];
       const { client: aiCompleteClient, model: aiCompleteModel } = buildSlotClient(aiCompleteSlot);
@@ -1012,7 +1048,9 @@ INSTRUCTIONS:
 
       const ctxToggle = await storage.getSystemToggle(`user_context_${userId}`);
       const ctx = (ctxToggle?.parameters as any) || DEFAULT_CONTEXT;
-      const sysPrompt = customSystem || `${ctx.systemPrompt || DEFAULT_CONTEXT.systemPrompt}\n\n${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}`;
+      const personaToggle = await storage.getSystemToggle(`user_persona_${userId}`);
+      const _persona = ((personaToggle?.parameters as any)?.persona ?? "free") as Persona;
+      const sysPrompt = customSystem || `${ctx.systemPrompt || DEFAULT_CONTEXT.systemPrompt}\n\n${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}${PERSONA_PROMPTS[_persona]}`;
       const streamSlots = await getModelSlots();
       const streamSlot = streamSlots["a"];
       const { client: aiCompleteClient, model: aiCompleteModel } = buildSlotClient(streamSlot);
