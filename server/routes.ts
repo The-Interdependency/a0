@@ -2343,22 +2343,18 @@ IMPORTANT RULES:
         }
       }
 
-      const geminiTools = [{
-        functionDeclarations: AGENT_TOOLS.map(t => ({
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters,
-        })),
-      }];
+      const grokClient = getGrokClient();
 
-      const geminiHistory = prevMessages.map((m) => ({
-        role: m.role === "assistant" ? "model" as const : "user" as const,
-        parts: [{ text: m.content }],
+      const grokTools = AGENT_TOOLS.map(t => ({
+        type: "function" as const,
+        function: { name: t.name, description: t.description, parameters: t.parameters },
       }));
 
-      let contents = [
-        ...geminiHistory,
-        { role: "user" as const, parts: [{ text: content }] },
+      type GrokMsg = { role: "system" | "user" | "assistant" | "tool"; content: string; tool_call_id?: string; tool_calls?: any[] };
+      let grokMessages: GrokMsg[] = [
+        { role: "system", content: agentSystemPrompt },
+        ...prevMessages.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+        { role: "user", content },
       ];
 
       let fullResponse = "";
@@ -2369,56 +2365,53 @@ IMPORTANT RULES:
       const toolsUsedInRequest: string[] = [];
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        const result = await geminiAI.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents,
-          config: {
-            systemInstruction: currentSystemPrompt,
-            maxOutputTokens: 8192,
-            tools: geminiTools,
-          },
+        grokMessages[0] = { role: "system", content: currentSystemPrompt };
+
+        const result = await grokClient.chat.completions.create({
+          model: "grok-3-mini",
+          messages: grokMessages,
+          tools: grokTools,
+          tool_choice: "auto",
+          max_tokens: 16384,
         });
 
-        totalPromptTokens += Math.ceil(JSON.stringify(contents).length / 4);
+        totalPromptTokens += result.usage?.prompt_tokens || Math.ceil(JSON.stringify(grokMessages).length / 4);
+        totalCompletionTokens += result.usage?.completion_tokens || 0;
 
-        const candidate = result.candidates?.[0];
-        if (!candidate?.content?.parts) break;
+        const choice = result.choices[0];
+        if (!choice) break;
 
-        const parts = candidate.content.parts;
-        let hasToolCalls = false;
-        const toolResultParts: any[] = [];
+        const assistantMsg = choice.message;
+        const toolCalls = assistantMsg.tool_calls || [];
+        const textContent = assistantMsg.content || "";
 
-        for (const part of parts) {
-          if (part.text) {
-            fullResponse += part.text;
-            res.write(`data: ${JSON.stringify({ content: part.text })}\n\n`);
-          }
-
-          if (part.functionCall) {
-            hasToolCalls = true;
-            const { name, args } = part.functionCall;
-            res.write(`data: ${JSON.stringify({ tool_call: { name, args } })}\n\n`);
-
-            const toolBandit = await banditSelectWithFallback("tool", name);
-
-            const toolResult = await executeAgentTool(name, args || {});
-            res.write(`data: ${JSON.stringify({ tool_result: { name, result: toolResult.slice(0, 2000) } })}\n\n`);
-
-            const toolSuccess = !toolResult.startsWith("Error:");
-            const toolReward = toolSuccess ? 0.8 : 0.1;
-            await rewardAndLogBandit(toolBandit?.armId || null, toolReward, "tool", toolBandit?.armName || name);
-
-            if (!toolsUsedInRequest.includes(name)) {
-              toolsUsedInRequest.push(name);
-            }
-
-            toolResultParts.push({
-              functionResponse: { name, response: { result: toolResult } },
-            });
-          }
+        if (textContent) {
+          fullResponse += textContent;
+          res.write(`data: ${JSON.stringify({ content: textContent })}\n\n`);
         }
 
-        if (!hasToolCalls) break;
+        if (toolCalls.length === 0) break;
+
+        grokMessages.push({ role: "assistant", content: textContent, tool_calls: toolCalls });
+
+        for (const tc of toolCalls) {
+          const name = tc.function.name;
+          let args: any = {};
+          try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
+
+          res.write(`data: ${JSON.stringify({ tool_call: { name, args } })}\n\n`);
+
+          const toolBandit = await banditSelectWithFallback("tool", name);
+          const toolResult = await executeAgentTool(name, args);
+          res.write(`data: ${JSON.stringify({ tool_result: { name, result: toolResult.slice(0, 2000) } })}\n\n`);
+
+          const toolSuccess = !toolResult.startsWith("Error:");
+          await rewardAndLogBandit(toolBandit?.armId || null, toolSuccess ? 0.8 : 0.1, "tool", toolBandit?.armName || name);
+
+          if (!toolsUsedInRequest.includes(name)) toolsUsedInRequest.push(name);
+
+          grokMessages.push({ role: "tool", content: toolResult, tool_call_id: tc.id });
+        }
 
         const directiveUpdate = await recomputeEdcmAfterToolCall(fullResponse, conversationId, round);
         if (directiveUpdate) {
@@ -2429,15 +2422,7 @@ IMPORTANT RULES:
             if (memCtx) currentSystemPrompt += memCtx;
           } catch {}
         }
-
-        contents = [
-          ...contents,
-          { role: "model" as const, parts },
-          { role: "user" as const, parts: toolResultParts },
-        ];
       }
-
-      totalCompletionTokens = Math.ceil(fullResponse.length / 4);
 
       await storage.createMessage({
         conversationId,
@@ -2446,7 +2431,7 @@ IMPORTANT RULES:
         model: "agent",
       } as InsertMessage);
 
-      await trackCost(userId === "default" ? null : userId, "gemini", totalPromptTokens, totalCompletionTokens);
+      await trackCost(userId === "default" ? null : userId, "grok", totalPromptTokens, totalCompletionTokens);
 
       postResponseMemoryUpdate(conversationId, fullResponse).catch(() => {});
 
@@ -2457,13 +2442,13 @@ IMPORTANT RULES:
 
       const agentLatency = Date.now() - requestStartTime;
       const agentReward = computeResponseReward(fullResponse, agentLatency);
-      await rewardAndLogBandit(modelBandit?.armId || null, agentReward, "model", modelBandit?.armName || "gemini");
+      await rewardAndLogBandit(modelBandit?.armId || null, agentReward, "model", modelBandit?.armName || "grok");
       await rewardAndLogBandit(ptcaBandit?.armId || null, agentReward, "ptca_route", ptcaBandit?.armName || "standard");
       await rewardAndLogBandit(pcnaBandit?.armId || null, agentReward, "pcna_route", pcnaBandit?.armName || "ring_53");
       const primaryTool = toolsUsedInRequest.length > 0 ? toolsUsedInRequest[0] : null;
       recordCorrelation(
         primaryTool,
-        modelBandit?.armName || "gemini",
+        modelBandit?.armName || "grok",
         ptcaBandit?.armName || "standard",
         pcnaBandit?.armName || "ring_53",
         agentReward
@@ -2475,7 +2460,7 @@ IMPORTANT RULES:
         reward: agentReward,
         latencyMs: agentLatency,
         toolsUsed: toolsUsedInRequest,
-        modelArm: modelBandit?.armName || "gemini",
+        modelArm: modelBandit?.armName || "grok",
         ptcaArm: ptcaBandit?.armName || "standard",
         pcnaArm: pcnaBandit?.armName || "ring_53",
       });

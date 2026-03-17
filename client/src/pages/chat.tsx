@@ -26,9 +26,9 @@ import { cn } from "@/lib/utils";
 import type { Conversation, Message } from "@shared/schema";
 
 const CHAT_MODELS = [
-  { id: "agent", label: "Agent (Tools)", icon: Shield },
-  { id: "gemini", label: "Gemini", icon: Zap },
+  { id: "agent", label: "Grok (Agent)", icon: Shield },
   { id: "grok", label: "Grok", icon: Zap },
+  { id: "gemini", label: "Gemini", icon: Zap },
   { id: "synthesis", label: "Synthesis", icon: Layers },
 ] as const;
 
