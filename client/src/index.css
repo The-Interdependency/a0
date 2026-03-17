@@ -233,6 +233,14 @@
   word-break: break-all;
 }
 
+.markdown-content a.md-link,
+.md-link {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+
 /* ── Mobile-first globals ── */
 html {
   height: -webkit-fill-available;

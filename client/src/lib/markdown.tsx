@@ -5,6 +5,14 @@ export function renderMarkdown(text: string): string {
     .replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
       `<pre class="code-block"><code class="lang-${lang}">${escapeHtml(code.trim())}</code></pre>`
     )
+    .replace(
+      /\[([^\]]+)\]\((https?:\/\/[^)]+)\)|(https?:\/\/[^\s<>"')\]]+)/g,
+      (_, linkText, mdUrl, bareUrl) => {
+        const href = mdUrl ?? bareUrl;
+        const label = linkText ?? bareUrl;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="md-link">${label}</a>`;
+      }
+    )
     .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
     .replace(/^### (.+)$/gm, '<h3 class="md-h3">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 class="md-h2">$1</h2>')
