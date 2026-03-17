@@ -17,8 +17,6 @@ import {
   Clock, Sparkles, Target, Settings, Lock, Eye, EyeOff, ArrowUpDown, ArrowLeftRight, Cpu, GitBranch, Star, Gauge,
 } from "lucide-react";
 import { useSliderOrientation } from "@/hooks/use-slider-orientation";
-import { usePersona, PERSONA_META } from "@/hooks/use-persona";
-import { useLocation } from "wouter";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -96,24 +94,8 @@ const DEFAULT_METRIC_LABELS: MetricLabelMap = {
   TBF: { label: "Turn-Balance", desc: "Gini coefficient on actor token shares" },
 };
 
-const LEGAL_METRIC_LABELS: MetricLabelMap = {
-  CM: { label: "Case Merit", desc: "1 - alignment with established legal precedent" },
-  DA: { label: "Doctrine Accumulation", desc: "accumulation of applicable legal doctrine" },
-  DRIFT: { label: "Jurisdictional Drift", desc: "drift from target jurisdiction norms" },
-  DVG: { label: "Divergence", desc: "entropy(topic_distribution) normalized" },
-  INT: { label: "Intensity", desc: "clamp01(caps + punct + lex + tempo)" },
-  TBF: { label: "Turn-Balance", desc: "Gini coefficient on actor token shares" },
-};
-
-function getMetricLabels(persona: string): MetricLabelMap {
-  return persona === "legal" ? LEGAL_METRIC_LABELS : DEFAULT_METRIC_LABELS;
-}
-
 export default function ConsolePage() {
-  const { persona } = usePersona();
-  const visibleGroups = ALL_GROUPS.filter(g =>
-    (PERSONA_META[persona as keyof typeof PERSONA_META]?.groups ?? ["agent", "tools"]).includes(g.id)
-  );
+  const visibleGroups = ALL_GROUPS;
   const defaultTab = visibleGroups[0]?.tabs[0]?.id ?? "edcm";
 
   const [activeTab, setActiveTab] = useState<TabId>(() => {
@@ -127,7 +109,6 @@ export default function ConsolePage() {
     return owning?.id ?? visibleGroups[0]?.id ?? "agent";
   });
   const { orientation, toggleOrientation, isVertical } = useSliderOrientation();
-  const [, setLocation] = useLocation();
 
   function selectGroup(groupId: string) {
     setActiveGroup(groupId);
@@ -151,16 +132,6 @@ export default function ConsolePage() {
       <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0">
         <Shield className="w-4 h-4 text-primary flex-shrink-0" />
         <span className="font-semibold text-sm flex-1">Console</span>
-        <button
-          onClick={() => setLocation("/pricing")}
-          data-testid="button-persona-chip"
-          className={cn(
-            "text-[10px] font-mono px-2 py-1 rounded-full border border-border transition-colors min-h-[28px]",
-            PERSONA_META[persona as keyof typeof PERSONA_META]?.color ?? "text-muted-foreground"
-          )}
-        >
-          {persona}
-        </button>
         <Button
           size="icon"
           variant="ghost"
@@ -1141,8 +1112,7 @@ function alertColor(value: number): { bg: string; text: string; label: string } 
 }
 
 function MetricRow({ metricKey, value, evidence }: { metricKey: string; value: number; evidence: string[] }) {
-  const { persona } = usePersona();
-  const labels = getMetricLabels(persona);
+  const labels = DEFAULT_METRIC_LABELS;
   const info = labels[metricKey] || { label: metricKey, desc: "" };
   const alert = alertColor(value);
   const pct = Math.round(value * 100);
@@ -1239,8 +1209,7 @@ function TranscriptSourcesSection() {
     }
   };
 
-  const { persona } = usePersona();
-  const metricLabels = getMetricLabels(persona);
+  const metricLabels = DEFAULT_METRIC_LABELS;
   const METRIC_COLORS: Record<string, string> = {
     CM: "text-yellow-400", DA: "text-red-400", DRIFT: "text-blue-400",
     DVG: "text-purple-400", INT: "text-orange-400", TBF: "text-green-400",
