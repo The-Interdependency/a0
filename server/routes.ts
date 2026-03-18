@@ -374,6 +374,57 @@ You are operating in political analysis mode. Apply structured political science
     }
   });
 
+  // ============ MERCHANT DEALS ============
+  app.get("/api/deals", async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { status } = req.query as { status?: string };
+      const rows = await storage.listDeals(userId, status);
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post("/api/deals", async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { title, ceiling, walkAway, myGoals, currentTerms } = req.body;
+      if (!title?.trim()) return res.status(400).json({ error: "title required" });
+      const deal = await storage.createDeal({ userId, title: title.trim(), ceiling: ceiling ?? null, walkAway: walkAway ?? null, myGoals: myGoals || [], currentTerms: currentTerms || {}, counterHistory: [], status: "active" });
+      res.json(deal);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.get("/api/deals/:id", async (req: Request, res: Response) => {
+    try {
+      const deal = await storage.getDeal(parseInt(req.params.id));
+      if (!deal) return res.status(404).json({ error: "Not found" });
+      res.json(deal);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.patch("/api/deals/:id", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deal = await storage.getDeal(id);
+      if (!deal) return res.status(404).json({ error: "Not found" });
+      const { title, ceiling, walkAway, myGoals, currentTerms, counterHistory, outcome, finalTerms, status } = req.body;
+      const updated = await storage.updateDeal(id, { title, ceiling, walkAway, myGoals, currentTerms, counterHistory, outcome, finalTerms, status });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post("/api/deals/:id/close", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deal = await storage.getDeal(id);
+      if (!deal) return res.status(404).json({ error: "Not found" });
+      const { outcome, finalTerms, status } = req.body;
+      const closedStatus = status && ["won", "lost", "abandoned"].includes(status) ? status : "won";
+      const updated = await storage.updateDeal(id, { status: closedStatus, outcome: outcome || "", finalTerms: finalTerms || deal.currentTerms });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
   const DEFAULT_MODEL_SLOTS: Record<string, any> = {
     a: { label: "A", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
     b: { label: "B", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
@@ -1801,6 +1852,77 @@ INSTRUCTIONS:
       description: "List all current persona grants — a map of userId → persona. Use this to audit who has what access level.",
       parameters: { type: "object" as const, properties: {}, required: [] as string[] },
     },
+    // ---- Merchant Deal Tools ----
+    {
+      name: "create_deal",
+      description: "Open a new negotiation deal on behalf of the user. Call this when the user wants to negotiate something: a price, a contract, a scope of work, SaaS renewal, consulting rate, vendor invoice, etc. You are the merchant — you hold the line. Capture the user's goals, ceiling (max they'll pay or min they'll accept), and walk-away point.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          title: { type: "string" as const, description: "Short name for this deal (e.g. 'AWS contract renewal', 'Contractor rate negotiation')" },
+          ceiling: { type: "number" as const, description: "Max willing to pay or min willing to accept (numeric). Null if not a price deal." },
+          walkAway: { type: "number" as const, description: "Absolute walk-away point — worse than this and we decline. Null if not applicable." },
+          myGoals: { type: "array" as const, items: { type: "string" as const }, description: "List of what the user wants from this deal (e.g. ['price under $2000', '60-day payment terms', 'include support'])" },
+          currentTerms: { type: "object" as const, description: "Initial terms on the table (free-form object)" },
+        },
+        required: ["title"],
+      },
+    },
+    {
+      name: "update_deal",
+      description: "Log a move in the negotiation — a counterparty offer, our counter-offer, or new notes. Also updates current terms if they have changed. Always score counterparty offers with EDCM: high DA means contradictions, high DRIFT means they moved off their stated position.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          dealId: { type: "number" as const, description: "Deal ID to update" },
+          side: { type: "string" as const, description: "'counterparty' for their move, 'us' for our counter" },
+          offerText: { type: "string" as const, description: "Raw text of the offer or proposal" },
+          offer: { type: "object" as const, description: "Structured terms being offered" },
+          edcm: { type: "object" as const, description: "EDCM scores {cm, da, ec, dr, rr, drift} for this offer (0–1 each). High da = contradictions, high drift = position shift." },
+          notes: { type: "string" as const, description: "a0's tactical assessment — what this move means, how we respond" },
+          currentTerms: { type: "object" as const, description: "Updated current proposed terms if changed" },
+        },
+        required: ["dealId", "side"],
+      },
+    },
+    {
+      name: "list_deals",
+      description: "List all deals for the current user. Filter by status if needed.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          status: { type: "string" as const, description: "Filter: 'active' | 'won' | 'lost' | 'abandoned'. Omit for all." },
+        },
+        required: [] as string[],
+      },
+    },
+    {
+      name: "close_deal",
+      description: "Close a deal as won, lost, or abandoned. Record the outcome and final agreed terms.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          dealId: { type: "number" as const, description: "Deal ID to close" },
+          status: { type: "string" as const, description: "'won' | 'lost' | 'abandoned'" },
+          outcome: { type: "string" as const, description: "How it ended — what happened, what we got or didn't" },
+          finalTerms: { type: "object" as const, description: "Final agreed terms (if won)" },
+        },
+        required: ["dealId", "status", "outcome"],
+      },
+    },
+    {
+      name: "analyze_offer",
+      description: "Deeply analyze a counterparty offer or document using EDCM. Flags contradictions (DA), position drift, rhetorical manipulation, and gaps vs the user's goals. Use this on any incoming proposal, contract, invoice, or pitch before responding. Returns tactical assessment.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          offerText: { type: "string" as const, description: "The full text of the offer, contract section, or proposal to analyze" },
+          dealId: { type: "number" as const, description: "Optional: associate analysis with an active deal" },
+          userGoals: { type: "array" as const, items: { type: "string" as const }, description: "What the user wants — used to score gap between offer and goals" },
+        },
+        required: ["offerText"],
+      },
+    },
   ];
 
   async function executeAgentTool(toolName: string, args: any, userId = "default"): Promise<string> {
@@ -2580,6 +2702,97 @@ INSTRUCTIONS:
           const lines = Object.entries(grants).map(([uid, p]) => `  ${uid} → ${p}`).join("\n");
           return `Persona grants (${count}):\n${lines}`;
         }
+        // ---- Merchant Deal Tools ----
+        case "create_deal": {
+          const { title, ceiling, walkAway, myGoals, currentTerms } = args;
+          if (!title?.trim()) return "Error: title required";
+          const deal = await storage.createDeal({
+            userId,
+            title: title.trim(),
+            ceiling: ceiling ?? null,
+            walkAway: walkAway ?? null,
+            myGoals: myGoals || [],
+            currentTerms: currentTerms || {},
+            counterHistory: [],
+            status: "active",
+          });
+          await logMaster("agent", "deal_created", { dealId: deal.id, title: deal.title, userId });
+          return `Deal opened: "${deal.title}" (ID: ${deal.id}). Ceiling: ${ceiling ?? "N/A"}, walk-away: ${walkAway ?? "N/A"}. Goals: ${(myGoals || []).join(", ") || "none yet"}. I'll track this negotiation and flag when offers cross your walk-away.`;
+        }
+        case "update_deal": {
+          const { dealId, side, offerText, offer, edcm, notes, currentTerms } = args;
+          const deal = await storage.getDeal(dealId);
+          if (!deal) return `Error: Deal ${dealId} not found`;
+          const entry = {
+            side: side || "counterparty",
+            offer: offer || {},
+            text: offerText || "",
+            edcm: edcm || {},
+            notes: notes || "",
+            timestamp: new Date().toISOString(),
+          };
+          const counterHistory = [...(deal.counterHistory || []), entry];
+          const updates: any = { counterHistory };
+          if (currentTerms) updates.currentTerms = currentTerms;
+          await storage.updateDeal(dealId, updates);
+          await logMaster("agent", "deal_updated", { dealId, side: entry.side, notes: notes?.slice(0, 100) });
+          const edcmSummary = edcm ? `EDCM: DA=${edcm.da?.toFixed(2) ?? "?"} DRIFT=${edcm.drift?.toFixed(2) ?? "?"}` : "";
+          return `Move logged on deal "${deal.title}" — ${side === "us" ? "our counter" : "their offer"}. ${edcmSummary}${notes ? "\nAssessment: " + notes : ""}`;
+        }
+        case "list_deals": {
+          const { status: filterStatus } = args;
+          const userDeals = await storage.listDeals(userId, filterStatus);
+          if (userDeals.length === 0) return filterStatus ? `No ${filterStatus} deals.` : "No deals open. Tell me what you want to negotiate and I'll open one.";
+          const lines = userDeals.map(d => {
+            const histCount = (d.counterHistory || []).length;
+            return `  [${d.id}] "${d.title}" — ${d.status} | ${histCount} moves | ceiling: ${d.ceiling ?? "N/A"} | walk-away: ${d.walkAway ?? "N/A"}`;
+          }).join("\n");
+          return `Deals (${userDeals.length}):\n${lines}`;
+        }
+        case "close_deal": {
+          const { dealId, status: closeStatus, outcome, finalTerms } = args;
+          const deal = await storage.getDeal(dealId);
+          if (!deal) return `Error: Deal ${dealId} not found`;
+          const validStatus = ["won", "lost", "abandoned"].includes(closeStatus) ? closeStatus : "won";
+          await storage.updateDeal(dealId, { status: validStatus, outcome: outcome || "", finalTerms: finalTerms || deal.currentTerms });
+          await logMaster("agent", "deal_closed", { dealId, status: validStatus, outcome: outcome?.slice(0, 100) });
+          const emoji = validStatus === "won" ? "✓" : validStatus === "lost" ? "✗" : "–";
+          return `${emoji} Deal "${deal.title}" closed as ${validStatus.toUpperCase()}. ${outcome}`;
+        }
+        case "analyze_offer": {
+          const { offerText, dealId, userGoals } = args;
+          if (!offerText?.trim()) return "Error: offerText required";
+          // Build a focused analysis using the LLM with EDCM framing
+          const analysisPrompt = [
+            `You are a0, a merchant AI. Analyze this offer using EDCM framing:`,
+            `- CM (Coherence Mass): How internally consistent is this offer?`,
+            `- DA (Dissonance Amplitude): Contradictions, weasel words, conflicting terms?`,
+            `- EC (Epistemic Coherence): Are claims backed by evidence or are they assertions?`,
+            `- DRIFT: Has the counterparty shifted from their earlier stated position?`,
+            `- RR (Rhetorical Resonance): Manipulation tactics, urgency manufacturing, false scarcity?`,
+            userGoals?.length ? `\nUser goals: ${userGoals.join(", ")}` : "",
+            `\nOffer text:\n${offerText.slice(0, 3000)}`,
+            `\nReturn: tactical assessment, EDCM scores (0.0–1.0 each), gaps vs user goals, recommended counter-position. Be concise and direct.`,
+          ].filter(Boolean).join("\n");
+
+          const { OpenAI } = await import("openai");
+          const xai = new OpenAI({ apiKey: process.env.XAI_API_KEY, baseURL: "https://api.x.ai/v1" });
+          const resp = await xai.chat.completions.create({
+            model: "grok-3-mini",
+            messages: [{ role: "user", content: analysisPrompt }],
+            max_tokens: 800,
+          });
+          const analysis = resp.choices[0]?.message?.content || "(no analysis)";
+          if (dealId) {
+            const deal = await storage.getDeal(dealId);
+            if (deal) {
+              const entry = { side: "counterparty" as const, offer: {}, text: offerText, edcm: {}, notes: analysis, timestamp: new Date().toISOString() };
+              await storage.updateDeal(dealId, { counterHistory: [...(deal.counterHistory || []), entry] });
+            }
+          }
+          await logMaster("agent", "deal_analyze_offer", { dealId, goalCount: userGoals?.length || 0 });
+          return analysis;
+        }
         default:
           return `Unknown tool: ${toolName}`;
       }
@@ -2631,6 +2844,7 @@ INSTRUCTIONS:
       const userPersona = grantedPersona ?? await getUserPersona(userId);
       const personaBlock = PERSONA_PROMPT_BLOCKS[userPersona] || "";
       const allGrants = await getPersonaGrants();
+      const activeDeals = await storage.listDeals(userId, "active");
 
       await logMaster("bandit", "request_selections", {
         conversationId,
@@ -2650,9 +2864,22 @@ INSTRUCTIONS:
         ? `This user has a configured persona grant: '${grantedPersona}'. It has been automatically enforced.`
         : `No persona grant configured for this user. They are using '${userPersona}'.`;
 
+      const dealsBlock = activeDeals.length > 0 ? `
+ACTIVE NEGOTIATIONS (${activeDeals.length}):
+${activeDeals.map(d => {
+  const moves = (d.counterHistory || []).length;
+  const goals = (d.myGoals as string[] || []).join(", ") || "none";
+  const lastMove = (d.counterHistory as any[] || []).slice(-1)[0];
+  const lastNote = lastMove ? `\n    Last move (${lastMove.side}): ${lastMove.notes?.slice(0, 120) || "(no notes)"}` : "";
+  return `  [${d.id}] "${d.title}" | ceiling: ${d.ceiling ?? "N/A"} | walk-away: ${d.walkAway ?? "N/A"} | ${moves} moves\n    Goals: ${goals}${lastNote}`;
+}).join("\n")}` : "";
+
       const baseAgentSystemPrompt = `${ctx.systemPrompt || DEFAULT_CONTEXT.systemPrompt}
 
 ${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}${personaBlock ? `\n\n${personaBlock}` : ""}
+
+MERCHANT MODE — NEGOTIATION AGENT:
+You are also a haggling merchant acting in the user's interest. When the user wants to negotiate anything (price, contract, vendor terms, SaaS renewals, consulting rates, invoices), open a deal with create_deal and take an active negotiating stance. You hold the line. You analyze incoming offers with analyze_offer, score them with EDCM, and propose counter-positions. You know market rates (use web_search). You never accept the first offer. You flag when terms cross the user's walk-away and recommend walking. You close deals when the user wins.${dealsBlock ? `\n${dealsBlock}` : ""}
 
 CURRENT USER IDENTITY:
 - userId: ${userId}

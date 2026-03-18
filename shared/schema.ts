@@ -189,6 +189,43 @@ export const insertHeartbeatTaskSchema = createInsertSchema(heartbeatTasks).omit
 export type HeartbeatTask = typeof heartbeatTasks.$inferSelect;
 export type InsertHeartbeatTask = z.infer<typeof insertHeartbeatTaskSchema>;
 
+// ---- Merchant Deals ----
+export const deals = pgTable("deals", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull(),
+  /** active | won | lost | abandoned */
+  status: text("status").notNull().default("active"),
+  /** Max willing to pay / min willing to accept */
+  ceiling: real("ceiling"),
+  /** Absolute walk-away threshold */
+  walkAway: real("walk_away"),
+  /** What the user wants out of this deal */
+  myGoals: jsonb("my_goals").$type<string[]>().default([]),
+  /** Current proposed terms (free-form object) */
+  currentTerms: jsonb("current_terms").$type<Record<string, any>>().default({}),
+  /** Full negotiation history with EDCM scores */
+  counterHistory: jsonb("counter_history").$type<Array<{
+    side: "counterparty" | "us";
+    offer: Record<string, any>;
+    text?: string;
+    edcm?: Record<string, number>;
+    notes?: string;
+    timestamp: string;
+  }>>().default([]),
+  /** How the deal closed */
+  outcome: text("outcome"),
+  /** Agreed final terms */
+  finalTerms: jsonb("final_terms").$type<Record<string, any>>(),
+  conversationId: integer("conversation_id"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertDealSchema = createInsertSchema(deals).omit({ id: true, createdAt: true, updatedAt: true });
+export type Deal = typeof deals.$inferSelect;
+export type InsertDeal = z.infer<typeof insertDealSchema>;
+
 export const edcmMetricSnapshots = pgTable("edcm_metric_snapshots", {
   id: serial("id").primaryKey(),
   conversationId: integer("conversation_id"),

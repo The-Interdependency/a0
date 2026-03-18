@@ -6,7 +6,7 @@ import {
   banditArms, customTools, heartbeatTasks, edcmMetricSnapshots,
   memorySeeds, memoryProjections, memoryTensorSnapshots,
   banditCorrelations, systemToggles, discoveryDrafts,
-  transcriptSources, transcriptReports,
+  transcriptSources, transcriptReports, deals,
   type Conversation, type InsertConversation,
   type Message, type InsertMessage,
   type AutomationTask, type InsertAutomationTask,
@@ -24,6 +24,7 @@ import {
   type DiscoveryDraft, type InsertDiscoveryDraft,
   type TranscriptSource, type InsertTranscriptSource,
   type TranscriptReport, type InsertTranscriptReport,
+  type Deal, type InsertDeal,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -110,6 +111,11 @@ export interface IStorage {
   getDiscoveryDrafts(limit?: number): Promise<DiscoveryDraft[]>;
   createDiscoveryDraft(data: InsertDiscoveryDraft): Promise<DiscoveryDraft>;
   promoteDiscoveryDraft(id: number, conversationId: number): Promise<void>;
+
+  listDeals(userId: string, status?: string): Promise<Deal[]>;
+  getDeal(id: number): Promise<Deal | undefined>;
+  createDeal(data: InsertDeal): Promise<Deal>;
+  updateDeal(id: number, updates: Partial<Deal>): Promise<Deal>;
 
   getActivityStats(): Promise<{
     heartbeatRuns: number;
@@ -515,6 +521,26 @@ export class DatabaseStorage implements IStorage {
 
   async promoteDiscoveryDraft(id: number, conversationId: number) {
     await db.update(discoveryDrafts).set({ promotedToConversation: true, conversationId }).where(eq(discoveryDrafts.id, id));
+  }
+
+  async listDeals(userId: string, status?: string): Promise<Deal[]> {
+    const rows = await db.select().from(deals).where(eq(deals.userId, userId)).orderBy(desc(deals.createdAt));
+    return status ? rows.filter(d => d.status === status) : rows;
+  }
+
+  async getDeal(id: number): Promise<Deal | undefined> {
+    const [row] = await db.select().from(deals).where(eq(deals.id, id));
+    return row;
+  }
+
+  async createDeal(data: InsertDeal): Promise<Deal> {
+    const [row] = await db.insert(deals).values(data).returning();
+    return row;
+  }
+
+  async updateDeal(id: number, updates: Partial<Deal>): Promise<Deal> {
+    const [row] = await db.update(deals).set({ ...updates, updatedAt: new Date() }).where(eq(deals.id, id)).returning();
+    return row;
   }
 
   async getActivityStats() {
