@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import { logMaster, logTranscript, logEdcm, logOmega, logPsi } from "./logger";
+import OpenAI from "openai";
 import { computeEdcmMetrics, updateSemanticMemory, omegaSolve, applyCrossTensorCoupling, applyMemoryBridge, persistOmegaState, getOmegaState, psiSolve, applyPsiOmegaCoupling, persistPsiState, ptcaSolveDetailed } from "./a0p-engine";
 import { getUncachableGitHubClient } from "./github";
 import { createHash } from "crypto";
@@ -93,10 +94,12 @@ async function getHeartbeatParams(): Promise<{ tickMs: number }> {
 }
 
 function weightedSelect(tasks: HeartbeatTask[]): HeartbeatTask | null {
+  const now = Date.now();
   const eligible = tasks.filter((t) => {
     if (!t.enabled) return false;
+    if (t.scheduledAt && new Date(t.scheduledAt).getTime() > now) return false;
     if (t.lastRun) {
-      const elapsed = (Date.now() - new Date(t.lastRun).getTime()) / 1000;
+      const elapsed = (now - new Date(t.lastRun).getTime()) / 1000;
       if (elapsed < t.intervalSeconds) return false;
     }
     return true;
@@ -122,10 +125,12 @@ interface OmegaStateCompact {
 }
 
 function omegaWeightedSelect(tasks: HeartbeatTask[], omega: OmegaStateCompact): HeartbeatTask | null {
+  const now = Date.now();
   const eligible = tasks.filter((t) => {
     if (!t.enabled) return false;
+    if (t.scheduledAt && new Date(t.scheduledAt).getTime() > now) return false;
     if (t.lastRun) {
-      const elapsed = (Date.now() - new Date(t.lastRun).getTime()) / 1000;
+      const elapsed = (now - new Date(t.lastRun).getTime()) / 1000;
       if (elapsed < t.intervalSeconds) return false;
     }
     return true;
@@ -186,10 +191,128 @@ async function executeTask(task: HeartbeatTask): Promise<{ result: string; relev
       return executeAiSocialSearch(task);
     case "x_monitor":
       return executeXMonitor(task);
+    case "goal_pursuit":
+      return executeGoalPursuit(task);
     case "custom":
       return executeCustomTask(task);
     default:
       return { result: `Unknown task type: ${task.taskType}`, relevance: 0, data: {} };
+  }
+}
+
+async function executeGoalPursuit(task: HeartbeatTask): Promise<{ result: string; relevance: number; data: any }> {
+  try {
+    const omega = getOmegaState();
+    const activeGoals = ((omega as any).goals || []).filter((g: any) => g.status === "active");
+
+    if (activeGoals.length === 0) {
+      return { result: "No active goals to pursue.", relevance: 0, data: { goalCount: 0 } };
+    }
+
+    // Pick highest priority goal
+    const goal = [...activeGoals].sort((a: any, b: any) => (b.priority || 0) - (a.priority || 0))[0];
+    const goalDesc: string = goal.description || "undefined goal";
+
+    await logMaster("heartbeat", "goal_pursuit_start", { goalId: goal.id, goalDesc: goalDesc.slice(0, 100) });
+
+    // Use xAI to decide on a concrete search query for this goal
+    const apiKey = process.env.XAI_API_KEY || "";
+    if (!apiKey) {
+      return { result: `Goal pursuit skipped: no XAI_API_KEY. Goal: "${goalDesc}"`, relevance: 0.1, data: { goalDesc } };
+    }
+
+    const xaiClient = new OpenAI({ apiKey, baseURL: "https://api.x.ai/v1" });
+    const abortCtrl = new AbortController();
+    const timeout = setTimeout(() => abortCtrl.abort(), 30000);
+    let searchQuery = goalDesc;
+    try {
+      const planResp = await xaiClient.chat.completions.create({
+        model: "grok-3-mini",
+        messages: [{
+          role: "user",
+          content: `You are an autonomous AI agent. Your current goal is: "${goalDesc}"\n\nGenerate ONE specific web search query that would make meaningful progress toward this goal. Reply with ONLY the search query, no explanation, no quotes.`,
+        }],
+        max_tokens: 60,
+      } as any, { signal: abortCtrl.signal });
+      clearTimeout(timeout);
+      searchQuery = planResp.choices[0]?.message?.content?.trim() || goalDesc;
+    } catch {
+      clearTimeout(timeout);
+    }
+
+    // Execute web search (Brave → DuckDuckGo fallback)
+    let searchResults = "";
+    let resultUrls: string[] = [];
+    try {
+      const braveKey = process.env.BRAVE_API_KEY || "";
+      if (braveKey) {
+        const r = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(searchQuery)}&count=5`, {
+          headers: { Accept: "application/json", "Accept-Encoding": "gzip", "X-Subscription-Token": braveKey },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (r.ok) {
+          const d = await r.json() as any;
+          const results = (d.web?.results || []).slice(0, 5);
+          resultUrls = results.map((x: any) => x.url);
+          searchResults = results.map((x: any) => `${x.title}: ${x.description || ""}`).join("\n");
+        }
+      }
+      if (!searchResults) {
+        const r = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`, {
+          headers: { "User-Agent": "Mozilla/5.0" },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (r.ok) {
+          const html = await r.text();
+          const titles = [...html.matchAll(/class="result__title"[^>]*>(.*?)<\/a>/gs)].slice(0, 5).map(m => m[1].replace(/<[^>]+>/g, "").trim());
+          searchResults = titles.join("\n");
+        }
+      }
+    } catch {}
+
+    if (!searchResults) searchResults = "No search results retrieved.";
+
+    // Ask Grok to assess what was found and what it means for the goal
+    let assessment = "";
+    try {
+      const abortCtrl2 = new AbortController();
+      const timeout2 = setTimeout(() => abortCtrl2.abort(), 30000);
+      const assessResp = await xaiClient.chat.completions.create({
+        model: "grok-3-mini",
+        messages: [{
+          role: "user",
+          content: `Goal: "${goalDesc}"\nSearch query used: "${searchQuery}"\nSearch results:\n${searchResults.slice(0, 1500)}\n\nBriefly: What did you find relevant to the goal? What is the next concrete step? (3-4 sentences max)`,
+        }],
+        max_tokens: 200,
+      } as any, { signal: abortCtrl2.signal });
+      clearTimeout(timeout2);
+      assessment = assessResp.choices[0]?.message?.content?.trim() || "";
+    } catch {}
+
+    // Score relevance by keyword overlap between goal and results
+    const goalWords = new Set(goalDesc.toLowerCase().split(/\W+/).filter(w => w.length > 4));
+    const resultText = (searchResults + " " + assessment).toLowerCase();
+    const matchCount = [...goalWords].filter(w => resultText.includes(w)).length;
+    const relevance = Math.min(0.95, 0.3 + (goalWords.size > 0 ? (matchCount / goalWords.size) * 0.65 : 0));
+
+    const result = `Goal pursuit: "${goalDesc.slice(0, 80)}"\nQuery: "${searchQuery}"\nFindings: ${assessment || searchResults.slice(0, 300)}`;
+
+    await logMaster("heartbeat", "goal_pursuit_complete", {
+      goalId: goal.id,
+      goalDesc: goalDesc.slice(0, 100),
+      searchQuery,
+      relevance,
+      resultLen: result.length,
+    });
+
+    return {
+      result,
+      relevance,
+      data: { goalId: goal.id, goalDesc, searchQuery, assessment, resultUrls: resultUrls.slice(0, 5) },
+    };
+  } catch (err: any) {
+    await logMaster("heartbeat", "goal_pursuit_error", { error: err.message }).catch(() => {});
+    return { result: `Goal pursuit error: ${err.message}`, relevance: 0, data: { error: err.message } };
   }
 }
 

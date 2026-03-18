@@ -81,6 +81,7 @@ export interface IStorage {
 
   getHeartbeatTasks(): Promise<HeartbeatTask[]>;
   getHeartbeatTask(name: string): Promise<HeartbeatTask | undefined>;
+  createHeartbeatTask(data: InsertHeartbeatTask): Promise<HeartbeatTask>;
   upsertHeartbeatTask(data: InsertHeartbeatTask): Promise<HeartbeatTask>;
   updateHeartbeatTask(id: number, updates: Partial<HeartbeatTask>): Promise<void>;
   deleteHeartbeatTask(id: number): Promise<void>;
@@ -389,6 +390,11 @@ export class DatabaseStorage implements IStorage {
 
   async getHeartbeatTask(name: string) {
     const [task] = await db.select().from(heartbeatTasks).where(eq(heartbeatTasks.name, name));
+    return task;
+  }
+
+  async createHeartbeatTask(data: InsertHeartbeatTask) {
+    const [task] = await db.insert(heartbeatTasks).values(data).returning();
     return task;
   }
 

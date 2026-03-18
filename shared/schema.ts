@@ -178,6 +178,10 @@ export const heartbeatTasks = pgTable("heartbeat_tasks", {
   lastRun: timestamp("last_run"),
   lastResult: text("last_result"),
   runCount: integer("run_count").notNull().default(0),
+  /** If set, task will not run until this timestamp has passed */
+  scheduledAt: timestamp("scheduled_at"),
+  /** If true, task is deleted from DB after running once */
+  oneShot: boolean("one_shot").notNull().default(false),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
