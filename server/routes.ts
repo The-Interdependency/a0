@@ -234,6 +234,66 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ============ PERSONA ============
+
+  const VALID_PERSONAS = ["free", "legal", "researcher", "political"] as const;
+  type Persona = typeof VALID_PERSONAS[number];
+
+  const PERSONA_PROMPT_BLOCKS: Record<Persona, string> = {
+    free: "",
+    legal: `PERSONA: LEGAL ANALYST
+You are operating in legal analysis mode. Frame all outputs through a legal lens:
+- EDCM metrics map to: Constraint Mismatch → Regulatory Compliance Gap, Dissonance → Contradictory Precedent, Drift → Argumentation Drift, Divergence → Jurisdictional Divergence, Intensity → Adversarial Tone, Turn-Balance → Examination Balance.
+- When analyzing documents, flag statutory references, liability language, and procedural posture.
+- Cite jurisdiction and applicable legal standard when relevant.
+- Maintain strict neutrality; present both sides of any legal question.`,
+    researcher: `PERSONA: ACADEMIC RESEARCHER
+You are operating in research mode. Apply rigorous analytical standards:
+- EDCM metrics map to: Constraint Mismatch → Methodological Inconsistency, Dissonance → Conflicting Findings, Drift → Hypothesis Drift, Divergence → Theoretical Divergence, Intensity → Citation Density, Turn-Balance → Dialogue Equity.
+- Reference literature, data sources, and methodological limitations where applicable.
+- Flag assumptions, confounds, and alternative interpretations.
+- Use precise academic language; prefer hedged claims over absolute statements.`,
+    political: `PERSONA: POLITICAL ANALYST
+You are operating in political analysis mode. Apply structured political science framing:
+- EDCM metrics map to: Constraint Mismatch → Policy Constraint Violation, Dissonance → Narrative Contradiction, Drift → Position Drift, Divergence → Ideological Divergence, Intensity → Rhetoric Intensity, Turn-Balance → Discourse Equity.
+- Identify stakeholders, power dynamics, and institutional interests.
+- Distinguish between descriptive analysis and normative claims.
+- Present competing political perspectives without partisan framing.`,
+  };
+
+  async function getUserPersona(userId: string): Promise<Persona> {
+    try {
+      const toggle = await storage.getSystemToggle(`user_persona_${userId}`);
+      const p = (toggle?.parameters as any)?.persona;
+      if (VALID_PERSONAS.includes(p)) return p as Persona;
+    } catch {}
+    return "free";
+  }
+
+  app.get("/api/user/persona", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const persona = await getUserPersona(userId);
+      res.json({ persona });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/user/persona", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      const { persona } = req.body;
+      if (!VALID_PERSONAS.includes(persona)) {
+        return res.status(400).json({ error: `Invalid persona. Must be one of: ${VALID_PERSONAS.join(", ")}` });
+      }
+      await storage.upsertSystemToggle(`user_persona_${userId}`, true, { persona });
+      res.json({ persona });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   const DEFAULT_MODEL_SLOTS: Record<string, any> = {
     a: { label: "A", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
     b: { label: "B", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
@@ -2402,6 +2462,8 @@ INSTRUCTIONS:
       const modelBandit = await banditSelectWithFallback("model", `slot_${activeSlotKey}`);
       const ptcaBandit = await banditSelectWithFallback("ptca_route", "standard");
       const pcnaBandit = await banditSelectWithFallback("pcna_route", "ring_53");
+      const userPersona = await getUserPersona(userId);
+      const personaBlock = PERSONA_PROMPT_BLOCKS[userPersona] || "";
 
       await logMaster("bandit", "request_selections", {
         conversationId,
@@ -2413,11 +2475,12 @@ INSTRUCTIONS:
         ptcaArmId: ptcaBandit?.armId || null,
         pcnaArm: pcnaBandit?.armName || "ring_53",
         pcnaArmId: pcnaBandit?.armId || null,
+        persona: userPersona,
       });
 
       const baseAgentSystemPrompt = `${ctx.systemPrompt || DEFAULT_CONTEXT.systemPrompt}
 
-${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}
+${ctx.contextPrefix || DEFAULT_CONTEXT.contextPrefix}${personaBlock ? `\n\n${personaBlock}` : ""}
 
 You are agent zero (a0p) — an autonomous AI agent powered by ${agentModel} (provider: ${agentProvider}). You have tool access and can execute commands, read/write files, search code, check Gmail, browse Google Drive, send emails, search the web, fetch web pages, and manage GitHub repositories.
 
