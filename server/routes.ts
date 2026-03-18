@@ -230,20 +230,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  const DEFAULT_MODEL_SLOTS = {
+  const DEFAULT_MODEL_SLOTS: Record<string, any> = {
     a: { label: "A", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
     b: { label: "B", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
     c: { label: "C", provider: "xai", model: "grok-3-mini", baseUrl: "https://api.x.ai/v1", apiKey: "" },
   };
 
-  async function getModelSlots() {
+  // Slot keys: lowercase alphanumeric, max 8 chars
+  function isValidSlotKey(key: string) {
+    return /^[a-z0-9]{1,8}$/.test(key);
+  }
+
+  async function getModelSlots(): Promise<Record<string, any>> {
     const toggle = await storage.getSystemToggle("model_slots");
     const saved = (toggle?.parameters as any) || {};
-    const slots: Record<string, any> = {};
-    for (const key of ["a", "b", "c"] as const) {
+    // Always include defaults for a/b/c if not overridden, plus any user-added slots
+    const merged: Record<string, any> = {};
+    for (const key of ["a", "b", "c"]) {
       const d = DEFAULT_MODEL_SLOTS[key];
       const s = saved[key] || {};
-      slots[key] = {
+      merged[key] = {
         label: s.label ?? d.label,
         provider: s.provider ?? d.provider,
         model: s.model ?? d.model,
@@ -251,7 +257,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         apiKey: s.apiKey ?? "",
       };
     }
-    return slots;
+    // Any extra user-defined slots
+    for (const key of Object.keys(saved)) {
+      if (!["a", "b", "c"].includes(key) && isValidSlotKey(key)) {
+        merged[key] = {
+          label: saved[key].label ?? key.toUpperCase(),
+          provider: saved[key].provider ?? "xai",
+          model: saved[key].model ?? "grok-3-mini",
+          baseUrl: saved[key].baseUrl ?? "https://api.x.ai/v1",
+          apiKey: saved[key].apiKey ?? "",
+        };
+      }
+    }
+    return merged;
   }
 
   function buildSlotClient(slot: any): { client: OpenAI; model: string } {
@@ -279,19 +297,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/agent/slots/:slot", async (req, res) => {
     try {
       const { slot } = req.params;
-      if (!["a", "b", "c"].includes(slot)) return res.status(400).json({ error: "Invalid slot. Use a, b, or c." });
+      if (!isValidSlotKey(slot)) return res.status(400).json({ error: "Invalid slot key. Use lowercase alphanumeric, max 8 chars." });
       const { label, provider, model, baseUrl, apiKey } = req.body;
       const existing = await getModelSlots();
       const cur = existing[slot] || {};
       existing[slot] = {
-        label: label ?? cur.label,
-        provider: provider ?? cur.provider,
-        model: model ?? cur.model,
-        baseUrl: baseUrl ?? cur.baseUrl,
+        label: label ?? cur.label ?? slot.toUpperCase(),
+        provider: provider ?? cur.provider ?? "xai",
+        model: model ?? cur.model ?? "grok-3-mini",
+        baseUrl: baseUrl ?? cur.baseUrl ?? "https://api.x.ai/v1",
         apiKey: apiKey !== undefined ? apiKey : (cur.apiKey || ""),
       };
       await storage.upsertSystemToggle("model_slots", true, existing);
-      res.json({ ok: true });
+      res.json({ ok: true, slot, slots: Object.keys(existing) });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/agent/slots/:slot", async (req, res) => {
+    try {
+      const { slot } = req.params;
+      if (["a", "b", "c"].includes(slot)) return res.status(400).json({ error: "Cannot delete core slots a, b, c." });
+      if (!isValidSlotKey(slot)) return res.status(400).json({ error: "Invalid slot key." });
+      const existing = await getModelSlots();
+      delete existing[slot];
+      await storage.upsertSystemToggle("model_slots", true, existing);
+      res.json({ ok: true, deleted: slot, slots: Object.keys(existing) });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -2146,7 +2178,8 @@ INSTRUCTIONS:
       const conv = await storage.getConversation(conversationId);
       if (!conv) return res.status(404).json({ error: "Conversation not found" });
 
-      const activeSlotKey = (requestSlot && ["a", "b", "c"].includes(requestSlot)) ? requestSlot : "a";
+      const allSlotsForValidation = await getModelSlots();
+      const activeSlotKey = (requestSlot && isValidSlotKey(requestSlot) && allSlotsForValidation[requestSlot]) ? requestSlot : "a";
       const requestStartTime = Date.now();
 
       await storage.createMessage({ conversationId, role: "user", content, model: `slot_${activeSlotKey}` } as InsertMessage);
@@ -2162,8 +2195,7 @@ INSTRUCTIONS:
       const userId = (req as any).user?.claims?.sub || "default";
       const ctxToggle = await storage.getSystemToggle(`user_context_${userId}`);
       const ctx = (ctxToggle?.parameters as any) || DEFAULT_CONTEXT;
-      const allSlots = await getModelSlots();
-      const activeSlot = allSlots[activeSlotKey];
+      const activeSlot = allSlotsForValidation[activeSlotKey];
       const { client: grokClient, model: agentModel } = buildSlotClient(activeSlot);
       const agentProvider = activeSlot.provider || "xai";
       const modelBandit = await banditSelectWithFallback("model", `slot_${activeSlotKey}`);
@@ -2241,13 +2273,25 @@ IMPORTANT RULES:
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         grokMessages[0] = { role: "system", content: currentSystemPrompt };
 
-        const result = await grokClient.chat.completions.create({
-          model: agentModel,
-          messages: grokMessages,
-          tools: grokTools,
-          tool_choice: "auto",
-          max_tokens: 16384,
-        });
+        const agentAbort = new AbortController();
+        const agentTimeout = setTimeout(() => agentAbort.abort(), 60000);
+        let result: any;
+        try {
+          result = await grokClient.chat.completions.create({
+            model: agentModel,
+            messages: grokMessages,
+            tools: grokTools,
+            tool_choice: "auto",
+            max_tokens: 16384,
+          }, { signal: agentAbort.signal });
+        } catch (e: any) {
+          clearTimeout(agentTimeout);
+          const errMsg = agentAbort.signal.aborted ? "Agent request timed out (60s). The model took too long to respond." : e.message;
+          res.write(`data: ${JSON.stringify({ error: errMsg, done: true })}\n\n`);
+          res.end();
+          return;
+        }
+        clearTimeout(agentTimeout);
 
         totalPromptTokens += result.usage?.prompt_tokens || Math.ceil(JSON.stringify(grokMessages).length / 4);
         totalCompletionTokens += result.usage?.completion_tokens || 0;

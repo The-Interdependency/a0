@@ -923,6 +923,23 @@ After first successful response, the agent generates a short title for the conve
 
 ## 5. AI Models
 
+### 5.0 Model Slots (Expansion Architecture)
+
+Model slots are fully dynamic. Slots A/B/C are the default core slots; additional slots can be added (D, E, custom keys, etc.) at runtime via the API or Console and persisted in `system_toggles` key `model_slots`.
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| GET /api/agent/slots | GET | List all slots (apiKey masked) |
+| PATCH /api/agent/slots/:slot | PATCH | Create or update any slot (any valid lowercase alphanumeric key, max 8 chars) |
+| DELETE /api/agent/slots/:slot | DELETE | Remove an expansion slot (cannot delete core a/b/c) |
+
+Slot schema per key:
+```json
+{ "label": "D", "provider": "openai", "model": "gpt-4o", "baseUrl": "https://api.openai.com/v1", "apiKey": "sk-..." }
+```
+
+All slots route through the same OpenAI-compatible `buildSlotClient()` factory. The active slot for a given request is selected per-message (sent as `slot` in the chat body) and falls back to slot `a` if invalid.
+
 ### 5.1 Built-In
 
 | Model | Provider | Cost (per 1M tokens) |
