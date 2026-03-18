@@ -48,6 +48,10 @@ import {
   logAiTranscript, readAiTranscripts, listAiTranscriptFiles,
 } from "./logger";
 import {
+  fanOut, daisyChain, roomAll, roomSynthesized, council, roleplay,
+  type CallFn, type Message, type ModelResult,
+} from "./hub/index.js";
+import {
   initializeHeartbeatTasks, startHeartbeatScheduler, stopHeartbeatScheduler,
   isHeartbeatSchedulerRunning, runTaskNow, updateTickInterval,
   getHeartbeatSchedulerStatus,
@@ -327,6 +331,122 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Hub orchestration endpoint
+  // ---------------------------------------------------------------------------
+
+  app.post("/api/hub/run", async (req, res) => {
+    try {
+      const {
+        pattern, slots, prompt, slotContexts,
+        rounds = 2, synthSlot, dmSlot,
+        maxHistory = 20, useInitiative = true,
+        allowReactions = false, actionWordLimit = 80,
+      } = req.body;
+
+      if (!pattern || !slots?.length || !prompt) {
+        return res.status(400).json({ error: "pattern, slots[], and prompt are required." });
+      }
+
+      const validPatterns = ["fan_out", "daisy_chain", "room_all", "room_synthesized", "council", "roleplay"];
+      if (!validPatterns.includes(pattern)) {
+        return res.status(400).json({ error: `Invalid pattern. Use: ${validPatterns.join(", ")}` });
+      }
+
+      const allSlots = await getModelSlots();
+      const modelIds: string[] = [];
+      for (const slotKey of slots) {
+        if (!allSlots[slotKey]) return res.status(400).json({ error: `Unknown slot: ${slotKey}` });
+        modelIds.push(slotKey); // we'll resolve to actual model inside callFn
+      }
+
+      // Build a CallFn that routes modelId (= slot key) through the right slot client
+      const callFn: CallFn = async (slotKey: string, messages: Message[]): Promise<string> => {
+        const slot = allSlots[slotKey];
+        if (!slot) return `[ERROR] Unknown slot: ${slotKey}`;
+        const { client, model } = buildSlotClient(slot);
+        const abortCtrl = new AbortController();
+        const timeout = setTimeout(() => abortCtrl.abort(), 60000);
+        try {
+          const result = await client.chat.completions.create({
+            model,
+            messages,
+            max_tokens: 4096,
+          } as any, { signal: abortCtrl.signal });
+          clearTimeout(timeout);
+          return result.choices[0]?.message?.content || "";
+        } catch (e: any) {
+          clearTimeout(timeout);
+          return `[ERROR] ${e?.message ?? e}`;
+        }
+      };
+
+      let results: ModelResult[];
+      const startMs = Date.now();
+
+      switch (pattern) {
+        case "fan_out":
+          results = await fanOut(callFn, modelIds, [{ role: "user", content: prompt }], slotContexts);
+          break;
+        case "daisy_chain":
+          results = await daisyChain(callFn, modelIds, prompt, slotContexts, maxHistory);
+          break;
+        case "room_all":
+          results = await roomAll(callFn, modelIds, prompt, rounds, slotContexts, maxHistory);
+          break;
+        case "room_synthesized": {
+          if (!synthSlot || !allSlots[synthSlot]) {
+            return res.status(400).json({ error: "room_synthesized requires synthSlot pointing to a valid slot." });
+          }
+          results = await roomSynthesized(callFn, modelIds, prompt, synthSlot, rounds, slotContexts, maxHistory);
+          break;
+        }
+        case "council":
+          results = await council(callFn, modelIds, prompt, slotContexts);
+          break;
+        case "roleplay": {
+          if (!dmSlot || !allSlots[dmSlot]) {
+            return res.status(400).json({ error: "roleplay requires dmSlot pointing to a valid slot." });
+          }
+          results = await roleplay(callFn, modelIds, dmSlot, prompt, {
+            rounds, useInitiative, allowReactions, actionWordLimit, maxHistory,
+            slotContexts,
+          });
+          break;
+        }
+        default:
+          return res.status(400).json({ error: "Unknown pattern." });
+      }
+
+      const totalMs = Date.now() - startMs;
+      await logMaster("hub", "pattern_run", { pattern, slots, rounds, totalMs, resultCount: results.length });
+
+      // Resolve slot keys back to human-readable model labels in results
+      const labeledResults = results.map(r => ({
+        ...r,
+        model: allSlots[r.model]?.label || r.model,
+        slotKey: r.model,
+      }));
+
+      res.json({ pattern, slots, prompt, totalMs, results: labeledResults });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/hub/patterns", (_req, res) => {
+    res.json({
+      patterns: [
+        { id: "fan_out", name: "Fan Out", description: "Parallel call to N models with the same prompt. Fastest pattern — all models respond simultaneously.", args: [] },
+        { id: "daisy_chain", name: "Daisy Chain", description: "Sequential: A's response becomes B's prompt → B's response becomes C's prompt. Each model builds on the last.", args: [] },
+        { id: "room_all", name: "Room (All)", description: "Multi-round room: all models see each other's responses and respond again.", args: [{ name: "rounds", type: "number", default: 2 }] },
+        { id: "room_synthesized", name: "Room (Synthesized)", description: "Like Room All, but a designated synthesizer merges all responses each round to seed the next.", args: [{ name: "rounds", type: "number", default: 2 }, { name: "synthSlot", type: "string", required: true }] },
+        { id: "council", name: "Council", description: "All models respond, then each independently synthesizes the full set of responses (including its own) in parallel.", args: [] },
+        { id: "roleplay", name: "Roleplay", description: "DM-driven roleplay: players act in initiative order, DM narrates outcomes.", args: [{ name: "rounds", type: "number", default: 2 }, { name: "dmSlot", type: "string", required: true }, { name: "useInitiative", type: "boolean", default: true }, { name: "allowReactions", type: "boolean", default: false }] },
+      ],
+    });
   });
 
   app.get("/api/agent/model-config", async (_req, res) => {
@@ -1476,6 +1596,30 @@ INSTRUCTIONS:
       description: "List available hub AI model connections from stored credentials (names and endpoints only, no keys exposed)",
       parameters: { type: "object" as const, properties: {}, required: [] as string[] },
     },
+    {
+      name: "hub_list_patterns",
+      description: "List all available hub orchestration patterns (fan_out, daisy_chain, room_all, room_synthesized, council, roleplay) with descriptions and required args.",
+      parameters: { type: "object" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "hub_run",
+      description: "Run a multi-model orchestration pattern using the configured model slots. Patterns: fan_out (parallel), daisy_chain (sequential chain), room_all (multi-round room), room_synthesized (room + synthesizer), council (all synthesize all), roleplay (DM + players). Returns all model responses with timing.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          pattern: { type: "string" as const, description: "Orchestration pattern: fan_out | daisy_chain | room_all | room_synthesized | council | roleplay" },
+          slots: { type: "array" as const, items: { type: "string" as const }, description: "Array of slot keys to use as participants (e.g. [\"a\",\"b\",\"c\"])" },
+          prompt: { type: "string" as const, description: "The prompt / question / scene to send to all models" },
+          rounds: { type: "number" as const, description: "Number of rounds for room_all, room_synthesized, roleplay (default 2)" },
+          synthSlot: { type: "string" as const, description: "Slot key for the synthesizer in room_synthesized pattern" },
+          dmSlot: { type: "string" as const, description: "Slot key for the DM in roleplay pattern" },
+          slotContexts: { type: "array" as const, items: { type: "string" as const }, description: "Optional per-slot system prompts aligned by index with slots array" },
+          useInitiative: { type: "boolean" as const, description: "Use random initiative rolls in roleplay (default true)" },
+          allowReactions: { type: "boolean" as const, description: "Allow reaction turns between player actions in roleplay (default false)" },
+        },
+        required: ["pattern", "slots", "prompt"],
+      },
+    },
   ];
 
   async function executeAgentTool(toolName: string, args: any): Promise<string> {
@@ -2159,6 +2303,63 @@ INSTRUCTIONS:
           if (hubConnections.length === 0) return "No hub AI model connections found. The system can use integrated AI models (xAI, Gemini) as hub connections.";
           const hubList = hubConnections.map(h => `- ${h.name}: ${h.endpoint} (model: ${h.model})`).join("\n");
           return `Hub connections (${hubConnections.length}):\n${hubList}`;
+        }
+        case "hub_list_patterns": {
+          const patterns = [
+            { id: "fan_out", name: "Fan Out", description: "Parallel call to N models with the same prompt. All models respond simultaneously." },
+            { id: "daisy_chain", name: "Daisy Chain", description: "Sequential: A's response becomes B's prompt → B feeds C. Each model builds on the last." },
+            { id: "room_all", name: "Room (All)", description: "Multi-round room: all models see each other's responses and respond again." },
+            { id: "room_synthesized", name: "Room (Synthesized)", description: "Like Room All, but a designated synthesizer merges all responses each round. Requires synthSlot." },
+            { id: "council", name: "Council", description: "All models respond, then each independently synthesizes all responses (including its own) in parallel." },
+            { id: "roleplay", name: "Roleplay", description: "DM-driven roleplay with initiative ordering. Players act in initiative order; DM narrates outcomes. Requires dmSlot." },
+          ];
+          return JSON.stringify(patterns, null, 2);
+        }
+        case "hub_run": {
+          const { pattern, slots, prompt, rounds, synthSlot, dmSlot, slotContexts, useInitiative, allowReactions } = args;
+          if (!pattern || !slots?.length || !prompt) return "Error: pattern, slots, and prompt are required.";
+          const hubAllSlots = await getModelSlots();
+          for (const sk of slots) {
+            if (!hubAllSlots[sk]) return `Error: Unknown slot '${sk}'. Available: ${Object.keys(hubAllSlots).join(", ")}`;
+          }
+          const hubCallFn: CallFn = async (slotKey: string, messages: Message[]): Promise<string> => {
+            const sl = hubAllSlots[slotKey];
+            if (!sl) return `[ERROR] Unknown slot: ${slotKey}`;
+            const { client: hc, model: hm } = buildSlotClient(sl);
+            const hAbort = new AbortController();
+            const hTimeout = setTimeout(() => hAbort.abort(), 60000);
+            try {
+              const hResult = await hc.chat.completions.create({ model: hm, messages, max_tokens: 4096 } as any, { signal: hAbort.signal });
+              clearTimeout(hTimeout);
+              return hResult.choices[0]?.message?.content || "";
+            } catch (e: any) { clearTimeout(hTimeout); return `[ERROR] ${e?.message ?? e}`; }
+          };
+          const hubStart = Date.now();
+          let hubResults;
+          try {
+            switch (pattern) {
+              case "fan_out": hubResults = await fanOut(hubCallFn, slots, [{ role: "user", content: prompt }], slotContexts); break;
+              case "daisy_chain": hubResults = await daisyChain(hubCallFn, slots, prompt, slotContexts, 20); break;
+              case "room_all": hubResults = await roomAll(hubCallFn, slots, prompt, rounds || 2, slotContexts, 20); break;
+              case "room_synthesized":
+                if (!synthSlot) return "Error: room_synthesized requires synthSlot.";
+                hubResults = await roomSynthesized(hubCallFn, slots, prompt, synthSlot, rounds || 2, slotContexts, 20); break;
+              case "council": hubResults = await council(hubCallFn, slots, prompt, slotContexts); break;
+              case "roleplay":
+                if (!dmSlot) return "Error: roleplay requires dmSlot.";
+                hubResults = await roleplay(hubCallFn, slots, dmSlot, prompt, { rounds: rounds || 2, useInitiative: useInitiative !== false, allowReactions: !!allowReactions, slotContexts }); break;
+              default: return `Error: Unknown pattern '${pattern}'.`;
+            }
+          } catch (e: any) { return `Error running hub pattern: ${e.message}`; }
+          const hubMs = Date.now() - hubStart;
+          await logMaster("hub", "tool_pattern_run", { pattern, slots, totalMs: hubMs });
+          const summary = hubResults.map(r => {
+            const slotLabel = hubAllSlots[r.model]?.label || r.model;
+            const tag = r.role === "dm" ? "[DM]" : r.role === "synthesizer" ? "[Synth]" : `[${slotLabel}]`;
+            const status = r.error ? "❌" : "✓";
+            return `${status} ${tag} Round ${r.roundNum + 1}${r.stepNum === -1 ? " (narration)" : ""} (${r.responseTimeMs}ms):\n${r.content}`;
+          }).join("\n\n---\n\n");
+          return `Hub run: ${pattern} across slots [${slots.join(", ")}] in ${hubMs}ms\n\n${summary}`;
         }
         default:
           return `Unknown tool: ${toolName}`;

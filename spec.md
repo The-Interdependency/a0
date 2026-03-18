@@ -907,6 +907,15 @@ Tools are organized into seven groups. All tools are available to every request 
 | set_ai_welcome | title, body | — | Update the AI/crawler welcome page (wrapped in HTML template automatically) |
 | generate_tool | name, description | hubProvider, handlerType, parametersSchema | Autonomously generate a new custom tool (Ψ-gated: Confidence≥0.4, Clarity≥0.3, Identity≥0.4; max 20 generated tools) |
 
+### 4.2a Hub Tools (added to the 48 above)
+
+Two additional tools give the agent direct access to the hub orchestration system:
+
+| Tool | Args | Description |
+|------|------|-------------|
+| hub_list_patterns | — | List all six hub patterns with descriptions and required args |
+| hub_run | pattern, slots[], prompt, [rounds, synthSlot, dmSlot, slotContexts, useInitiative, allowReactions] | Run any hub orchestration pattern across configured model slots; returns all responses with timing |
+
 ### 4.3 Tool Output
 
 - Terminal results truncated to 4,000 chars
@@ -918,6 +927,69 @@ Tools are organized into seven groups. All tools are available to every request 
 ### 4.4 Auto-Titling
 
 After first successful response, the agent generates a short title for the conversation.
+
+---
+
+## 4.5 Hub Orchestration (aimmh-lib)
+
+Multi-model conversation orchestration, ported from [erinepshovel-code/aimmh](https://github.com/erinepshovel-code/aimmh). Six patterns, all async, zero external dependencies. Each slot in the model slot system (§5.0) acts as a named participant.
+
+### 4.5.1 Architecture
+
+- **Source**: `server/hub/orchestration.ts` — TypeScript port of `aimmh_lib/conversations.py`
+- **Types**: `server/hub/types.ts` — `CallFn`, `ModelResult`, `Message`, `HubRunRequest`
+- **CallFn contract**: `async (slotKey: string, messages: Message[]) → string` — on error returns `"[ERROR] ..."` 
+- **Routing**: slotKey → `buildSlotClient()` → OpenAI-compatible client for that slot's provider/model/baseUrl/apiKey
+- **Timeout**: 60s per individual model call; AbortController-based
+
+### 4.5.2 Patterns
+
+| Pattern | Name | Description | Extra Args |
+|---------|------|-------------|-----------|
+| `fan_out` | Fan Out | All slots called **in parallel** with the same prompt. Fastest. | — |
+| `daisy_chain` | Daisy Chain | **Sequential**: A's response becomes B's prompt → B feeds C. Each model builds on the last. | — |
+| `room_all` | Room (All) | **Multi-round**: all slots see each other's prior responses and respond again each round. | `rounds` (default 2) |
+| `room_synthesized` | Room (Synthesized) | Like Room All but a dedicated **synthesizer** slot merges all responses each round into a unified prompt. | `rounds`, `synthSlot` (required) |
+| `council` | Council | All slots respond first; then each independently synthesizes the full set of responses (including its own) in parallel. | — |
+| `roleplay` | Roleplay | DM-driven: players roll initiative and act in order; DM narrates outcomes. Optional reaction turns. | `rounds`, `dmSlot` (required), `useInitiative`, `allowReactions`, `actionWordLimit` |
+
+### 4.5.3 ModelResult
+
+Every pattern returns `ModelResult[]`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| model | string | Slot key used |
+| content | string | Model response (starts with `[ERROR]` on failure) |
+| responseTimeMs | number | Wall-clock time for that call |
+| error | string? | Set if content is an error |
+| roundNum | number | 0-indexed round number |
+| stepNum | number | 0-indexed step within round; -1 = synthesis/DM narration |
+| initiative | number | Initiative roll (roleplay only) |
+| role | string | `player` / `dm` / `synthesizer` / `council` / `reaction` |
+| slotIdx | number | Index into the original slots array |
+
+### 4.5.4 API Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/hub/patterns | List all patterns with descriptions and required args |
+| POST | /api/hub/run | Run a pattern; body: `{ pattern, slots[], prompt, rounds?, synthSlot?, dmSlot?, slotContexts?, useInitiative?, allowReactions? }` |
+
+### 4.5.5 slotContexts (per-slot system prompts)
+
+`slotContexts` is an array aligned by index with the `slots` array. Use it to give each model participant a different persona:
+
+```json
+{
+  "slots": ["a", "b", "c"],
+  "slotContexts": ["You are a critic.", "You are a defender.", "You are a judge."],
+  "pattern": "room_all",
+  "prompt": "Is autonomous AI beneficial?"
+}
+```
+
+The synthesizer (room_synthesized) and DM (roleplay) always occupy `slotContexts[len(slots)]`.
 
 ---
 
@@ -1247,6 +1319,10 @@ server/
   xai.ts                — Grok/xAI client factory
   github.ts             — GitHub client factory (Replit Connector, uncacheable tokens)
   subcore-instance.ts   — Singleton SubCore instance; tickSubCore(), getSubCoreState() with Float64Array→number[] serialization; startup hydration from DB
+  hub/
+    types.ts            — Hub type definitions: CallFn, Message, ModelResult, HubRunRequest
+    orchestration.ts    — Six orchestration patterns (fanOut, daisyChain, roomAll, roomSynthesized, council, roleplay) — TypeScript port of aimmh_lib/conversations.py
+    index.ts            — Module re-exports
   subcore/
     types.ts            — Type definitions: SubCoreSeed, AuditoryProjection, VisualProjection, MemoryProjection, SyncPayload, CoreId enum
     subcore.ts          — SubCore class: 17-seed state machine, tick(), auditoryProject(), visualProject(), memoryProject(), exportSync(), importSync()
