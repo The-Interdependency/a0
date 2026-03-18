@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
   Clock, Sparkles, Target, Settings, Lock, Eye, EyeOff, ArrowUpDown, ArrowLeftRight, Cpu, GitBranch, Star, Gauge,
 } from "lucide-react";
 import { useSliderOrientation } from "@/hooks/use-slider-orientation";
+import { usePersona, type Persona } from "@/hooks/use-persona";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -95,8 +96,55 @@ const DEFAULT_METRIC_LABELS: MetricLabelMap = {
   TBF: { label: "Turn-Balance", desc: "Gini coefficient on actor token shares" },
 };
 
+const PERSONA_METRIC_LABELS: Record<Persona, MetricLabelMap> = {
+  free: DEFAULT_METRIC_LABELS,
+  legal: {
+    CM: { label: "Regulatory Compliance Gap", desc: "Deviation from declared statutory constraints" },
+    DA: { label: "Contradictory Precedent", desc: "Accumulation of conflicting case law signals" },
+    DRIFT: { label: "Argumentation Drift", desc: "Divergence from original legal theory" },
+    DVG: { label: "Jurisdictional Divergence", desc: "Entropy across applicable jurisdictions" },
+    INT: { label: "Adversarial Tone", desc: "Intensity of adversarial rhetorical markers" },
+    TBF: { label: "Examination Balance", desc: "Equity of examination across parties" },
+  },
+  researcher: {
+    CM: { label: "Methodological Inconsistency", desc: "Gap between declared and observed methodology" },
+    DA: { label: "Conflicting Findings", desc: "Accumulation of contradictory empirical signals" },
+    DRIFT: { label: "Hypothesis Drift", desc: "Divergence from original research question" },
+    DVG: { label: "Theoretical Divergence", desc: "Entropy across theoretical frameworks cited" },
+    INT: { label: "Citation Density", desc: "Intensity of reference and evidence markers" },
+    TBF: { label: "Dialogue Equity", desc: "Balance of voice across cited perspectives" },
+  },
+  political: {
+    CM: { label: "Policy Constraint Violation", desc: "Gap between stated and enacted policy constraints" },
+    DA: { label: "Narrative Contradiction", desc: "Accumulation of conflicting political signals" },
+    DRIFT: { label: "Position Drift", desc: "Divergence from initial stated political position" },
+    DVG: { label: "Ideological Divergence", desc: "Entropy across competing ideological framings" },
+    INT: { label: "Rhetoric Intensity", desc: "Intensity of partisan rhetorical markers" },
+    TBF: { label: "Discourse Equity", desc: "Balance of voice across political actors" },
+  },
+};
+
+/** Tab IDs visible per persona. Free = all. Others get curated sets. */
+const PERSONA_VISIBLE_TABS: Record<Persona, TabId[] | null> = {
+  free: null, // null = show all
+  legal: ["workflow", "metrics", "edcm", "memory", "context", "logs", "credentials", "export"],
+  researcher: ["workflow", "metrics", "edcm", "memory", "brain", "omega", "context", "logs", "credentials", "export"],
+  political: ["workflow", "metrics", "edcm", "memory", "context", "logs", "credentials", "export"],
+};
+
 export default function ConsolePage() {
-  const visibleGroups = ALL_GROUPS;
+  const { persona } = usePersona();
+
+  const visibleGroups = useMemo<TabGroup[]>(() => {
+    const allowed = PERSONA_VISIBLE_TABS[persona];
+    if (!allowed) return ALL_GROUPS;
+    return ALL_GROUPS
+      .map(g => ({ ...g, tabs: g.tabs.filter(t => allowed.includes(t.id)) }))
+      .filter(g => g.tabs.length > 0);
+  }, [persona]);
+
+  const metricLabels = PERSONA_METRIC_LABELS[persona] ?? DEFAULT_METRIC_LABELS;
+
   const defaultTab = visibleGroups[0]?.tabs[0]?.id ?? "edcm";
 
   const [activeTab, setActiveTab] = useState<TabId>(() => {
@@ -109,6 +157,17 @@ export default function ConsolePage() {
     const owning = visibleGroups.find(g => g.tabs.some(t => t.id === saved));
     return owning?.id ?? visibleGroups[0]?.id ?? "agent";
   });
+
+  // Keep active tab valid when persona changes
+  useEffect(() => {
+    const stillVisible = visibleGroups.some(g => g.tabs.some(t => t.id === activeTab));
+    if (!stillVisible) {
+      const first = visibleGroups[0]?.tabs[0]?.id ?? "workflow";
+      setActiveTab(first);
+      setActiveGroup(visibleGroups[0]?.id ?? "agent");
+    }
+  }, [persona, visibleGroups]);
+
   const { orientation, toggleOrientation, isVertical } = useSliderOrientation();
 
   function selectGroup(groupId: string) {
@@ -1114,7 +1173,8 @@ function alertColor(value: number): { bg: string; text: string; label: string } 
 }
 
 function MetricRow({ metricKey, value, evidence }: { metricKey: string; value: number; evidence: string[] }) {
-  const labels = DEFAULT_METRIC_LABELS;
+  const { persona } = usePersona();
+  const labels = PERSONA_METRIC_LABELS[persona] ?? DEFAULT_METRIC_LABELS;
   const info = labels[metricKey] || { label: metricKey, desc: "" };
   const alert = alertColor(value);
   const pct = Math.round(value * 100);
@@ -1211,7 +1271,6 @@ function TranscriptSourcesSection() {
     }
   };
 
-  const metricLabels = DEFAULT_METRIC_LABELS;
   const METRIC_COLORS: Record<string, string> = {
     CM: "text-yellow-400", DA: "text-red-400", DRIFT: "text-blue-400",
     DVG: "text-purple-400", INT: "text-orange-400", TBF: "text-green-400",
@@ -1370,9 +1429,9 @@ function TranscriptSourcesSection() {
   );
 }
 
-const METRIC_LABELS = DEFAULT_METRIC_LABELS;
-
 function EdcmTab() {
+  const { persona } = usePersona();
+  const METRIC_LABELS = PERSONA_METRIC_LABELS[persona] ?? DEFAULT_METRIC_LABELS;
   const { data: snapshots = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/edcm/snapshots"],
     refetchInterval: 10000,
