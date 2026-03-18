@@ -1680,9 +1680,21 @@ INSTRUCTIONS:
         required: ["pattern", "slots", "prompt"],
       },
     },
+    {
+      name: "set_persona",
+      description: "Switch the active analysis persona to adapt your reasoning style, console views, and EDCM metric labels. Call this when you detect the domain of the conversation: 'legal' for legal/regulatory documents, 'researcher' for academic/scientific content, 'political' for policy/political analysis, 'free' to reset to default. You should call this proactively without asking the user.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          persona: { type: "string" as const, description: "One of: free | legal | researcher | political" },
+          reason: { type: "string" as const, description: "Brief explanation of why you are switching (shown in console log)" },
+        },
+        required: ["persona"],
+      },
+    },
   ];
 
-  async function executeAgentTool(toolName: string, args: any): Promise<string> {
+  async function executeAgentTool(toolName: string, args: any, userId = "default"): Promise<string> {
     try {
       switch (toolName) {
         case "run_command": {
@@ -2421,6 +2433,15 @@ INSTRUCTIONS:
           }).join("\n\n---\n\n");
           return `Hub run: ${pattern} across slots [${slots.join(", ")}] in ${hubMs}ms\n\n${summary}`;
         }
+        case "set_persona": {
+          const { persona: newPersona, reason } = args;
+          if (!VALID_PERSONAS.includes(newPersona)) {
+            return `Error: Invalid persona '${newPersona}'. Must be one of: ${VALID_PERSONAS.join(", ")}`;
+          }
+          await storage.upsertSystemToggle(`user_persona_${userId}`, true, { persona: newPersona });
+          await logMaster("agent", "persona_switch", { persona: newPersona, reason: reason || "autonomous" });
+          return `Persona set to '${newPersona}'${reason ? ` — ${reason}` : ""}. EDCM labels and reasoning style adapted.`;
+        }
         default:
           return `Unknown tool: ${toolName}`;
       }
@@ -2584,7 +2605,7 @@ IMPORTANT RULES:
           res.write(`data: ${JSON.stringify({ tool_call: { name, args } })}\n\n`);
 
           const toolBandit = await banditSelectWithFallback("tool", name);
-          const toolResult = await executeAgentTool(name, args);
+          const toolResult = await executeAgentTool(name, args, userId);
           res.write(`data: ${JSON.stringify({ tool_result: { name, result: toolResult.slice(0, 2000) } })}\n\n`);
 
           const toolSuccess = !toolResult.startsWith("Error:");

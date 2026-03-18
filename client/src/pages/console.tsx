@@ -2836,6 +2836,43 @@ function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
   );
 }
 
+function PersonaSection() {
+  const { persona, setPersona, isPending } = usePersona();
+  const personas: Array<{ id: import("@/hooks/use-persona").Persona; icon: string; label: string }> = [
+    { id: "free", icon: "🧭", label: "Explorer" },
+    { id: "legal", icon: "⚖️", label: "Legal" },
+    { id: "researcher", icon: "🔬", label: "Research" },
+    { id: "political", icon: "🏛️", label: "Political" },
+  ];
+  return (
+    <div className="rounded-lg border border-border bg-card p-3">
+      <h3 className="font-semibold text-xs mb-2.5 flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
+        <Settings className="w-3.5 h-3.5" />
+        Agent Persona
+      </h3>
+      <div className="grid grid-cols-4 gap-1.5">
+        {personas.map(({ id, icon, label }) => (
+          <button
+            key={id}
+            data-testid={`persona-btn-${id}`}
+            disabled={isPending}
+            onClick={() => setPersona(id)}
+            className={cn(
+              "flex flex-col items-center gap-1 py-2 px-1 rounded-lg border text-[10px] font-medium transition-all active:scale-95",
+              persona === id
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:border-primary/30"
+            )}
+          >
+            <span className="text-base leading-none">{icon}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SystemTab({ orientation, isVertical }: SliderOrientationProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -2880,6 +2917,7 @@ function SystemTab({ orientation, isVertical }: SliderOrientationProps) {
   return (
     <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
+        <PersonaSection />
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
             <Settings className="w-4 h-4 text-muted-foreground" />

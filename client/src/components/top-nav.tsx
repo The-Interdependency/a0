@@ -1,9 +1,8 @@
 import { useLocation, Link } from "wouter";
-import { Zap, Terminal, FolderOpen, Shield, Plus, UserCircle } from "lucide-react";
+import { Zap, Terminal, FolderOpen, Shield, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { PERSONA_META, type Persona } from "@/hooks/use-persona";
 
 const NAV_ITEMS = [
   { path: "/", icon: Zap, label: "Agent" },
@@ -15,12 +14,6 @@ const NAV_ITEMS = [
 export default function TopNav() {
   const [location] = useLocation();
   const qc = useQueryClient();
-
-  const { data: personaData } = useQuery<{ persona: Persona }>({
-    queryKey: ["/api/user/persona"],
-  });
-  const currentPersona: Persona = personaData?.persona ?? "free";
-  const personaMeta = PERSONA_META[currentPersona];
 
   const { data: toggles = [] } = useQuery<any[]>({
     queryKey: ["/api/toggles"],
@@ -83,25 +76,6 @@ export default function TopNav() {
           </div>
         </div>
       )}
-
-      <Link
-        href="/persona"
-        className={cn(
-          "flex flex-col items-center justify-center px-2 min-h-[44px] gap-0.5 transition-colors select-none",
-          location === "/persona" ? "text-primary" : "text-muted-foreground"
-        )}
-        data-testid="nav-persona"
-        title={personaMeta.label}
-      >
-        {currentPersona === "free" ? (
-          <UserCircle className={cn("w-5 h-5", location === "/persona" && "drop-shadow-[0_0_6px_hsl(var(--primary))]")} />
-        ) : (
-          <span className="text-lg leading-none">{personaMeta.icon}</span>
-        )}
-        <span className="text-[9px] font-medium leading-none">
-          {currentPersona === "free" ? "Persona" : personaMeta.label.split(" ")[0]}
-        </span>
-      </Link>
 
       <button
         onClick={() => createConv.mutate()}
