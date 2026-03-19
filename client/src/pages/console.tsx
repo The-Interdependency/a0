@@ -712,7 +712,6 @@ function WorkflowTab() {
   );
 }
 
-const BANDIT_DOMAINS = ["tool", "model", "ptca_route", "pcna_route"] as const;
 
 interface SliderOrientationProps {
   orientation: "vertical" | "horizontal";
@@ -725,9 +724,12 @@ function BanditTab({ orientation, isVertical }: SliderOrientationProps) {
 
   const { data: statsData, isLoading } = useQuery<any>({
     queryKey: ["/api/bandit/stats"],
-    refetchInterval: 10000,
+    refetchInterval: 8000,
   });
   const stats: any[] = statsData?.arms || [];
+  const banditEnabled: boolean = statsData?.enabled ?? true;
+  const totalPulls: number = statsData?.totalPulls ?? 0;
+  const banditConfig: any = statsData?.config ?? {};
 
   const { data: correlationsData } = useQuery<any>({
     queryKey: ["/api/bandit/correlations"],
@@ -748,9 +750,7 @@ function BanditTab({ orientation, isVertical }: SliderOrientationProps) {
   const toggleArmMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
       apiRequest("POST", `/api/bandit/toggle/${id}`, { enabled }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bandit/stats"] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/bandit/stats"] }),
   });
 
   const resetDomainMutation = useMutation({
@@ -759,6 +759,19 @@ function BanditTab({ orientation, isVertical }: SliderOrientationProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/bandit/stats"] });
       toast({ title: "Domain reset" });
     },
+  });
+
+  const seedMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/bandit/seed", {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bandit/stats"] });
+      toast({ title: "Arms seeded" });
+    },
+  });
+
+  const globalToggleMutation = useMutation({
+    mutationFn: (enabled: boolean) => apiRequest("PATCH", "/api/toggles/bandit", { enabled }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/bandit/stats"] }),
   });
 
   const updateToggleMutation = useMutation({
@@ -772,11 +785,13 @@ function BanditTab({ orientation, isVertical }: SliderOrientationProps) {
 
   if (isLoading) return <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
 
+  // Derive domains dynamically from API data
   const armsByDomain: Record<string, any[]> = {};
   for (const arm of stats) {
     if (!armsByDomain[arm.domain]) armsByDomain[arm.domain] = [];
     armsByDomain[arm.domain].push(arm);
   }
+  const domains = Object.keys(armsByDomain);
 
   const DIRECTIVE_TYPES = [
     { type: "CONSTRAINT_REFOCUS", metric: "CM", description: "Refocuses when constraint metric exceeds threshold" },
@@ -797,9 +812,47 @@ function BanditTab({ orientation, isVertical }: SliderOrientationProps) {
   return (
     <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
-        {BANDIT_DOMAINS.map((domain) => {
+
+        {/* Global bandit header */}
+        <div className="rounded-lg border border-border bg-card p-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-orange-400" />
+              <span className="text-sm font-semibold">Multi-Armed Bandit</span>
+              <Badge variant="secondary" className="text-[9px] font-mono">{totalPulls} pulls</Badge>
+              {banditConfig?.explorationParam != null && (
+                <Badge variant="outline" className="text-[9px] font-mono">c={banditConfig.explorationParam}</Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => seedMutation.mutate()}
+                disabled={seedMutation.isPending}
+                data-testid="button-seed-bandit"
+                className="text-[10px] h-7 px-2"
+              >
+                <Zap className="w-3 h-3 mr-1" />
+                Seed
+              </Button>
+              <Switch
+                checked={banditEnabled}
+                onCheckedChange={(v) => globalToggleMutation.mutate(v)}
+                data-testid="toggle-bandit-global"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Arms per domain — derived from API, not hardcoded */}
+        {domains.map((domain) => {
           const arms = armsByDomain[domain] || [];
           const maxReward = Math.max(0.001, ...arms.map((a: any) => a.avgReward || 0));
+          const maxUcb = Math.max(0.001, ...arms.map((a: any) => a.ucbScore || 0));
+          const winnerId = arms.reduce((best: any, a: any) =>
+            a.enabled && (a.ucbScore || 0) > (best?.ucbScore || -1) ? a : best, null)?.id;
+
           return (
             <div key={domain} className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
@@ -813,63 +866,99 @@ function BanditTab({ orientation, isVertical }: SliderOrientationProps) {
                   onClick={() => resetDomainMutation.mutate(domain)}
                   disabled={resetDomainMutation.isPending}
                   data-testid={`button-reset-${domain}`}
+                  className="h-7 text-[10px] px-2"
                 >
                   <RefreshCw className="w-3 h-3 mr-1" />
                   Reset
                 </Button>
               </div>
               {arms.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No arms configured for this domain.</p>
+                <p className="text-xs text-muted-foreground">No arms configured.</p>
               ) : (
                 <div className="space-y-2">
-                  {arms.map((arm: any) => (
-                    <div
-                      key={arm.id}
-                      className={cn("rounded-md border border-border p-2.5 space-y-1.5", !arm.enabled && "opacity-50")}
-                      data-testid={`bandit-arm-${arm.id}`}
-                    >
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <Switch
-                            checked={arm.enabled}
-                            onCheckedChange={(enabled) => toggleArmMutation.mutate({ id: arm.id, enabled })}
-                            data-testid={`toggle-arm-${arm.id}`}
-                          />
-                          <span className="text-xs font-mono font-bold truncate" data-testid={`text-arm-name-${arm.id}`}>
-                            {arm.armName}
-                          </span>
+                  {arms.map((arm: any) => {
+                    const isWinner = arm.id === winnerId;
+                    const isModelDomain = domain === "model";
+                    return (
+                      <div
+                        key={arm.id}
+                        className={cn(
+                          "rounded-md border p-2.5 space-y-1.5 transition-colors",
+                          isWinner ? "border-orange-500/40 bg-orange-500/5" : "border-border",
+                          !arm.enabled && "opacity-45"
+                        )}
+                        data-testid={`bandit-arm-${arm.id}`}
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <Switch
+                              checked={arm.enabled}
+                              onCheckedChange={(enabled) => toggleArmMutation.mutate({ id: arm.id, enabled })}
+                              data-testid={`toggle-arm-${arm.id}`}
+                            />
+                            <span
+                              className={cn(
+                                "text-xs font-mono font-bold truncate",
+                                isModelDomain && slotColor(arm.armName).split(" ").find(c => c.startsWith("text-"))
+                              )}
+                              data-testid={`text-arm-name-${arm.id}`}
+                            >
+                              {arm.armName}
+                            </span>
+                            {isWinner && (
+                              <Badge className="text-[8px] bg-orange-500/20 text-orange-400 border-orange-500/30 px-1 py-0">
+                                SELECTED
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end">
+                            <span className="text-[9px] text-muted-foreground font-mono">{arm.pulls}p</span>
+                            {arm.lastPulled && (
+                              <span className="text-[9px] text-muted-foreground">
+                                {new Date(arm.lastPulled).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <Badge variant="secondary" className="text-[9px] font-mono">
-                            pulls={arm.pulls}
-                          </Badge>
-                          <Badge variant="secondary" className="text-[9px] font-mono">
-                            UCB={arm.ucbScore?.toFixed(3) || "0.000"}
-                          </Badge>
+
+                        {/* Avg reward bar */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground w-8 flex-shrink-0">Avg</span>
+                          <div className="flex-1 h-1.5 bg-background rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary rounded-full transition-all"
+                              style={{ width: `${maxReward > 0 ? ((arm.avgReward || 0) / maxReward) * 100 : 0}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-mono w-10 text-right tabular-nums">{(arm.avgReward || 0).toFixed(3)}</span>
+                        </div>
+
+                        {/* EMA bar */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground w-8 flex-shrink-0">EMA</span>
+                          <div className="flex-1 h-1.5 bg-background rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-emerald-500 rounded-full transition-all"
+                              style={{ width: `${maxReward > 0 ? ((arm.emaReward || 0) / maxReward) * 100 : 0}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-mono w-10 text-right tabular-nums">{(arm.emaReward || 0).toFixed(3)}</span>
+                        </div>
+
+                        {/* UCB bar */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground w-8 flex-shrink-0">UCB</span>
+                          <div className="flex-1 h-1.5 bg-background rounded-full overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full transition-all", isWinner ? "bg-orange-400" : "bg-amber-500/60")}
+                              style={{ width: `${maxUcb > 0 ? ((arm.ucbScore || 0) / maxUcb) * 100 : 0}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-mono w-10 text-right tabular-nums">{(arm.ucbScore || 0).toFixed(3)}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground w-10 flex-shrink-0">Avg</span>
-                        <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary rounded-full transition-all"
-                            style={{ width: `${maxReward > 0 ? ((arm.avgReward || 0) / maxReward) * 100 : 0}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] font-mono w-12 text-right">{(arm.avgReward || 0).toFixed(3)}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground w-10 flex-shrink-0">EMA</span>
-                        <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-emerald-500 rounded-full transition-all"
-                            style={{ width: `${maxReward > 0 ? ((arm.emaReward || 0) / maxReward) * 100 : 0}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] font-mono w-12 text-right">{(arm.emaReward || 0).toFixed(3)}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

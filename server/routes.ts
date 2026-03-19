@@ -4399,6 +4399,15 @@ IMPORTANT RULES:
     }
   });
 
+  app.post("/api/bandit/seed", async (_req, res) => {
+    try {
+      await initializeBanditArms();
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/bandit/toggle/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);

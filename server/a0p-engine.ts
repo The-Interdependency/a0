@@ -2165,7 +2165,7 @@ export async function banditToggleArm(armId: number, enabled: boolean): Promise<
 
 const DEFAULT_ARMS: Record<string, string[]> = {
   tool: ["web_search", "fetch_url", "gmail_search", "gmail_send", "github_search", "code_execute"],
-  model: ["gemini", "grok", "synthesis"],
+  model: ["a", "b", "c"],
   ptca_route: ["standard", "deep_solve", "heptagram_boost", "sentinel_focus"],
   pcna_route: ["ring_53", "adjacency_8", "full_diffusion", "hub_only"],
 };
