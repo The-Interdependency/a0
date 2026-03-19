@@ -203,7 +203,7 @@ export function EdcmTab() {
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <h3 className="font-semibold text-sm flex items-center gap-2"><Brain className="w-4 h-4 text-purple-400" /> EDCM Metric Families</h3>
-            <Badge variant="secondary" className="text-[9px] font-mono" data-testid="badge-build-version">v1.0.2-S9</Badge>
+            <Badge variant="secondary" className="text-[9px] font-mono" data-testid="badge-build-version">v1.1.0-M1</Badge>
           </div>
           {!latest && !reportMetrics ? (
             <div className="space-y-3">
@@ -315,7 +315,7 @@ export function EdcmTab() {
       "INT":   {"value": ${mv("INT")}},
       "TBF":   {"value": ${mv("TBF")}}
     },
-    "provenance": {"build":"v1.0.2-S9"}
+    "provenance": {"build":"v1.1.0-M1"}
   }
 }`}
           </div>

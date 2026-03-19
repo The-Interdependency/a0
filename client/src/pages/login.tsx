@@ -93,7 +93,7 @@ export default function LoginPage() {
 
       <div className="text-center pb-6 px-4">
         <p className="text-[10px] text-zinc-700">
-          a0p v1.0.2-S9 · TIW Canon · EDCMBONE
+          a0p v1.1.0-M1 · TIW Canon · EDCMBONE
         </p>
       </div>
     </div>

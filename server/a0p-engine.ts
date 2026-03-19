@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { storage } from "./storage";
 import { logMemory, logSentinel, logInterference, logAttribution, logMaster, logOmega, logPsi } from "./logger";
 
-const BUILD_VERSION = "v1.0.2-S9";
+const BUILD_VERSION = "v1.1.0-M1";
 const GENESIS_HASH = createHash("sha256").update("a0p-genesis").digest("hex");
 
 const OPERATOR_CLASSES = ["P", "K", "Q", "T", "S"] as const;
