@@ -20,6 +20,13 @@ a0p is a mobile-first autonomous AI agent application leveraging multi-model AI 
 ## System Architecture
 The application is built with a React + Vite + TypeScript frontend, an Express.js + TypeScript backend, and a PostgreSQL database managed by Drizzle ORM. Authentication is handled via Replit Auth (OpenID Connect). Payments are integrated with Stripe (sandbox) using managed webhooks.
 
+**Modular Architecture (completed refactor):**
+- `client/src/lib/console-config.ts` — shared types: TabId, TabGroup, SliderOrientationProps, TAB_GROUPS, ALL_GROUPS, TAB_TO_GROUP, PERSONA_VISIBLE_TABS, PERSONA_METRIC_LABELS, DEFAULT_METRIC_LABELS, slotColor()
+- `client/src/components/tabs/` — 18 focused tab components (60–340 lines each): WorkflowTab, BanditTab, MetricsTab, DealsTab, MemoryTab, EdcmTab, BrainTab, S17Tab, PsiTab, OmegaTab, HeartbeatTab, SystemTab, LogsTab, CustomToolsTab, CredentialsTab, ContextTab, ApiModelTab, ExportTab — re-exported via `index.ts`
+- `client/src/pages/console.tsx` — thin layout shell (176 lines), imports all tabs from barrel
+- `server/lib/` — shared server utilities: logger, slots, bandit, persona, memory, edcm, synthesis, agent-tools, brain, ai-client, files-lib, custom-tools-lib, transcripts-lib
+- API versioning: Express Router mounted at both `/api` and `/api/v1` (dual-mount for backward compatibility); all frontend queryKeys use `/api/v1/` paths (auth hooks excepted)
+
 **UI/UX Decisions:**
 - Mobile-first design with sticky top navigation bar (5 items: Agent, Term, Files, Console, Account + New button).
 - Dark mode enabled by default across the application.

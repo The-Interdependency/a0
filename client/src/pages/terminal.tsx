@@ -18,7 +18,7 @@ export default function TerminalPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const { data: history = [] } = useQuery<CommandHistory[]>({
-    queryKey: ["/api/terminal/history"],
+    queryKey: ["/api/v1/terminal/history"],
     refetchInterval: false,
   });
 
@@ -26,7 +26,7 @@ export default function TerminalPage() {
     mutationFn: (command: string) =>
       apiRequest("POST", "/api/terminal/exec", { command }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/terminal/history"] });
+      qc.invalidateQueries({ queryKey: ["/api/v1/terminal/history"] });
     },
     onError: (e: any) => {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -35,7 +35,7 @@ export default function TerminalPage() {
 
   const clearHistory = useMutation({
     mutationFn: () => apiRequest("DELETE", "/api/terminal/history"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/terminal/history"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/v1/terminal/history"] }),
   });
 
   useEffect(() => {

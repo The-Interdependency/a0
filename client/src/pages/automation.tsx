@@ -37,13 +37,13 @@ export default function AutomationPage() {
   const [runningIds, setRunningIds] = useState<Set<number>>(new Set());
 
   const { data: tasks = [], isLoading } = useQuery<AutomationTask[]>({
-    queryKey: ["/api/automation"],
+    queryKey: ["/api/v1/automation"],
   });
 
   const createTask = useMutation({
     mutationFn: () => apiRequest("POST", "/api/automation", { name, specContent }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/automation"] });
+      qc.invalidateQueries({ queryKey: ["/api/v1/automation"] });
       setCreateOpen(false);
       setName("");
       setSpecContent("");
@@ -54,7 +54,7 @@ export default function AutomationPage() {
 
   const deleteTask = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/automation/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/automation"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/v1/automation"] }),
   });
 
   async function runTask(id: number) {
@@ -86,7 +86,7 @@ export default function AutomationPage() {
               }
               if (data.done || data.error) {
                 setRunningIds((s) => { const ns = new Set(s); ns.delete(id); return ns; });
-                qc.invalidateQueries({ queryKey: ["/api/automation"] });
+                qc.invalidateQueries({ queryKey: ["/api/v1/automation"] });
               }
             } catch {}
           }

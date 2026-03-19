@@ -86,24 +86,24 @@ export default function ChatPage() {
   }
 
   const { data: modelSlots } = useQuery<Record<string, { label: string; provider: string; model: string; baseUrl: string; apiKeySet: boolean }>>({
-    queryKey: ["/api/agent/slots"],
+    queryKey: ["/api/v1/agent/slots"],
   });
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: conversations = [], isLoading: convsLoading } = useQuery<Conversation[]>({
-    queryKey: ["/api/conversations"],
+    queryKey: ["/api/v1/conversations"],
   });
 
   const { data: convDetail, isLoading: messagesLoading } = useQuery<
     Conversation & { messages: Message[] }
   >({
-    queryKey: ["/api/conversations", activeConvId],
+    queryKey: ["/api/v1/conversations", activeConvId],
     enabled: !!activeConvId,
   });
 
   const { data: engineStatus } = useQuery<{ status: string }>({
-    queryKey: ["/api/a0p/status"],
+    queryKey: ["/api/v1/a0p/status"],
     refetchInterval: 30000,
   });
 
@@ -115,7 +115,7 @@ export default function ChatPage() {
       return await res.json() as Conversation;
     },
     onSuccess: (conv: Conversation) => {
-      qc.invalidateQueries({ queryKey: ["/api/conversations"] });
+      qc.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
       setActiveConvId(conv.id);
       setSidebarOpen(false);
     },
@@ -124,7 +124,7 @@ export default function ChatPage() {
   const deleteConv = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/conversations/${id}`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/conversations"] });
+      qc.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
       setActiveConvId(null);
     },
   });
@@ -206,8 +206,8 @@ export default function ChatPage() {
                 setStreaming(false);
                 setStreamContent("");
                 setToolActions([]);
-                qc.invalidateQueries({ queryKey: ["/api/conversations", convId] });
-                qc.invalidateQueries({ queryKey: ["/api/conversations"] });
+                qc.invalidateQueries({ queryKey: ["/api/v1/conversations", convId] });
+                qc.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
               }
             } catch {}
           }
