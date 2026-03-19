@@ -5639,7 +5639,7 @@ function OmegaTab({ orientation, isVertical }: SliderOrientationProps) {
   };
 
   return (
-    <ScrollArea className="flex-1">
+    <ScrollArea className="h-full">
       <div className="p-3 space-y-4">
         <div className="flex items-center justify-between">
           <div>
