@@ -1089,6 +1089,70 @@ You are operating in political analysis mode. Apply structured political science
     }
   }
 
+  /** Call any model slot by key using buildSlotClient(). Used by brain pipeline stages. */
+  async function callSlotForSynthesis(
+    slotKey: string,
+    messages: { role: string; content: string }[],
+    sysPrompt: string,
+    maxTokens: number,
+    temperature: number | undefined,
+    timeoutMs: number,
+    conversationId?: number,
+    messageId?: number
+  ): Promise<{ content: string; promptTokens: number; completionTokens: number }> {
+    const allSlots = await getModelSlots();
+    const slot = allSlots[slotKey] ?? allSlots["a"];
+    const { client, model } = buildSlotClient(slot);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const startTime = Date.now();
+    try {
+      const chatMsgs = [
+        { role: "system" as const, content: sysPrompt },
+        ...messages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      ];
+      const result = await client.chat.completions.create({
+        model,
+        messages: chatMsgs,
+        max_tokens: maxTokens || 16384,
+        ...(temperature != null ? { temperature } : {}),
+      });
+      clearTimeout(timeout);
+      const text = result.choices[0]?.message?.content || "";
+      const usage = result.usage;
+      const promptTokens = usage?.prompt_tokens || 0;
+      const completionTokens = usage?.completion_tokens || 0;
+      const latencyMs = Date.now() - startTime;
+      logAiTranscript({
+        timestamp: new Date().toISOString(),
+        conversationId,
+        messageId,
+        model: `slot_${slotKey}(${model})`,
+        request: { systemPrompt: sysPrompt, messages },
+        response: text,
+        tokens: { prompt: promptTokens, completion: completionTokens, total: promptTokens + completionTokens },
+        latencyMs,
+        status: "success",
+      }).catch(() => {});
+      return { content: text, promptTokens, completionTokens };
+    } catch (e: any) {
+      clearTimeout(timeout);
+      logAiTranscript({
+        timestamp: new Date().toISOString(),
+        conversationId,
+        messageId,
+        model: `slot_${slotKey}(${model})`,
+        request: { systemPrompt: sysPrompt, messages },
+        response: "",
+        tokens: { prompt: 0, completion: 0, total: 0 },
+        latencyMs: Date.now() - startTime,
+        status: "error",
+        error: e.message,
+      }).catch(() => {});
+      throw e;
+    }
+  }
+
   async function mergeResponsesViaGemini(
     geminiResponse: string,
     grokResponse: string,
@@ -4903,13 +4967,20 @@ IMPORTANT RULES:
           { role: "user" as const, content: stageInput },
         ];
 
-        const model = stage.model || "gemini";
+        const model = stage.model || "a";
         const timeoutMs = stage.timeoutMs || 30000;
 
-        if (model === "gemini") {
+        // Slot-based routing: if model matches a slot key, use callSlotForSynthesis
+        const allSlotsForStage = await getModelSlots();
+        if (allSlotsForStage[model]) {
+          const result = await callSlotForSynthesis(model, stageMessages, sysPrompt, maxTokens || 16384, temperature, timeoutMs, conversationId, messageId);
+          return { model: `slot_${model}`, role: stage.role, content: result.content, promptTokens: result.promptTokens, completionTokens: result.completionTokens };
+        } else if (model === "gemini") {
+          // Legacy preset fallback
           const result = await callGeminiForSynthesis(stageMessages, sysPrompt, maxTokens || 8192, timeoutMs, conversationId, messageId);
           return { model: "gemini", role: stage.role, content: result.content, promptTokens: result.promptTokens, completionTokens: result.completionTokens };
         } else if (model === "grok") {
+          // Legacy preset fallback
           const result = await callGrokForSynthesis(stageMessages, sysPrompt, maxTokens || 16384, temperature, timeoutMs, conversationId, messageId);
           return { model: "grok", role: stage.role, content: result.content, promptTokens: result.promptTokens, completionTokens: result.completionTokens };
         } else if (model === "hub") {

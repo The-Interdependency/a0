@@ -2823,8 +2823,15 @@ const SUBSYSTEM_PARAMS: Record<string, { label: string; params: { key: string; l
 };
 
 const STAGE_ROLES = ["generate", "review", "refine", "synthesize"];
-const STAGE_MODELS = ["gemini", "grok", "hub"];
 const STAGE_INPUTS = ["user_query", "previous_output", "all_outputs"];
+const SLOT_COLORS: Record<string, string> = {
+  a: "border-blue-500/30 bg-blue-500/10 text-blue-400",
+  b: "border-orange-500/30 bg-orange-500/10 text-orange-400",
+  c: "border-purple-500/30 bg-purple-500/10 text-purple-400",
+};
+function slotColor(key: string): string {
+  return SLOT_COLORS[key] ?? "border-green-500/30 bg-green-500/10 text-green-400";
+}
 
 function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
   const { toast } = useToast();
@@ -2834,7 +2841,13 @@ function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formMerge, setFormMerge] = useState("last");
-  const [formStages, setFormStages] = useState<any[]>([{ order: 0, model: "gemini", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 }]);
+  const [formStages, setFormStages] = useState<any[]>([{ order: 0, model: "a", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 }]);
+
+  const { data: slotsData } = useQuery<Record<string, { label: string; provider: string; model: string }>>({
+    queryKey: ["/api/agent/slots"],
+    refetchInterval: 30000,
+  });
+  const slotEntries = Object.entries(slotsData ?? {});
 
   const { data: brainData, isLoading } = useQuery<{ presets: any[]; activePresetId: string }>({
     queryKey: ["/api/brain/presets"],
@@ -2901,12 +2914,12 @@ function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
     setFormName("");
     setFormDesc("");
     setFormMerge("last");
-    setFormStages([{ order: 0, model: "gemini", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 }]);
+    setFormStages([{ order: 0, model: "a", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 }]);
   }
 
   function addStage() {
     const maxOrder = Math.max(...formStages.map(s => s.order), -1);
-    setFormStages([...formStages, { order: maxOrder + 1, model: "gemini", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 }]);
+    setFormStages([...formStages, { order: maxOrder + 1, model: "a", role: "generate", input: "user_query", timeoutMs: 30000, weight: 1.0 }]);
   }
 
   function removeStage(idx: number) {
@@ -2975,18 +2988,18 @@ function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
                   {activePreset.stages.map((stage: any, idx: number) => {
                     const prevStage = idx > 0 ? activePreset.stages[idx - 1] : null;
                     const isParallel = prevStage && prevStage.order === stage.order;
+                    const slotKey = stage.model?.replace(/^slot_/, "") ?? "a";
+                    const slotInfo = slotsData?.[slotKey];
+                    const displayLabel = slotInfo ? slotInfo.label : stage.model;
+                    const displayModel = slotInfo ? slotInfo.model : "";
                     return (
                       <div key={idx} className="flex items-center gap-1">
                         {idx > 0 && !isParallel && <GitBranch className="w-3 h-3 text-muted-foreground rotate-90" />}
-                        {isParallel && <span className="text-[9px] text-muted-foreground">||</span>}
-                        <div className={cn(
-                          "rounded-md border px-2 py-1 text-[10px] font-mono",
-                          stage.model === "gemini" ? "border-blue-500/30 bg-blue-500/10 text-blue-400" :
-                          stage.model === "grok" ? "border-orange-500/30 bg-orange-500/10 text-orange-400" :
-                          "border-purple-500/30 bg-purple-500/10 text-purple-400"
-                        )}>
-                          <span className="font-semibold">{stage.model}</span>
-                          <span className="text-muted-foreground ml-1">({stage.role})</span>
+                        {isParallel && <span className="text-[9px] text-muted-foreground">‖</span>}
+                        <div className={cn("rounded-md border px-2 py-1 text-[10px] font-mono", slotColor(slotKey))}>
+                          <span className="font-semibold">{displayLabel}</span>
+                          {displayModel && <span className="opacity-60 ml-1 text-[9px]">{displayModel.split("/").pop()}</span>}
+                          <span className="opacity-60 ml-1">({stage.role})</span>
                         </div>
                       </div>
                     );
@@ -2998,11 +3011,15 @@ function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
                 <div className="space-y-1.5">
                   <span className="text-[10px] text-muted-foreground font-medium">Model Weights</span>
                   <div className={cn(isVertical ? "grid grid-cols-2 gap-3" : "space-y-2")}>
-                    {Object.entries(activePreset.weights).map(([model, weight]) => (
+                    {Object.entries(activePreset.weights).map(([model, weight]) => {
+                      const wSlotKey = model.replace(/^slot_/, "");
+                      const wSlotInfo = slotsData?.[wSlotKey];
+                      const wLabel = wSlotInfo ? wSlotInfo.label : model;
+                      return (
                       <div key={model} className={cn(
                         isVertical ? "flex flex-col items-center gap-1" : "flex items-center gap-2"
                       )}>
-                        <span className={cn("text-[10px] font-mono flex-shrink-0", !isVertical && "w-16")}>{model}</span>
+                        <span className={cn("text-[10px] font-mono flex-shrink-0", !isVertical && "w-16")}>{wLabel}</span>
                         <Slider
                           value={[weight as number]}
                           onValueChange={([val]) => {
@@ -3018,7 +3035,8 @@ function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
                         />
                         <span className="text-[10px] font-mono">{(weight as number).toFixed(2)}</span>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -3101,11 +3119,14 @@ function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
                       data-testid={`input-stage-order-${idx}`}
                     />
                     <Select value={stage.model} onValueChange={(v) => updateStage(idx, "model", v)}>
-                      <SelectTrigger className="w-20" data-testid={`select-stage-model-${idx}`}>
+                      <SelectTrigger className="w-24" data-testid={`select-stage-model-${idx}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {STAGE_MODELS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                        {slotEntries.map(([key, s]) => (
+                          <SelectItem key={key} value={key}>{s.label} ({key})</SelectItem>
+                        ))}
+                        <SelectItem value="hub">Hub</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={stage.role} onValueChange={(v) => updateStage(idx, "role", v)}>
@@ -3211,15 +3232,17 @@ function BrainTab({ orientation, isVertical }: SliderOrientationProps) {
                       return (
                         <div key={idx} className="flex items-center gap-0.5">
                           {idx > 0 && !isParallel && <span className="text-[9px] text-muted-foreground mx-0.5">&rarr;</span>}
-                          {isParallel && <span className="text-[9px] text-muted-foreground mx-0.5">||</span>}
-                          <span className={cn(
-                            "text-[9px] font-mono px-1 py-0.5 rounded",
-                            stage.model === "gemini" ? "bg-blue-500/10 text-blue-400" :
-                            stage.model === "grok" ? "bg-orange-500/10 text-orange-400" :
-                            "bg-purple-500/10 text-purple-400"
-                          )}>
-                            {stage.model}:{stage.role}
-                          </span>
+                          {isParallel && <span className="text-[9px] text-muted-foreground mx-0.5">‖</span>}
+                          {(() => {
+                            const pSlotKey = (stage.model ?? "a").replace(/^slot_/, "");
+                            const pSlotInfo = slotsData?.[pSlotKey];
+                            const pLabel = pSlotInfo ? pSlotInfo.label : stage.model;
+                            return (
+                              <span className={cn("text-[9px] font-mono px-1 py-0.5 rounded", slotColor(pSlotKey).replace("border-","").split(" ").filter(c => c.startsWith("bg-") || c.startsWith("text-")).join(" "))}>
+                                {pLabel}:{stage.role}
+                              </span>
+                            );
+                          })()}
                         </div>
                       );
                     })}
