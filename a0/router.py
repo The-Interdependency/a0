@@ -4,7 +4,7 @@ from pathlib import Path
 from .contract import A0Request, A0Response
 from .logging import log_event
 from .state import load_state, save_state
-from .model_adapter import LocalEchoAdapter
+from .adapters import get_adapter
 
 from .tools.edcm_tool import run_edcm
 from .tools.pdf_tool import run_pdf_extract
@@ -14,7 +14,7 @@ LOG_DIR = Path(__file__).resolve().parent / "logs"
 
 def handle(req: A0Request) -> A0Response:
     state = load_state()
-    adapter = LocalEchoAdapter()
+    adapter = get_adapter()
     state["last_model"] = adapter.name
     save_state(state)
 

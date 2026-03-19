@@ -1,0 +1,11 @@
+# Core — required for .env loading
+python-dotenv>=1.0
+
+# Adapters — install only what you use
+anthropic>=0.25            # A0_MODEL=claude
+openai>=1.0                # A0_MODEL=openai, grok, deepseek (all OpenAI-compatible)
+google-generativeai>=0.5   # A0_MODEL=gemini
+PyGithub>=2.0              # A0_MODEL=github
+
+# Google Cloud (Vertex AI / GCP services)
+google-cloud-aiplatform>=1.0
