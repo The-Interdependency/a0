@@ -6008,6 +6008,67 @@ IMPORTANT RULES:
     }
   });
 
+  const AGENT_MODULES_REGISTRY = path.join(process.cwd(), "client/src/lib/agent-modules.json");
+  const AGENT_TABS_DIR = path.join(process.cwd(), "client/src/components/tabs");
+  const AGENT_BARREL = path.join(AGENT_TABS_DIR, "index.ts");
+
+  router.get("/agent/modules", async (_req, res) => {
+    try {
+      let registry: any[] = [];
+      try { registry = JSON.parse(await readFile(AGENT_MODULES_REGISTRY, "utf8")); } catch {}
+      res.json(registry);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.post("/agent/write-module", async (req: Request, res: Response) => {
+    try {
+      if (!(req as any).user) return res.status(401).json({ error: "Unauthorized" });
+      const { name, tabId, groupId, label, icon, description, code } = req.body;
+      if (!name || !tabId || !groupId || !label || !icon || !code) return res.status(400).json({ error: "name, tabId, groupId, label, icon, and code are required." });
+      const safeName = name.replace(/[^a-zA-Z0-9]/g, "");
+      if (!safeName || safeName[0] !== safeName[0].toUpperCase()) return res.status(400).json({ error: "name must be PascalCase alphanumeric." });
+      const safeTabId = tabId.replace(/[^a-z0-9-]/g, "");
+      if (!safeTabId) return res.status(400).json({ error: "tabId must be lowercase alphanumeric with hyphens." });
+      const componentPath = path.join(AGENT_TABS_DIR, `${safeName}Tab.tsx`);
+      await writeFile(componentPath, code, "utf8");
+      const indexContent = await readFile(AGENT_BARREL, "utf8");
+      const exportLine = `export { ${safeName}Tab } from "./${safeName}Tab";\n`;
+      if (!indexContent.includes(exportLine)) await writeFile(AGENT_BARREL, indexContent + exportLine, "utf8");
+      let registry: any[] = [];
+      try { registry = JSON.parse(await readFile(AGENT_MODULES_REGISTRY, "utf8")); } catch {}
+      registry = registry.filter((m: any) => m.tabId !== safeTabId);
+      const entry = { name: safeName, tabId: safeTabId, groupId, label, icon, description: description || "", createdAt: new Date().toISOString(), createdBy: (req as any).user?.id || "owner" };
+      registry.push(entry);
+      await writeFile(AGENT_MODULES_REGISTRY, JSON.stringify(registry, null, 2), "utf8");
+      res.json({ ok: true, module: entry });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.delete("/agent/modules/:tabId", async (req: Request, res: Response) => {
+    try {
+      if (!(req as any).user) return res.status(401).json({ error: "Unauthorized" });
+      const safeTabId = req.params.tabId.replace(/[^a-z0-9-]/g, "");
+      let registry: any[] = [];
+      try { registry = JSON.parse(await readFile(AGENT_MODULES_REGISTRY, "utf8")); } catch {}
+      const mod = registry.find((m: any) => m.tabId === safeTabId);
+      if (!mod) return res.status(404).json({ error: `Module "${safeTabId}" not found.` });
+      registry = registry.filter((m: any) => m.tabId !== safeTabId);
+      await writeFile(AGENT_MODULES_REGISTRY, JSON.stringify(registry, null, 2), "utf8");
+      const componentPath = path.join(AGENT_TABS_DIR, `${mod.name}Tab.tsx`);
+      try { await unlink(componentPath); } catch {}
+      const indexContent = await readFile(AGENT_BARREL, "utf8");
+      const exportLine = `export { ${mod.name}Tab } from "./${mod.name}Tab";\n`;
+      await writeFile(AGENT_BARREL, indexContent.replace(exportLine, ""), "utf8");
+      res.json({ ok: true, deleted: safeTabId });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Mount router at both /api and /api/v1 for versioning support
   app.use("/api", router);
   app.use("/api/v1", router);

@@ -1,59 +1,115 @@
-import { Activity, Brain, ChevronDown, ChevronRight, Clock, Cpu, DollarSign, Download, Eye, FileText, Gauge, GitBranch, Lock, ScrollText, Settings, ShoppingBag, Star, Wrench, Zap } from "lucide-react";
+import { Activity, Brain, ChevronDown, ChevronRight, Clock, Cpu, Database, DollarSign, Download, Eye, FileText, Flame, Gauge, GitBranch, Globe, Hash, Layers, Lock, Map, Package, Puzzle, Radio, ScrollText, Search, Settings, Shield, ShoppingBag, Square, Star, Target, Terminal, Triangle, User, Wand2, Wrench, Zap } from "lucide-react";
 import type { Persona } from "@/hooks/use-persona";
 
 export type TabId = "workflow" | "bandit" | "metrics" | "edcm" | "memory" | "brain" | "system" | "heartbeat" | "tools" | "credentials" | "export" | "logs" | "context" | "omega" | "psi" | "api" | "s17" | "deals";
 
-export type TabGroup = { id: string; label: string; icon: any; tabs: Array<{ id: TabId; label: string; icon: any }> };
+export type TabGroup = { id: string; label: string; icon: any; tabs: Array<{ id: string; label: string; icon: any }> };
 
 export type SliderOrientationProps = { orientation: "horizontal" | "vertical"; isVertical: boolean };
+
+export type AgentModule = {
+  name: string;
+  tabId: string;
+  groupId: string;
+  label: string;
+  icon: string;
+  description?: string;
+  createdAt: string;
+  createdBy?: string;
+};
+
+export const AGENT_ICONS: Record<string, any> = {
+  Activity, Brain, Clock, Cpu, Database, DollarSign, Download, Eye,
+  FileText, Flame, Gauge, GitBranch, Globe, Hash, Layers, Lock, Map,
+  Package, Puzzle, Radio, ScrollText, Search, Settings, Shield, ShoppingBag,
+  Square, Star, Target, Terminal, Triangle, User, Wand2, Wrench, Zap,
+};
+
+export function resolveIcon(name: string): any {
+  return AGENT_ICONS[name] || Zap;
+}
+
+export function buildAgentGroups(modules: AgentModule[]): TabGroup[] {
+  const grouped: Record<string, AgentModule[]> = {};
+  for (const m of modules) {
+    const g = m.groupId || "custom";
+    if (!grouped[g]) grouped[g] = [];
+    grouped[g].push(m);
+  }
+  const result: TabGroup[] = [];
+  for (const groupId of Object.keys(grouped)) {
+    const mods: AgentModule[] = grouped[groupId];
+    const existing = TAB_GROUPS.find(g => g.id === groupId);
+    if (existing) {
+      const dynTabs = mods.map((m: AgentModule) => ({ id: m.tabId, label: m.label, icon: resolveIcon(m.icon) }));
+      result.push({ ...existing, tabs: [...existing.tabs, ...dynTabs] });
+    } else {
+      result.push({
+        id: groupId,
+        label: groupId.charAt(0).toUpperCase() + groupId.slice(1),
+        icon: Puzzle,
+        tabs: mods.map((m: AgentModule) => ({ id: m.tabId, label: m.label, icon: resolveIcon(m.icon) })),
+      });
+    }
+  }
+  return result;
+}
 
 export const TAB_GROUPS: readonly TabGroup[] = [
   {
     id: "agent", label: "Self-State Diag", icon: Activity,
     tabs: [
-      { id: "workflow" as TabId, label: "Workflow", icon: Activity },
-      { id: "bandit" as TabId, label: "Bandit", icon: GitBranch },
-      { id: "metrics" as TabId, label: "Metrics", icon: DollarSign },
-      { id: "deals" as TabId, label: "Deals", icon: ShoppingBag },
+      { id: "workflow", label: "Workflow", icon: Activity },
+      { id: "bandit", label: "Bandit", icon: GitBranch },
+      { id: "metrics", label: "Metrics", icon: DollarSign },
+      { id: "deals", label: "Deals", icon: ShoppingBag },
     ],
   },
   {
     id: "memory", label: "Memory", icon: Brain,
     tabs: [
-      { id: "memory" as TabId, label: "Memory", icon: Brain },
-      { id: "edcm" as TabId, label: "EDCM", icon: Cpu },
-      { id: "brain" as TabId, label: "Brain", icon: GitBranch },
-      { id: "s17" as TabId, label: "S17", icon: Zap },
+      { id: "memory", label: "Memory", icon: Brain },
+      { id: "edcm", label: "EDCM", icon: Cpu },
+      { id: "brain", label: "Brain", icon: GitBranch },
+      { id: "s17", label: "S17", icon: Zap },
     ],
   },
   {
     id: "triad", label: "Triad", icon: Star,
     tabs: [
-      { id: "psi" as TabId, label: "Psi Ψ", icon: Eye },
-      { id: "omega" as TabId, label: "Omega Ω", icon: Gauge },
-      { id: "heartbeat" as TabId, label: "Heartbeat", icon: Clock },
+      { id: "psi", label: "Psi Ψ", icon: Eye },
+      { id: "omega", label: "Omega Ω", icon: Gauge },
+      { id: "heartbeat", label: "Heartbeat", icon: Clock },
     ],
   },
   {
     id: "system", label: "System", icon: Settings,
     tabs: [
-      { id: "system" as TabId, label: "System", icon: Settings },
-      { id: "logs" as TabId, label: "Logs", icon: ScrollText },
+      { id: "system", label: "System", icon: Settings },
+      { id: "logs", label: "Logs", icon: ScrollText },
     ],
   },
   {
     id: "tools", label: "Tools", icon: Wrench,
     tabs: [
-      { id: "tools" as TabId, label: "Tools", icon: Wrench },
-      { id: "credentials" as TabId, label: "Keys", icon: Lock },
-      { id: "context" as TabId, label: "Context", icon: FileText },
-      { id: "api" as TabId, label: "API", icon: Cpu },
-      { id: "export" as TabId, label: "Export", icon: Download },
+      { id: "tools", label: "Tools", icon: Wrench },
+      { id: "credentials", label: "Keys", icon: Lock },
+      { id: "context", label: "Context", icon: FileText },
+      { id: "api", label: "API", icon: Cpu },
+      { id: "export", label: "Export", icon: Download },
     ],
   },
 ] as const;
 
 export const ALL_GROUPS: TabGroup[] = [...TAB_GROUPS];
+
+export const STATIC_TAB_IDS = new Set<string>([
+  "workflow", "bandit", "metrics", "deals",
+  "memory", "edcm", "brain", "s17",
+  "psi", "omega", "heartbeat",
+  "system", "logs",
+  "tools", "credentials", "context", "api", "export",
+]);
 
 export const TAB_TO_GROUP: Record<TabId, string> = {
   workflow: "agent", bandit: "agent", metrics: "agent", deals: "agent",
@@ -102,7 +158,7 @@ export const PERSONA_METRIC_LABELS: Record<Persona, MetricLabelMap> = {
   },
 };
 
-export const PERSONA_VISIBLE_TABS: Record<Persona, TabId[] | null> = {
+export const PERSONA_VISIBLE_TABS: Record<Persona, string[] | null> = {
   free: null,
   legal: ["workflow", "metrics", "deals", "edcm", "memory", "psi", "heartbeat", "context", "logs", "credentials", "export"],
   researcher: ["workflow", "metrics", "deals", "edcm", "memory", "brain", "psi", "omega", "heartbeat", "context", "logs", "credentials", "export"],
