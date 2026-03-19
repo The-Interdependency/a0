@@ -203,6 +203,9 @@ export default function ChatPage() {
               if (data.tool_result) {
                 setToolActions((prev) => [...prev, { type: "tool_result", name: data.tool_result.name, result: data.tool_result.result }]);
               }
+              if (data.error) {
+                toast({ title: "Agent error", description: data.error, variant: "destructive" });
+              }
               if (data.done) {
                 gotDone = true;
                 setStreaming(false);
@@ -444,20 +447,23 @@ export default function ChatPage() {
               const slot = modelSlots?.[s];
               const label = slot?.label || s.toUpperCase();
               const model = slot?.model || "—";
+              const noKey = slot && !slot.apiKeySet;
               return (
                 <button
                   key={s}
                   onClick={() => setActiveSlot(s)}
-                  title={model}
+                  title={noKey ? `${model} — no API key set` : model}
                   className={cn(
                     "flex items-center gap-1 px-3 py-2 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors border flex-shrink-0 min-h-[36px]",
                     activeSlot === s
                       ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-card text-muted-foreground border-border hover:text-foreground"
+                      : "bg-card text-muted-foreground border-border hover:text-foreground",
+                    noKey && activeSlot !== s && "border-amber-500/50 text-amber-500/70"
                   )}
                   data-testid={`slot-pill-${s}`}
                 >
                   {label}
+                  {noKey && <span className="text-[8px] opacity-70">⚠</span>}
                 </button>
               );
             })}
