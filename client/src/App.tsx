@@ -13,6 +13,7 @@ import MailPage from "@/pages/mail";
 import AutomationPage from "@/pages/automation";
 import ConsolePage from "@/pages/console";
 import PersonaPage from "@/pages/persona";
+import PricingPage from "@/pages/pricing";
 import SplashPage from "@/pages/splash";
 import LoginPage from "@/pages/login";
 import TopNav from "@/components/top-nav";
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/automation" component={AutomationPage} />
       <Route path="/console" component={ConsolePage} />
       <Route path="/persona" component={PersonaPage} />
+      <Route path="/pricing" component={PricingPage} />
       <Route component={ChatPage} />
     </Switch>
   );

@@ -17,7 +17,8 @@ import {
   Clock, Sparkles, Target, Settings, Lock, Eye, EyeOff, ArrowUpDown, ArrowLeftRight, Cpu, GitBranch, Star, Gauge, ShoppingBag, TrendingDown, TrendingUp,
 } from "lucide-react";
 import { useSliderOrientation } from "@/hooks/use-slider-orientation";
-import { usePersona, type Persona } from "@/hooks/use-persona";
+import { usePersona, PERSONA_META, type Persona } from "@/hooks/use-persona";
+import { useLocation } from "wouter";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -189,11 +190,24 @@ export default function ConsolePage() {
 
   const currentGroup = visibleGroups.find(g => g.id === activeGroup) ?? visibleGroups[0];
 
+  const [, navigate] = useLocation();
+  const personaMeta = PERSONA_META[persona];
+
   return (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
       <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0 min-w-0">
         <Shield className="w-4 h-4 text-primary flex-shrink-0" />
-        <span className="font-semibold text-sm flex-1 min-w-0">Console</span>
+        <span className="font-semibold text-sm flex-shrink-0">Console</span>
+        <button
+          onClick={() => navigate("/pricing")}
+          className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-border hover:border-primary/50 hover:bg-accent transition-colors text-[11px] text-muted-foreground hover:text-foreground flex-1 min-w-0 max-w-fit"
+          data-testid="button-persona-badge"
+          title={`Current plan: ${personaMeta.label} — tap to change`}
+        >
+          <span>{personaMeta.icon}</span>
+          <span className={cn("font-medium truncate", personaMeta.color)}>{personaMeta.label}</span>
+        </button>
+        <div className="flex-1" />
         <Button
           size="icon"
           variant="ghost"
