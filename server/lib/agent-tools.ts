@@ -107,6 +107,9 @@ export const AGENT_TOOLS = [
   { name: "schedule_task", description: "Schedule a task to be executed at a future time or on a recurring interval.", parameters: { type: "object" as const, properties: { description: { type: "string" as const }, runAt: { type: "string" as const }, intervalMinutes: { type: "number" as const }, label: { type: "string" as const } }, required: ["description", "label"] } },
   { name: "list_scheduled_tasks", description: "List all scheduled tasks.", parameters: { type: "object" as const, properties: {}, required: [] as string[] } },
   { name: "cancel_scheduled_task", description: "Cancel a scheduled task by its ID.", parameters: { type: "object" as const, properties: { taskId: { type: "string" as const } }, required: ["taskId"] } },
+  { name: "write_module", description: "Write a new React tab component to the live codebase and register it in the Console. The component file is written to client/src/components/tabs/, the barrel index.ts is updated, and the module registry is updated. Requires elevated Ψ gates (Ψ3≥0.6, Ψ4≥0.5, Ψ5≥0.5). Available icons: Activity, Brain, Clock, Cpu, Database, DollarSign, Download, Eye, FileText, Flame, Gauge, GitBranch, Globe, Hash, Layers, Lock, Map, Package, Puzzle, Radio, ScrollText, Search, Settings, Shield, ShoppingBag, Square, Star, Target, Terminal, Triangle, User, Wand2, Wrench, Zap.", parameters: { type: "object" as const, properties: { name: { type: "string" as const, description: "PascalCase component name, e.g. 'Research'" }, tabId: { type: "string" as const, description: "Slug ID for the tab, e.g. 'research' (lowercase, hyphens ok)" }, groupId: { type: "string" as const, description: "Which group to add the tab to: agent, memory, triad, system, tools, or a new custom group name" }, label: { type: "string" as const, description: "Display label shown in the tab bar" }, icon: { type: "string" as const, description: "Lucide icon name from the available set" }, description: { type: "string" as const, description: "Short description of what this module does" }, code: { type: "string" as const, description: "Full TypeScript/TSX source for the tab component. Must export a default or named export matching {name}Tab." } }, required: ["name", "tabId", "groupId", "label", "icon", "code"] } },
+  { name: "list_agent_modules", description: "List all agent-written tab modules currently registered in the codebase.", parameters: { type: "object" as const, properties: {}, required: [] as string[] } },
+  { name: "delete_agent_module", description: "Remove an agent-written tab module from the codebase and registry. The component file is deleted and the barrel/registry are updated.", parameters: { type: "object" as const, properties: { tabId: { type: "string" as const, description: "The tabId of the module to delete" } }, required: ["tabId"] } },
 ];
 
 export async function executeAgentTool(toolName: string, args: any, userId = "default"): Promise<string> {
@@ -834,6 +837,63 @@ export async function executeAgentTool(toolName: string, args: any, userId = "de
         await storage.upsertSystemToggle(`agent_scheduled_tasks_${userId}`, true, { tasks });
         await logMaster("agent", "cancel_scheduled_task", { taskId, userId });
         return `Task ${taskId} (${tasks[idx].label}) cancelled.`;
+      }
+      case "write_module": {
+        const psi = getPsiState();
+        const conf = psi.dimensionEnergies[3] || 0;
+        const clar = psi.dimensionEnergies[4] || 0;
+        const iden = psi.dimensionEnergies[5] || 0;
+        if (conf < 0.6 || clar < 0.5 || iden < 0.5) {
+          const { logPsi: lp } = await import("../logger");
+          await lp("write_module_blocked", { reason: "psi_gate_fail", psi3: conf, psi4: clar, psi5: iden });
+          return `Module writing blocked by Ψ gates:\n  Ψ3 Confidence: ${conf.toFixed(4)} (need ≥0.6)\n  Ψ4 Clarity: ${clar.toFixed(4)} (need ≥0.5)\n  Ψ5 Identity: ${iden.toFixed(4)} (need ≥0.5)`;
+        }
+        const { name, tabId, groupId, label, icon, description: modDesc, code } = args;
+        if (!name || !tabId || !groupId || !label || !icon || !code) return "Error: name, tabId, groupId, label, icon, and code are required.";
+        const safeName = name.replace(/[^a-zA-Z0-9]/g, "");
+        if (!safeName || safeName[0] !== safeName[0].toUpperCase()) return "Error: name must be PascalCase alphanumeric (e.g. 'Research').";
+        const safeTabId = tabId.replace(/[^a-z0-9-]/g, "");
+        if (!safeTabId) return "Error: tabId must be lowercase alphanumeric with hyphens (e.g. 'research').";
+        const componentPath = path.join(BASE_DIR, "client/src/components/tabs", `${safeName}Tab.tsx`);
+        const indexPath = path.join(BASE_DIR, "client/src/components/tabs/index.ts");
+        const registryPath = path.join(BASE_DIR, "client/src/lib/agent-modules.json");
+        await writeFile(componentPath, code, "utf8");
+        const indexContent = await readFile(indexPath, "utf8");
+        const exportLine = `export { ${safeName}Tab } from "./${safeName}Tab";\n`;
+        if (!indexContent.includes(exportLine)) await writeFile(indexPath, indexContent + exportLine, "utf8");
+        let registry: any[] = [];
+        try { registry = JSON.parse(await readFile(registryPath, "utf8")); } catch {}
+        registry = registry.filter((m: any) => m.tabId !== safeTabId);
+        registry.push({ name: safeName, tabId: safeTabId, groupId, label, icon, description: modDesc || "", createdAt: new Date().toISOString(), createdBy: "agent" });
+        await writeFile(registryPath, JSON.stringify(registry, null, 2), "utf8");
+        await logMaster("agent", "write_module", { name: safeName, tabId: safeTabId, groupId, label });
+        return `Module "${safeName}Tab" written successfully.\n  File: client/src/components/tabs/${safeName}Tab.tsx\n  Tab ID: ${safeTabId}\n  Group: ${groupId}\n  Vite HMR will pick it up instantly — tab will appear in Console under the '${groupId}' group.`;
+      }
+      case "list_agent_modules": {
+        const registryPath = path.join(BASE_DIR, "client/src/lib/agent-modules.json");
+        let registry: any[] = [];
+        try { registry = JSON.parse(await readFile(registryPath, "utf8")); } catch {}
+        if (registry.length === 0) return "No agent-written modules registered.";
+        return `Agent modules (${registry.length}):\n${registry.map((m: any) => `- [${m.tabId}] ${m.label} (group: ${m.groupId}, icon: ${m.icon}) — created ${m.createdAt}`).join("\n")}`;
+      }
+      case "delete_agent_module": {
+        const { tabId: delTabId } = args;
+        if (!delTabId) return "Error: tabId is required.";
+        const registryPath = path.join(BASE_DIR, "client/src/lib/agent-modules.json");
+        const indexPath = path.join(BASE_DIR, "client/src/components/tabs/index.ts");
+        let registry: any[] = [];
+        try { registry = JSON.parse(await readFile(registryPath, "utf8")); } catch {}
+        const mod = registry.find((m: any) => m.tabId === delTabId);
+        if (!mod) return `Error: module with tabId "${delTabId}" not found.`;
+        registry = registry.filter((m: any) => m.tabId !== delTabId);
+        await writeFile(registryPath, JSON.stringify(registry, null, 2), "utf8");
+        const componentPath = path.join(BASE_DIR, "client/src/components/tabs", `${mod.name}Tab.tsx`);
+        try { await rm(componentPath); } catch {}
+        const indexContent = await readFile(indexPath, "utf8");
+        const exportLine = `export { ${mod.name}Tab } from "./${mod.name}Tab";\n`;
+        await writeFile(indexPath, indexContent.replace(exportLine, ""), "utf8");
+        await logMaster("agent", "delete_agent_module", { tabId: delTabId, name: mod.name });
+        return `Module "${mod.name}Tab" (tabId: ${delTabId}) deleted from codebase and registry.`;
       }
       default:
         return `Unknown tool: ${toolName}`;
