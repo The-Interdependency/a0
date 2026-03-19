@@ -189,10 +189,10 @@ export default function ConsolePage() {
   const currentGroup = visibleGroups.find(g => g.id === activeGroup) ?? visibleGroups[0];
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0">
+    <div className="flex flex-col h-full w-full overflow-x-hidden">
+      <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0 min-w-0">
         <Shield className="w-4 h-4 text-primary flex-shrink-0" />
-        <span className="font-semibold text-sm flex-1">Console</span>
+        <span className="font-semibold text-sm flex-1 min-w-0">Console</span>
         <Button
           size="icon"
           variant="ghost"
@@ -203,7 +203,7 @@ export default function ConsolePage() {
         </Button>
       </header>
 
-      <div className="flex gap-1 px-2 py-1 bg-card border-b border-border flex-shrink-0 overflow-x-auto">
+      <div className="flex gap-1 px-2 py-1 bg-card border-b border-border flex-shrink-0 overflow-x-auto min-w-0 max-w-full scrollbar-none">
         {visibleGroups.map((group) => (
           <button
             key={group.id}
@@ -222,7 +222,7 @@ export default function ConsolePage() {
         ))}
       </div>
 
-      <div className="flex border-b border-border bg-card overflow-x-auto flex-shrink-0">
+      <div className="flex border-b border-border bg-card overflow-x-auto flex-shrink-0 min-w-0 max-w-full scrollbar-none">
         {currentGroup?.tabs.map((tab) => (
           <button
             key={tab.id}
@@ -241,7 +241,7 @@ export default function ConsolePage() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden min-w-0">
         {activeTab === "workflow" && <WorkflowTab />}
         {activeTab === "bandit" && <BanditTab orientation={orientation} isVertical={isVertical} />}
         {activeTab === "metrics" && <MetricsTab orientation={orientation} isVertical={isVertical} />}
@@ -313,7 +313,7 @@ function DealsTab() {
   }
 
   return (
-    <div className="h-full flex flex-col gap-3 p-3 overflow-y-auto">
+    <div className="h-full w-full flex flex-col gap-3 p-3 overflow-y-auto overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center gap-2">
         <ShoppingBag className="w-4 h-4 text-zinc-400" />
