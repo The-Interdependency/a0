@@ -3551,7 +3551,7 @@ function SystemTab({ orientation, isVertical }: SliderOrientationProps) {
   const subsystems = Object.keys(SUBSYSTEM_PARAMS);
 
   return (
-    <ScrollArea className="h-full px-3 py-3">
+    <div className="h-full w-full overflow-y-auto overflow-x-hidden px-3 py-3">
       <div className="space-y-4 pb-4">
         <PersonaSection />
         <div className="rounded-lg border border-border bg-card p-4">
@@ -3671,7 +3671,7 @@ function SystemTab({ orientation, isVertical }: SliderOrientationProps) {
           )}
         </div>
       </div>
-    </ScrollArea>
+    </div>
   );
 }
 
@@ -3944,7 +3944,7 @@ function HeartbeatTab({ orientation, isVertical }: SliderOrientationProps) {
   );
 
   return (
-    <ScrollArea className="h-full px-3 py-3">
+    <div className="h-full w-full overflow-y-auto overflow-x-hidden px-3 py-3">
       <div className="space-y-4 pb-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
@@ -4236,7 +4236,7 @@ function HeartbeatTab({ orientation, isVertical }: SliderOrientationProps) {
           )}
         </div>
       </div>
-    </ScrollArea>
+    </div>
   );
 }
 
@@ -4416,7 +4416,7 @@ function CustomToolsTab() {
   if (isLoading) return <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
 
   return (
-    <ScrollArea className="h-full px-3 py-3">
+    <div className="h-full w-full overflow-y-auto overflow-x-hidden px-3 py-3">
       <div className="space-y-4 pb-4">
 
         <div className="rounded-lg border border-border bg-card p-3 space-y-2">
@@ -4743,7 +4743,7 @@ function CustomToolsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </ScrollArea>
+    </div>
   );
 }
 
@@ -5521,7 +5521,7 @@ function ApiModelTab() {
   });
 
   return (
-    <ScrollArea className="h-full px-3 py-3">
+    <div className="h-full w-full overflow-y-auto overflow-x-hidden px-3 py-3">
       <div className="space-y-4 pb-4">
         <div>
           <p className="text-[11px] text-muted-foreground mb-2">
@@ -5556,7 +5556,7 @@ function ApiModelTab() {
           onSaved={() => {}}
         />
       </div>
-    </ScrollArea>
+    </div>
   );
 }
 
@@ -5891,7 +5891,7 @@ function OmegaTab({ orientation, isVertical }: SliderOrientationProps) {
   };
 
   return (
-    <ScrollArea className="h-full">
+    <div className="h-full w-full overflow-y-auto overflow-x-hidden">
       <div className="p-3 space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -5906,10 +5906,10 @@ function OmegaTab({ orientation, isVertical }: SliderOrientationProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium">Mode:</span>
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <span className="text-xs font-medium flex-shrink-0">Mode:</span>
           <Select value={mode} onValueChange={(v) => modeMutation.mutate(v)}>
-            <SelectTrigger className="w-32 h-7 text-xs" data-testid="select-omega-mode">
+            <SelectTrigger className="w-28 h-7 text-xs flex-shrink-0" data-testid="select-omega-mode">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -5919,7 +5919,7 @@ function OmegaTab({ orientation, isVertical }: SliderOrientationProps) {
               <SelectItem value="research">Research</SelectItem>
             </SelectContent>
           </Select>
-          <span className="text-xs text-muted-foreground">{modeDescriptions[mode]}</span>
+          <span className="text-xs text-muted-foreground truncate">{modeDescriptions[mode]}</span>
         </div>
 
         <div className="space-y-2">
@@ -5932,7 +5932,7 @@ function OmegaTab({ orientation, isVertical }: SliderOrientationProps) {
                   <span className="text-xs truncate max-w-[120px]">{labels[i] || `Dim ${i}`}</span>
                   {crossed[i] && <Badge variant="default" className="text-[9px] h-4 px-1" data-testid={`badge-crossed-${i}`}>ACTIVE</Badge>}
                 </div>
-                <span className="text-xs font-mono text-muted-foreground">{energy.toFixed(3)}/{thresholds[i]}</span>
+                <span className="text-[10px] font-mono text-muted-foreground tabular-nums">{energy.toFixed(3)}/{thresholds[i]?.toFixed(2)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden relative">
@@ -6066,7 +6066,7 @@ function OmegaTab({ orientation, isVertical }: SliderOrientationProps) {
           </div>
         </div>
       </div>
-    </ScrollArea>
+    </div>
   );
 }
 
