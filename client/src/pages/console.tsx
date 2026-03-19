@@ -128,9 +128,9 @@ const PERSONA_METRIC_LABELS: Record<Persona, MetricLabelMap> = {
 /** Tab IDs visible per persona. Free = all. Others get curated sets. */
 const PERSONA_VISIBLE_TABS: Record<Persona, TabId[] | null> = {
   free: null, // null = show all
-  legal: ["workflow", "metrics", "deals", "edcm", "memory", "context", "logs", "credentials", "export"],
-  researcher: ["workflow", "metrics", "deals", "edcm", "memory", "brain", "omega", "context", "logs", "credentials", "export"],
-  political: ["workflow", "metrics", "deals", "edcm", "memory", "context", "logs", "credentials", "export"],
+  legal: ["workflow", "metrics", "deals", "edcm", "memory", "psi", "heartbeat", "context", "logs", "credentials", "export"],
+  researcher: ["workflow", "metrics", "deals", "edcm", "memory", "brain", "psi", "omega", "heartbeat", "context", "logs", "credentials", "export"],
+  political: ["workflow", "metrics", "deals", "edcm", "memory", "psi", "heartbeat", "context", "logs", "credentials", "export"],
 };
 
 export default function ConsolePage() {
