@@ -57,7 +57,7 @@ export default function FilesPage() {
   const manifestInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, refetch } = useQuery<FileListing>({
-    queryKey: ["/api/files", currentPath],
+    queryKey: ["/api/v1/files", currentPath],
     queryFn: async () => {
       const res = await fetch(`/api/files?path=${encodeURIComponent(currentPath)}`);
       return res.json();

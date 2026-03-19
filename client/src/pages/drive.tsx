@@ -43,7 +43,7 @@ export default function DrivePage() {
   const [history, setHistory] = useState<Array<{ id?: string; name: string }>>([{ id: undefined, name: "My Drive" }]);
 
   const { data: files, isLoading, error, refetch } = useQuery<DriveFile[]>({
-    queryKey: ["/api/drive/files", folderId],
+    queryKey: ["/api/v1/drive/files", folderId],
     queryFn: async () => {
       const url = folderId ? `/api/drive/files?folderId=${folderId}` : "/api/drive/files";
       const res = await fetch(url);

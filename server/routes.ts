@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import express, { Router } from "express";
 import { createServer, type Server } from "http";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -125,6 +126,7 @@ const DEFAULT_AI_WELCOME_HTML = `<!DOCTYPE html>
 </html>`;
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  const router = Router();
 
   // ============ AI WELCOME PAGE ============
 
@@ -152,7 +154,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ============ CONVERSATIONS ============
 
-  app.get("/api/conversations", async (_req, res) => {
+  router.get("/conversations", async (_req, res) => {
     try {
       const convs = await storage.getConversations();
       res.json(convs);
@@ -161,7 +163,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.post("/api/conversations", async (req, res) => {
+  router.post("/conversations", async (req, res) => {
     try {
       const { title = "New Task", model = "agent" } = req.body;
       const conv = await storage.createConversation({ title, model } as InsertConversation);
@@ -171,7 +173,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/conversations/:id", async (req, res) => {
+  router.get("/conversations/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const [conv, msgs] = await Promise.all([
@@ -185,7 +187,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.delete("/api/conversations/:id", async (req, res) => {
+  router.delete("/conversations/:id", async (req, res) => {
     try {
       await storage.deleteConversation(parseInt(req.params.id));
       res.json({ ok: true });
@@ -212,7 +214,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return keys;
   }
 
-  app.post("/api/context", async (req, res) => {
+  router.post("/context", async (req, res) => {
     try {
       const { systemPrompt, contextPrefix } = req.body;
       const userId = (req as any).user?.claims?.sub || "default";
@@ -223,7 +225,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/context", async (req, res) => {
+  router.get("/context", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const toggle = await storage.getSystemToggle(`user_context_${userId}`);
@@ -296,7 +298,7 @@ You are operating in political analysis mode. Apply structured political science
     return null;
   }
 
-  app.get("/api/user/persona", async (req, res) => {
+  router.get("/user/persona", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const persona = await getUserPersona(userId);
@@ -307,7 +309,7 @@ You are operating in political analysis mode. Apply structured political science
     }
   });
 
-  app.patch("/api/user/persona", async (req, res) => {
+  router.patch("/user/persona", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const { persona } = req.body;
@@ -323,7 +325,7 @@ You are operating in political analysis mode. Apply structured political science
 
   // ---- Persona grants (owner-configurable, a0-manageable) ----
 
-  app.get("/api/persona-grants", async (_req, res) => {
+  router.get("/persona-grants", async (_req, res) => {
     try {
       const grants = await getPersonaGrants();
       res.json(grants);
@@ -333,7 +335,7 @@ You are operating in political analysis mode. Apply structured political science
   });
 
   /** Full replace of grants map */
-  app.put("/api/persona-grants", async (req, res) => {
+  router.put("/persona-grants", async (req, res) => {
     try {
       const grants = req.body as Record<string, string>;
       if (typeof grants !== "object" || Array.isArray(grants)) {
@@ -352,7 +354,7 @@ You are operating in political analysis mode. Apply structured political science
   });
 
   /** Grant or update a single user */
-  app.patch("/api/persona-grants/:userId", async (req, res) => {
+  router.patch("/persona-grants/:userId", async (req, res) => {
     try {
       const targetUserId = req.params.userId;
       const { persona } = req.body;
@@ -369,7 +371,7 @@ You are operating in political analysis mode. Apply structured political science
   });
 
   /** Revoke a grant */
-  app.delete("/api/persona-grants/:userId", async (req, res) => {
+  router.delete("/persona-grants/:userId", async (req, res) => {
     try {
       const targetUserId = req.params.userId;
       const grants = await getPersonaGrants();
@@ -382,7 +384,7 @@ You are operating in political analysis mode. Apply structured political science
   });
 
   // ============ MERCHANT DEALS ============
-  app.get("/api/deals", async (req: Request, res: Response) => {
+  router.get("/deals", async (req: Request, res: Response) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const { status } = req.query as { status?: string };
@@ -391,7 +393,7 @@ You are operating in political analysis mode. Apply structured political science
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
-  app.post("/api/deals", async (req: Request, res: Response) => {
+  router.post("/deals", async (req: Request, res: Response) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const { title, ceiling, walkAway, myGoals, currentTerms } = req.body;
@@ -401,7 +403,7 @@ You are operating in political analysis mode. Apply structured political science
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
-  app.get("/api/deals/:id", async (req: Request, res: Response) => {
+  router.get("/deals/:id", async (req: Request, res: Response) => {
     try {
       const deal = await storage.getDeal(parseInt(req.params.id));
       if (!deal) return res.status(404).json({ error: "Not found" });
@@ -409,7 +411,7 @@ You are operating in political analysis mode. Apply structured political science
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
-  app.patch("/api/deals/:id", async (req: Request, res: Response) => {
+  router.patch("/deals/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
       const deal = await storage.getDeal(id);
@@ -420,7 +422,7 @@ You are operating in political analysis mode. Apply structured political science
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
-  app.post("/api/deals/:id/close", async (req: Request, res: Response) => {
+  router.post("/deals/:id/close", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
       const deal = await storage.getDeal(id);
@@ -483,7 +485,7 @@ You are operating in political analysis mode. Apply structured political science
     };
   }
 
-  app.get("/api/agent/slots", async (_req, res) => {
+  router.get("/agent/slots", async (_req, res) => {
     try {
       const slots = await getModelSlots();
       const safe: Record<string, any> = {};
@@ -496,11 +498,11 @@ You are operating in political analysis mode. Apply structured political science
     }
   });
 
-  app.get("/api/agent/tools", (_req, res) => {
+  router.get("/agent/tools", (_req, res) => {
     res.json(AGENT_TOOLS.map(t => ({ name: t.name, description: t.description, required: t.parameters?.required || [] })));
   });
 
-  app.patch("/api/agent/slots/:slot", async (req, res) => {
+  router.patch("/agent/slots/:slot", async (req, res) => {
     try {
       const { slot } = req.params;
       if (!isValidSlotKey(slot)) return res.status(400).json({ error: "Invalid slot key. Use lowercase alphanumeric, max 8 chars." });
@@ -521,7 +523,7 @@ You are operating in political analysis mode. Apply structured political science
     }
   });
 
-  app.delete("/api/agent/slots/:slot", async (req, res) => {
+  router.delete("/agent/slots/:slot", async (req, res) => {
     try {
       const { slot } = req.params;
       if (["a", "b", "c"].includes(slot)) return res.status(400).json({ error: "Cannot delete core slots a, b, c." });
@@ -539,7 +541,7 @@ You are operating in political analysis mode. Apply structured political science
   // Hub orchestration endpoint
   // ---------------------------------------------------------------------------
 
-  app.post("/api/hub/run", async (req, res) => {
+  router.post("/hub/run", async (req, res) => {
     try {
       const {
         pattern, slots, prompt, slotContexts,
@@ -638,7 +640,7 @@ You are operating in political analysis mode. Apply structured political science
     }
   });
 
-  app.get("/api/hub/patterns", (_req, res) => {
+  router.get("/hub/patterns", (_req, res) => {
     res.json({
       patterns: [
         { id: "fan_out", name: "Fan Out", description: "Parallel call to N models with the same prompt. Fastest pattern — all models respond simultaneously.", args: [] },
@@ -651,7 +653,7 @@ You are operating in political analysis mode. Apply structured political science
     });
   });
 
-  app.get("/api/agent/model-config", async (_req, res) => {
+  router.get("/agent/model-config", async (_req, res) => {
     try {
       const slots = await getModelSlots();
       const s = slots["a"];
@@ -661,7 +663,7 @@ You are operating in political analysis mode. Apply structured political science
     }
   });
 
-  app.get("/api/keys", async (req, res) => {
+  router.get("/keys", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const keys = await loadUserApiKeys(userId);
@@ -675,7 +677,7 @@ You are operating in political analysis mode. Apply structured political science
     }
   });
 
-  app.post("/api/keys", async (req, res) => {
+  router.post("/keys", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const { provider, key } = req.body;
@@ -746,7 +748,7 @@ You are operating in political analysis mode. Apply structured political science
     },
   };
 
-  app.get("/api/ai/models", async (req, res) => {
+  router.get("/ai/models", async (req, res) => {
     const userId = (req as any).user?.claims?.sub || "default";
     const keys = await loadUserApiKeys(userId);
     const models = [...BUILTIN_MODELS];
@@ -1223,7 +1225,7 @@ INSTRUCTIONS:
     }
   }
 
-  app.post("/api/ai/complete", async (req: Request, res: Response) => {
+  router.post("/ai/complete", async (req: Request, res: Response) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const { model, messages, systemPrompt: customSystem, maxTokens, temperature } = req.body;
@@ -1420,7 +1422,7 @@ INSTRUCTIONS:
     }
   });
 
-  app.post("/api/ai/stream", async (req: Request, res: Response) => {
+  router.post("/ai/stream", async (req: Request, res: Response) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const { model, messages, systemPrompt: customSystem, maxTokens, temperature } = req.body;
@@ -1600,7 +1602,7 @@ INSTRUCTIONS:
     }
   });
 
-  app.post("/api/ai/estimate", async (req, res) => {
+  router.post("/ai/estimate", async (req, res) => {
     const { model, promptLength, maxTokens } = req.body;
     if (!model || !promptLength) return res.status(400).json({ error: "model and promptLength required" });
     const cost = await estimateCost(model.includes("/") ? model.split("/")[0] : model, promptLength, maxTokens || 2048);
@@ -2992,7 +2994,7 @@ INSTRUCTIONS:
     }
   }
 
-  app.post("/api/conversations/:id/chat", async (req: Request, res: Response) => {
+  router.post("/conversations/:id/chat", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
       const { content, model: requestModel, slot: requestSlot } = req.body;
@@ -3274,7 +3276,7 @@ IMPORTANT RULES:
     "sed", "awk", "sort", "wc", "diff",
   ]);
 
-  app.post("/api/terminal/exec", async (req, res) => {
+  router.post("/terminal/exec", async (req, res) => {
     try {
       const { command } = req.body;
       if (!command?.trim()) return res.status(400).json({ error: "Command required" });
@@ -3308,7 +3310,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/terminal/history", async (_req, res) => {
+  router.get("/terminal/history", async (_req, res) => {
     try {
       const hist = await storage.getCommandHistory();
       res.json(hist);
@@ -3317,7 +3319,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.delete("/api/terminal/history", async (_req, res) => {
+  router.delete("/terminal/history", async (_req, res) => {
     try {
       await storage.clearCommandHistory();
       res.json({ ok: true });
@@ -3330,7 +3332,7 @@ IMPORTANT RULES:
 
   const HARDCODED_COMMANDS = ["ls", "pwd", "echo", "cat", "find", "grep", "head", "tail", "mkdir", "touch", "cp", "mv", "rm", "chmod", "env", "date", "ps", "df", "du", "which", "whoami", "uname", "curl", "wget", "python3", "node", "npm", "npx", "git", "tar", "zip", "unzip", "sed", "awk", "sort", "wc", "diff"];
 
-  app.get("/api/allowed-commands", async (_req, res) => {
+  router.get("/allowed-commands", async (_req, res) => {
     try {
       const toggle = await storage.getSystemToggle("allowed_commands_extra");
       const extra: string[] = toggle?.parameters?.commands || [];
@@ -3340,7 +3342,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/allowed-commands", async (req, res) => {
+  router.post("/allowed-commands", async (req, res) => {
     try {
       const { command } = req.body;
       if (!command || typeof command !== "string" || !/^\S+$/.test(command)) {
@@ -3358,7 +3360,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.delete("/api/allowed-commands/:command", async (req, res) => {
+  router.delete("/allowed-commands/:command", async (req, res) => {
     try {
       const { command } = req.params;
       const toggle = await storage.getSystemToggle("allowed_commands_extra");
@@ -3381,7 +3383,7 @@ IMPORTANT RULES:
     return resolved;
   }
 
-  app.get("/api/files", async (req, res) => {
+  router.get("/files", async (req, res) => {
     try {
       const dir = req.query.path as string || ".";
       const resolved = safePath(dir);
@@ -3409,7 +3411,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/files/read", async (req, res) => {
+  router.get("/files/read", async (req, res) => {
     try {
       const filePath = req.query.path as string;
       if (!filePath) return res.status(400).json({ error: "Path required" });
@@ -3421,7 +3423,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/files/write", async (req, res) => {
+  router.post("/files/write", async (req, res) => {
     try {
       const { path: filePath, content } = req.body;
       const resolved = safePath(filePath);
@@ -3432,7 +3434,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/files/move", async (req, res) => {
+  router.post("/files/move", async (req, res) => {
     try {
       const { from, to } = req.body;
       const src = safePath(from);
@@ -3480,7 +3482,7 @@ IMPORTANT RULES:
     };
   }
 
-  app.post("/api/files/upload", upload.array("files", 50), async (req: any, res) => {
+  router.post("/files/upload", upload.array("files", 50), async (req: any, res) => {
     try {
       const files = req.files as Express.Multer.File[];
       if (!files?.length) return res.status(400).json({ error: "No files provided" });
@@ -3524,7 +3526,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/files/upload-manifest", upload.single("manifest"), async (req: any, res) => {
+  router.post("/files/upload-manifest", upload.single("manifest"), async (req: any, res) => {
     try {
       const file = req.file as Express.Multer.File;
       if (!file) return res.status(400).json({ error: "No manifest file provided" });
@@ -3564,7 +3566,7 @@ IMPORTANT RULES:
 
   // ============ AUTOMATION / SPEC PARSER ============
 
-  app.get("/api/automation", async (_req, res) => {
+  router.get("/automation", async (_req, res) => {
     try {
       res.json(await storage.getAutomationTasks());
     } catch (e: any) {
@@ -3572,7 +3574,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/automation", async (req, res) => {
+  router.post("/automation", async (req, res) => {
     try {
       const { name, specContent } = req.body;
       const task = await storage.createAutomationTask({ name, specContent, status: "pending" });
@@ -3582,7 +3584,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/automation/:id/run", async (req: Request, res: Response) => {
+  router.post("/automation/:id/run", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
       const task = await storage.getAutomationTask(id);
@@ -3626,7 +3628,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.delete("/api/automation/:id", async (req, res) => {
+  router.delete("/automation/:id", async (req, res) => {
     try {
       await storage.deleteAutomationTask(parseInt(req.params.id));
       res.json({ ok: true });
@@ -3637,7 +3639,7 @@ IMPORTANT RULES:
 
   // ============ GMAIL ============
 
-  app.get("/api/gmail/messages", async (_req, res) => {
+  router.get("/gmail/messages", async (_req, res) => {
     try {
       const gmail = await getUncachableGmailClient();
       const list = await gmail.users.messages.list({ userId: "me", maxResults: 20, labelIds: ["INBOX"] });
@@ -3669,7 +3671,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/gmail/messages/:id", async (req, res) => {
+  router.get("/gmail/messages/:id", async (req, res) => {
     try {
       const gmail = await getUncachableGmailClient();
       const msg = await gmail.users.messages.get({ userId: "me", id: req.params.id, format: "full" });
@@ -3697,7 +3699,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/gmail/send", async (req, res) => {
+  router.post("/gmail/send", async (req, res) => {
     try {
       const { to, subject, body } = req.body;
       const gmail = await getUncachableGmailClient();
@@ -3717,7 +3719,7 @@ IMPORTANT RULES:
 
   // ============ GOOGLE DRIVE ============
 
-  app.get("/api/drive/files", async (req, res) => {
+  router.get("/drive/files", async (req, res) => {
     try {
       const drive = await getUncachableGoogleDriveClient();
       const folderId = req.query.folderId as string | undefined;
@@ -3738,7 +3740,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/drive/files/:id", async (req, res) => {
+  router.get("/drive/files/:id", async (req, res) => {
     try {
       const drive = await getUncachableGoogleDriveClient();
       const file = await drive.files.get({
@@ -3756,7 +3758,7 @@ IMPORTANT RULES:
   startHeartbeat();
   ENGINE_STATUS.isRunning = true;
 
-  app.post("/api/a0p/process", async (req, res) => {
+  router.post("/a0p/process", async (req, res) => {
     try {
       if (ENGINE_STATUS.emergencyStop) {
         return res.status(503).json({ error: "Engine emergency stopped" });
@@ -3769,7 +3771,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/a0p/events", async (req, res) => {
+  router.get("/a0p/events", async (req, res) => {
     try {
       const taskId = req.query.taskId as string | undefined;
       if (taskId) {
@@ -3784,7 +3786,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/a0p/chain/verify", async (_req, res) => {
+  router.get("/a0p/chain/verify", async (_req, res) => {
     try {
       const result = await verifyHashChain();
       res.json(result);
@@ -3793,7 +3795,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/a0p/heartbeat", async (_req, res) => {
+  router.get("/a0p/heartbeat", async (_req, res) => {
     try {
       const logs = await storage.getHeartbeats(24);
       res.json(logs);
@@ -3802,7 +3804,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/a0p/status", (_req, res) => {
+  router.get("/a0p/status", (_req, res) => {
     res.json({
       isRunning: ENGINE_STATUS.isRunning,
       emergencyStop: ENGINE_STATUS.emergencyStop,
@@ -3810,19 +3812,19 @@ IMPORTANT RULES:
     });
   });
 
-  app.post("/api/a0p/emergency-stop", (_req, res) => {
+  router.post("/a0p/emergency-stop", (_req, res) => {
     emergencyStopEngine();
     res.json({ ok: true, status: "STOPPED" });
   });
 
-  app.post("/api/a0p/resume", (_req, res) => {
+  router.post("/a0p/resume", (_req, res) => {
     resumeEngine();
     res.json({ ok: true, status: "RUNNING" });
   });
 
   // ============ COST METRICS ============
 
-  app.get("/api/metrics/costs", async (_req, res) => {
+  router.get("/metrics/costs", async (_req, res) => {
     try {
       const summary = await storage.getCostSummary();
       res.json(summary);
@@ -3831,7 +3833,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/metrics/costs/history", async (_req, res) => {
+  router.get("/metrics/costs/history", async (_req, res) => {
     try {
       const metrics = await storage.getCostMetrics();
       res.json(metrics);
@@ -3840,7 +3842,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/metrics/token-rates", async (_req, res) => {
+  router.get("/metrics/token-rates", async (_req, res) => {
     try {
       const rates = await getTokenRates();
       res.json(rates);
@@ -3849,7 +3851,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/metrics/token-rates", async (req, res) => {
+  router.post("/metrics/token-rates", async (req, res) => {
     try {
       const { rates } = req.body;
       if (!rates || typeof rates !== "object") return res.status(400).json({ error: "rates object required" });
@@ -3861,7 +3863,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/metrics/spend-limit", async (_req, res) => {
+  router.get("/metrics/spend-limit", async (_req, res) => {
     try {
       const toggle = await storage.getSystemToggle("spend_limit_monthly");
       const summary = await storage.getCostSummary();
@@ -3877,7 +3879,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/metrics/spend-limit", async (req, res) => {
+  router.post("/metrics/spend-limit", async (req, res) => {
     try {
       const { enabled, limit, mode } = req.body;
       await storage.upsertSystemToggle("spend_limit_monthly", enabled !== false, { limit: limit || 50, mode: mode || "warn" });
@@ -3889,7 +3891,7 @@ IMPORTANT RULES:
 
   // ============ EDCM SNAPSHOTS ============
 
-  app.get("/api/edcm/snapshots", async (_req, res) => {
+  router.get("/edcm/snapshots", async (_req, res) => {
     try {
       const snaps = await storage.getEdcmSnapshots(50);
       res.json(snaps);
@@ -3898,7 +3900,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/edcm/evaluate", async (req, res) => {
+  router.post("/edcm/evaluate", async (req, res) => {
     try {
       const { grokVec, geminiVec, userVec } = req.body;
       const result = edcmDisposition(grokVec, geminiVec, userVec);
@@ -3911,7 +3913,7 @@ IMPORTANT RULES:
 
   // ============ STRIPE PAYMENTS ============
 
-  app.get("/api/stripe/publishable-key", async (_req, res) => {
+  router.get("/stripe/publishable-key", async (_req, res) => {
     try {
       const key = await getStripePublishableKey();
       res.json({ publishableKey: key });
@@ -3920,7 +3922,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/stripe/products", async (_req, res) => {
+  router.get("/stripe/products", async (_req, res) => {
     try {
       const result = await db.execute(sql`
         SELECT
@@ -3953,7 +3955,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/stripe/subscription", async (req: any, res) => {
+  router.get("/stripe/subscription", async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
       if (!userId) return res.json({ subscription: null });
@@ -3969,7 +3971,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/stripe/checkout", async (req: any, res) => {
+  router.post("/stripe/checkout", async (req: any, res) => {
     try {
       const { priceId } = req.body;
       if (!priceId) return res.status(400).json({ error: "priceId required" });
@@ -4004,7 +4006,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/stripe/portal", async (req: any, res) => {
+  router.post("/stripe/portal", async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
       const stripe = await getUncachableStripeClient();
@@ -4038,7 +4040,7 @@ IMPORTANT RULES:
     ],
   };
 
-  app.get("/api/model-registry", async (_req, res) => {
+  router.get("/model-registry", async (_req, res) => {
     try {
       const toggle = await storage.getSystemToggle("model_registry");
       const registry = toggle?.parameters || DEFAULT_MODEL_REGISTRY;
@@ -4048,7 +4050,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.patch("/api/model-registry", async (req, res) => {
+  router.patch("/model-registry", async (req, res) => {
     try {
       const { providers } = req.body;
       if (!Array.isArray(providers)) return res.status(400).json({ error: "providers must be an array" });
@@ -4061,7 +4063,7 @@ IMPORTANT RULES:
 
   // ============ CUSTOM TOOLS ============
 
-  app.get("/api/custom-tools", async (req, res) => {
+  router.get("/custom-tools", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const tools = await storage.getCustomTools(userId);
@@ -4071,7 +4073,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/custom-tools/:id", async (req, res) => {
+  router.get("/custom-tools/:id", async (req, res) => {
     try {
       const tool = await storage.getCustomTool(parseInt(req.params.id));
       if (!tool) return res.status(404).json({ error: "Tool not found" });
@@ -4081,7 +4083,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/custom-tools", async (req, res) => {
+  router.post("/custom-tools", async (req, res) => {
     try {
       const toggle = await storage.getSystemToggle("custom_tools");
       if (toggle && !toggle.enabled) {
@@ -4113,7 +4115,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.patch("/api/custom-tools/:id", async (req, res) => {
+  router.patch("/custom-tools/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const tool = await storage.getCustomTool(id);
@@ -4135,7 +4137,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.delete("/api/custom-tools/:id", async (req, res) => {
+  router.delete("/custom-tools/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const tool = await storage.getCustomTool(id);
@@ -4148,7 +4150,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/custom-tools/:id/toggle", async (req, res) => {
+  router.post("/custom-tools/:id/toggle", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const tool = await storage.getCustomTool(id);
@@ -4162,7 +4164,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/custom-tools/:id/test", async (req, res) => {
+  router.post("/custom-tools/:id/test", async (req, res) => {
     try {
       const toggle = await storage.getSystemToggle("custom_tools");
       if (toggle && !toggle.enabled) {
@@ -4256,12 +4258,12 @@ IMPORTANT RULES:
     console.error("[heartbeat] Failed to initialize:", err);
   });
 
-  app.get("/api/heartbeat/status", (_req, res) => {
+  router.get("/heartbeat/status", (_req, res) => {
     const status = getHeartbeatSchedulerStatus();
     res.json(status);
   });
 
-  app.get("/api/heartbeat/tasks", async (_req, res) => {
+  router.get("/heartbeat/tasks", async (_req, res) => {
     try {
       const tasks = await storage.getHeartbeatTasks();
       res.json(tasks);
@@ -4272,7 +4274,7 @@ IMPORTANT RULES:
 
   const BUILTIN_HEARTBEAT_TASKS = ["transcript_search", "github_search", "ai_social_search", "x_monitor"];
 
-  app.post("/api/heartbeat/tasks", async (req, res) => {
+  router.post("/heartbeat/tasks", async (req, res) => {
     try {
       const { name, description, taskType, weight, intervalSeconds, enabled, handlerCode } = req.body;
       if (!name || !taskType) {
@@ -4297,7 +4299,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.delete("/api/heartbeat/tasks/:id", async (req, res) => {
+  router.delete("/heartbeat/tasks/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const tasks = await storage.getHeartbeatTasks();
@@ -4315,7 +4317,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.patch("/api/heartbeat/tasks/:id", async (req, res) => {
+  router.patch("/heartbeat/tasks/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const updates: any = {};
@@ -4333,7 +4335,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/heartbeat/tasks/:name/run", async (req, res) => {
+  router.post("/heartbeat/tasks/:name/run", async (req, res) => {
     try {
       const { name } = req.params;
       const result = await runTaskNow(name);
@@ -4343,17 +4345,17 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/heartbeat/start", (_req, res) => {
+  router.post("/heartbeat/start", (_req, res) => {
     startHeartbeatScheduler();
     res.json({ ok: true, running: true });
   });
 
-  app.post("/api/heartbeat/stop", (_req, res) => {
+  router.post("/heartbeat/stop", (_req, res) => {
     stopHeartbeatScheduler();
     res.json({ ok: true, running: false });
   });
 
-  app.get("/api/heartbeat/stats", async (_req, res) => {
+  router.get("/heartbeat/stats", async (_req, res) => {
     try {
       const stats = await storage.getActivityStats();
       res.json(stats);
@@ -4362,7 +4364,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.patch("/api/heartbeat/tick-interval", async (req, res) => {
+  router.patch("/heartbeat/tick-interval", async (req, res) => {
     try {
       const { seconds } = req.body;
       if (!seconds || seconds < 5) {
@@ -4375,7 +4377,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/discoveries", async (req, res) => {
+  router.get("/discoveries", async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
       const drafts = await storage.getDiscoveryDrafts(limit);
@@ -4385,7 +4387,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/discoveries/:id/promote", async (req, res) => {
+  router.post("/discoveries/:id/promote", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const conv = await storage.createConversation({
@@ -4404,7 +4406,7 @@ IMPORTANT RULES:
 
   const VALID_STREAMS: LogStream[] = ["master", "edcm", "memory", "sentinel", "interference", "attribution", "omega", "psi"];
 
-  app.get("/api/logs/stats", async (_req, res) => {
+  router.get("/logs/stats", async (_req, res) => {
     try {
       const stats = await getLogStats();
       const toggles = getStreamToggles();
@@ -4414,11 +4416,11 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/logs/toggles", (_req, res) => {
+  router.get("/logs/toggles", (_req, res) => {
     res.json(getStreamToggles());
   });
 
-  app.patch("/api/logs/toggles", (req, res) => {
+  router.patch("/logs/toggles", (req, res) => {
     const { stream, enabled, globalEnabled } = req.body;
     if (typeof globalEnabled === "boolean") {
       setLoggingEnabled(globalEnabled);
@@ -4429,7 +4431,7 @@ IMPORTANT RULES:
     res.json(getStreamToggles());
   });
 
-  app.get("/api/logs/transcripts/list", async (_req, res) => {
+  router.get("/logs/transcripts/list", async (_req, res) => {
     try {
       const transcripts = await listTranscripts();
       res.json(transcripts);
@@ -4438,7 +4440,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/logs/transcripts/:filename", async (req, res) => {
+  router.get("/logs/transcripts/:filename", async (req, res) => {
     try {
       const { filename } = req.params;
       if (!filename.endsWith(".jsonl") || filename.includes("..")) {
@@ -4451,7 +4453,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/ai-transcripts", async (req, res) => {
+  router.get("/ai-transcripts", async (req, res) => {
     try {
       const date = req.query.date as string | undefined;
       const model = req.query.model as string | undefined;
@@ -4464,7 +4466,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/ai-transcripts/files", async (_req, res) => {
+  router.get("/ai-transcripts/files", async (_req, res) => {
     try {
       const files = await listAiTranscriptFiles();
       res.json(files);
@@ -4473,7 +4475,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/logs/:stream", async (req, res) => {
+  router.get("/logs/:stream", async (req, res) => {
     try {
       const stream = req.params.stream as LogStream;
       if (!VALID_STREAMS.includes(stream)) {
@@ -4490,7 +4492,7 @@ IMPORTANT RULES:
 
   // ============ BANDIT ENDPOINTS ============
 
-  app.get("/api/bandit/stats", async (req, res) => {
+  router.get("/bandit/stats", async (req, res) => {
     try {
       const domain = req.query.domain as string | undefined;
       const stats = await banditGetStats(domain);
@@ -4500,7 +4502,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/bandit/stats/:domain", async (req, res) => {
+  router.get("/bandit/stats/:domain", async (req, res) => {
     try {
       const stats = await banditGetStats(req.params.domain);
       res.json(stats);
@@ -4509,7 +4511,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/bandit/reset/:domain", async (req, res) => {
+  router.post("/bandit/reset/:domain", async (req, res) => {
     try {
       await storage.resetBanditDomain(req.params.domain);
       await logMaster("bandit", "domain_reset", { domain: req.params.domain });
@@ -4519,7 +4521,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/bandit/seed", async (_req, res) => {
+  router.post("/bandit/seed", async (_req, res) => {
     try {
       await initializeBanditArms();
       res.json({ ok: true });
@@ -4528,7 +4530,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/bandit/toggle/:id", async (req, res) => {
+  router.post("/bandit/toggle/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { enabled } = req.body;
@@ -4542,7 +4544,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/bandit/correlations", async (req, res) => {
+  router.get("/bandit/correlations", async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const correlations = await getTopCorrelations(limit);
@@ -4554,7 +4556,7 @@ IMPORTANT RULES:
 
   // ============ MEMORY SEEDS ENDPOINTS ============
 
-  app.get("/api/memory/seeds", async (_req, res) => {
+  router.get("/memory/seeds", async (_req, res) => {
     try {
       const seeds = await storage.getMemorySeeds();
       res.json(seeds);
@@ -4563,7 +4565,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.patch("/api/memory/seeds/:index", async (req, res) => {
+  router.patch("/memory/seeds/:index", async (req, res) => {
     try {
       const seedIndex = parseInt(req.params.index);
       if (isNaN(seedIndex) || seedIndex < 0 || seedIndex > 10) {
@@ -4584,7 +4586,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/memory/seeds/:index/clear", async (req, res) => {
+  router.post("/memory/seeds/:index/clear", async (req, res) => {
     try {
       const seedIndex = parseInt(req.params.index);
       if (isNaN(seedIndex) || seedIndex < 0 || seedIndex > 10) {
@@ -4597,7 +4599,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/memory/seeds/:index/import", async (req, res) => {
+  router.post("/memory/seeds/:index/import", async (req, res) => {
     try {
       const seedIndex = parseInt(req.params.index);
       if (isNaN(seedIndex) || seedIndex < 0 || seedIndex > 10) {
@@ -4615,7 +4617,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/memory/state", async (_req, res) => {
+  router.get("/memory/state", async (_req, res) => {
     try {
       const state = await getMemoryState();
       res.json(state);
@@ -4624,7 +4626,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/memory/history", async (req, res) => {
+  router.get("/memory/history", async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
       const snapshots = await storage.getMemoryTensorSnapshots(limit);
@@ -4634,7 +4636,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/memory/drift", async (_req, res) => {
+  router.get("/memory/drift", async (_req, res) => {
     try {
       const driftResults = await checkSemanticDrift();
       res.json(driftResults);
@@ -4643,7 +4645,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/memory/export", async (_req, res) => {
+  router.get("/memory/export", async (_req, res) => {
     try {
       const identity = await exportMemoryIdentity();
       res.json(identity);
@@ -4652,7 +4654,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/memory/import", async (req, res) => {
+  router.post("/memory/import", async (req, res) => {
     try {
       const data = req.body;
       if (!data || !data.seeds || !Array.isArray(data.seeds)) {
@@ -4668,7 +4670,7 @@ IMPORTANT RULES:
 
   // ============ SYSTEM TOGGLES ENDPOINTS ============
 
-  app.get("/api/toggles", async (_req, res) => {
+  router.get("/toggles", async (_req, res) => {
     try {
       const toggles = await storage.getSystemToggles();
       res.json(toggles);
@@ -4677,7 +4679,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.patch("/api/toggles/:subsystem", async (req, res) => {
+  router.patch("/toggles/:subsystem", async (req, res) => {
     try {
       const { subsystem } = req.params;
       const { enabled, parameters } = req.body;
@@ -4697,7 +4699,7 @@ IMPORTANT RULES:
 
   // ============ CREDENTIALS & SECRETS ENDPOINTS ============
 
-  app.get("/api/credentials", async (req, res) => {
+  router.get("/credentials", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const creds = await storage.getUserCredentials(userId);
@@ -4714,7 +4716,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/credentials", async (req, res) => {
+  router.post("/credentials", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const { serviceName, category, template, fields } = req.body;
@@ -4741,7 +4743,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.delete("/api/credentials/:id", async (req, res) => {
+  router.delete("/credentials/:id", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const { id } = req.params;
@@ -4753,7 +4755,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/secrets", async (req, res) => {
+  router.get("/secrets", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const secrets = await storage.getUserSecrets(userId);
@@ -4767,7 +4769,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/secrets", async (req, res) => {
+  router.post("/secrets", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const { name, key, value, category } = req.body;
@@ -4789,7 +4791,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.delete("/api/secrets/:key", async (req, res) => {
+  router.delete("/secrets/:key", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const { key } = req.params;
@@ -4901,7 +4903,7 @@ IMPORTANT RULES:
     return presets.find((p: any) => p.isDefault) || presets[0] || DEFAULT_BRAIN_PRESETS[0];
   }
 
-  app.get("/api/brain/presets", async (_req, res) => {
+  router.get("/brain/presets", async (_req, res) => {
     try {
       const presets = await getBrainPresets();
       const activeToggle = await storage.getSystemToggle("active_brain_preset");
@@ -4912,7 +4914,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/brain/presets", async (req, res) => {
+  router.post("/brain/presets", async (req, res) => {
     try {
       const { name, description, stages, mergeStrategy, weights, thresholds } = req.body;
       if (!name || !stages || !Array.isArray(stages) || stages.length === 0) {
@@ -4947,7 +4949,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.patch("/api/brain/presets/:id", async (req, res) => {
+  router.patch("/brain/presets/:id", async (req, res) => {
     try {
       const { id } = req.params;
       const presets = await getBrainPresets();
@@ -4963,7 +4965,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.delete("/api/brain/presets/:id", async (req, res) => {
+  router.delete("/brain/presets/:id", async (req, res) => {
     try {
       const { id } = req.params;
       const presets = await getBrainPresets();
@@ -4979,7 +4981,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/brain/presets/:id/activate", async (req, res) => {
+  router.post("/brain/presets/:id/activate", async (req, res) => {
     try {
       const { id } = req.params;
       const presets = await getBrainPresets();
@@ -4993,7 +4995,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/brain/presets/:id/default", async (req, res) => {
+  router.post("/brain/presets/:id/default", async (req, res) => {
     try {
       const { id } = req.params;
       const presets = await getBrainPresets();
@@ -5010,7 +5012,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/brain/config", async (_req, res) => {
+  router.get("/brain/config", async (_req, res) => {
     try {
       const activePreset = await getActiveBrainPreset();
       res.json({ activePreset });
@@ -5019,7 +5021,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/brain/weights", async (req, res) => {
+  router.post("/brain/weights", async (req, res) => {
     try {
       const { weights } = req.body;
       if (!weights || typeof weights !== "object") {
@@ -5169,7 +5171,7 @@ IMPORTANT RULES:
 
   // ============ EDCM DIRECTIVES ENDPOINTS ============
 
-  app.get("/api/edcm/directives", async (_req, res) => {
+  router.get("/edcm/directives", async (_req, res) => {
     try {
       const config = await getEdcmDirectiveConfig();
       res.json(config);
@@ -5178,7 +5180,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/edcm/history", async (req, res) => {
+  router.get("/edcm/history", async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const snapshots = await storage.getEdcmMetricSnapshots(limit);
@@ -5265,7 +5267,7 @@ IMPORTANT RULES:
     return texts;
   }
 
-  app.get("/api/transcripts/sources", async (_req, res) => {
+  router.get("/transcripts/sources", async (_req, res) => {
     try {
       const sources = await storage.getTranscriptSources();
       const result = await Promise.all(sources.map(async (src) => {
@@ -5281,7 +5283,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/transcripts/sources", async (req, res) => {
+  router.post("/transcripts/sources", async (req, res) => {
     try {
       const { displayName } = req.body;
       if (!displayName?.trim()) return res.status(400).json({ error: "displayName required" });
@@ -5298,7 +5300,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.delete("/api/transcripts/sources/:slug", async (req, res) => {
+  router.delete("/transcripts/sources/:slug", async (req, res) => {
     try {
       const { slug } = req.params;
       const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, slug);
@@ -5322,7 +5324,7 @@ IMPORTANT RULES:
     limits: { fileSize: 50 * 1024 * 1024 },
   });
 
-  app.post("/api/transcripts/sources/:slug/upload", transcriptUpload.array("files", 20), async (req: any, res) => {
+  router.post("/transcripts/sources/:slug/upload", transcriptUpload.array("files", 20), async (req: any, res) => {
     try {
       const { slug } = req.params;
       const source = await storage.getTranscriptSource(slug);
@@ -5338,7 +5340,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/transcripts/sources/:slug/files", async (req, res) => {
+  router.get("/transcripts/sources/:slug/files", async (req, res) => {
     try {
       const { slug } = req.params;
       const dirPath = path.join(TRANSCRIPT_SOURCES_DIR, slug);
@@ -5355,7 +5357,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.delete("/api/transcripts/sources/:slug/files/:filename", async (req, res) => {
+  router.delete("/transcripts/sources/:slug/files/:filename", async (req, res) => {
     try {
       const { slug, filename } = req.params;
       const filePath = path.join(TRANSCRIPT_SOURCES_DIR, slug, filename);
@@ -5372,7 +5374,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/transcripts/sources/:slug/scan", async (req, res) => {
+  router.post("/transcripts/sources/:slug/scan", async (req, res) => {
     try {
       const { slug } = req.params;
       const source = await storage.getTranscriptSource(slug);
@@ -5455,7 +5457,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/transcripts/sources/:slug/report", async (req, res) => {
+  router.get("/transcripts/sources/:slug/report", async (req, res) => {
     try {
       const { slug } = req.params;
       const report = await storage.getLatestTranscriptReport(slug);
@@ -5468,7 +5470,7 @@ IMPORTANT RULES:
 
   // ============ DATA EXPORT ENDPOINTS ============
 
-  app.get("/api/export/transcripts", async (req: Request, res: Response) => {
+  router.get("/export/transcripts", async (req: Request, res: Response) => {
     try {
       const from = req.query.from as string | undefined;
       const to = req.query.to as string | undefined;
@@ -5524,7 +5526,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/export/conversations", async (req: Request, res: Response) => {
+  router.get("/export/conversations", async (req: Request, res: Response) => {
     try {
       const id = req.query.id ? parseInt(req.query.id as string) : undefined;
 
@@ -5570,7 +5572,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/export/credentials", async (req: Request, res: Response) => {
+  router.get("/export/credentials", async (req: Request, res: Response) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const creds = await storage.getUserCredentials(userId);
@@ -5601,7 +5603,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/export/config", async (_req: Request, res: Response) => {
+  router.get("/export/config", async (_req: Request, res: Response) => {
     try {
       const [
         toggles,
@@ -5663,7 +5665,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/export/all", async (req: Request, res: Response) => {
+  router.get("/export/all", async (req: Request, res: Response) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
 
@@ -5747,7 +5749,7 @@ IMPORTANT RULES:
 
   // ============ OMEGA PTCA-Ω ENDPOINTS ============
 
-  app.get("/api/omega/state", async (_req, res) => {
+  router.get("/omega/state", async (_req, res) => {
     try {
       const state = getOmegaState();
       const labels = getOmegaDimensionLabels();
@@ -5763,7 +5765,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/omega/bias", async (req, res) => {
+  router.post("/omega/bias", async (req, res) => {
     try {
       const { dimension, bias } = req.body;
       if (typeof dimension !== "number" || dimension < 0 || dimension >= 10) {
@@ -5780,7 +5782,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/omega/mode", async (req, res) => {
+  router.post("/omega/mode", async (req, res) => {
     try {
       const { mode } = req.body;
       if (!["active", "passive", "economy", "research"].includes(mode)) {
@@ -5794,7 +5796,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/omega/goal", async (req, res) => {
+  router.post("/omega/goal", async (req, res) => {
     try {
       const { description, priority } = req.body;
       if (!description) return res.status(400).json({ error: "description required" });
@@ -5806,7 +5808,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/omega/goal/:goalId/complete", async (req, res) => {
+  router.post("/omega/goal/:goalId/complete", async (req, res) => {
     try {
       const ok = completeOmegaGoal(req.params.goalId, "console");
       if (!ok) return res.status(404).json({ error: "Goal not found or already completed" });
@@ -5817,7 +5819,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/omega/goal/:goalId/remove", async (req, res) => {
+  router.post("/omega/goal/:goalId/remove", async (req, res) => {
     try {
       const ok = removeOmegaGoal(req.params.goalId, "console");
       if (!ok) return res.status(404).json({ error: "Goal not found" });
@@ -5828,7 +5830,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/omega/boost", async (req, res) => {
+  router.post("/omega/boost", async (req, res) => {
     try {
       const { dimension, amount } = req.body;
       if (typeof dimension !== "number" || dimension < 0 || dimension >= 10) {
@@ -5842,7 +5844,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/omega/solve", async (_req, res) => {
+  router.post("/omega/solve", async (_req, res) => {
     try {
       const state = omegaSolve();
       await persistOmegaState();
@@ -5854,7 +5856,7 @@ IMPORTANT RULES:
 
   // ============ PSI SELF-MODEL ENDPOINTS ============
 
-  app.get("/api/psi/state", async (_req, res) => {
+  router.get("/psi/state", async (_req, res) => {
     try {
       const state = getPsiState();
       const labels = getPsiDimensionLabels();
@@ -5880,7 +5882,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/subcore/state", async (_req, res) => {
+  router.get("/subcore/state", async (_req, res) => {
     try {
       let state = getSubCoreState();
       if (!state) state = tickSubCore();
@@ -5890,7 +5892,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/psi/bias", async (req, res) => {
+  router.post("/psi/bias", async (req, res) => {
     try {
       const { dimension, bias } = req.body;
       if (typeof dimension !== "number" || typeof bias !== "number") {
@@ -5903,7 +5905,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/psi/mode", async (req, res) => {
+  router.post("/psi/mode", async (req, res) => {
     try {
       const { mode } = req.body;
       const validModes = ["reflective", "operational", "transparent", "guarded"];
@@ -5917,7 +5919,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/psi/solve", async (_req, res) => {
+  router.post("/psi/solve", async (_req, res) => {
     try {
       const state = psiSolve();
       await persistPsiState();
@@ -5927,7 +5929,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/psi/boost", async (req, res) => {
+  router.post("/psi/boost", async (req, res) => {
     try {
       const { dimension, amount } = req.body;
       if (typeof dimension !== "number" || typeof amount !== "number") {
@@ -5940,7 +5942,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.get("/api/triad/state", async (_req, res) => {
+  router.get("/triad/state", async (_req, res) => {
     try {
       const psi = getPsiState();
       const omega = getOmegaState();
@@ -5969,7 +5971,7 @@ IMPORTANT RULES:
 
   // ============ DISCOVERY DRAFTS ENDPOINTS ============
 
-  app.get("/api/discoveries", async (req, res) => {
+  router.get("/discoveries", async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const drafts = await storage.getDiscoveryDrafts(limit);
@@ -5979,7 +5981,7 @@ IMPORTANT RULES:
     }
   });
 
-  app.post("/api/discoveries/:id/promote", async (req, res) => {
+  router.post("/discoveries/:id/promote", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const drafts = await storage.getDiscoveryDrafts(200);
@@ -6005,6 +6007,10 @@ IMPORTANT RULES:
       res.status(500).json({ error: e.message });
     }
   });
+
+  // Mount router at both /api and /api/v1 for versioning support
+  app.use("/api", router);
+  app.use("/api/v1", router);
 
   return httpServer;
 }

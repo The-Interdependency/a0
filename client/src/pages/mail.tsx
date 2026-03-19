@@ -56,7 +56,7 @@ export default function MailPage() {
   const [body, setBody] = useState("");
 
   const { data: emails, isLoading, error, refetch } = useQuery<EmailSummary[]>({
-    queryKey: ["/api/gmail/messages"],
+    queryKey: ["/api/v1/gmail/messages"],
     queryFn: async () => {
       const res = await fetch("/api/gmail/messages");
       const data = await res.json();
@@ -66,7 +66,7 @@ export default function MailPage() {
   });
 
   const { data: emailDetail, isLoading: detailLoading } = useQuery<EmailDetail>({
-    queryKey: ["/api/gmail/messages", selectedId],
+    queryKey: ["/api/v1/gmail/messages", selectedId],
     queryFn: async () => {
       const res = await fetch(`/api/gmail/messages/${selectedId}`);
       const data = await res.json();
