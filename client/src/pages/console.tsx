@@ -134,15 +134,16 @@ const PERSONA_VISIBLE_TABS: Record<Persona, TabId[] | null> = {
 };
 
 export default function ConsolePage() {
-  const { persona } = usePersona();
+  const { persona, isOwner } = usePersona();
 
   const visibleGroups = useMemo<TabGroup[]>(() => {
+    if (isOwner) return ALL_GROUPS; // owner always sees everything
     const allowed = PERSONA_VISIBLE_TABS[persona];
     if (!allowed) return ALL_GROUPS;
     return ALL_GROUPS
       .map(g => ({ ...g, tabs: g.tabs.filter(t => allowed.includes(t.id)) }))
       .filter(g => g.tabs.length > 0);
-  }, [persona]);
+  }, [persona, isOwner]);
 
   const metricLabels = PERSONA_METRIC_LABELS[persona] ?? DEFAULT_METRIC_LABELS;
 
@@ -167,7 +168,7 @@ export default function ConsolePage() {
       setActiveTab(first);
       setActiveGroup(visibleGroups[0]?.id ?? "agent");
     }
-  }, [persona, visibleGroups]);
+  }, [persona, isOwner, visibleGroups]);
 
   const { orientation, toggleOrientation, isVertical } = useSliderOrientation();
 

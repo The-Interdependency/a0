@@ -239,6 +239,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const VALID_PERSONAS = ["free", "legal", "researcher", "political"] as const;
   type Persona = typeof VALID_PERSONAS[number];
 
+  /** Permanent owner bypass — the Replit project owner is never gated. */
+  const OWNER_USER_ID = process.env.REPL_OWNER_ID || "";
+
   const PERSONA_PROMPT_BLOCKS: Record<Persona, string> = {
     free: "",
     legal: `PERSONA: LEGAL ANALYST
@@ -262,6 +265,7 @@ You are operating in political analysis mode. Apply structured political science
   };
 
   async function getUserPersona(userId: string): Promise<Persona> {
+    if (OWNER_USER_ID && userId === OWNER_USER_ID) return "political";
     try {
       const toggle = await storage.getSystemToggle(`user_persona_${userId}`);
       const p = (toggle?.parameters as any)?.persona;
@@ -279,8 +283,10 @@ You are operating in political analysis mode. Apply structured political science
     return {};
   }
 
-  /** If there is a grant for this userId, enforce it (write it) and return it. */
+  /** If there is a grant for this userId, enforce it (write it) and return it.
+   *  The owner is never subject to grant enforcement. */
   async function enforcePersonaGrant(userId: string): Promise<Persona | null> {
+    if (OWNER_USER_ID && userId === OWNER_USER_ID) return null;
     const grants = await getPersonaGrants();
     const granted = grants[userId];
     if (granted && VALID_PERSONAS.includes(granted as Persona)) {
@@ -294,7 +300,8 @@ You are operating in political analysis mode. Apply structured political science
     try {
       const userId = (req as any).user?.claims?.sub || "default";
       const persona = await getUserPersona(userId);
-      res.json({ persona });
+      const isOwner = !!(OWNER_USER_ID && userId === OWNER_USER_ID);
+      res.json({ persona, isOwner });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

@@ -35,7 +35,7 @@ export function usePersona() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data, isLoading } = useQuery<{ persona: Persona }>({
+  const { data, isLoading } = useQuery<{ persona: Persona; isOwner: boolean }>({
     queryKey: ["/api/user/persona"],
   });
 
@@ -54,6 +54,7 @@ export function usePersona() {
 
   return {
     persona: data?.persona ?? "free",
+    isOwner: data?.isOwner ?? false,
     isLoading,
     setPersona: mutation.mutate,
     isPending: mutation.isPending,
