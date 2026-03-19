@@ -496,6 +496,10 @@ You are operating in political analysis mode. Apply structured political science
     }
   });
 
+  app.get("/api/agent/tools", (_req, res) => {
+    res.json(AGENT_TOOLS.map(t => ({ name: t.name, description: t.description, required: t.parameters?.required || [] })));
+  });
+
   app.patch("/api/agent/slots/:slot", async (req, res) => {
     try {
       const { slot } = req.params;
@@ -1994,6 +1998,49 @@ INSTRUCTIONS:
         required: ["offerText"],
       },
     },
+    // ---- xAI Native Search ----
+    {
+      name: "xai_search",
+      description: "Search the web using xAI Grok's native Live Search capability. Returns a grounded, AI-synthesized answer with cited sources. Prefers this over web_search when you need a synthesis rather than a raw list of links, or when Brave/DDG fallback has failed.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          query: { type: "string" as const, description: "The search query — be specific and descriptive" },
+        },
+        required: ["query"],
+      },
+    },
+    // ---- Self-Scheduling ----
+    {
+      name: "schedule_task",
+      description: "Schedule a task to be executed by you at a future time or on a recurring interval. The task description will be injected into a future heartbeat cycle. Use for autonomous follow-ups, reminders, deferred research, or time-bound obligations.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          description: { type: "string" as const, description: "What to do when the task fires (will be run as an agent prompt)" },
+          runAt: { type: "string" as const, description: "ISO 8601 datetime for one-time execution, or null for interval-based" },
+          intervalMinutes: { type: "number" as const, description: "Repeat interval in minutes (e.g. 60 = hourly). Null for one-time." },
+          label: { type: "string" as const, description: "Short human-readable label for the task" },
+        },
+        required: ["description", "label"],
+      },
+    },
+    {
+      name: "list_scheduled_tasks",
+      description: "List all scheduled tasks you have queued, including their status (pending, done, cancelled) and next run time.",
+      parameters: { type: "object" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "cancel_scheduled_task",
+      description: "Cancel a scheduled task by its ID so it will not run again.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          taskId: { type: "string" as const, description: "The task ID returned by schedule_task or list_scheduled_tasks" },
+        },
+        required: ["taskId"],
+      },
+    },
   ];
 
   async function executeAgentTool(toolName: string, args: any, userId = "default"): Promise<string> {
@@ -2864,6 +2911,79 @@ INSTRUCTIONS:
           await logMaster("agent", "deal_analyze_offer", { dealId, goalCount: userGoals?.length || 0 });
           return analysis;
         }
+
+        case "xai_search": {
+          const q = (args.query || "").trim();
+          if (!q) return "Error: query is required";
+          if (!process.env.XAI_API_KEY) return "Error: XAI_API_KEY not configured";
+          const xaiClient = new OpenAI({ apiKey: process.env.XAI_API_KEY, baseURL: "https://api.x.ai/v1" });
+          const xaiAbort = new AbortController();
+          const xaiTimeout = setTimeout(() => xaiAbort.abort(), 30000);
+          try {
+            const xaiResp = await (xaiClient.chat.completions.create as any)({
+              model: "grok-3-mini",
+              messages: [{ role: "user", content: q }],
+              tools: [{ type: "web_search_preview" }],
+              max_tokens: 2048,
+            }, { signal: xaiAbort.signal });
+            clearTimeout(xaiTimeout);
+            const content = xaiResp.choices?.[0]?.message?.content || "";
+            if (!content) return `No results returned by xAI Live Search for: ${q}`;
+            const citations: string[] = [];
+            const rawCitations = (xaiResp.choices?.[0]?.message as any)?.citations || [];
+            for (const c of rawCitations) {
+              if (c?.url) citations.push(`[${citations.length + 1}] ${c.title || c.url}\n    ${c.url}`);
+            }
+            return `xAI Live Search — "${q}":\n\n${content}${citations.length > 0 ? `\n\nSources:\n${citations.join("\n")}` : ""}`;
+          } catch (e: any) {
+            clearTimeout(xaiTimeout);
+            return `xAI Live Search failed: ${e.message}`;
+          }
+        }
+
+        case "schedule_task": {
+          const { description, label, runAt, intervalMinutes } = args;
+          if (!description || !label) return "Error: description and label are required";
+          const storedRaw = await storage.getSystemToggle(`agent_scheduled_tasks_${userId}`);
+          const tasks: any[] = (storedRaw?.parameters as any)?.tasks || [];
+          const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+          const now = new Date();
+          let nextRun: string;
+          if (runAt) {
+            nextRun = runAt;
+          } else if (intervalMinutes) {
+            nextRun = new Date(now.getTime() + intervalMinutes * 60000).toISOString();
+          } else {
+            nextRun = new Date(now.getTime() + 60 * 60000).toISOString();
+          }
+          tasks.push({ id, label, description, runAt: runAt || null, intervalMinutes: intervalMinutes || null, nextRun, status: "pending", createdAt: now.toISOString() });
+          await storage.upsertSystemToggle(`agent_scheduled_tasks_${userId}`, true, { tasks });
+          await logMaster("agent", "schedule_task", { id, label, nextRun, userId });
+          return `Task scheduled — ID: ${id}\nLabel: ${label}\nNext run: ${nextRun}${intervalMinutes ? `\nRepeats every ${intervalMinutes}m` : " (one-time)"}`;
+        }
+
+        case "list_scheduled_tasks": {
+          const storedRaw = await storage.getSystemToggle(`agent_scheduled_tasks_${userId}`);
+          const tasks: any[] = (storedRaw?.parameters as any)?.tasks || [];
+          if (tasks.length === 0) return "No scheduled tasks.";
+          return tasks.map((t: any) =>
+            `[${t.id}] ${t.label} | status: ${t.status} | next: ${t.nextRun}${t.intervalMinutes ? ` (every ${t.intervalMinutes}m)` : " (one-time)"}\n  ${t.description.slice(0, 120)}`
+          ).join("\n\n");
+        }
+
+        case "cancel_scheduled_task": {
+          const { taskId } = args;
+          if (!taskId) return "Error: taskId is required";
+          const storedRaw = await storage.getSystemToggle(`agent_scheduled_tasks_${userId}`);
+          const tasks: any[] = (storedRaw?.parameters as any)?.tasks || [];
+          const idx = tasks.findIndex((t: any) => t.id === taskId);
+          if (idx === -1) return `Error: task ${taskId} not found`;
+          tasks[idx].status = "cancelled";
+          await storage.upsertSystemToggle(`agent_scheduled_tasks_${userId}`, true, { tasks });
+          await logMaster("agent", "cancel_scheduled_task", { taskId, userId });
+          return `Task ${taskId} (${tasks[idx].label}) cancelled.`;
+        }
+
         default:
           return `Unknown tool: ${toolName}`;
       }

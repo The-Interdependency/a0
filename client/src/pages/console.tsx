@@ -32,7 +32,7 @@ type TabId = "workflow" | "bandit" | "metrics" | "edcm" | "memory" | "brain" | "
 
 const TAB_GROUPS = [
   {
-    id: "agent", label: "Agent", icon: Activity,
+    id: "agent", label: "Self-State Diag", icon: Activity,
     tabs: [
       { id: "workflow" as TabId, label: "Workflow", icon: Activity },
       { id: "bandit" as TabId, label: "Bandit", icon: Target },
@@ -263,7 +263,7 @@ export default function ConsolePage() {
         {activeTab === "edcm" && <EdcmTab />}
         {activeTab === "memory" && <MemoryTab orientation={orientation} isVertical={isVertical} />}
         {activeTab === "brain" && <BrainTab orientation={orientation} isVertical={isVertical} />}
-        {activeTab === "system" && <SystemTab orientation={orientation} isVertical={isVertical} />}
+        {activeTab === "system" && <SystemTab />}
         {activeTab === "heartbeat" && <HeartbeatTab orientation={orientation} isVertical={isVertical} />}
         {activeTab === "tools" && <CustomToolsTab />}
         {activeTab === "credentials" && <CredentialsTab />}
@@ -2884,46 +2884,6 @@ function MemoryTab({ orientation, isVertical }: SliderOrientationProps) {
   );
 }
 
-const SUBSYSTEM_PARAMS: Record<string, { label: string; params: { key: string; label: string; min: number; max: number; step: number; default: number }[] }> = {
-  bandit: {
-    label: "Multi-Armed Bandit",
-    params: [
-      { key: "C", label: "Exploration (C)", min: 0, max: 5, step: 0.1, default: 1.414 },
-      { key: "lambda", label: "EMA Decay (lambda)", min: 0.5, max: 1, step: 0.01, default: 0.95 },
-      { key: "epsilon", label: "Cold Start Epsilon", min: 0, max: 1, step: 0.05, default: 0.3 },
-      { key: "cold_start_threshold", label: "Cold Start Pulls", min: 1, max: 20, step: 1, default: 5 },
-    ],
-  },
-  edcm_directives: {
-    label: "EDCM Directives",
-    params: [
-      { key: "default_threshold", label: "Default Threshold", min: 0, max: 1, step: 0.05, default: 0.8 },
-    ],
-  },
-  memory_injection: {
-    label: "Memory Injection",
-    params: [
-      { key: "alpha", label: "Learning Rate (alpha)", min: 0, max: 1, step: 0.01, default: 0.1 },
-      { key: "s8_threshold", label: "S8 Risk Threshold", min: 1, max: 200, step: 1, default: 50 },
-      { key: "s9_threshold", label: "S9 Coherence Min", min: -1, max: 0, step: 0.05, default: -0.5 },
-      { key: "drift_check_interval", label: "Drift Check Interval (reqs)", min: 10, max: 200, step: 10, default: 50 },
-    ],
-  },
-  heartbeat: {
-    label: "Heartbeat Scheduler",
-    params: [
-      { key: "tickIntervalMs", label: "Tick Interval (ms)", min: 5000, max: 300000, step: 1000, default: 30000 },
-    ],
-  },
-  synthesis: {
-    label: "Dual-Model Synthesis",
-    params: [
-      { key: "timeoutMs", label: "Timeout (ms)", min: 5000, max: 120000, step: 1000, default: 30000 },
-    ],
-  },
-  custom_tools: { label: "Custom Tools", params: [] },
-  logging: { label: "Logging", params: [] },
-};
 
 const STAGE_ROLES = ["generate", "review", "refine", "synthesize"];
 const STAGE_INPUTS = ["user_query", "previous_output", "all_outputs"];
@@ -3523,168 +3483,10 @@ function PersonaSection() {
   );
 }
 
-function SystemTab({ orientation, isVertical }: SliderOrientationProps) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [expandedSub, setExpandedSub] = useState<string | null>(null);
-
-  const { data: toggles = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/toggles"],
-    refetchInterval: 10000,
-  });
-
-  const { data: discoveries = [] } = useQuery<any[]>({
-    queryKey: ["/api/discoveries"],
-    refetchInterval: 10000,
-  });
-
-  const updateToggleMutation = useMutation({
-    mutationFn: ({ subsystem, enabled, parameters }: { subsystem: string; enabled?: boolean; parameters?: any }) =>
-      apiRequest("PATCH", `/api/toggles/${subsystem}`, { enabled, parameters }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/toggles"] });
-      toast({ title: "Toggle updated" });
-    },
-  });
-
-  const promoteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("POST", `/api/discoveries/${id}/promote`),
-    onSuccess: () => {
-      toast({ title: "Discovery promoted to conversation" });
-      queryClient.invalidateQueries({ queryKey: ["/api/discoveries"] });
-    },
-  });
-
-  if (isLoading) return <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
-
-  const toggleMap: Record<string, any> = {};
-  for (const t of toggles) {
-    toggleMap[t.subsystem] = t;
-  }
-
-  const subsystems = Object.keys(SUBSYSTEM_PARAMS);
-
+function SystemTab() {
   return (
     <div className="h-full w-full overflow-y-auto overflow-x-hidden px-3 py-3">
-      <div className="space-y-4 pb-4">
-        <PersonaSection />
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <Settings className="w-4 h-4 text-muted-foreground" />
-            Global System Toggles
-          </h3>
-          <div className="space-y-2">
-            {subsystems.map((sub) => {
-              const config = SUBSYSTEM_PARAMS[sub];
-              const toggle = toggleMap[sub];
-              const isEnabled = toggle?.enabled ?? true;
-              const params = (toggle?.parameters || {}) as Record<string, any>;
-              const isExpanded = expandedSub === sub;
-
-              return (
-                <div key={sub} className="rounded-md border border-border" data-testid={`toggle-subsystem-${sub}`}>
-                  <div className="flex items-center justify-between gap-2 p-2.5">
-                    <button
-                      className="flex items-center gap-2 flex-1 min-w-0 text-left"
-                      onClick={() => setExpandedSub(isExpanded ? null : sub)}
-                      data-testid={`button-expand-${sub}`}
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                      ) : (
-                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                      )}
-                      <span className="text-xs font-medium truncate">{config.label}</span>
-                      <Badge variant="secondary" className="text-[9px] font-mono">{sub}</Badge>
-                    </button>
-                    <Switch
-                      checked={isEnabled}
-                      onCheckedChange={(enabled) => updateToggleMutation.mutate({ subsystem: sub, enabled })}
-                      data-testid={`toggle-enable-${sub}`}
-                    />
-                  </div>
-
-                  {isExpanded && config.params.length > 0 && (
-                    <div className={cn("px-2.5 pb-2.5 border-t border-border pt-2", isVertical ? "grid grid-cols-2 gap-3" : "space-y-2")}>
-                      {config.params.map((p) => {
-                        const currentVal = params[p.key] ?? p.default;
-                        return (
-                          <div key={p.key} className={cn(
-                            isVertical ? "flex flex-col items-center gap-1" : "flex items-center gap-2"
-                          )}>
-                            <span className={cn("text-[10px] text-muted-foreground flex-shrink-0", !isVertical && "w-32")}>{p.label}</span>
-                            <Slider
-                              value={[currentVal]}
-                              onValueChange={([val]) => {
-                                const newParams = { ...params, [p.key]: val };
-                                updateToggleMutation.mutate({ subsystem: sub, parameters: newParams });
-                              }}
-                              min={p.min}
-                              max={p.max}
-                              step={p.step}
-                              orientation={orientation}
-                              className={cn(isVertical ? "h-[120px]" : "flex-1")}
-                              data-testid={`slider-param-${sub}-${p.key}`}
-                            />
-                            <span className="text-[10px] font-mono text-right">{typeof currentVal === "number" ? currentVal.toFixed(p.step < 1 ? 2 : 0) : currentVal}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            Discovery Drafts
-          </h3>
-          {discoveries.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No discoveries yet. Heartbeat tasks will surface notable findings here.</p>
-          ) : (
-            <div className="space-y-2">
-              {discoveries.slice(0, 20).map((draft: any) => (
-                <div
-                  key={draft.id}
-                  className="rounded-md border border-border p-2.5 space-y-1"
-                  data-testid={`discovery-system-${draft.id}`}
-                >
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-xs font-medium truncate flex-1">{draft.title}</span>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <Badge variant="secondary" className="text-[9px]">
-                        {(draft.relevanceScore * 100).toFixed(0)}%
-                      </Badge>
-                      {!draft.promotedToConversation ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => promoteMutation.mutate(draft.id)}
-                          disabled={promoteMutation.isPending}
-                          data-testid={`button-promote-system-${draft.id}`}
-                        >
-                          Start Conversation
-                        </Button>
-                      ) : (
-                        <Badge variant="default" className="text-[9px]">Promoted</Badge>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground truncate">{draft.summary}</p>
-                  <div className="flex items-center gap-2 text-[9px] text-muted-foreground">
-                    <span>{draft.sourceTask}</span>
-                    <span>{new Date(draft.createdAt).toLocaleString()}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <PersonaSection />
     </div>
   );
 }
@@ -4257,6 +4059,20 @@ function HeartbeatTab({ orientation, isVertical }: SliderOrientationProps) {
 function CustomToolsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [builtinOpen, setBuiltinOpen] = useState(false);
+  const [builtinFilter, setBuiltinFilter] = useState("");
+
+  const { data: builtinTools = [] } = useQuery<{ name: string; description: string; required: string[] }[]>({
+    queryKey: ["/api/agent/tools"],
+    staleTime: 60000,
+  });
+
+  const filteredBuiltin = builtinFilter.trim()
+    ? builtinTools.filter(t =>
+        t.name.includes(builtinFilter.toLowerCase()) ||
+        t.description.toLowerCase().includes(builtinFilter.toLowerCase())
+      )
+    : builtinTools;
 
   const [newCommand, setNewCommand] = useState("");
   const { data: allowlistData } = useQuery<{ hardcoded: string[]; extra: string[]; all: string[] }>({
@@ -4432,6 +4248,51 @@ function CustomToolsTab() {
   return (
     <div className="h-full w-full overflow-y-auto overflow-x-hidden px-3 py-3">
       <div className="space-y-4 pb-4">
+
+        <div className="rounded-lg border border-border bg-card" data-testid="section-builtin-tools">
+          <button
+            onClick={() => setBuiltinOpen(o => !o)}
+            className="flex items-center justify-between w-full px-3 py-2.5 text-left"
+            data-testid="button-toggle-builtin-tools"
+          >
+            <span className="font-semibold text-xs flex items-center gap-1.5 text-muted-foreground uppercase tracking-wide">
+              <Wrench className="w-3.5 h-3.5 text-primary" />
+              Built-in Agent Tools
+              <span className="ml-1 text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5 font-mono normal-case tracking-normal">
+                {builtinTools.length}
+              </span>
+            </span>
+            {builtinOpen ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
+          </button>
+          {builtinOpen && (
+            <div className="px-3 pb-3 space-y-2 border-t border-border pt-2">
+              <input
+                type="text"
+                placeholder="Filter tools…"
+                value={builtinFilter}
+                onChange={e => setBuiltinFilter(e.target.value)}
+                className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                data-testid="input-filter-builtin-tools"
+              />
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {filteredBuiltin.map(t => (
+                  <div key={t.name} className="rounded-md bg-muted/40 px-2.5 py-2" data-testid={`builtin-tool-${t.name}`}>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-mono text-[11px] font-semibold text-primary">{t.name}</span>
+                      {t.required.length > 0 && (
+                        <span className="text-[9px] text-muted-foreground">req: {t.required.join(", ")}</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground leading-snug line-clamp-2">{t.description}</p>
+                  </div>
+                ))}
+                {filteredBuiltin.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">No tools match "{builtinFilter}"</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="rounded-lg border border-border bg-card p-3 space-y-2">
           <h3 className="font-semibold text-xs flex items-center gap-1.5 text-muted-foreground uppercase tracking-wide">
