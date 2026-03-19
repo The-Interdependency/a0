@@ -3,20 +3,26 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Check, Eye, EyeOff } from "lucide-react";
+import { Check, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 
 const PRESET_PROVIDERS = [
   { id: "xai", label: "xAI", baseUrl: "https://api.x.ai/v1", models: ["grok-3-mini", "grok-3", "grok-3-mini-fast"] },
   { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", models: ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"] },
+  { id: "anthropic", label: "Anthropic", baseUrl: "https://api.anthropic.com/v1", models: ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"] },
   { id: "custom", label: "Custom", baseUrl: "", models: [] },
 ];
 
-type SlotKey = "a" | "b" | "c";
 type SlotData = { label: string; provider: string; model: string; baseUrl: string; apiKeySet: boolean };
 
-function SlotEditor({ slotKey, slotData, onSaved }: { slotKey: SlotKey; slotData?: SlotData; onSaved: () => void }) {
+function SlotEditor({ slotKey, slotData, onSaved, onDelete }: {
+  slotKey: string;
+  slotData?: SlotData;
+  onSaved: () => void;
+  onDelete?: () => void;
+}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [label, setLabel] = useState(slotData?.label ?? slotKey.toUpperCase());
@@ -51,80 +57,131 @@ function SlotEditor({ slotKey, slotData, onSaved }: { slotKey: SlotKey; slotData
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const isBuiltin = ["a", "b", "c"].includes(slotKey);
+
   return (
-    <div className="space-y-3">
-      <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Label</h4>
-        <Input value={label} onChange={e => setLabel(e.target.value)} placeholder={`Slot ${slotKey.toUpperCase()}`} className="text-xs" data-testid={`input-slot-${slotKey}-label`} />
+    <div className="space-y-2.5">
+      <div className="rounded-lg border border-border bg-card p-2.5 space-y-1.5">
+        <p className="text-[10px] text-muted-foreground">Label</p>
+        <Input value={label} onChange={e => setLabel(e.target.value)} placeholder={`Slot ${slotKey.toUpperCase()}`} className="text-xs h-7" data-testid={`input-slot-${slotKey}-label`} />
       </div>
-      <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Provider</h4>
-        <div className="flex gap-1.5 flex-wrap">
+      <div className="rounded-lg border border-border bg-card p-2.5 space-y-1.5">
+        <p className="text-[10px] text-muted-foreground">Provider</p>
+        <div className="flex gap-1 flex-wrap">
           {PRESET_PROVIDERS.map(p => (
-            <button key={p.id} onClick={() => handleProviderChange(p.id)} className={cn("px-2.5 py-1 rounded-md border text-xs transition-colors", provider === p.id ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/50 hover:bg-accent text-muted-foreground")} data-testid={`button-slot-${slotKey}-provider-${p.id}`}>
+            <button key={p.id} onClick={() => handleProviderChange(p.id)} className={cn("px-2 py-0.5 rounded border text-[11px] transition-colors", provider === p.id ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/50 text-muted-foreground")} data-testid={`button-slot-${slotKey}-provider-${p.id}`}>
               {p.label}
             </button>
           ))}
         </div>
       </div>
-      <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Model</h4>
+      <div className="rounded-lg border border-border bg-card p-2.5 space-y-1.5">
+        <p className="text-[10px] text-muted-foreground">Model</p>
         {preset && preset.models.length > 0 && (
           <div className="flex gap-1 flex-wrap mb-1">
             {preset.models.map(m => (
-              <button key={m} onClick={() => setModel(m)} className={cn("px-2 py-0.5 rounded text-[10px] font-mono transition-colors", model === m ? "bg-primary text-primary-foreground" : "bg-background border border-border hover:bg-accent text-muted-foreground hover:text-foreground")} data-testid={`button-slot-${slotKey}-model-${m}`}>{m}</button>
+              <button key={m} onClick={() => setModel(m)} className={cn("px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors", model === m ? "bg-primary text-primary-foreground" : "bg-background border border-border hover:bg-accent text-muted-foreground")} data-testid={`button-slot-${slotKey}-model-${m}`}>{m}</button>
             ))}
           </div>
         )}
-        <Input value={model} onChange={e => setModel(e.target.value)} placeholder="e.g. grok-3-mini, gpt-4o, llama-3..." className="font-mono text-xs" data-testid={`input-slot-${slotKey}-model`} />
+        <Input value={model} onChange={e => setModel(e.target.value)} placeholder="e.g. grok-3-mini, gpt-4o..." className="font-mono text-xs h-7" data-testid={`input-slot-${slotKey}-model`} />
       </div>
-      <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Base URL</h4>
-        <Input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="https://api.x.ai/v1" className="font-mono text-xs" data-testid={`input-slot-${slotKey}-base-url`} />
+      <div className="rounded-lg border border-border bg-card p-2.5 space-y-1.5">
+        <p className="text-[10px] text-muted-foreground">Base URL</p>
+        <Input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="https://api.x.ai/v1" className="font-mono text-xs h-7" data-testid={`input-slot-${slotKey}-base-url`} />
       </div>
-      <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">API Key</h4>
-        <p className="text-[10px] text-muted-foreground">{slotData?.apiKeySet ? "Key stored. Enter a new one to replace." : "No key stored. xAI slots use XAI_API_KEY env var."}</p>
+      <div className="rounded-lg border border-border bg-card p-2.5 space-y-1.5">
+        <p className="text-[10px] text-muted-foreground">API Key</p>
+        <p className="text-[9px] text-muted-foreground">{slotData?.apiKeySet ? "Key stored. Enter a new one to replace." : "No key stored. xAI slots use XAI_API_KEY env var."}</p>
         <div className="relative">
-          <Input type={showKey ? "text" : "password"} value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={slotData?.apiKeySet ? "••••••••••••••••" : "Paste API key…"} className="font-mono text-xs pr-9" data-testid={`input-slot-${slotKey}-api-key`} />
+          <Input type={showKey ? "text" : "password"} value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={slotData?.apiKeySet ? "••••••••••••" : "Paste API key…"} className="font-mono text-xs h-7 pr-8" data-testid={`input-slot-${slotKey}-api-key`} />
           <button type="button" onClick={() => setShowKey(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-            {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {showKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
           </button>
         </div>
       </div>
-      <div className="rounded-lg border border-border bg-card px-3 py-2 font-mono text-[10px] text-muted-foreground space-y-0.5">
+      <div className="rounded-lg border border-border bg-muted/20 px-2.5 py-2 font-mono text-[9px] text-muted-foreground space-y-0.5">
         <div><span className="text-primary">label</span>: {label}</div>
-        <div><span className="text-primary">provider</span>: {provider}</div>
         <div><span className="text-primary">model</span>: {model}</div>
         <div><span className="text-primary">baseUrl</span>: {baseUrl || "(default)"}</div>
         <div><span className="text-primary">apiKey</span>: {slotData?.apiKeySet ? "stored ✓" : "env var"}</div>
       </div>
-      <Button className="w-full" size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid={`button-save-slot-${slotKey}`}>
-        <Check className="w-3.5 h-3.5 mr-1" />{saveMutation.isPending ? "Saving..." : `Save Slot ${slotKey.toUpperCase()}`}
-      </Button>
+      <div className="flex gap-2">
+        <Button className="flex-1" size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid={`button-save-slot-${slotKey}`}>
+          <Check className="w-3 h-3 mr-1" />{saveMutation.isPending ? "Saving…" : `Save ${slotKey.toUpperCase()}`}
+        </Button>
+        {!isBuiltin && onDelete && (
+          <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10 px-2" onClick={onDelete} data-testid={`button-delete-slot-${slotKey}`}>
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
 
 export function ApiModelTab() {
-  const [activeSlot, setActiveSlot] = useState<SlotKey>("a");
-  const { data: slots } = useQuery<Record<string, SlotData>>({ queryKey: ["/api/v1/agent/slots"] });
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: slots = {} } = useQuery<Record<string, SlotData>>({ queryKey: ["/api/v1/agent/slots"] });
+
+  const slotKeys = Object.keys(slots);
+  const [activeSlot, setActiveSlot] = useState<string>("a");
+  const [showAddSlot, setShowAddSlot] = useState(false);
+  const [newSlotKey, setNewSlotKey] = useState("");
+
+  const deleteSlotMutation = useMutation({
+    mutationFn: (key: string) => apiRequest("DELETE", `/api/agent/slots/${key}`),
+    onSuccess: (_, key) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/agent/slots"] });
+      if (activeSlot === key) setActiveSlot("a");
+      toast({ title: `Slot ${key.toUpperCase()} removed` });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  function handleAddSlot() {
+    const key = newSlotKey.trim().toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8);
+    if (!key) { toast({ title: "Invalid key", description: "1-8 alphanumeric chars", variant: "destructive" }); return; }
+    if (slots[key]) { toast({ title: "Slot already exists", variant: "destructive" }); return; }
+    setActiveSlot(key);
+    setNewSlotKey("");
+    setShowAddSlot(false);
+  }
+
+  const effectiveKeys = slotKeys.length > 0 ? slotKeys : ["a", "b", "c"];
 
   return (
     <div className="h-full w-full overflow-y-auto overflow-x-hidden px-3 py-3">
-      <div className="space-y-4 pb-4">
+      <div className="space-y-3 pb-4">
         <div>
-          <p className="text-[11px] text-muted-foreground mb-2">Three independent model slots (A / B / C). Select a slot in the chat to route all calls through it.</p>
-          <div className="flex gap-1.5">
-            {(["a", "b", "c"] as const).map(s => (
-              <button key={s} onClick={() => setActiveSlot(s)} className={cn("flex-1 py-1.5 rounded-md border text-xs font-semibold transition-colors", activeSlot === s ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-accent text-muted-foreground")} data-testid={`button-slot-tab-${s}`}>
-                {slots?.[s]?.label || s.toUpperCase()}
-                {slots?.[s]?.model && <span className="block text-[9px] font-normal opacity-70 truncate px-1">{slots[s].model}</span>}
+          <p className="text-[11px] text-muted-foreground mb-2">Model slots route calls from the chat bar. Each slot is an independent LLM endpoint.</p>
+          <div className="flex gap-1 flex-wrap">
+            {effectiveKeys.map(s => (
+              <button key={s} onClick={() => setActiveSlot(s)} className={cn("flex-1 min-w-[60px] py-1.5 px-2 rounded-md border text-xs font-semibold transition-colors", activeSlot === s ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-accent text-muted-foreground")} data-testid={`button-slot-tab-${s}`}>
+                {slots[s]?.label || s.toUpperCase()}
+                {slots[s]?.model && <span className="block text-[9px] font-normal opacity-70 truncate px-0.5">{slots[s].model}</span>}
+                {!["a","b","c"].includes(s) && <Badge variant="secondary" className="text-[8px] ml-1">custom</Badge>}
               </button>
             ))}
+            <button onClick={() => setShowAddSlot(v => !v)} className="py-1.5 px-2 rounded-md border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors" data-testid="button-add-slot">
+              <Plus className="w-3.5 h-3.5" />
+            </button>
           </div>
+          {showAddSlot && (
+            <div className="flex gap-1.5 mt-2">
+              <Input value={newSlotKey} onChange={e => setNewSlotKey(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddSlot()} placeholder="slot key (a-z, 1-8 chars)" className="h-7 text-xs font-mono flex-1" data-testid="input-new-slot-key" />
+              <Button size="sm" className="h-7 px-2" onClick={handleAddSlot} data-testid="button-confirm-add-slot"><Check className="w-3 h-3" /></Button>
+            </div>
+          )}
         </div>
-        <SlotEditor key={activeSlot} slotKey={activeSlot} slotData={slots?.[activeSlot]} onSaved={() => {}} />
+        <SlotEditor
+          key={activeSlot}
+          slotKey={activeSlot}
+          slotData={slots[activeSlot]}
+          onSaved={() => {}}
+          onDelete={!["a","b","c"].includes(activeSlot) ? () => deleteSlotMutation.mutate(activeSlot) : undefined}
+        />
       </div>
     </div>
   );

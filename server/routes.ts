@@ -236,6 +236,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  router.get("/context/system-sections", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      if (OWNER_USER_ID && userId !== OWNER_USER_ID) return res.status(403).json({ error: "Owner only" });
+      const toggle = await storage.getSystemToggle("system_sections_override");
+      res.json((toggle?.parameters as Record<string, string>) || {});
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  router.patch("/context/system-sections", async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub || "default";
+      if (OWNER_USER_ID && userId !== OWNER_USER_ID) return res.status(403).json({ error: "Owner only" });
+      const { key, value } = req.body;
+      if (!key || typeof value !== "string") return res.status(400).json({ error: "key and value required" });
+      const toggle = await storage.getSystemToggle("system_sections_override");
+      const saved = (toggle?.parameters as Record<string, string>) || {};
+      saved[key] = value;
+      await storage.upsertSystemToggle("system_sections_override", true, saved);
+      res.json({ ok: true, key });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
   router.get("/context/full-preview", async (req, res) => {
     try {
       const userId = (req as any).user?.claims?.sub || "default";
@@ -311,7 +334,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         },
       ];
 
-      res.json({ sections, persona: userPersona });
+      const isOwner = !!(OWNER_USER_ID && userId === OWNER_USER_ID);
+      if (isOwner) {
+        const sysOverrideTog = await storage.getSystemToggle("system_sections_override");
+        const sysOverrides = (sysOverrideTog?.parameters as Record<string, string>) || {};
+        for (const s of sections) {
+          if (sysOverrides[s.key] !== undefined) s.content = sysOverrides[s.key];
+          if (s.key !== "userIdentity" && s.key !== "memoryAugmentations") s.editable = true;
+        }
+      }
+      res.json({ sections, persona: userPersona, isOwner });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -581,6 +613,43 @@ You are operating in political analysis mode. Apply structured political science
 
   router.get("/agent/tools", (_req, res) => {
     res.json(AGENT_TOOLS.map(t => ({ name: t.name, description: t.description, required: t.parameters?.required || [] })));
+  });
+
+  router.get("/agent/tool-toggles", async (_req, res) => {
+    try {
+      const toggle = await storage.getSystemToggle("tool_toggles");
+      const saved = (toggle?.parameters as Record<string, boolean>) || {};
+      res.json(saved);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  router.patch("/agent/tool-toggles", async (req, res) => {
+    try {
+      const { updates } = req.body;
+      if (!updates || typeof updates !== "object") return res.status(400).json({ error: "updates object required" });
+      const toggle = await storage.getSystemToggle("tool_toggles");
+      const saved = (toggle?.parameters as Record<string, boolean>) || {};
+      Object.assign(saved, updates);
+      await storage.upsertSystemToggle("tool_toggles", true, saved);
+      res.json({ ok: true, toggles: saved });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  router.get("/agent/persona-block-enabled", async (_req, res) => {
+    try {
+      const toggle = await storage.getSystemToggle("persona_block_enabled");
+      const enabled = toggle ? (toggle.enabled !== false) : true;
+      res.json(enabled);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  router.patch("/agent/persona-block-enabled", async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      if (typeof enabled !== "boolean") return res.status(400).json({ error: "enabled (boolean) required" });
+      await storage.upsertSystemToggle("persona_block_enabled", enabled, {});
+      res.json({ ok: true, enabled });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
   router.patch("/agent/slots/:slot", async (req, res) => {
@@ -3116,7 +3185,16 @@ INSTRUCTIONS:
       // Enforce persona grant for this user (server-side, reliable)
       const grantedPersona = await enforcePersonaGrant(userId);
       const userPersona = grantedPersona ?? await getUserPersona(userId);
-      const personaBlock = PERSONA_PROMPT_BLOCKS[userPersona] || "";
+      const personaBlockToggle = await storage.getSystemToggle("persona_block_enabled");
+      const personaBlockEnabled = personaBlockToggle ? personaBlockToggle.enabled !== false : true;
+      const personaBlock = personaBlockEnabled ? (PERSONA_PROMPT_BLOCKS[userPersona] || "") : "";
+
+      // Apply system section overrides for owner
+      const sysOverrideTog = await storage.getSystemToggle("system_sections_override");
+      const sysOverrides = (sysOverrideTog?.parameters as Record<string, string>) || {};
+      if (sysOverrides["systemPrompt"]) ctx.systemPrompt = sysOverrides["systemPrompt"];
+      if (sysOverrides["contextPrefix"]) ctx.contextPrefix = sysOverrides["contextPrefix"];
+
       const allGrants = await getPersonaGrants();
       const activeDeals = await storage.listDeals(userId, "active");
 
@@ -3208,7 +3286,10 @@ MODULE WRITING (write_module tool):
         promptLength: agentSystemPrompt.length,
       });
 
-      const grokTools = AGENT_TOOLS.map(t => ({
+      const toolToggleTog = await storage.getSystemToggle("tool_toggles");
+      const toolToggleMap = (toolToggleTog?.parameters as Record<string, boolean>) || {};
+      const activeAgentTools = AGENT_TOOLS.filter(t => toolToggleMap[t.name] !== false);
+      const grokTools = activeAgentTools.map(t => ({
         type: "function" as const,
         function: { name: t.name, description: t.description, parameters: t.parameters },
       }));
@@ -4395,9 +4476,7 @@ MODULE WRITING (write_module tool):
       if (!task) {
         return res.status(404).json({ error: "Task not found" });
       }
-      if (BUILTIN_HEARTBEAT_TASKS.includes(task.name)) {
-        return res.status(403).json({ error: `Cannot delete built-in task "${task.name}"` });
-      }
+      // all tasks are fully deletable
       await storage.deleteHeartbeatTask(id);
       res.json({ ok: true });
     } catch (e: any) {

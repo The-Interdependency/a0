@@ -57,21 +57,19 @@ export function buildAgentGroups(modules: AgentModule[]): TabGroup[] {
 
 export const TAB_GROUPS: readonly TabGroup[] = [
   {
-    id: "agent", label: "Self-State Diag", icon: Activity,
+    id: "agent", label: "Cognition", icon: Activity,
     tabs: [
       { id: "workflow", label: "Workflow", icon: Activity },
-      { id: "bandit", label: "Bandit", icon: GitBranch },
+      { id: "bandit", label: "ε-Explore", icon: GitBranch },
       { id: "metrics", label: "Metrics", icon: DollarSign },
       { id: "deals", label: "Deals", icon: ShoppingBag },
+      { id: "api", label: "API", icon: Cpu },
     ],
   },
   {
     id: "memory", label: "Memory", icon: Brain,
     tabs: [
       { id: "memory", label: "Memory", icon: Brain },
-      { id: "edcm", label: "EDCM", icon: Cpu },
-      { id: "brain", label: "Brain", icon: GitBranch },
-      { id: "s17", label: "S17", icon: Zap },
     ],
   },
   {
@@ -79,7 +77,7 @@ export const TAB_GROUPS: readonly TabGroup[] = [
     tabs: [
       { id: "psi", label: "Psi Ψ", icon: Eye },
       { id: "omega", label: "Omega Ω", icon: Gauge },
-      { id: "heartbeat", label: "Heartbeat", icon: Clock },
+      { id: "heartbeat", label: "Φ Heartbeat", icon: Clock },
     ],
   },
   {
@@ -95,7 +93,6 @@ export const TAB_GROUPS: readonly TabGroup[] = [
       { id: "tools", label: "Tools", icon: Wrench },
       { id: "credentials", label: "Keys", icon: Lock },
       { id: "context", label: "Context", icon: FileText },
-      { id: "api", label: "API", icon: Cpu },
       { id: "export", label: "Export", icon: Download },
     ],
   },
@@ -112,11 +109,11 @@ export const STATIC_TAB_IDS = new Set<string>([
 ]);
 
 export const TAB_TO_GROUP: Record<TabId, string> = {
-  workflow: "agent", bandit: "agent", metrics: "agent", deals: "agent",
+  workflow: "agent", bandit: "agent", metrics: "agent", deals: "agent", api: "agent",
   memory: "memory", edcm: "memory", brain: "memory", s17: "memory",
   psi: "triad", omega: "triad", heartbeat: "triad",
   system: "system", logs: "system",
-  tools: "tools", credentials: "tools", context: "tools", api: "tools", export: "tools",
+  tools: "tools", credentials: "tools", context: "tools", export: "tools",
 };
 
 export type MetricLabelMap = Record<string, { label: string; desc: string }>;
@@ -160,9 +157,9 @@ export const PERSONA_METRIC_LABELS: Record<Persona, MetricLabelMap> = {
 
 export const PERSONA_VISIBLE_TABS: Record<Persona, string[] | null> = {
   free: null,
-  legal: ["workflow", "metrics", "deals", "edcm", "memory", "psi", "heartbeat", "context", "logs", "credentials", "export"],
-  researcher: ["workflow", "metrics", "deals", "edcm", "memory", "brain", "psi", "omega", "heartbeat", "context", "logs", "credentials", "export"],
-  political: ["workflow", "metrics", "deals", "edcm", "memory", "psi", "heartbeat", "context", "logs", "credentials", "export"],
+  legal: ["workflow", "metrics", "deals", "memory", "api", "psi", "heartbeat", "context", "logs", "credentials", "export"],
+  researcher: ["workflow", "metrics", "deals", "memory", "api", "psi", "omega", "heartbeat", "context", "logs", "credentials", "export"],
+  political: ["workflow", "metrics", "deals", "memory", "api", "psi", "heartbeat", "context", "logs", "credentials", "export"],
 };
 
 export const SLOT_COLORS: Record<string, string> = {
