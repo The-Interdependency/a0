@@ -310,3 +310,4 @@
 {"timestamp":"2026-03-20T16:50:50.974Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"f9c2a3df28f0","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-20T17:00:51.341Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"184f96c3eb3c","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-20T17:10:58.813Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"a9e7a4b42982","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
+{"timestamp":"2026-03-20T17:21:58.723Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"975769f552e1","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}

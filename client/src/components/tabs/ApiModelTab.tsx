@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Check, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Eye, EyeOff, Info, Plus, Trash2 } from "lucide-react";
 
 const PRESET_PROVIDERS = [
   { id: "xai", label: "xAI", baseUrl: "https://api.x.ai/v1", models: ["grok-3-mini", "grok-3", "grok-3-mini-fast"] },
@@ -16,6 +16,22 @@ const PRESET_PROVIDERS = [
 ];
 
 type SlotData = { label: string; provider: string; model: string; baseUrl: string; apiKeySet: boolean };
+
+function getModelHint(model: string, provider: string): { type: "warning" | "info"; text: string } | null {
+  if (model.toLowerCase().includes("reasoning")) {
+    return {
+      type: "warning",
+      text: "Reasoning model — tool calls are disabled for this slot; responses are text-only. Uses max_completion_tokens instead of max_tokens.",
+    };
+  }
+  if (provider === "anthropic") {
+    return {
+      type: "info",
+      text: "Anthropic models use a different API format (messages API, anthropic-version header). Ensure your base URL and key are correct.",
+    };
+  }
+  return null;
+}
 
 function SlotEditor({ slotKey, slotData, onSaved, onDelete }: {
   slotKey: string;
@@ -44,6 +60,7 @@ function SlotEditor({ slotKey, slotData, onSaved, onDelete }: {
   }, [slotData, loaded, slotKey]);
 
   const preset = PRESET_PROVIDERS.find(p => p.id === provider);
+  const modelHint = getModelHint(model, provider);
 
   function handleProviderChange(pid: string) {
     setProvider(pid);
@@ -106,6 +123,22 @@ function SlotEditor({ slotKey, slotData, onSaved, onDelete }: {
         <div><span className="text-primary">baseUrl</span>: {baseUrl || "(default)"}</div>
         <div><span className="text-primary">apiKey</span>: {slotData?.apiKeySet ? "stored ✓" : "env var"}</div>
       </div>
+      {modelHint && (
+        <div
+          className={cn(
+            "flex items-start gap-2 rounded-lg border px-3 py-2 text-[10px] leading-relaxed",
+            modelHint.type === "warning"
+              ? "border-amber-400/40 bg-amber-400/5 text-amber-500"
+              : "border-blue-400/40 bg-blue-400/5 text-blue-400"
+          )}
+          data-testid={`callout-model-hint-${slotKey}`}
+        >
+          {modelHint.type === "warning"
+            ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+            : <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />}
+          <span>{modelHint.text}</span>
+        </div>
+      )}
       <div className="flex gap-2">
         <Button className="flex-1" size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid={`button-save-slot-${slotKey}`}>
           <Check className="w-3 h-3 mr-1" />{saveMutation.isPending ? "Saving…" : `Save ${slotKey.toUpperCase()}`}
@@ -164,13 +197,20 @@ export function ApiModelTab() {
                 {!["a","b","c"].includes(s) && <Badge variant="secondary" className="text-[8px] ml-1">custom</Badge>}
               </button>
             ))}
-            <button onClick={() => setShowAddSlot(v => !v)} className="py-1.5 px-2 rounded-md border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors" data-testid="button-add-slot">
-              <Plus className="w-3.5 h-3.5" />
-            </button>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full mt-2 h-8 text-xs border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary/50 gap-1.5"
+            onClick={() => setShowAddSlot(v => !v)}
+            data-testid="button-add-slot"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Slot
+          </Button>
           {showAddSlot && (
             <div className="flex gap-1.5 mt-2">
-              <Input value={newSlotKey} onChange={e => setNewSlotKey(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddSlot()} placeholder="slot key (a-z, 1-8 chars)" className="h-7 text-xs font-mono flex-1" data-testid="input-new-slot-key" />
+              <Input value={newSlotKey} onChange={e => setNewSlotKey(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddSlot()} placeholder="slot key (a-z, 1-8 chars)" className="h-7 text-xs font-mono flex-1" data-testid="input-new-slot-key" autoFocus />
               <Button size="sm" className="h-7 px-2" onClick={handleAddSlot} data-testid="button-confirm-add-slot"><Check className="w-3 h-3" /></Button>
             </div>
           )}
