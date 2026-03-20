@@ -33,6 +33,7 @@ import {
   CredentialsTab,
   ContextTab,
   ApiModelTab,
+  HubTab,
   ExportTab,
 } from "@/components/tabs";
 
@@ -222,6 +223,7 @@ export default function ConsolePage() {
         {activeTab === "logs" && <LogsTab />}
         {activeTab === "context" && <ContextTab />}
         {activeTab === "api" && <ApiModelTab />}
+        {activeTab === "hub" && <HubTab />}
         {activeTab === "omega" && <OmegaTab {...sliderProps} />}
         {activeTab === "psi" && <PsiTab />}
         {activeTab === "s17" && <S17Tab />}

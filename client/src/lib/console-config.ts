@@ -1,7 +1,7 @@
 import { Activity, Brain, ChevronDown, ChevronRight, Clock, Cpu, Database, DollarSign, Download, Eye, FileText, Flame, Gauge, GitBranch, Globe, Hash, Layers, Lock, Map, Package, Puzzle, Radio, ScrollText, Search, Settings, Shield, ShoppingBag, Square, Star, Target, Terminal, Triangle, User, Wand2, Wrench, Zap } from "lucide-react";
 import type { Persona } from "@/hooks/use-persona";
 
-export type TabId = "workflow" | "bandit" | "metrics" | "edcm" | "memory" | "brain" | "system" | "heartbeat" | "tools" | "credentials" | "export" | "logs" | "context" | "omega" | "psi" | "api" | "s17" | "deals";
+export type TabId = "workflow" | "bandit" | "metrics" | "edcm" | "memory" | "brain" | "system" | "heartbeat" | "tools" | "credentials" | "export" | "logs" | "context" | "omega" | "psi" | "api" | "s17" | "deals" | "hub";
 
 export type TabGroup = { id: string; label: string; icon: any; tabs: Array<{ id: string; label: string; icon: any }> };
 
@@ -64,6 +64,7 @@ export const TAB_GROUPS: readonly TabGroup[] = [
       { id: "metrics", label: "Metrics", icon: DollarSign },
       { id: "deals", label: "Deals", icon: ShoppingBag },
       { id: "api", label: "API", icon: Cpu },
+      { id: "hub", label: "Hub", icon: Radio },
     ],
   },
   {
@@ -105,11 +106,11 @@ export const STATIC_TAB_IDS = new Set<string>([
   "memory", "edcm", "brain", "s17",
   "psi", "omega", "heartbeat",
   "system", "logs",
-  "tools", "credentials", "context", "api", "export",
+  "tools", "credentials", "context", "api", "export", "hub",
 ]);
 
 export const TAB_TO_GROUP: Record<TabId, string> = {
-  workflow: "agent", bandit: "agent", metrics: "agent", deals: "agent", api: "agent",
+  workflow: "agent", bandit: "agent", metrics: "agent", deals: "agent", api: "agent", hub: "agent",
   memory: "memory", edcm: "memory", brain: "memory", s17: "memory",
   psi: "triad", omega: "triad", heartbeat: "triad",
   system: "system", logs: "system",
