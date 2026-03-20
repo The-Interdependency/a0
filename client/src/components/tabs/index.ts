@@ -15,4 +15,5 @@ export { CustomToolsTab } from "./CustomToolsTab";
 export { CredentialsTab } from "./CredentialsTab";
 export { ContextTab } from "./ContextTab";
 export { ApiModelTab } from "./ApiModelTab";
+export { HubTab } from "./HubTab";
 export { ExportTab } from "./ExportTab";
