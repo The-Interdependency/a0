@@ -13,11 +13,13 @@ import { ChevronDown, ChevronRight, Layers, Play, Radio } from "lucide-react";
 
 type SlotData = { label: string; provider: string; model: string; baseUrl: string; apiKeySet: boolean };
 
+type PatternArg = { name: string; type: string; default?: string | number | boolean; required?: boolean };
+
 type Pattern = {
   id: string;
   name: string;
   description: string;
-  args: { name: string; type: string; default?: any; required?: boolean }[];
+  args: PatternArg[];
 };
 
 type ModelResult = {
@@ -90,15 +92,25 @@ export function HubTab() {
       if (needsSynth && !synthSlot) throw new Error("Synth slot is required for this pattern");
       if (needsDm && !dmSlot) throw new Error("DM slot is required for this pattern");
 
-      const body: any = {
+      type HubRunRequest = {
+        pattern: string;
+        slots: string[];
+        prompt: string;
+        slotContexts?: string[];
+        rounds?: number;
+        synthSlot?: string;
+        dmSlot?: string;
+      };
+
+      const body: HubRunRequest = {
         pattern: selectedPattern,
         slots: selectedSlots,
         prompt: prompt.trim(),
         slotContexts: slotContexts.some(c => c.trim()) ? slotContexts : undefined,
+        ...(needsRounds ? { rounds } : {}),
+        ...(needsSynth ? { synthSlot } : {}),
+        ...(needsDm ? { dmSlot } : {}),
       };
-      if (needsRounds) body.rounds = rounds;
-      if (needsSynth) body.synthSlot = synthSlot;
-      if (needsDm) body.dmSlot = dmSlot;
 
       const res = await apiRequest("POST", "/api/v1/hub/run", body);
       if (!res.ok) {
@@ -108,7 +120,7 @@ export function HubTab() {
       return await res.json() as HubRunResult;
     },
     onSuccess: (data) => { setResult(data); },
-    onError: (e: any) => toast({ title: "Hub error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Hub error", description: e.message, variant: "destructive" }),
   });
 
   const currentPattern = patterns.find(p => p.id === selectedPattern);
