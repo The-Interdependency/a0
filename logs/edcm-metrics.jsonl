@@ -319,3 +319,4 @@
 {"timestamp":"2026-03-20T18:23:03.908Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"7d73e5eadd36","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-20T18:33:04.229Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"ac1f52947e70","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-20T18:43:24.140Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"c57f200d601a","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
+{"timestamp":"2026-03-20T18:53:53.949Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"389910597983","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
