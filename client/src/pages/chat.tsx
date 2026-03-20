@@ -13,7 +13,7 @@ import {
   Plus, Send, Trash2, Bot, User, ChevronRight,
   PanelLeftOpen, PanelLeftClose, Terminal as TermIcon,
   FileText, Mail, HardDrive, Search, Pencil,
-  Activity, Shield, Pin,
+  Activity, Shield, Pin, ThumbsUp, ThumbsDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Conversation, Message } from "@shared/schema";
@@ -520,6 +520,17 @@ function AgentMessage({ message, isStreaming }: { message: Message; isStreaming?
   const isUser = message.role === "user";
   const { pinContent, content: pinnedContent } = usePopout();
   const isPinned = pinnedContent === message.content;
+  const { toast } = useToast();
+  const [rating, setRating] = useState<1 | -1 | null>(null);
+
+  const feedbackMutation = useMutation({
+    mutationFn: (r: 1 | -1) => apiRequest("POST", "/api/v1/feedback", { conversationId: message.conversationId, rating: r }),
+    onSuccess: (_data, r) => {
+      setRating(r);
+      toast({ title: r === 1 ? "Good — reward signal sent" : "Noted — penalty signal sent" });
+    },
+    onError: () => toast({ title: "Feedback failed", variant: "destructive" }),
+  });
 
   return (
     <div className={cn("flex gap-2 items-start group", isUser && "flex-row-reverse")}>
@@ -553,20 +564,50 @@ function AgentMessage({ message, isStreaming }: { message: Message; isStreaming?
           )}
         </div>
         {!isUser && !isStreaming && (
-          <button
-            onClick={() => pinContent(message.content, "Pinned Response")}
-            className={cn(
-              "self-start flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-colors active:scale-95",
-              isPinned
-                ? "text-primary bg-primary/10"
-                : "text-muted-foreground/60 bg-muted/40 active:bg-primary/10 active:text-primary"
-            )}
-            data-testid={`button-pin-${message.id}`}
-            title="Pin this response"
-          >
-            <Pin className="w-3 h-3" />
-            {isPinned ? "pinned" : "pin"}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => pinContent(message.content, "Pinned Response")}
+              className={cn(
+                "flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-colors active:scale-95",
+                isPinned
+                  ? "text-primary bg-primary/10"
+                  : "text-muted-foreground/60 bg-muted/40 active:bg-primary/10 active:text-primary"
+              )}
+              data-testid={`button-pin-${message.id}`}
+              title="Pin this response"
+            >
+              <Pin className="w-3 h-3" />
+              {isPinned ? "pinned" : "pin"}
+            </button>
+            <button
+              onClick={() => { if (rating === null) feedbackMutation.mutate(1); }}
+              disabled={rating !== null || feedbackMutation.isPending}
+              className={cn(
+                "flex items-center gap-0.5 px-2 py-1 rounded text-[10px] transition-colors active:scale-95",
+                rating === 1
+                  ? "text-green-500 bg-green-500/10"
+                  : "text-muted-foreground/60 bg-muted/40 active:bg-green-500/10 active:text-green-500 disabled:opacity-40"
+              )}
+              data-testid={`button-thumbs-up-${message.id}`}
+              title="Good response — trains reward signal"
+            >
+              <ThumbsUp className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => { if (rating === null) feedbackMutation.mutate(-1); }}
+              disabled={rating !== null || feedbackMutation.isPending}
+              className={cn(
+                "flex items-center gap-0.5 px-2 py-1 rounded text-[10px] transition-colors active:scale-95",
+                rating === -1
+                  ? "text-red-500 bg-red-500/10"
+                  : "text-muted-foreground/60 bg-muted/40 active:bg-red-500/10 active:text-red-500 disabled:opacity-40"
+              )}
+              data-testid={`button-thumbs-down-${message.id}`}
+              title="Bad response — trains penalty signal"
+            >
+              <ThumbsDown className="w-3 h-3" />
+            </button>
+          </div>
         )}
       </div>
     </div>

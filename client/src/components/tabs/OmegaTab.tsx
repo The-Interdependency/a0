@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Plus, X, Zap } from "lucide-react";
+import { Check, Plus, X, Zap, Swords, TrendingDown, TrendingUp } from "lucide-react";
 import { type SliderOrientationProps } from "@/lib/console-config";
 
 export function OmegaTab({ orientation, isVertical }: SliderOrientationProps) {
@@ -16,6 +17,10 @@ export function OmegaTab({ orientation, isVertical }: SliderOrientationProps) {
   const { toast } = useToast();
   const [newGoal, setNewGoal] = useState("");
   const [newGoalPriority, setNewGoalPriority] = useState(5);
+  const [batchSteps, setBatchSteps] = useState(50);
+  const [batchResult, setBatchResult] = useState<{ delta: number; trajectory: number[] } | null>(null);
+  const [competePrompt, setCompetePrompt] = useState("");
+  const [competeResults, setCompeteResults] = useState<Array<{ slot: string; label: string; model: string; response: string; score: number }>>([]);
 
   const { data: omegaState, isLoading } = useQuery<any>({ queryKey: ["/api/v1/omega/state"], refetchInterval: 5000 });
 
@@ -42,6 +47,22 @@ export function OmegaTab({ orientation, isVertical }: SliderOrientationProps) {
   const solveMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/omega/solve"),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/v1/omega/state"] }); toast({ title: "Omega solve step executed" }); },
+  });
+  const batchSolveMutation = useMutation({
+    mutationFn: (steps: number) => apiRequest("POST", "/api/omega/batch-solve", { steps }).then(r => r.json()),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/omega/state"] });
+      setBatchResult({ delta: data.delta, trajectory: data.trajectory });
+      toast({ title: `Batch solve done — ΔE: ${data.delta >= 0 ? "+" : ""}${data.delta.toFixed(4)}` });
+    },
+  });
+  const competeMutation = useMutation({
+    mutationFn: (prompt: string) => apiRequest("POST", "/api/v1/train/compete", { prompt }).then(r => r.json()),
+    onSuccess: (data: any) => {
+      setCompeteResults(data.results || []);
+      toast({ title: `Competition done — ${data.results?.length || 0} models scored` });
+    },
+    onError: () => toast({ title: "Compete failed", variant: "destructive" }),
   });
 
   if (isLoading) return <div className="p-4"><Skeleton className="h-40" /></div>;
@@ -119,6 +140,93 @@ export function OmegaTab({ orientation, isVertical }: SliderOrientationProps) {
             </div>
           </div>
         )}
+
+        <div className="space-y-2 border border-border rounded-lg p-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Batch Solve</h4>
+          <p className="text-[10px] text-muted-foreground">Run N coupled Ψ+Ω solve steps to accelerate convergence.</p>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              value={batchSteps}
+              onChange={e => setBatchSteps(Math.min(200, Math.max(1, parseInt(e.target.value) || 50)))}
+              className="h-7 w-20 text-xs"
+              min={1}
+              max={200}
+              data-testid="input-batch-steps"
+            />
+            <span className="text-xs text-muted-foreground">steps</span>
+            <Button
+              size="sm"
+              className="h-7 text-xs ml-auto"
+              onClick={() => batchSolveMutation.mutate(batchSteps)}
+              disabled={batchSolveMutation.isPending}
+              data-testid="button-batch-solve"
+            >
+              <Zap className="w-3 h-3 mr-1" />
+              {batchSolveMutation.isPending ? "Solving…" : `Run ${batchSteps}`}
+            </Button>
+          </div>
+          {batchResult && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs">
+                {batchResult.delta < 0
+                  ? <TrendingDown className="w-3 h-3 text-green-500" />
+                  : <TrendingUp className="w-3 h-3 text-amber-500" />}
+                <span className={batchResult.delta < 0 ? "text-green-500" : "text-amber-500"}>
+                  ΔE: {batchResult.delta >= 0 ? "+" : ""}{batchResult.delta.toFixed(4)}
+                </span>
+              </div>
+              <div className="flex items-end gap-px h-8 bg-muted/30 rounded p-0.5" data-testid="batch-trajectory">
+                {batchResult.trajectory.map((e, i) => {
+                  const maxE = Math.max(...batchResult.trajectory, 0.001);
+                  return <div key={i} className="flex-1 bg-blue-500/60 rounded-t" style={{ height: `${Math.max(2, (e / maxE) * 100)}%` }} />;
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2 border border-border rounded-lg p-2">
+          <div className="flex items-center gap-1.5">
+            <Swords className="w-3.5 h-3.5 text-muted-foreground" />
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Competitive Training</h4>
+          </div>
+          <p className="text-[10px] text-muted-foreground">All active model slots race on a prompt. The judge scores each, bandit arms are rewarded proportionally.</p>
+          <Textarea
+            value={competePrompt}
+            onChange={e => setCompetePrompt(e.target.value)}
+            placeholder="Enter a prompt for models to compete on…"
+            className="text-xs min-h-[56px] resize-none"
+            data-testid="input-compete-prompt"
+          />
+          <Button
+            size="sm"
+            className="w-full h-7 text-xs"
+            onClick={() => { if (competePrompt.trim()) competeMutation.mutate(competePrompt.trim()); }}
+            disabled={competeMutation.isPending || !competePrompt.trim()}
+            data-testid="button-compete-run"
+          >
+            <Swords className="w-3 h-3 mr-1" />
+            {competeMutation.isPending ? "Racing…" : "Run Competition"}
+          </Button>
+          {competeResults.length > 0 && (
+            <div className="space-y-2 mt-1">
+              {competeResults.map((r, i) => (
+                <div key={r.slot} className="bg-muted/40 rounded p-2 space-y-1" data-testid={`compete-result-${r.slot}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      {i === 0 && <Badge className="text-[9px] h-4 px-1 bg-yellow-500 text-black">🥇</Badge>}
+                      <span className="text-xs font-medium">{r.label}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{r.model}</span>
+                    </div>
+                    <Badge variant={r.score >= 7 ? "default" : "outline"} className="text-[9px] h-4 px-1">{r.score.toFixed(1)}/10</Badge>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground line-clamp-3">{r.response}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="space-y-2">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Goals</h4>
