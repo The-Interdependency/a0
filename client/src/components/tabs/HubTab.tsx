@@ -65,7 +65,7 @@ export function HubTab() {
   const [rounds, setRounds] = useState(2);
   const [synthSlot, setSynthSlot] = useState<string>("");
   const [dmSlot, setDmSlot] = useState<string>("");
-  const [slotContexts, setSlotContexts] = useState<string[]>([]);
+  const [slotContextMap, setSlotContextMap] = useState<Record<string, string>>({});
   const [showContexts, setShowContexts] = useState(false);
   const [result, setResult] = useState<HubRunResult | null>(null);
 
@@ -74,15 +74,13 @@ export function HubTab() {
   const needsDm = PATTERNS_NEEDING_DM.has(selectedPattern);
 
   function toggleSlot(key: string) {
-    setSelectedSlots(prev => {
-      const next = prev.includes(key) ? prev.filter(s => s !== key) : [...prev, key];
-      setSlotContexts(Array(next.length).fill(""));
-      return next;
-    });
+    setSelectedSlots(prev =>
+      prev.includes(key) ? prev.filter(s => s !== key) : [...prev, key]
+    );
   }
 
-  function updateSlotContext(idx: number, val: string) {
-    setSlotContexts(prev => { const a = [...prev]; a[idx] = val; return a; });
+  function updateSlotContext(key: string, val: string) {
+    setSlotContextMap(prev => ({ ...prev, [key]: val }));
   }
 
   const runMutation = useMutation({
@@ -106,17 +104,15 @@ export function HubTab() {
         pattern: selectedPattern,
         slots: selectedSlots,
         prompt: prompt.trim(),
-        slotContexts: slotContexts.some(c => c.trim()) ? slotContexts : undefined,
+        slotContexts: selectedSlots.some(k => slotContextMap[k]?.trim())
+          ? selectedSlots.map(k => slotContextMap[k] ?? "")
+          : undefined,
         ...(needsRounds ? { rounds } : {}),
         ...(needsSynth ? { synthSlot } : {}),
         ...(needsDm ? { dmSlot } : {}),
       };
 
       const res = await apiRequest("POST", "/api/v1/hub/run", body);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Hub run failed");
-      }
       return await res.json() as HubRunResult;
     },
     onSuccess: (data) => { setResult(data); },
@@ -275,14 +271,14 @@ export function HubTab() {
             </button>
             {showContexts && (
               <div className="px-3 pb-3 space-y-2 border-t border-border pt-2">
-                {selectedSlots.map((key, idx) => (
+                {selectedSlots.map((key) => (
                   <div key={key} className="space-y-1">
                     <p className="text-[9px] text-muted-foreground font-mono">
                       <span className={slotColor(key)}>{slots[key]?.label || key.toUpperCase()}</span> system prompt
                     </p>
                     <Textarea
-                      value={slotContexts[idx] ?? ""}
-                      onChange={e => updateSlotContext(idx, e.target.value)}
+                      value={slotContextMap[key] ?? ""}
+                      onChange={e => updateSlotContext(key, e.target.value)}
                       placeholder={`Override system prompt for ${slots[key]?.label || key}…`}
                       className="text-xs min-h-[52px] resize-none"
                       data-testid={`textarea-hub-context-${key}`}
