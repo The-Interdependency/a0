@@ -24,7 +24,7 @@ Architecture snapshot (working freeze 2026-03-20):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -51,12 +51,21 @@ class Circle:
 
     Live cores    : 7 tensors per circle (all standard).
     Memory core   : 9 tensors per circle (7 standard + phase_variance + spin_variance).
-    Guardian functional : inward face 5 tensors + outward face 9 tensors (circle count variable).
-    Guardian sentinel   : 11 Γ-typed tensors per circle (circle count variable).
+    Guardian functional : 14 tensors per circle (5 inward t0–t4 + 9 outward t5–t13).
+        Tensor roles are positional — documented in handler function comments in cores.py.
+        t0: gate / result gate   t1: BAD clear / hmmm gate   t2-t4: validation tensors
+        t5-t13: outward face (artifact-specific — see handler comments)
+    Guardian sentinel   : 11 Γ-typed tensors per circle (when active; currently 0 circles).
+
+    handler : callable that executes this circle's logic (None for live/memory circles).
+    phase   : named role within its seed (e.g. "ingress", "validate", "response_text").
+              "" for live/memory circles.
     """
     id: str
     seed_id: str
     tensors: List[Tensor]
+    handler: Optional[Callable] = None   # None for live/memory circles
+    phase: str = ""                      # "" for live/memory circles
 
 
 # ─────────────────────────────────────────────────────────────────────────────

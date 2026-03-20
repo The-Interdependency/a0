@@ -6,11 +6,13 @@ Every assertion maps directly to a line in the working freeze spec
 """
 
 import pytest
+from a0.contract import A0Response
 from a0.ptca import assemble_system
 from a0.ptca.cores import (
-    GUARD_CIRCLES,
+    GUARD_CIRCLE_TENSORS,
+    GUARD_CLI_CIRCLES,
+    GUARD_HTTP_CIRCLES,
     GUARD_SEEDS,
-    GUARD_TENSORS,
     JURY_SEEDS_PER_CORE,
     LIVE_CIRCLES,
     LIVE_SEEDS,
@@ -18,6 +20,8 @@ from a0.ptca.cores import (
     MEM_CIRCLES,
     MEM_SEEDS,
     MEM_TENSORS,
+    _cli_validate,
+    _http_validate,
 )
 
 
@@ -73,6 +77,14 @@ class TestLiveCores:
                 for tensor in circle.tensors:
                     assert tensor.tensor_type == "standard"
 
+    @pytest.mark.parametrize("core_attr", ["phi", "psi", "omega"])
+    def test_live_circles_have_no_handler(self, stack, core_attr):
+        core = getattr(stack, core_attr)
+        for seed in core.seeds:
+            for circle in seed.circles:
+                assert circle.handler is None
+                assert circle.phase == ""
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Memory core
@@ -115,10 +127,125 @@ class TestGuardianCore:
     def test_guardian_seed_count(self, stack):
         assert len(stack.guardian.seeds) == GUARD_SEEDS
 
-    def test_guardian_circles_provisional(self, stack):
-        # Circle count is open — currently 0 as placeholder
+    # ── CLI seed ──────────────────────────────────────────────────────────────
+
+    def test_cli_seed_exists(self, stack):
+        cli = next((s for s in stack.guardian.seeds if s.id == "guardian:cli"), None)
+        assert cli is not None
+        assert cli.seed_kind == "guardian_ui_cli"
+
+    def test_cli_seed_has_correct_circle_count(self, stack):
+        cli = next(s for s in stack.guardian.seeds if s.id == "guardian:cli")
+        assert len(cli.circles) == GUARD_CLI_CIRCLES
+
+    def test_cli_circle_phases(self, stack):
+        cli = next(s for s in stack.guardian.seeds if s.id == "guardian:cli")
+        expected = ["ingress", "validate", "response_text", "artifacts", "logs", "hmm_display", "egress"]
+        assert [c.phase for c in cli.circles] == expected
+
+    def test_cli_circles_have_handlers(self, stack):
+        cli = next(s for s in stack.guardian.seeds if s.id == "guardian:cli")
+        for circle in cli.circles:
+            assert circle.handler is not None, f"circle {circle.phase} has no handler"
+
+    def test_cli_circles_have_14_tensors(self, stack):
+        cli = next(s for s in stack.guardian.seeds if s.id == "guardian:cli")
+        for circle in cli.circles:
+            assert len(circle.tensors) == GUARD_CIRCLE_TENSORS, (
+                f"circle {circle.phase} has {len(circle.tensors)} tensors, expected {GUARD_CIRCLE_TENSORS}"
+            )
+
+    def test_cli_all_tensors_standard(self, stack):
+        cli = next(s for s in stack.guardian.seeds if s.id == "guardian:cli")
+        for circle in cli.circles:
+            for tensor in circle.tensors:
+                assert tensor.tensor_type == "standard"
+
+    # ── HTTP seed ─────────────────────────────────────────────────────────────
+
+    def test_http_seed_exists(self, stack):
+        http = next((s for s in stack.guardian.seeds if s.id == "guardian:http"), None)
+        assert http is not None
+        assert http.seed_kind == "guardian_ui_http"
+
+    def test_http_seed_has_correct_circle_count(self, stack):
+        http = next(s for s in stack.guardian.seeds if s.id == "guardian:http")
+        assert len(http.circles) == GUARD_HTTP_CIRCLES
+
+    def test_http_circle_phases(self, stack):
+        http = next(s for s in stack.guardian.seeds if s.id == "guardian:http")
+        expected = [
+            "ingress", "validate",
+            "agent_chat", "energy_display", "tools_display", "api_set", "env_display",
+            "api_response", "envelope", "egress",
+        ]
+        assert [c.phase for c in http.circles] == expected
+
+    def test_http_circles_have_handlers(self, stack):
+        http = next(s for s in stack.guardian.seeds if s.id == "guardian:http")
+        for circle in http.circles:
+            assert circle.handler is not None, f"circle {circle.phase} has no handler"
+
+    def test_http_circles_have_14_tensors(self, stack):
+        http = next(s for s in stack.guardian.seeds if s.id == "guardian:http")
+        for circle in http.circles:
+            assert len(circle.tensors) == GUARD_CIRCLE_TENSORS
+
+    # ── Unassigned functional seeds ───────────────────────────────────────────
+
+    def test_unassigned_functional_seeds_count(self, stack):
+        unassigned = [
+            s for s in stack.guardian.seeds
+            if s.seed_kind == "guardian_functional"
+        ]
+        # 25 functional total − 2 UI seeds = 23 unassigned
+        assert len(unassigned) == 23
+
+    def test_unassigned_functional_seeds_have_zero_circles(self, stack):
         for seed in stack.guardian.seeds:
-            assert len(seed.circles) == GUARD_CIRCLES
+            if seed.seed_kind == "guardian_functional":
+                assert len(seed.circles) == 0, (
+                    f"unassigned seed {seed.id} has {len(seed.circles)} circles"
+                )
+
+    # ── Sentinel seeds ────────────────────────────────────────────────────────
+
+    def test_sentinel_seeds_count(self, stack):
+        sentinels = [s for s in stack.guardian.seeds if s.seed_kind == "guardian_sentinel"]
+        assert len(sentinels) == 4
+
+    def test_sentinel_seeds_have_zero_circles(self, stack):
+        for seed in stack.guardian.seeds:
+            if seed.seed_kind == "guardian_sentinel":
+                assert len(seed.circles) == 0
+
+    def test_sentinel_seeds_have_gamma_topology(self, stack):
+        for seed in stack.guardian.seeds:
+            if seed.seed_kind == "guardian_sentinel":
+                assert seed.guardian_topology is not None
+                assert seed.guardian_topology.gamma_count == 11
+
+    # ── hmmm invariant enforcement ────────────────────────────────────────────
+
+    def test_cli_validate_blocks_on_empty_hmm(self):
+        bad_resp = A0Response(task_id="t", result={}, hmm=[])
+        with pytest.raises(ValueError, match="hmmm absent"):
+            _cli_validate(bad_resp)
+
+    def test_http_validate_blocks_on_empty_hmm(self):
+        bad_resp = A0Response(task_id="t", result={}, hmm=[])
+        with pytest.raises(ValueError, match="hmmm absent"):
+            _http_validate(bad_resp)
+
+    def test_cli_validate_passes_with_hmm(self):
+        good_resp = A0Response(task_id="t", result={}, hmm=["hmm"])
+        result = _cli_validate(good_resp)
+        assert result is good_resp
+
+    def test_http_validate_passes_with_hmm(self):
+        good_resp = A0Response(task_id="t", result={}, hmm=["hmm"])
+        result = _http_validate(good_resp)
+        assert result is good_resp
 
 
 # ─────────────────────────────────────────────────────────────────────────────
