@@ -1,3 +1,20 @@
 {
-  "last_model": "local-echo"
+  "last_model": "local-echo",
+  "meta_sentinel_codes": [
+    "phi_0",
+    "phi_1",
+    "phi_2",
+    "phi_3",
+    "psi_0",
+    "psi_1",
+    "psi_2",
+    "psi_3",
+    "omega_0",
+    "omega_1",
+    "omega_2",
+    "omega_3",
+    "omega",
+    "phi",
+    "psi"
+  ]
 }
