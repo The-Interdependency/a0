@@ -3188,9 +3188,10 @@ ${moduleWritingBlock}`;
       let fullResponse = "";
       let totalPromptTokens = 0;
       let totalCompletionTokens = 0;
-      const MAX_TOOL_ROUNDS = 8;
+      const MAX_TOOL_ROUNDS = 25;
       let currentSystemPrompt = agentSystemPrompt;
       const toolsUsedInRequest: string[] = [];
+      let roundsExhausted = false;
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         grokMessages[0] = { role: "system", content: currentSystemPrompt };
