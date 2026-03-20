@@ -707,13 +707,14 @@ Three private cores think. Phonon transports internally and remains private. Jur
         const slot = allSlots[slotKey];
         if (!slot) return `[ERROR] Unknown slot: ${slotKey}`;
         const { client, model } = buildSlotClient(slot);
+        const isReasoning = model.toLowerCase().includes("reasoning");
         const abortCtrl = new AbortController();
         const timeout = setTimeout(() => abortCtrl.abort(), 60000);
         try {
           const result = await client.chat.completions.create({
             model,
             messages,
-            max_tokens: 4096,
+            ...(isReasoning ? { max_completion_tokens: 4096 } : { max_tokens: 4096 }),
           } as any, { signal: abortCtrl.signal });
           clearTimeout(timeout);
           return result.choices[0]?.message?.content || "";
@@ -1253,12 +1254,14 @@ Three private cores think. Phonon transports internally and remains private. Jur
         { role: "system" as const, content: sysPrompt },
         ...messages.map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
       ];
+      const isReasoningSlot = model.toLowerCase().includes("reasoning");
       const result = await client.chat.completions.create({
         model,
         messages: chatMsgs,
-        max_tokens: maxTokens || 16384,
-        ...(temperature != null ? { temperature } : {}),
-      });
+        ...(isReasoningSlot
+          ? { max_completion_tokens: maxTokens || 16384 }
+          : { max_tokens: maxTokens || 16384, ...(temperature != null ? { temperature } : {}) }),
+      } as any);
       clearTimeout(timeout);
       const text = result.choices[0]?.message?.content || "";
       const usage = result.usage;
@@ -2844,10 +2847,15 @@ INSTRUCTIONS:
             const sl = hubAllSlots[slotKey];
             if (!sl) return `[ERROR] Unknown slot: ${slotKey}`;
             const { client: hc, model: hm } = buildSlotClient(sl);
+            const hIsReasoning = hm.toLowerCase().includes("reasoning");
             const hAbort = new AbortController();
             const hTimeout = setTimeout(() => hAbort.abort(), 60000);
             try {
-              const hResult = await hc.chat.completions.create({ model: hm, messages, max_tokens: 4096 } as any, { signal: hAbort.signal });
+              const hResult = await hc.chat.completions.create({
+                model: hm,
+                messages,
+                ...(hIsReasoning ? { max_completion_tokens: 4096 } : { max_tokens: 4096 }),
+              } as any, { signal: hAbort.signal });
               clearTimeout(hTimeout);
               return hResult.choices[0]?.message?.content || "";
             } catch (e: any) { clearTimeout(hTimeout); return `[ERROR] ${e?.message ?? e}`; }
@@ -3189,15 +3197,16 @@ ${moduleWritingBlock}`;
 
         const agentAbort = new AbortController();
         const agentTimeout = setTimeout(() => agentAbort.abort(), 60000);
+        const isReasoningModel = agentModel.toLowerCase().includes("reasoning");
         let result: any;
         try {
           result = await grokClient.chat.completions.create({
             model: agentModel,
             messages: grokMessages,
-            tools: grokTools,
-            tool_choice: "auto",
-            max_tokens: 16384,
-          }, { signal: agentAbort.signal });
+            ...(isReasoningModel
+              ? { max_completion_tokens: 16384 }
+              : { tools: grokTools, tool_choice: "auto", max_tokens: 16384 }),
+          } as any, { signal: agentAbort.signal });
         } catch (e: any) {
           clearTimeout(agentTimeout);
           const errMsg = agentAbort.signal.aborted ? "Agent request timed out (60s). The model took too long to respond." : e.message;
