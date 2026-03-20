@@ -283,10 +283,8 @@ Three private cores think. Phonon transports internally and remains private. Jur
     }
   });
 
-  router.get("/context/system-sections", async (req, res) => {
+  router.get("/context/system-sections", async (_req, res) => {
     try {
-      const userId = (req as any).user?.claims?.sub || "default";
-      if (OWNER_USER_ID && userId !== OWNER_USER_ID) return res.status(403).json({ error: "Owner only" });
       const toggle = await storage.getSystemToggle("system_sections_override");
       res.json((toggle?.parameters as Record<string, string>) || {});
     } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -294,8 +292,6 @@ Three private cores think. Phonon transports internally and remains private. Jur
 
   router.patch("/context/system-sections", async (req, res) => {
     try {
-      const userId = (req as any).user?.claims?.sub || "default";
-      if (OWNER_USER_ID && userId !== OWNER_USER_ID) return res.status(403).json({ error: "Owner only" });
       const { key, value } = req.body;
       if (!key || typeof value !== "string") return res.status(400).json({ error: "key and value required" });
       const toggle = await storage.getSystemToggle("system_sections_override");
@@ -318,6 +314,13 @@ Three private cores think. Phonon transports internally and remains private. Jur
 
       const sysOverrideTog = await storage.getSystemToggle("system_sections_override");
       const sysOverrides = (sysOverrideTog?.parameters as Record<string, string>) || {};
+
+      // Seed PTCA architecture into storage on first use
+      if (sysOverrides["ptcaArchitecture"] === undefined) {
+        sysOverrides["ptcaArchitecture"] = DEFAULT_PTCA_ARCHITECTURE;
+        const merged = { ...sysOverrides };
+        await storage.upsertSystemToggle("system_sections_override", true, merged).catch(() => {});
+      }
 
       const sections = [
         {
@@ -347,8 +350,8 @@ Three private cores think. Phonon transports internally and remains private. Jur
         {
           label: "User Identity",
           key: "userIdentity",
-          editable: false,
-          content: `CURRENT USER IDENTITY:\n- userId: ${userId}\n- name: ${userName}${userEmail ? `\n- email: ${userEmail}` : ""}`,
+          editable: true,
+          content: sysOverrides["userIdentity"] ?? `CURRENT USER IDENTITY:\n- userId: ${userId}\n- name: ${userName}${userEmail ? `\n- email: ${userEmail}` : ""}`,
         },
         {
           label: "Agent Capabilities",
@@ -365,8 +368,8 @@ Three private cores think. Phonon transports internally and remains private. Jur
         {
           label: "Memory / EDCM Augmentations",
           key: "memoryAugmentations",
-          editable: false,
-          content: "(Dynamic — injected at request time based on active conversation context, EDCM directives, and memory seeds. Not previewable statically.)",
+          editable: true,
+          content: sysOverrides["memoryAugmentations"] ?? "(Dynamic — injected at request time based on active conversation context, EDCM directives, and memory seeds. Not previewable statically.)",
         },
       ];
 
