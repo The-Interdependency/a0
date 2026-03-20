@@ -37,7 +37,7 @@ import {
   getOmegaDimensionLabels, getOmegaDimensionThresholds, OMEGA_CONFIG,
   type OmegaAutonomyMode,
   initPsi, psiSolve, getPsiState, setPsiMode, boostPsiDimension, setPsiDimensionBias,
-  persistPsiState, getPsiDimensionLabels, getPsiDimensionThresholds, PSI_CONFIG,
+  persistPsiState, getPsiDimensionLabels, getPsiDimensionThresholds, PSI_CONFIG, applyPsiOmegaCoupling,
   type PsiSelfModelMode, type PsiState,
   type A0Request,
   type MemoryAttribution,
@@ -960,6 +960,21 @@ Three private cores think. Phonon transports internally and remains private. Jur
     const reward = 0.3 * lengthScore + 0.3 * latencyPenalty + 0.4 * qualityScore;
     return Math.max(0, Math.min(1, reward));
   }
+
+  function injectEdcmIntoOmega(edcm: { DA: { value: number }; DRIFT: { value: number }; CM: { value: number }; INT: { value: number } }): void {
+    try {
+      const penalty = (v: number) => -Math.min(0.15, v * 0.2);
+      boostOmegaDimension(1, penalty(edcm.DA.value), "edcm_feedback");
+      boostOmegaDimension(3, penalty(edcm.DA.value), "edcm_feedback");
+      boostOmegaDimension(0, penalty(edcm.DRIFT.value), "edcm_feedback");
+      boostOmegaDimension(2, penalty(edcm.DRIFT.value) * 0.5, "edcm_feedback");
+      boostOmegaDimension(4, penalty(edcm.CM.value), "edcm_feedback");
+      boostOmegaDimension(5, penalty(edcm.CM.value) * 0.5, "edcm_feedback");
+      if (edcm.INT.value > 0.5) boostOmegaDimension(7, Math.min(0.08, edcm.INT.value * 0.1), "edcm_feedback");
+    } catch {}
+  }
+
+  const lastConvBandits = new Map<number, { modelArmId: number | null; ptcaArmId: number | null; pcnaArmId: number | null; modelArmName: string; ptcaArmName: string; pcnaArmName: string }>();
 
   async function banditSelectWithFallback(domain: string, fallback: string): Promise<{ armName: string; armId: number } | null> {
     try {
@@ -3287,6 +3302,17 @@ ${moduleWritingBlock}`;
       await rewardAndLogBandit(modelBandit?.armId || null, agentReward, "model", modelBandit?.armName || "grok");
       await rewardAndLogBandit(ptcaBandit?.armId || null, agentReward, "ptca_route", ptcaBandit?.armName || "standard");
       await rewardAndLogBandit(pcnaBandit?.armId || null, agentReward, "pcna_route", pcnaBandit?.armName || "ring_53");
+
+      const edcmForOmega = computeEdcmMetrics(fullResponse);
+      injectEdcmIntoOmega(edcmForOmega);
+      lastConvBandits.set(conversationId, {
+        modelArmId: modelBandit?.armId || null,
+        ptcaArmId: ptcaBandit?.armId || null,
+        pcnaArmId: pcnaBandit?.armId || null,
+        modelArmName: modelBandit?.armName || "grok",
+        ptcaArmName: ptcaBandit?.armName || "standard",
+        pcnaArmName: pcnaBandit?.armName || "ring_53",
+      });
       const primaryTool = toolsUsedInRequest.length > 0 ? toolsUsedInRequest[0] : null;
       recordCorrelation(
         primaryTool,
@@ -5902,6 +5928,124 @@ ${moduleWritingBlock}`;
       const state = omegaSolve();
       await persistOmegaState();
       res.json({ ok: true, state });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.post("/omega/batch-solve", async (req, res) => {
+    try {
+      const steps = Math.min(200, Math.max(1, parseInt(req.body?.steps) || 20));
+      const trajectory: number[] = [];
+      const startEnergy = getOmegaState().totalEnergy;
+      for (let i = 0; i < steps; i++) {
+        const r = omegaSolve();
+        psiSolve();
+        applyPsiOmegaCoupling();
+        trajectory.push(parseFloat(r.totalEnergy.toFixed(6)));
+      }
+      await persistOmegaState();
+      await persistPsiState();
+      const endEnergy = trajectory[trajectory.length - 1] ?? startEnergy;
+      res.json({ ok: true, steps, startEnergy, endEnergy, delta: endEnergy - startEnergy, trajectory });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.post("/psi/batch-solve", async (req, res) => {
+    try {
+      const steps = Math.min(200, Math.max(1, parseInt(req.body?.steps) || 20));
+      const trajectory: number[] = [];
+      const startEnergy = getPsiState().totalEnergy;
+      for (let i = 0; i < steps; i++) {
+        const r = psiSolve();
+        omegaSolve();
+        applyPsiOmegaCoupling();
+        trajectory.push(parseFloat(r.totalEnergy.toFixed(6)));
+      }
+      await persistPsiState();
+      await persistOmegaState();
+      const endEnergy = trajectory[trajectory.length - 1] ?? startEnergy;
+      res.json({ ok: true, steps, startEnergy, endEnergy, delta: endEnergy - startEnergy, trajectory });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.post("/v1/feedback", async (req, res) => {
+    try {
+      const { conversationId, rating } = req.body as { conversationId: number; rating: 1 | -1 };
+      if (!conversationId || (rating !== 1 && rating !== -1)) {
+        return res.status(400).json({ error: "conversationId and rating (1 or -1) required" });
+      }
+      const reward = rating === 1 ? 1.0 : 0.0;
+      const arms = lastConvBandits.get(conversationId);
+      if (arms) {
+        await rewardAndLogBandit(arms.modelArmId, reward, "model", arms.modelArmName);
+        await rewardAndLogBandit(arms.ptcaArmId, reward, "ptca_route", arms.ptcaArmName);
+        await rewardAndLogBandit(arms.pcnaArmId, reward, "pcna_route", arms.pcnaArmName);
+      }
+      boostOmegaDimension(8, rating === 1 ? 0.05 : -0.03, "user_feedback");
+      await logMaster("feedback", "user_rating", { conversationId, rating, reward, armsFound: !!arms });
+      res.json({ ok: true, reward, armsFound: !!arms });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.post("/v1/train/compete", async (req, res) => {
+    try {
+      const { prompt, slotKeys } = req.body as { prompt: string; slotKeys?: string[] };
+      if (!prompt) return res.status(400).json({ error: "prompt required" });
+      const allSlots = await getModelSlots();
+      const keys = (slotKeys?.filter(k => allSlots[k]) || Object.keys(allSlots)).slice(0, 4);
+      if (keys.length < 2) return res.status(400).json({ error: "Need at least 2 model slots configured" });
+
+      const apiKey = process.env.XAI_API_KEY || "";
+      const results: Array<{ slot: string; model: string; label: string; response: string; score: number }> = [];
+
+      await Promise.all(keys.map(async (key) => {
+        const slot = allSlots[key];
+        const { client, model } = buildSlotClient(slot);
+        try {
+          const r = await client.chat.completions.create({ model, messages: [{ role: "user", content: prompt }], max_tokens: 512 });
+          results.push({ slot: key, model, label: slot.label || key.toUpperCase(), response: r.choices[0]?.message?.content || "", score: 0 });
+        } catch (e: any) {
+          results.push({ slot: key, model, label: slot.label || key.toUpperCase(), response: `Error: ${e.message}`, score: -1 });
+        }
+      }));
+
+      const valid = results.filter(r => r.score !== -1);
+      if (valid.length >= 2) {
+        const judgeClient = new OpenAI({ apiKey, baseURL: "https://api.x.ai/v1" });
+        const judgePrompt = `Rate each response 0-10 for quality, accuracy, and coherence. Respond only with JSON: {"scores": [number, number, ...]}\n\nPrompt: "${prompt}"\n\n${valid.map((r, i) => `Response ${i + 1} (${r.label}):\n${r.response}`).join("\n\n")}`;
+        try {
+          const jr = await judgeClient.chat.completions.create({ model: "grok-3-mini", messages: [{ role: "user", content: judgePrompt }], max_tokens: 100 });
+          const jText = jr.choices[0]?.message?.content || "{}";
+          const jData = JSON.parse(jText.replace(/```[a-z]*\n?/g, "").replace(/```/g, ""));
+          const scores: number[] = jData.scores || [];
+          scores.forEach((s, i) => { if (valid[i]) valid[i].score = Math.max(0, Math.min(10, s)); });
+        } catch {}
+
+        const maxScore = Math.max(...valid.map(r => r.score), 0.001);
+        const rewards: Array<{ slot: string; reward: number }> = [];
+        for (const r of valid) {
+          const reward = maxScore > 0 ? r.score / maxScore : 0.5;
+          const banditResult = await banditSelectWithFallback("model", `slot_${r.slot}`);
+          if (banditResult) {
+            await rewardAndLogBandit(banditResult.armId, reward, "model", banditResult.armName);
+          }
+          rewards.push({ slot: r.slot, reward });
+        }
+
+        boostOmegaDimension(6, 0.05, "competitive_training");
+        boostOmegaDimension(8, 0.05, "competitive_training");
+
+        return res.json({ ok: true, prompt, results: results.sort((a, b) => b.score - a.score), rewards });
+      }
+
+      res.json({ ok: true, prompt, results, rewards: [] });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
