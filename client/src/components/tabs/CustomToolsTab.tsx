@@ -30,7 +30,6 @@ const TOOL_CATEGORIES: Array<{ label: string; color: string; tools: string[]; no
   { label: "Deals", color: "text-yellow-400", tools: ["analyze_offer", "create_deal", "close_deal", "list_deals", "update_deal"] },
   { label: "Transcript", color: "text-indigo-400", tools: ["create_transcript_source", "fetch_transcript_url", "get_transcript_report", "list_transcript_sources", "scan_transcript_source"] },
   { label: "Hub / Model", color: "text-teal-400", tools: ["hub_run", "hub_list_patterns", "list_hub_connections", "list_model_registry", "update_model_registry", "get_brain_presets", "get_synthesis_config", "set_brain_preset", "set_default_brain", "set_synthesis_weights", "Council", "Daisy Chain", "Fan Out", "Roleplay", "Room (All)", "Room (Synthesized)"] },
-  { label: "Persona", color: "text-rose-400", tools: ["set_persona", "grant_persona", "revoke_persona", "list_persona_grants"] },
   { label: "Module / Misc", color: "text-violet-400", tools: ["write_module", "list_agent_modules", "delete_agent_module", "generate_tool", "set_ai_welcome", "xai-grok"] },
 ];
 
