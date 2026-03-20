@@ -158,9 +158,9 @@ export const PERSONA_METRIC_LABELS: Record<Persona, MetricLabelMap> = {
 
 export const PERSONA_VISIBLE_TABS: Record<Persona, string[] | null> = {
   free: null,
-  legal: ["workflow", "metrics", "deals", "memory", "api", "psi", "heartbeat", "context", "logs", "credentials", "export"],
-  researcher: ["workflow", "metrics", "deals", "memory", "api", "psi", "omega", "heartbeat", "context", "logs", "credentials", "export"],
-  political: ["workflow", "metrics", "deals", "memory", "api", "psi", "heartbeat", "context", "logs", "credentials", "export"],
+  legal: ["workflow", "metrics", "deals", "memory", "api", "hub", "psi", "heartbeat", "context", "logs", "credentials", "export"],
+  researcher: ["workflow", "metrics", "deals", "memory", "api", "hub", "psi", "omega", "heartbeat", "context", "logs", "credentials", "export"],
+  political: ["workflow", "metrics", "deals", "memory", "api", "hub", "psi", "heartbeat", "context", "logs", "credentials", "export"],
 };
 
 export const SLOT_COLORS: Record<string, string> = {
