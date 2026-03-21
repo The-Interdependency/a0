@@ -3171,8 +3171,14 @@ INSTRUCTIONS:
           return `Task ${taskId} (${tasks[idx].label}) cancelled.`;
         }
 
-        default:
+        default: {
+          const customToolsAll = await storage.getCustomTools();
+          const customTool = customToolsAll.find(t => t.name === toolName && t.enabled);
+          if (customTool) {
+            return await executeCustomToolHandler(customTool, args);
+          }
           return `Unknown tool: ${toolName}`;
+        }
       }
     } catch (e: any) {
       return `Error: ${e.message}`;
@@ -3293,10 +3299,25 @@ ${moduleWritingBlock}`;
       const toolToggleTog = await storage.getSystemToggle("tool_toggles");
       const toolToggleMap = (toolToggleTog?.parameters as Record<string, boolean>) || {};
       const activeAgentTools = AGENT_TOOLS.filter(t => toolToggleMap[t.name] !== false);
-      const grokTools = activeAgentTools.map(t => ({
+      const grokTools: Array<{ type: "function"; function: { name: string; description: string; parameters: any } }> = activeAgentTools.map(t => ({
         type: "function" as const,
         function: { name: t.name, description: t.description, parameters: t.parameters },
       }));
+      // Append enabled custom tools from DB so a0 can call them
+      try {
+        const dbCustomTools = await storage.getCustomTools();
+        for (const ct of dbCustomTools) {
+          if (!ct.enabled) continue;
+          if (grokTools.some(g => g.function.name === ct.name)) continue; // skip duplicates
+          let ctParams: any = { type: "object", properties: {}, required: [] };
+          if (ct.parametersSchema && typeof ct.parametersSchema === "object") {
+            ctParams = ct.parametersSchema;
+          }
+          grokTools.push({ type: "function" as const, function: { name: ct.name, description: ct.description, parameters: ctParams } });
+        }
+      } catch (ctErr: any) {
+        console.warn("[agent] Failed to load custom tools:", ctErr.message);
+      }
 
       type GrokMsg = { role: "system" | "user" | "assistant" | "tool"; content: string; tool_call_id?: string; tool_calls?: any[] };
       let grokMessages: GrokMsg[] = [
@@ -3322,21 +3343,52 @@ ${moduleWritingBlock}`;
         const agentAbort = new AbortController();
         const agentTimeout = setTimeout(() => agentAbort.abort(), 60000);
         const isReasoningModel = agentModel.toLowerCase().includes("reasoning");
+        // For reasoning models: strip "-reasoning" suffix to get a tool-capable base model
+        const effectiveModel = isReasoningModel
+          ? agentModel.replace(/-?reasoning$/i, "").replace(/-?reasoning-/i, "-") || agentModel
+          : agentModel;
         let result: any;
+        let usingReasoningTextFallback = false;
         try {
           result = await grokClient.chat.completions.create({
-            model: agentModel,
+            model: effectiveModel,
             messages: grokMessages,
-            ...(isReasoningModel
-              ? { max_completion_tokens: 16384 }
-              : { tools: grokTools, tool_choice: "auto", max_tokens: 16384 }),
+            tools: grokTools,
+            tool_choice: "auto" as const,
+            max_tokens: 16384,
           } as any, { signal: agentAbort.signal });
         } catch (e: any) {
-          clearTimeout(agentTimeout);
-          const errMsg = agentAbort.signal.aborted ? "Agent request timed out (60s). The model took too long to respond." : e.message;
-          res.write(`data: ${JSON.stringify({ error: errMsg, done: true })}\n\n`);
-          res.end();
-          return;
+          // If the stripped model name failed with 400 (likely doesn't support tools or doesn't exist),
+          // fall back to the original reasoning model without tools
+          if (isReasoningModel && (e?.status === 400 || String(e?.message).includes("400") || String(e?.message).includes("model"))) {
+            usingReasoningTextFallback = true;
+            try {
+              const reasoningMessages = [
+                {
+                  ...grokMessages[0],
+                  content: grokMessages[0].content + "\n\n[TOOL CALLING]: When you need to invoke a tool, output a JSON block using this exact format on its own line:\n```tool_call\n{\"name\": \"tool_name\", \"arguments\": {\"key\": \"value\"}}\n```\nAvailable tools: " + grokTools.map(t => t.function.name).join(", "),
+                },
+                ...grokMessages.slice(1),
+              ];
+              result = await grokClient.chat.completions.create({
+                model: agentModel,
+                messages: reasoningMessages,
+                max_completion_tokens: 16384,
+              } as any, { signal: agentAbort.signal });
+            } catch (e2: any) {
+              clearTimeout(agentTimeout);
+              const errMsg = agentAbort.signal.aborted ? "Agent request timed out (60s). The model took too long to respond." : e2.message;
+              res.write(`data: ${JSON.stringify({ error: errMsg, done: true })}\n\n`);
+              res.end();
+              return;
+            }
+          } else {
+            clearTimeout(agentTimeout);
+            const errMsg = agentAbort.signal.aborted ? "Agent request timed out (60s). The model took too long to respond." : e.message;
+            res.write(`data: ${JSON.stringify({ error: errMsg, done: true })}\n\n`);
+            res.end();
+            return;
+          }
         }
         clearTimeout(agentTimeout);
 
@@ -3347,8 +3399,33 @@ ${moduleWritingBlock}`;
         if (!choice) break;
 
         const assistantMsg = choice.message;
-        const toolCalls = assistantMsg.tool_calls || [];
-        const textContent = assistantMsg.content || "";
+        let toolCalls = assistantMsg.tool_calls || [];
+        let textContent = assistantMsg.content || "";
+
+        // Parse text-embedded tool calls from reasoning model text fallback
+        if (usingReasoningTextFallback && textContent) {
+          const tcMatches = [...textContent.matchAll(/```tool_call\s*\n([\s\S]*?)\n```/g)];
+          if (tcMatches.length > 0) {
+            const parsedTcs: any[] = [];
+            for (const m of tcMatches) {
+              try {
+                const parsed = JSON.parse(m[1].trim());
+                if (parsed.name) {
+                  parsedTcs.push({
+                    id: `rtc_${Date.now()}_${parsedTcs.length}`,
+                    type: "function",
+                    function: { name: parsed.name, arguments: JSON.stringify(parsed.arguments || {}) },
+                  });
+                }
+              } catch {}
+            }
+            if (parsedTcs.length > 0) {
+              toolCalls = parsedTcs;
+              // Strip tool_call blocks from text content so they don't show to user
+              textContent = textContent.replace(/```tool_call\s*\n[\s\S]*?\n```/g, "").trim();
+            }
+          }
+        }
 
         if (textContent) {
           fullResponse += textContent;
