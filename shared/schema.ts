@@ -177,6 +177,8 @@ export const heartbeatTasks = pgTable("heartbeat_tasks", {
   intervalSeconds: integer("interval_seconds").notNull().default(300),
   lastRun: timestamp("last_run"),
   lastResult: text("last_result"),
+  /** JS handler code for custom task type — executed via new Function */
+  handlerCode: text("handler_code"),
   runCount: integer("run_count").notNull().default(0),
   /** If set, task will not run until this timestamp has passed */
   scheduledAt: timestamp("scheduled_at"),

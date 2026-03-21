@@ -4567,7 +4567,7 @@ ${moduleWritingBlock}`;
         weight: weight ?? 1.0,
         intervalSeconds: intervalSeconds ?? 300,
         enabled: enabled ?? true,
-        ...(handlerCode ? { lastResult: `handler:${handlerCode}` } : {}),
+        ...(handlerCode ? { handlerCode } : {}),
       });
       res.json(task);
     } catch (e: any) {
@@ -4600,7 +4600,7 @@ ${moduleWritingBlock}`;
       if (req.body.intervalSeconds !== undefined) updates.intervalSeconds = req.body.intervalSeconds;
       if (req.body.description !== undefined) updates.description = req.body.description;
       if (req.body.taskType !== undefined) updates.taskType = req.body.taskType;
-      if (req.body.handlerCode !== undefined) updates.lastResult = `handler:${req.body.handlerCode}`;
+      if (req.body.handlerCode !== undefined) updates.handlerCode = req.body.handlerCode;
       await storage.updateHeartbeatTask(id, updates);
       const tasks = await storage.getHeartbeatTasks();
       res.json(tasks);

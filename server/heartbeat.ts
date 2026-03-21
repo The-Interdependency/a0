@@ -1240,9 +1240,9 @@ async function runScheduledTaskMiniLoop(description: string): Promise<string> {
 
 async function executeCustomTask(task: HeartbeatTask): Promise<{ result: string; relevance: number; data: any }> {
   try {
-    // Handler code is stored as "handler:<code>" in lastResult at task creation time
-    const lastResultVal = task.lastResult || "";
-    const handlerCode = lastResultVal.startsWith("handler:") ? lastResultVal.slice(8) : (task.description || "");
+    // Handler code stored in dedicated handlerCode field (nullable); legacy fallback: "handler:" prefix in lastResult
+    const legacyCode = (task.lastResult || "").startsWith("handler:") ? (task.lastResult as string).slice(8) : null;
+    const handlerCode = task.handlerCode || legacyCode;
     if (!handlerCode || handlerCode.trim().length < 5) {
       return { result: `Custom task "${task.name}": no handler code configured.`, relevance: 0.1, data: { taskName: task.name, status: "no_handler" } };
     }
@@ -1320,31 +1320,18 @@ async function tick(): Promise<void> {
         if (now - lastPursuitTs < tickIntervalMs) continue;
         // Stamp the goal now (persisted to storage on next persistOmegaState call at end of tick)
         touchOmegaGoalPursuit(goal.id);
-        // Run goal pursuit as a synthetic heartbeat task
-        const syntheticTask: HeartbeatTask = {
-          id: -1,
-          name: `omega_goal_${goalKey}`,
-          description: goal.description || "active omega goal",
-          taskType: "goal_pursuit",
-          enabled: true,
-          weight: 1,
-          intervalSeconds: 0,
-          lastRun: null,
-          lastResult: null,
-          runCount: 0,
-          scheduledAt: null,
-          oneShot: false,
-          createdAt: new Date(),
-        };
         try {
-          const { result, relevance } = await executeGoalPursuit(syntheticTask);
+          // Run tool-enabled mini loop for goal pursuit (up to 10 rounds, with web_search + done tools)
+          const goalPrompt = `Autonomous goal pursuit task:\nGoal: ${goal.description || "active omega goal"}\n\nResearch this goal, find relevant information, summarize findings, then call 'done' with a result summary.`;
+          const result = await runScheduledTaskMiniLoop(goalPrompt);
+          const relevance = 0.6; // base relevance for goal pursuit
           await logOmega("goal_pursuit_tick", {
             goalId: goal.id,
             goalKey,
             relevance,
             resultPreview: result.slice(0, 200),
           });
-          if (relevance > 0.7) {
+          if (relevance > 0.5) {
             await storage.createDiscoveryDraft({
               sourceTask: `omega_goal_${goalKey}`,
               title: `Ω Goal Progress: ${(goal.description || "").slice(0, 60)}`,
