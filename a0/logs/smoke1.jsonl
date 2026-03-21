@@ -1,2 +1,14 @@
 {"type": "request", "mode": "analyze", "tools_allowed": ["none"], "hmm": ["hmm"], "ts": "2026-02-17T18:02:41.004163+00:00"}
 {"type": "model", "name": "local-echo", "ts": "2026-02-17T18:02:41.004496+00:00"}
+{"type": "request", "mode": "analyze", "tools_allowed": ["none"], "hmmm": ["hmm"], "ts": "2026-03-21T04:42:31.480353+00:00"}
+{"type": "model", "name": "local-echo", "hmmm": [], "ts": "2026-03-21T04:42:31.480622+00:00"}
+{"type": "request", "mode": "analyze", "tools_allowed": ["none"], "hmmm": ["hmm"], "ts": "2026-03-21T04:43:36.404197+00:00"}
+{"type": "model", "name": "local-echo", "hmmm": [], "ts": "2026-03-21T04:43:36.404292+00:00"}
+{"type": "request", "mode": "analyze", "tools_allowed": ["none"], "hmmm": ["hmm"], "ts": "2026-03-21T04:47:24.141830+00:00"}
+{"type": "model", "name": "local-echo", "hmmm": [], "ts": "2026-03-21T04:47:24.141907+00:00"}
+{"type": "request", "mode": "analyze", "tools_allowed": ["none"], "hmmm": ["hmm"], "ts": "2026-03-21T04:47:26.801924+00:00"}
+{"type": "model", "name": "local-echo", "hmmm": [], "ts": "2026-03-21T04:47:26.802005+00:00"}
+{"type": "request", "mode": "analyze", "tools_allowed": ["none"], "hmmm": ["hmm"], "ts": "2026-03-21T04:47:32.584112+00:00"}
+{"type": "model", "name": "local-echo", "hmmm": [], "ts": "2026-03-21T04:47:32.584199+00:00"}
+{"type": "request", "mode": "analyze", "tools_allowed": ["none"], "hmmm": ["hmm"], "ts": "2026-03-21T04:47:40.022627+00:00"}
+{"type": "model", "name": "local-echo", "hmmm": [], "ts": "2026-03-21T04:47:40.022719+00:00"}
