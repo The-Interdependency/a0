@@ -1,7 +1,7 @@
-import { Activity, Brain, ChevronDown, ChevronRight, Clock, Cpu, Database, DollarSign, Download, Eye, FileText, Flame, Gauge, GitBranch, Globe, Hash, Layers, Lock, Map, Package, Puzzle, Radio, ScrollText, Search, Settings, Shield, ShoppingBag, Square, Star, Target, Terminal, Triangle, User, Wand2, Wrench, Zap } from "lucide-react";
+import { Activity, Brain, ChevronDown, ChevronRight, Clock, Cpu, Database, DollarSign, Download, Eye, FileText, Flame, Gauge, GitBranch, Globe, Hash, Layers, Lock, Map, MessageSquare, Package, Puzzle, Radio, ScrollText, Search, Settings, Shield, ShoppingBag, Square, Star, Target, Terminal, Triangle, User, Wand2, Wrench, Zap } from "lucide-react";
 import type { Persona } from "@/hooks/use-persona";
 
-export type TabId = "workflow" | "bandit" | "metrics" | "edcm" | "memory" | "brain" | "system" | "heartbeat" | "tools" | "credentials" | "export" | "logs" | "context" | "omega" | "psi" | "api" | "s17" | "deals" | "hub";
+export type TabId = "workflow" | "bandit" | "metrics" | "edcm" | "memory" | "brain" | "system" | "heartbeat" | "tools" | "credentials" | "export" | "logs" | "context" | "omega" | "psi" | "api" | "s17" | "deals" | "hub" | "visitors" | "research";
 
 export type TabGroup = { id: string; label: string; icon: any; tabs: Array<{ id: string; label: string; icon: any }> };
 
@@ -65,6 +65,7 @@ export const TAB_GROUPS: readonly TabGroup[] = [
       { id: "deals", label: "Deals", icon: ShoppingBag },
       { id: "api", label: "API", icon: Cpu },
       { id: "hub", label: "Hub", icon: Radio },
+      { id: "research", label: "Research", icon: Search },
     ],
   },
   {
@@ -95,6 +96,7 @@ export const TAB_GROUPS: readonly TabGroup[] = [
       { id: "credentials", label: "Keys", icon: Lock },
       { id: "context", label: "Context", icon: FileText },
       { id: "export", label: "Export", icon: Download },
+      { id: "visitors", label: "Visitors", icon: MessageSquare },
     ],
   },
 ] as const;
@@ -106,15 +108,15 @@ export const STATIC_TAB_IDS = new Set<string>([
   "memory", "edcm", "brain", "s17",
   "psi", "omega", "heartbeat",
   "system", "logs",
-  "tools", "credentials", "context", "api", "export", "hub",
+  "tools", "credentials", "context", "api", "export", "hub", "visitors", "research",
 ]);
 
 export const TAB_TO_GROUP: Record<TabId, string> = {
-  workflow: "agent", bandit: "agent", metrics: "agent", deals: "agent", api: "agent", hub: "agent",
+  workflow: "agent", bandit: "agent", metrics: "agent", deals: "agent", api: "agent", hub: "agent", research: "agent",
   memory: "memory", edcm: "memory", brain: "memory", s17: "memory",
   psi: "triad", omega: "triad", heartbeat: "triad",
   system: "system", logs: "system",
-  tools: "tools", credentials: "tools", context: "tools", export: "tools",
+  tools: "tools", credentials: "tools", context: "tools", export: "tools", visitors: "tools",
 };
 
 export type MetricLabelMap = Record<string, { label: string; desc: string }>;

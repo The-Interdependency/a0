@@ -166,8 +166,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   router.post("/conversations", async (req, res) => {
     try {
       const { title = "New Task", model = "agent" } = req.body;
-      const conv = await storage.createConversation({ title, model } as InsertConversation);
+      const visitorId = req.headers["x-visitor-id"] as string | undefined;
+      const userId = (req as any).user?.claims?.sub || visitorId || "default";
+      const conv = await storage.createConversation({ title, model, userId } as InsertConversation);
       res.json(conv);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.get("/v1/admin/visitors", async (_req, res) => {
+    try {
+      const convs = await storage.getConversations();
+      const sorted = [...convs].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      res.json(sorted);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.post("/v1/admin/conversations/:id/inject", async (req, res) => {
+    try {
+      const convId = parseInt(req.params.id);
+      const { content } = req.body as { content: string };
+      if (!content?.trim()) return res.status(400).json({ error: "content required" });
+      const conv = await storage.getConversation(convId);
+      if (!conv) return res.status(404).json({ error: "Conversation not found" });
+      const msg = await storage.createMessage({ conversationId: convId, role: "assistant", content: content.trim(), model: "owner" } as InsertMessage);
+      res.json({ ok: true, message: msg });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -2156,7 +2182,100 @@ INSTRUCTIONS:
         required: ["taskId"],
       },
     },
+    // ---- Autoresearch Loop ----
+    {
+      name: "research_loop",
+      description: "Run a multi-model autoresearch loop on any topic or claim. Uses Gemini for bulk extraction and Grok Live Search for counterevidence arbitration. Steps: ingest → extract claims → generate verification questions → seek counterevidence → compress into spec. Invoke autonomously when a user makes a claim worth verifying, asks you to research something deeply, or when you need high-confidence grounded information.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          topic: { type: "string" as const, description: "The topic, claim, or question to research" },
+          depth: { type: "string" as const, enum: ["quick", "standard", "deep"], description: "Research depth: quick (1 search), standard (2 searches), deep (3 searches with broader counterevidence sweep). Default: standard." },
+        },
+        required: ["topic"],
+      },
+    },
   ];
+
+  async function xaiSearch(query: string, maxTokens = 2048): Promise<string> {
+    if (!process.env.XAI_API_KEY) return `[xai_search unavailable: no API key]`;
+    const xaiClient = new OpenAI({ apiKey: process.env.XAI_API_KEY, baseURL: "https://api.x.ai/v1" });
+    const abort = new AbortController();
+    const t = setTimeout(() => abort.abort(), 30000);
+    try {
+      const resp = await (xaiClient.chat.completions.create as any)({
+        model: "grok-3-mini",
+        messages: [{ role: "user", content: query }],
+        tools: [{ type: "web_search_preview" }],
+        max_tokens: maxTokens,
+      }, { signal: abort.signal });
+      clearTimeout(t);
+      const content = resp.choices?.[0]?.message?.content || "";
+      const citations: string[] = (resp.choices?.[0]?.message as any)?.citations || [];
+      const citeStr = citations.length > 0 ? `\n\nSources:\n${citations.map((c: any, i: number) => `[${i+1}] ${c.title || c.url}\n    ${c.url}`).join("\n")}` : "";
+      return content + citeStr;
+    } catch (e: any) {
+      clearTimeout(t);
+      return `[search failed: ${e.message}]`;
+    }
+  }
+
+  async function runResearchLoop(
+    topic: string,
+    depth: "quick" | "standard" | "deep" = "standard",
+    onStep?: (step: string, status: "running" | "done" | "error", output?: string) => void
+  ): Promise<{ steps: Record<string, string>; synthesis: string }> {
+    const steps: Record<string, string> = {};
+
+    onStep?.("ingest", "running");
+    const ingestContent = await xaiSearch(`Research: ${topic}`, 3000);
+    steps.ingest = ingestContent;
+    onStep?.("ingest", "done", ingestContent);
+
+    onStep?.("claims", "running");
+    const claimsResult = await callGeminiForSynthesis(
+      [{ role: "user", content: `Extract 5-8 discrete, testable factual claims from the following research on "${topic}":\n\n${ingestContent.slice(0, 4000)}\n\nReturn a numbered list of claims only.` }],
+      "You are a precise claim extractor. Output only a numbered list of discrete factual claims. Be concise.",
+      1024, 30000
+    );
+    steps.claims = claimsResult.content;
+    onStep?.("claims", "done", claimsResult.content);
+
+    onStep?.("questions", "running");
+    const questionsResult = await callGeminiForSynthesis(
+      [{ role: "user", content: `For each claim below, generate 1-2 sharp verification questions that would expose errors or gaps:\n\n${claimsResult.content}` }],
+      "You generate targeted verification questions. Be concise and precise.",
+      1024, 30000
+    );
+    steps.questions = questionsResult.content;
+    onStep?.("questions", "done", questionsResult.content);
+
+    onStep?.("counterevidence", "running");
+    const counterQueries = depth === "deep" ? 3 : depth === "standard" ? 2 : 1;
+    const counterResults: string[] = [];
+    for (let i = 0; i < counterQueries; i++) {
+      const ceQuery = i === 0
+        ? `Evidence against or contradicting: ${topic}`
+        : i === 1
+        ? `Limitations, caveats, and known failures of: ${topic}`
+        : `Recent updates or revisions to: ${topic}`;
+      counterResults.push(await xaiSearch(ceQuery, 2000));
+    }
+    steps.counterevidence = counterResults.join("\n\n---\n\n");
+    onStep?.("counterevidence", "done", steps.counterevidence);
+
+    onStep?.("synthesis", "running");
+    const synthInput = `Topic: ${topic}\n\nIngested:\n${ingestContent.slice(0, 2000)}\n\nExtracted Claims:\n${claimsResult.content}\n\nVerification Questions:\n${questionsResult.content}\n\nCounterEvidence:\n${steps.counterevidence.slice(0, 2000)}`;
+    const synthResult = await callGeminiForSynthesis(
+      [{ role: "user", content: `${synthInput}\n\nSynthesize this into a concise spec update:\n- Key confirmed conclusions\n- Unresolved tensions or contradictions\n- Confidence level per claim\n- Recommended action items` }],
+      "You compress multi-source research into precise, actionable spec updates. No fluff.",
+      2048, 60000
+    );
+    steps.synthesis = synthResult.content;
+    onStep?.("synthesis", "done", synthResult.content);
+
+    return { steps, synthesis: synthResult.content };
+  }
 
   async function executeAgentTool(toolName: string, args: any, userId = "default"): Promise<string> {
     try {
@@ -3021,6 +3140,19 @@ INSTRUCTIONS:
             clearTimeout(xaiTimeout);
             return `xAI Live Search failed: ${e.message}`;
           }
+        }
+
+        case "research_loop": {
+          const topic = (args.topic || "").trim();
+          if (!topic) return "Error: topic is required";
+          const depth: "quick" | "standard" | "deep" = args.depth || "standard";
+          const parts: string[] = [`# Autoresearch: ${topic}\nDepth: ${depth}\n`];
+          const { steps, synthesis } = await runResearchLoop(topic, depth, (step, status, output) => {
+            if (status === "done" && output) {
+              parts.push(`## Step: ${step}\n${output.slice(0, 1000)}${output.length > 1000 ? "\n...(truncated)" : ""}`);
+            }
+          });
+          return parts.join("\n\n") + `\n\n## Final Synthesis\n${synthesis}`;
         }
 
         case "schedule_task": {
@@ -6264,6 +6396,30 @@ ${moduleWritingBlock}`;
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
+  });
+
+  // ============ RESEARCH LOOP SSE ============
+  router.post("/v1/research/loop", async (req, res) => {
+    const { topic, depth = "standard" } = req.body as { topic: string; depth?: string };
+    if (!topic?.trim()) { res.status(400).json({ error: "topic required" }); return; }
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+    const write = (data: object) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+    try {
+      const { steps, synthesis } = await runResearchLoop(
+        topic.trim(),
+        (["quick","standard","deep"].includes(depth) ? depth : "standard") as any,
+        (step, status, output) => {
+          write({ step, status, output: output?.slice(0, 4000) });
+        }
+      );
+      write({ done: true, synthesis: synthesis.slice(0, 6000) });
+    } catch (e: any) {
+      write({ error: e.message, done: true });
+    }
+    res.end();
   });
 
   // Mount router at both /api and /api/v1 for versioning support

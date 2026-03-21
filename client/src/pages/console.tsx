@@ -33,6 +33,8 @@ import {
   ApiModelTab,
   HubTab,
   ExportTab,
+  VisitorsTab,
+  ResearchTab,
 } from "@/components/tabs";
 
 const allTabFiles = import.meta.glob("../components/tabs/*Tab.tsx");
@@ -197,6 +199,8 @@ export default function ConsolePage() {
         {activeTab === "tools" && <CustomToolsTab />}
         {activeTab === "credentials" && <CredentialsTab />}
         {activeTab === "export" && <ExportTab />}
+        {activeTab === "visitors" && <VisitorsTab />}
+        {activeTab === "research" && <ResearchTab />}
         {activeTab === "logs" && <LogsTab />}
         {activeTab === "context" && <ContextTab />}
         {activeTab === "api" && <ApiModelTab />}

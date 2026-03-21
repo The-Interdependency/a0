@@ -17,3 +17,5 @@ export { ContextTab } from "./ContextTab";
 export { ApiModelTab } from "./ApiModelTab";
 export { HubTab } from "./HubTab";
 export { ExportTab } from "./ExportTab";
+export { VisitorsTab } from "./VisitorsTab";
+export { ResearchTab } from "./ResearchTab";

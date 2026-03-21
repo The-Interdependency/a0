@@ -69,6 +69,12 @@ export default function ChatPage() {
       localStorage.removeItem("a0p-active-conv");
     }
   };
+  const visitorId = (() => {
+    let id = localStorage.getItem("a0p-visitor-id");
+    if (!id) { id = `visitor_${crypto.randomUUID().slice(0, 8)}`; localStorage.setItem("a0p-visitor-id", id); }
+    return id;
+  })();
+
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
@@ -111,7 +117,11 @@ export default function ChatPage() {
 
   const createConv = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/conversations", { title: "New Task", model: "agent" });
+      const res = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Visitor-ID": visitorId },
+        body: JSON.stringify({ title: "New Task", model: "agent" }),
+      });
       return await res.json() as Conversation;
     },
     onSuccess: (conv: Conversation) => {
@@ -171,7 +181,7 @@ export default function ChatPage() {
     try {
       const response = await fetch(`/api/conversations/${convId}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Visitor-ID": visitorId },
         body: JSON.stringify({ content: userMsg, slot: activeSlot }),
       });
 
