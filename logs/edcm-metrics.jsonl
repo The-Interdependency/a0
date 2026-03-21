@@ -357,3 +357,4 @@
 {"timestamp":"2026-03-21T10:44:40.538Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"68ba4d9c984f","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-21T10:55:10.206Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"5bced79d486f","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-21T11:05:39.272Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"7a8696fcd772","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
+{"timestamp":"2026-03-21T11:15:41.699Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"9ebca90c9b01","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
