@@ -2386,6 +2386,7 @@ export interface OmegaGoal {
   status: "active" | "completed" | "removed";
   createdAt: string;
   completedAt: string | null;
+  lastPursuitAt?: string | null;
 }
 
 export interface OmegaState {
@@ -2766,6 +2767,14 @@ export function removeOmegaGoal(goalId: string, source: string = "api"): boolean
   }).catch(() => {});
 
   return true;
+}
+
+/** Mark a goal's lastPursuitAt timestamp in the live omega state (persisted on next persistOmegaState). */
+export function touchOmegaGoalPursuit(goalId: string): void {
+  const goal = omegaState.goals.find(g => g.id === goalId);
+  if (goal) {
+    goal.lastPursuitAt = new Date().toISOString();
+  }
 }
 
 export function getOmegaDimensionLabels(): readonly string[] {

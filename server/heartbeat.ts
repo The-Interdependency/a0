@@ -1,7 +1,7 @@
 import { storage } from "./storage";
 import { logMaster, logTranscript, logEdcm, logOmega, logPsi } from "./logger";
 import OpenAI from "openai";
-import { computeEdcmMetrics, updateSemanticMemory, omegaSolve, applyCrossTensorCoupling, applyMemoryBridge, persistOmegaState, getOmegaState, psiSolve, applyPsiOmegaCoupling, persistPsiState, ptcaSolveDetailed } from "./a0p-engine";
+import { computeEdcmMetrics, updateSemanticMemory, omegaSolve, applyCrossTensorCoupling, applyMemoryBridge, persistOmegaState, getOmegaState, psiSolve, applyPsiOmegaCoupling, persistPsiState, ptcaSolveDetailed, touchOmegaGoalPursuit } from "./a0p-engine";
 import { getUncachableGitHubClient } from "./github";
 import { createHash } from "crypto";
 import type { HeartbeatTask } from "@shared/schema";
@@ -13,8 +13,6 @@ let tickInterval: ReturnType<typeof setInterval> | null = null;
 let tickIntervalMs = DEFAULT_TICK_INTERVAL_MS;
 let running = false;
 
-// Track last Ω goal pursuit time to throttle (max once per tick interval per goal)
-const goalLastPursuitAt = new Map<string, number>();
 
 const DEFAULT_TASKS: Array<{
   name: string;
@@ -1311,15 +1309,17 @@ async function tick(): Promise<void> {
       } catch {}
     }
 
-    // ---- Ω Goal Pursuit: pursue one active goal per tick (throttled) ----
+    // ---- Ω Goal Pursuit: pursue all active goals per tick (each throttled by persisted lastPursuitAt) ----
     try {
       const activeGoals = (omega.goals || []).filter((g: any) => g.status === "active");
       const now = Date.now();
       for (const goal of activeGoals) {
         const goalKey = String(goal.id ?? goal.description ?? Math.random());
-        const lastPursuit = goalLastPursuitAt.get(goalKey) || 0;
-        if (now - lastPursuit < tickIntervalMs) continue; // throttle: once per tick interval
-        goalLastPursuitAt.set(goalKey, now);
+        // Throttle: skip if this goal was pursued within the last tick interval (persisted state survives restarts)
+        const lastPursuitTs = (goal as any).lastPursuitAt ? new Date((goal as any).lastPursuitAt).getTime() : 0;
+        if (now - lastPursuitTs < tickIntervalMs) continue;
+        // Stamp the goal now (persisted to storage on next persistOmegaState call at end of tick)
+        touchOmegaGoalPursuit(goal.id);
         // Run goal pursuit as a synthetic heartbeat task
         const syntheticTask: HeartbeatTask = {
           id: -1,
@@ -1368,19 +1368,19 @@ async function tick(): Promise<void> {
     try {
       const allToggles = await storage.getSystemToggles();
       const scheduledTaskToggles = allToggles.filter(
-        (t: any) => typeof t?.key === "string" && t.key.startsWith("agent_scheduled_tasks_")
+        (t: any) => typeof t?.subsystem === "string" && t.subsystem.startsWith("agent_scheduled_tasks_")
       );
       const nowMs = Date.now();
       for (const toggle of scheduledTaskToggles) {
-        if (!toggle?.key) continue;
-        const userId = toggle.key.replace("agent_scheduled_tasks_", "");
+        if (!toggle?.subsystem) continue;
+        const userId = toggle.subsystem.replace("agent_scheduled_tasks_", "");
         const tasks: any[] = (toggle.parameters as any)?.tasks || [];
         for (const task of tasks) {
           if (!task || task.status !== "pending") continue;
           if (!task.nextRun || new Date(task.nextRun).getTime() > nowMs) continue;
           // Mark as running
           task.status = "running";
-          await storage.upsertSystemToggle(toggle.key, true, { tasks });
+          await storage.upsertSystemToggle(toggle.subsystem, true, { tasks });
           let taskResult = "";
           let success = true;
           try {
@@ -1404,7 +1404,7 @@ async function tick(): Promise<void> {
               createdAt: task.createdAt,
             });
           }
-          await storage.upsertSystemToggle(toggle.key, true, { tasks });
+          await storage.upsertSystemToggle(toggle.subsystem, true, { tasks });
           await logMaster("heartbeat", "scheduled_task_executed", {
             userId,
             taskId: task.id,
