@@ -13,6 +13,9 @@ let tickInterval: ReturnType<typeof setInterval> | null = null;
 let tickIntervalMs = DEFAULT_TICK_INTERVAL_MS;
 let running = false;
 
+// Track last Ω goal pursuit time to throttle (max once per tick interval per goal)
+const goalLastPursuitAt = new Map<string, number>();
+
 const DEFAULT_TASKS: Array<{
   name: string;
   description: string;
@@ -1112,11 +1115,36 @@ async function executeXMonitor(_task: HeartbeatTask): Promise<{ result: string; 
 }
 
 async function executeCustomTask(task: HeartbeatTask): Promise<{ result: string; relevance: number; data: any }> {
-  return {
-    result: `Custom task "${task.name}" executed (no handler configured).`,
-    relevance: 0.1,
-    data: { taskName: task.name, status: "no_handler" },
-  };
+  try {
+    // Handler code is stored as "handler:<code>" in lastResult at task creation time
+    const lastResultVal = task.lastResult || "";
+    const handlerCode = lastResultVal.startsWith("handler:") ? lastResultVal.slice(8) : (task.description || "");
+    if (!handlerCode || handlerCode.trim().length < 5) {
+      return { result: `Custom task "${task.name}": no handler code configured.`, relevance: 0.1, data: { taskName: task.name, status: "no_handler" } };
+    }
+    const taskArgs = {
+      taskName: task.name,
+      description: task.description,
+      now: new Date().toISOString(),
+      runCount: task.runCount,
+    };
+    const fn = new Function("args", `"use strict";\n${handlerCode}`);
+    const rawResult = await Promise.resolve(fn(taskArgs));
+    const resultStr = typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult ?? null);
+    await logMaster("heartbeat", "custom_task_executed", { taskName: task.name, resultLength: resultStr.length });
+    return {
+      result: resultStr.slice(0, 1000),
+      relevance: 0.5,
+      data: { taskName: task.name, status: "executed", resultLength: resultStr.length },
+    };
+  } catch (err: any) {
+    await logMaster("heartbeat", "custom_task_error", { taskName: task.name, error: err.message }).catch(() => {});
+    return {
+      result: `Custom task "${task.name}" error: ${err.message}`,
+      relevance: 0,
+      data: { taskName: task.name, status: "error", error: err.message },
+    };
+  }
 }
 
 async function tick(): Promise<void> {
@@ -1155,6 +1183,121 @@ async function tick(): Promise<void> {
         await updateSemanticMemory(learningNote.slice(0, 450), 10);
         await logOmega("learning_entry", { seedIndex: 10, summary: learningNote.slice(0, 100), a7Energy: omega.dimensionEnergies[6] });
       } catch {}
+    }
+
+    // ---- Ω Goal Pursuit: pursue one active goal per tick (throttled) ----
+    try {
+      const activeGoals = (omega.goals || []).filter((g: any) => g.status === "active");
+      const now = Date.now();
+      for (const goal of activeGoals) {
+        const goalKey = String(goal.id ?? goal.description ?? Math.random());
+        const lastPursuit = goalLastPursuitAt.get(goalKey) || 0;
+        if (now - lastPursuit < tickIntervalMs) continue; // throttle: once per tick interval
+        goalLastPursuitAt.set(goalKey, now);
+        // Run goal pursuit as a synthetic heartbeat task
+        const syntheticTask: HeartbeatTask = {
+          id: -1,
+          name: `omega_goal_${goalKey}`,
+          description: goal.description || "active omega goal",
+          taskType: "goal_pursuit",
+          enabled: true,
+          weight: 1,
+          intervalSeconds: 0,
+          lastRun: null,
+          lastResult: null,
+          runCount: 0,
+          scheduledAt: null,
+          oneShot: false,
+          createdAt: new Date(),
+        };
+        try {
+          const { result, relevance } = await executeGoalPursuit(syntheticTask);
+          await logOmega("goal_pursuit_tick", {
+            goalId: goal.id,
+            goalKey,
+            relevance,
+            resultPreview: result.slice(0, 200),
+          });
+          if (relevance > 0.7) {
+            await storage.createDiscoveryDraft({
+              sourceTask: `omega_goal_${goalKey}`,
+              title: `Ω Goal Progress: ${(goal.description || "").slice(0, 60)}`,
+              summary: result.slice(0, 500),
+              relevanceScore: relevance,
+              sourceData: { goalId: goal.id, goalDesc: goal.description },
+              promotedToConversation: false,
+              conversationId: null,
+            }).catch(() => {});
+          }
+        } catch (goalErr: any) {
+          await logMaster("heartbeat", "omega_goal_tick_error", { goalKey, error: goalErr.message }).catch(() => {});
+        }
+        break; // pursue at most one goal per tick
+      }
+    } catch (omegaGoalErr: any) {
+      await logMaster("heartbeat", "omega_goals_scan_error", { error: omegaGoalErr.message }).catch(() => {});
+    }
+
+    // ---- Agent Scheduled Tasks: pick up and execute pending user-scheduled tasks ----
+    try {
+      const allToggles = await storage.getSystemToggles();
+      const scheduledTaskToggles = allToggles.filter((t: any) => t.key.startsWith("agent_scheduled_tasks_"));
+      const nowMs = Date.now();
+      for (const toggle of scheduledTaskToggles) {
+        const userId = toggle.key.replace("agent_scheduled_tasks_", "");
+        const tasks: any[] = (toggle.parameters as any)?.tasks || [];
+        for (const task of tasks) {
+          if (task.status !== "pending") continue;
+          if (!task.nextRun || new Date(task.nextRun).getTime() > nowMs) continue;
+          // Fire this task
+          task.status = "running";
+          await storage.upsertSystemToggle(toggle.key, true, { tasks });
+          let taskResult = "";
+          let success = true;
+          try {
+            const apiKey = process.env.XAI_API_KEY || "";
+            if (!apiKey) throw new Error("No XAI_API_KEY");
+            const xaiClient = new OpenAI({ apiKey, baseURL: "https://api.x.ai/v1" });
+            const resp = await xaiClient.chat.completions.create({
+              model: "grok-3-mini",
+              messages: [
+                { role: "system", content: "You are a0, an autonomous AI agent. Execute the following scheduled task concisely." },
+                { role: "user", content: task.description },
+              ],
+              max_tokens: 1024,
+            } as any);
+            taskResult = resp.choices[0]?.message?.content?.trim() || "(no output)";
+          } catch (taskErr: any) {
+            success = false;
+            taskResult = `Error: ${taskErr.message}`;
+          }
+          task.status = success ? "completed" : "failed";
+          task.lastResult = taskResult.slice(0, 500);
+          task.completedAt = new Date().toISOString();
+          // Re-queue if repeating
+          if (success && task.intervalMinutes) {
+            tasks.push({
+              ...task,
+              id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+              status: "pending",
+              nextRun: new Date(nowMs + task.intervalMinutes * 60000).toISOString(),
+              lastResult: undefined,
+              completedAt: undefined,
+            });
+          }
+          await storage.upsertSystemToggle(toggle.key, true, { tasks });
+          await logMaster("heartbeat", "scheduled_task_executed", {
+            userId,
+            taskId: task.id,
+            label: task.label,
+            status: task.status,
+            resultPreview: taskResult.slice(0, 100),
+          });
+          break; // execute at most one scheduled task per tick
+        }
+      }
+    } catch (schedErr: any) {
+      await logMaster("heartbeat", "scheduled_tasks_error", { error: schedErr.message }).catch(() => {});
     }
 
     const tasks = await storage.getHeartbeatTasks();
