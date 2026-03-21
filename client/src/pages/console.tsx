@@ -206,7 +206,7 @@ export default function ConsolePage() {
         {activeTab === "reasoning_overview" && <EdcmTab />}
         {activeTab === "psi" && <PsiTab />}
         {activeTab === "reasoning_jury" && <JuryTab />}
-        {activeTab === "reasoning_guardian" && <GuardianTab />}
+        {activeTab === "reasoning_guardian" && <GuardianTab activeTab={activeTab} onNavigate={setActiveTab} />}
         {activeTab === "reasoning_policies" && <PoliciesTab />}
         {activeTab === "memory" && <MemoryTab {...sliderProps} />}
         {activeTab === "logs" && <LogsTab />}
