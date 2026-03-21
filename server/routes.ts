@@ -1033,9 +1033,9 @@ Three private cores think. Phonon transports internally and remains private. Jur
         if (!hasKey) {
           entry.disabled = true;
           entry.reason = "API key not configured";
-        } else if (!cfg.openaiCompat) {
+        } else if (!cfg.openaiCompat && provider !== "anthropic" && provider !== "cohere") {
           entry.disabled = true;
-          entry.reason = "Native adapter coming soon (stubbed)";
+          entry.reason = "Native adapter not yet implemented";
         }
         models.push(entry);
       }
@@ -1678,9 +1678,24 @@ INSTRUCTIONS:
       const { provider, modelId, modelCfg, apiKey: byoKey, providerCfg } = validated;
 
       if (!providerCfg!.openaiCompat) {
+        if (provider === "anthropic") {
+          const startTime = Date.now();
+          try {
+            const result = await callAnthropic({ messages, systemPrompt: sysPrompt, model: modelId!, maxTokens: maxTokens || modelCfg!.maxOutput, temperature, apiKey: byoKey! });
+            await trackCost(userId === "default" ? null : userId, modelId!, result.promptTokens, result.completionTokens);
+            return res.json({ role: "assistant", content: result.content, model: `anthropic/${modelId}`, tokens: { prompt: result.promptTokens, completion: result.completionTokens, total: result.promptTokens + result.completionTokens }, latencyMs: Date.now() - startTime });
+          } catch (e: any) { return res.status(500).json({ error: e.message }); }
+        }
+        if (provider === "cohere") {
+          const startTime = Date.now();
+          try {
+            const result = await callCohere({ messages, systemPrompt: sysPrompt, model: modelId!, maxTokens: maxTokens || modelCfg!.maxOutput, temperature, apiKey: byoKey! });
+            await trackCost(userId === "default" ? null : userId, modelId!, result.promptTokens, result.completionTokens);
+            return res.json({ role: "assistant", content: result.content, model: `cohere/${modelId}`, tokens: { prompt: result.promptTokens, completion: result.completionTokens, total: result.promptTokens + result.completionTokens }, latencyMs: Date.now() - startTime });
+          } catch (e: any) { return res.status(500).json({ error: e.message }); }
+        }
         return res.status(400).json({
           error: `${provider} requires a native SDK adapter (not OpenAI-compatible). Use built-in Gemini/Grok, or an OpenAI-compatible provider (OpenAI, Mistral, Perplexity).`,
-          hint: `${provider} integration is stubbed — full native adapter coming soon.`,
         });
       }
 
@@ -1856,6 +1871,19 @@ INSTRUCTIONS:
         const { provider, modelId, modelCfg, apiKey: byoKey, providerCfg } = validated;
 
         if (!providerCfg!.openaiCompat) {
+          if (provider === "anthropic" || provider === "cohere") {
+            try {
+              const result = provider === "anthropic"
+                ? await callAnthropic({ messages, systemPrompt: sysPrompt, model: modelId!, maxTokens: maxTokens || modelCfg!.maxOutput, temperature, apiKey: byoKey! })
+                : await callCohere({ messages, systemPrompt: sysPrompt, model: modelId!, maxTokens: maxTokens || modelCfg!.maxOutput, temperature, apiKey: byoKey! });
+              await trackCost(userId === "default" ? null : userId, modelId!, result.promptTokens, result.completionTokens);
+              res.write(`data: ${JSON.stringify({ content: result.content, done: false })}\n\n`);
+              res.write(`data: ${JSON.stringify({ done: true, tokens: { prompt: result.promptTokens, completion: result.completionTokens } })}\n\n`);
+            } catch (e: any) {
+              res.write(`data: ${JSON.stringify({ error: e.message, done: true })}\n\n`);
+            }
+            return res.end();
+          }
           res.write(`data: ${JSON.stringify({ error: `${provider} requires a native SDK adapter (not OpenAI-compatible). Use OpenAI, Mistral, or Perplexity.`, done: true })}\n\n`);
           return res.end();
         }
