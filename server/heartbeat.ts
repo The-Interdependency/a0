@@ -1114,6 +1114,132 @@ async function executeXMonitor(_task: HeartbeatTask): Promise<{ result: string; 
   };
 }
 
+/**
+ * Run a scheduled agent task as a 10-round mini agent loop with tool access.
+ * Uses the same AGENT_TOOLS concept but via direct Grok calls with tool_choice.
+ */
+async function runScheduledTaskMiniLoop(description: string): Promise<string> {
+  const apiKey = process.env.XAI_API_KEY || "";
+  if (!apiKey) throw new Error("No XAI_API_KEY configured");
+
+  const xaiClient = new OpenAI({ apiKey, baseURL: "https://api.x.ai/v1" });
+
+  // Build a subset of safe, read-only tools available to scheduled tasks
+  const scheduledTools: any[] = [
+    {
+      type: "function",
+      function: {
+        name: "web_search",
+        description: "Search the web for information using DuckDuckGo",
+        parameters: {
+          type: "object",
+          properties: { query: { type: "string", description: "Search query" } },
+          required: ["query"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "write_memory",
+        description: "Write a note to semantic memory for future recall",
+        parameters: {
+          type: "object",
+          properties: {
+            content: { type: "string", description: "Content to remember" },
+            seedIndex: { type: "number", description: "Memory seed index (0-11)" },
+          },
+          required: ["content"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "done",
+        description: "Signal task completion and return the final result",
+        parameters: {
+          type: "object",
+          properties: { result: { type: "string", description: "Final task result or summary" } },
+          required: ["result"],
+        },
+      },
+    },
+  ];
+
+  type MiniMsg = { role: "system" | "user" | "assistant" | "tool"; content: string; tool_call_id?: string; tool_calls?: any[] };
+  const messages: MiniMsg[] = [
+    { role: "system", content: "You are a0, an autonomous AI agent running a scheduled task. Complete the task using available tools. Call `done` when finished." },
+    { role: "user", content: description },
+  ];
+
+  let finalResult = "";
+  const MAX_ROUNDS = 10;
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const resp = await xaiClient.chat.completions.create({
+      model: "grok-3-mini",
+      messages,
+      tools: scheduledTools,
+      tool_choice: "auto" as const,
+      max_tokens: 2048,
+    } as any);
+
+    const choice = resp.choices[0];
+    if (!choice) break;
+
+    const assistantMsg = choice.message;
+    const toolCalls = assistantMsg.tool_calls || [];
+    const textContent = assistantMsg.content || "";
+
+    if (textContent) finalResult += textContent;
+
+    if (toolCalls.length === 0) break;
+
+    messages.push({ role: "assistant", content: textContent, tool_calls: toolCalls });
+
+    let done = false;
+    for (const tc of toolCalls) {
+      const name = tc.function.name;
+      let args: any = {};
+      try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
+
+      let toolResult = "";
+      if (name === "done") {
+        finalResult = args.result || textContent || finalResult;
+        done = true;
+        toolResult = "Task marked complete.";
+      } else if (name === "web_search") {
+        try {
+          const r = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(args.query || "")}`, {
+            headers: { "User-Agent": "Mozilla/5.0" },
+            signal: AbortSignal.timeout(10000),
+          });
+          const html = await r.text();
+          const titles = [...html.matchAll(/class="result__title"[^>]*>(.*?)<\/a>/gs)].slice(0, 5).map(m => m[1].replace(/<[^>]+>/g, "").trim());
+          toolResult = titles.join("\n") || "No results";
+        } catch (e: any) {
+          toolResult = `Search error: ${e.message}`;
+        }
+      } else if (name === "write_memory") {
+        try {
+          await updateSemanticMemory(args.content, args.seedIndex ?? 10);
+          toolResult = "Stored to memory.";
+        } catch (e: any) {
+          toolResult = `Memory error: ${e.message}`;
+        }
+      } else {
+        toolResult = `Unknown tool: ${name}`;
+      }
+      messages.push({ role: "tool", content: toolResult, tool_call_id: tc.id });
+      if (done) break;
+    }
+    if (done) break;
+  }
+
+  return finalResult || "(task completed with no output)";
+}
+
 async function executeCustomTask(task: HeartbeatTask): Promise<{ result: string; relevance: number; data: any }> {
   try {
     // Handler code is stored as "handler:<code>" in lastResult at task creation time
@@ -1232,7 +1358,7 @@ async function tick(): Promise<void> {
         } catch (goalErr: any) {
           await logMaster("heartbeat", "omega_goal_tick_error", { goalKey, error: goalErr.message }).catch(() => {});
         }
-        break; // pursue at most one goal per tick
+        // No break — continue to process all active goals this tick (each throttled individually)
       }
     } catch (omegaGoalErr: any) {
       await logMaster("heartbeat", "omega_goals_scan_error", { error: omegaGoalErr.message }).catch(() => {});
@@ -1241,32 +1367,24 @@ async function tick(): Promise<void> {
     // ---- Agent Scheduled Tasks: pick up and execute pending user-scheduled tasks ----
     try {
       const allToggles = await storage.getSystemToggles();
-      const scheduledTaskToggles = allToggles.filter((t: any) => t.key.startsWith("agent_scheduled_tasks_"));
+      const scheduledTaskToggles = allToggles.filter(
+        (t: any) => typeof t?.key === "string" && t.key.startsWith("agent_scheduled_tasks_")
+      );
       const nowMs = Date.now();
       for (const toggle of scheduledTaskToggles) {
+        if (!toggle?.key) continue;
         const userId = toggle.key.replace("agent_scheduled_tasks_", "");
         const tasks: any[] = (toggle.parameters as any)?.tasks || [];
         for (const task of tasks) {
-          if (task.status !== "pending") continue;
+          if (!task || task.status !== "pending") continue;
           if (!task.nextRun || new Date(task.nextRun).getTime() > nowMs) continue;
-          // Fire this task
+          // Mark as running
           task.status = "running";
           await storage.upsertSystemToggle(toggle.key, true, { tasks });
           let taskResult = "";
           let success = true;
           try {
-            const apiKey = process.env.XAI_API_KEY || "";
-            if (!apiKey) throw new Error("No XAI_API_KEY");
-            const xaiClient = new OpenAI({ apiKey, baseURL: "https://api.x.ai/v1" });
-            const resp = await xaiClient.chat.completions.create({
-              model: "grok-3-mini",
-              messages: [
-                { role: "system", content: "You are a0, an autonomous AI agent. Execute the following scheduled task concisely." },
-                { role: "user", content: task.description },
-              ],
-              max_tokens: 1024,
-            } as any);
-            taskResult = resp.choices[0]?.message?.content?.trim() || "(no output)";
+            taskResult = await runScheduledTaskMiniLoop(task.description);
           } catch (taskErr: any) {
             success = false;
             taskResult = `Error: ${taskErr.message}`;
@@ -1277,12 +1395,13 @@ async function tick(): Promise<void> {
           // Re-queue if repeating
           if (success && task.intervalMinutes) {
             tasks.push({
-              ...task,
               id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+              label: task.label,
+              description: task.description,
+              intervalMinutes: task.intervalMinutes,
               status: "pending",
               nextRun: new Date(nowMs + task.intervalMinutes * 60000).toISOString(),
-              lastResult: undefined,
-              completedAt: undefined,
+              createdAt: task.createdAt,
             });
           }
           await storage.upsertSystemToggle(toggle.key, true, { tasks });
@@ -1293,7 +1412,7 @@ async function tick(): Promise<void> {
             status: task.status,
             resultPreview: taskResult.slice(0, 100),
           });
-          break; // execute at most one scheduled task per tick
+          break; // execute at most one scheduled task per toggle-key per tick
         }
       }
     } catch (schedErr: any) {
