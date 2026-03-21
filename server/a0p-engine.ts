@@ -3212,6 +3212,12 @@ export function getPsiDimensionThresholds(): number[] {
   return [...PSI_DIMENSION_THRESHOLDS];
 }
 
+export function setPsiDimensionThreshold(dimension: number, threshold: number): { ok: boolean; thresholds: number[] } {
+  if (dimension < 0 || dimension >= PSI_DIMENSION_THRESHOLDS.length) return { ok: false, thresholds: [...PSI_DIMENSION_THRESHOLDS] };
+  PSI_DIMENSION_THRESHOLDS[dimension] = Math.max(0, Math.min(1, threshold));
+  return { ok: true, thresholds: [...PSI_DIMENSION_THRESHOLDS] };
+}
+
 export const PSI_CONFIG = {
   dimensions: PSI_DIM_COUNT,
   labels: PSI_DIMENSION_LABELS,

@@ -21,7 +21,6 @@ import {
   BrainTab,
   S17Tab,
   PsiTab,
-  OmegaTab,
   HeartbeatTab,
   SystemTab,
   LogsTab,
@@ -29,9 +28,23 @@ import {
   CredentialsTab,
   ContextTab,
   ApiModelTab,
-  HubTab,
   ExportTab,
-  TasksTab,
+  StatusTab,
+  AlertsTab,
+  ControlTab,
+  SentinelsTab,
+  JuryTab,
+  GuardianTab,
+  PoliciesTab,
+  HygieneTab,
+  BuiltinTab,
+  PermissionsTab,
+  AimmhTab,
+  AuditTab,
+  IngestTab,
+  FindingsTab,
+  DraftsTab,
+  ResearchTab,
 } from "@/components/tabs";
 
 const allTabFiles = import.meta.glob("../components/tabs/*Tab.tsx");
@@ -61,7 +74,7 @@ export default function ConsolePage() {
     return [...merged, ...pureNewGroups];
   }, [agentTabGroups]);
 
-  const defaultTab = mergedGroups[0]?.tabs[0]?.id ?? "workflow";
+  const defaultTab = mergedGroups[0]?.tabs[0]?.id ?? "rt_status";
 
   const [activeTab, setActiveTab] = useState<string>(() => {
     const saved = localStorage.getItem("a0p-console-tab") ?? "";
@@ -72,15 +85,15 @@ export default function ConsolePage() {
   const [activeGroup, setActiveGroup] = useState<string>(() => {
     const saved = localStorage.getItem("a0p-console-tab") ?? "";
     const owning = mergedGroups.find(g => g.tabs.some(t => t.id === saved));
-    return owning?.id ?? mergedGroups[0]?.id ?? "agent";
+    return owning?.id ?? mergedGroups[0]?.id ?? "runtime";
   });
 
   useEffect(() => {
     const stillVisible = mergedGroups.some(g => g.tabs.some(t => t.id === activeTab));
     if (!stillVisible) {
-      const first = mergedGroups[0]?.tabs[0]?.id ?? "workflow";
+      const first = mergedGroups[0]?.tabs[0]?.id ?? "rt_status";
       setActiveTab(first);
-      setActiveGroup(mergedGroups[0]?.id ?? "agent");
+      setActiveGroup(mergedGroups[0]?.id ?? "runtime");
     }
   }, [mergedGroups]);
 
@@ -185,24 +198,36 @@ export default function ConsolePage() {
       </div>
 
       <div className="flex-1 overflow-hidden min-w-0">
-        {activeTab === "bandit" && <BanditTab {...sliderProps} />}
-        {activeTab === "metrics" && <MetricsTab {...sliderProps} />}
-        {activeTab === "edcm" && <EdcmTab />}
-        {activeTab === "memory" && <MemoryTab {...sliderProps} />}
-        {activeTab === "brain" && <BrainTab {...sliderProps} />}
-        {activeTab === "system" && <SystemTab />}
+        {activeTab === "rt_status" && <StatusTab />}
         {activeTab === "heartbeat" && <HeartbeatTab {...sliderProps} />}
-        {activeTab === "tools" && <CustomToolsTab />}
-        {activeTab === "credentials" && <CredentialsTab />}
-        {activeTab === "export" && <ExportTab />}
+        {activeTab === "rt_sentinels" && <SentinelsTab />}
+        {activeTab === "rt_alerts" && <AlertsTab />}
+        {activeTab === "rt_control" && <ControlTab />}
+        {activeTab === "reasoning_overview" && <EdcmTab />}
+        {activeTab === "psi" && <PsiTab />}
+        {activeTab === "reasoning_jury" && <JuryTab />}
+        {activeTab === "reasoning_guardian" && <GuardianTab />}
+        {activeTab === "reasoning_policies" && <PoliciesTab />}
+        {activeTab === "memory" && <MemoryTab {...sliderProps} />}
         {activeTab === "logs" && <LogsTab />}
         {activeTab === "context" && <ContextTab />}
+        {activeTab === "memory_hygiene" && <HygieneTab />}
+        {activeTab === "export" && <ExportTab />}
+        {activeTab === "tools_builtin" && <BuiltinTab />}
+        {activeTab === "tools" && <CustomToolsTab />}
+        {activeTab === "credentials" && <CredentialsTab />}
+        {activeTab === "tools_permissions" && <PermissionsTab />}
+        {activeTab === "metrics" && <MetricsTab {...sliderProps} />}
+        {activeTab === "system" && <SystemTab />}
         {activeTab === "api" && <ApiModelTab />}
-        {activeTab === "hub" && <HubTab />}
-        {activeTab === "omega" && <OmegaTab {...sliderProps} />}
-        {activeTab === "psi" && <PsiTab />}
-        {activeTab === "s17" && <S17Tab />}
-        {activeTab === "tasks" && <TasksTab />}
+        {activeTab === "hub" && <AimmhTab />}
+        {activeTab === "sys_logs" && <LogsTab />}
+        {activeTab === "sys_audit" && <AuditTab />}
+        {activeTab === "bandit" && <BanditTab {...sliderProps} />}
+        {activeTab === "research_ingest" && <IngestTab />}
+        {activeTab === "research_runs" && <ResearchTab />}
+        {activeTab === "research_findings" && <FindingsTab />}
+        {activeTab === "research_drafts" && <DraftsTab />}
         {!STATIC_TAB_IDS.has(activeTab) && DynComp && (
           <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}>
             <DynComp />

@@ -107,6 +107,7 @@ export interface IStorage {
   getSystemToggles(): Promise<SystemToggle[]>;
   getSystemToggle(subsystem: string): Promise<SystemToggle | undefined>;
   upsertSystemToggle(subsystem: string, enabled: boolean, parameters?: any): Promise<SystemToggle>;
+  deleteSystemToggle(subsystem: string): Promise<void>;
 
   getDiscoveryDrafts(limit?: number): Promise<DiscoveryDraft[]>;
   createDiscoveryDraft(data: InsertDiscoveryDraft): Promise<DiscoveryDraft>;
@@ -508,6 +509,10 @@ export class DatabaseStorage implements IStorage {
     }
     const [toggle] = await db.insert(systemToggles).values({ subsystem, enabled, parameters, updatedAt: new Date() }).returning();
     return toggle;
+  }
+
+  async deleteSystemToggle(subsystem: string) {
+    await db.delete(systemToggles).where(eq(systemToggles.subsystem, subsystem));
   }
 
   async getDiscoveryDrafts(limit = 50) {

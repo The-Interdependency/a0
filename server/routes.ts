@@ -37,7 +37,7 @@ import {
   getOmegaDimensionLabels, getOmegaDimensionThresholds, OMEGA_CONFIG,
   type OmegaAutonomyMode,
   initPsi, psiSolve, getPsiState, setPsiMode, boostPsiDimension, setPsiDimensionBias,
-  persistPsiState, getPsiDimensionLabels, getPsiDimensionThresholds, PSI_CONFIG, applyPsiOmegaCoupling,
+  persistPsiState, getPsiDimensionLabels, getPsiDimensionThresholds, setPsiDimensionThreshold, PSI_CONFIG, applyPsiOmegaCoupling,
   type PsiSelfModelMode, type PsiState,
   type A0Request,
   type MemoryAttribution,
@@ -182,6 +182,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ]);
       if (!conv) return res.status(404).json({ error: "Not found" });
       res.json({ ...conv, messages: msgs });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.delete("/conversations", async (_req, res) => {
+    try {
+      const all = await storage.getConversations();
+      for (const c of all) await storage.deleteConversation(c.id);
+      res.json({ ok: true, deleted: all.length });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -625,13 +635,18 @@ Three private cores think. Phonon transports internally and remains private. Jur
     try {
       const toggle = await storage.getSystemToggle("agent_behavior");
       const params = (toggle?.parameters as any) || {};
-      res.json({ maxToolRounds: params.maxToolRounds ?? 25, pursueToCompletion: params.pursueToCompletion ?? false });
+      const hbToggle = await storage.getSystemToggle("heartbeat_enabled");
+      res.json({
+        maxToolRounds: params.maxToolRounds ?? 25,
+        pursueToCompletion: params.pursueToCompletion ?? false,
+        heartbeatEnabled: hbToggle?.enabled !== false,
+      });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
   router.patch("/agent/behavior", async (req, res) => {
     try {
-      const { maxToolRounds, pursueToCompletion } = req.body;
+      const { maxToolRounds, pursueToCompletion, heartbeatEnabled } = req.body;
       const toggle = await storage.getSystemToggle("agent_behavior");
       const params = (toggle?.parameters as any) || {};
       if (maxToolRounds !== undefined) {
@@ -640,7 +655,16 @@ Three private cores think. Phonon transports internally and remains private. Jur
       }
       if (pursueToCompletion !== undefined) params.pursueToCompletion = Boolean(pursueToCompletion);
       await storage.upsertSystemToggle("agent_behavior", true, params);
-      res.json({ ok: true, maxToolRounds: params.maxToolRounds ?? 25, pursueToCompletion: params.pursueToCompletion ?? false });
+      if (heartbeatEnabled !== undefined) {
+        await storage.upsertSystemToggle("heartbeat_enabled", Boolean(heartbeatEnabled), {});
+      }
+      const hbToggle = await storage.getSystemToggle("heartbeat_enabled");
+      res.json({
+        ok: true,
+        maxToolRounds: params.maxToolRounds ?? 25,
+        pursueToCompletion: params.pursueToCompletion ?? false,
+        heartbeatEnabled: hbToggle?.enabled !== false,
+      });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
@@ -1875,6 +1899,11 @@ INSTRUCTIONS:
       parameters: { type: "object" as const, properties: { path: { type: "string" as const, description: "File path" }, content: { type: "string" as const, description: "File content" } }, required: ["path", "content"] },
     },
     {
+      name: "write_draft",
+      description: "Save a research draft or synthesis finding to the Research > Drafts panel for later review or promotion. Use to record hypotheses, synthesis outputs, findings, or exploratory notes.",
+      parameters: { type: "object" as const, properties: { title: { type: "string" as const, description: "Draft title" }, summary: { type: "string" as const, description: "Draft content / synthesis summary" }, sourceTask: { type: "string" as const, description: "Task or query that produced this draft (default: 'agent_research')" }, relevanceScore: { type: "number" as const, description: "Estimated relevance 0–1 (default: 0.5)" } }, required: ["title", "summary"] },
+    },
+    {
       name: "list_files",
       description: "List files and directories at a path",
       parameters: { type: "object" as const, properties: { path: { type: "string" as const, description: "Directory path, defaults to ." } }, required: [] as string[] },
@@ -2283,6 +2312,31 @@ INSTRUCTIONS:
         case "write_file": {
           await writeFile(safePath(args.path), args.content, "utf-8");
           return `File written: ${args.path} (${args.content.length} bytes)`;
+        }
+        case "write_draft": {
+          const draft = await storage.createDiscoveryDraft({
+            title: String(args.title),
+            summary: String(args.summary),
+            sourceTask: String(args.sourceTask || "agent_research"),
+            relevanceScore: typeof args.relevanceScore === "number" ? Math.max(0, Math.min(1, args.relevanceScore)) : 0.5,
+            sourceData: null,
+            promotedToConversation: false,
+            conversationId: null,
+          });
+          const draftToggle = await storage.getSystemToggle("research_drafts");
+          const existingDrafts: any[] = (draftToggle as any)?.parameters?.drafts || [];
+          await storage.upsertSystemToggle("research_drafts", true, {
+            drafts: [...existingDrafts, {
+              id: `${draft.id}-${Date.now()}`,
+              title: draft.title,
+              content: draft.summary,
+              createdAt: new Date().toISOString(),
+              sourceTask: draft.sourceTask,
+              relevanceScore: draft.relevanceScore,
+            }],
+          });
+          await logMaster("synthesis", "draft_written", { draftId: draft.id, title: draft.title });
+          return `Draft saved: "${draft.title}" (id=${draft.id})`;
         }
         case "list_files": {
           const dir = safePath(args.path || ".");
@@ -5742,6 +5796,38 @@ ${moduleWritingBlock}`;
     }
   });
 
+  // ============ TRANSCRIPTS FETCH URL REST ENDPOINT ============
+
+  router.post("/transcripts/fetch-url", async (req, res) => {
+    try {
+      const { url, sourceSlug } = req.body;
+      if (!url || !sourceSlug) return res.status(400).json({ error: "url and sourceSlug required" });
+      const src = await storage.getTranscriptSource(sourceSlug);
+      if (!src) return res.status(404).json({ error: `Source "${sourceSlug}" not found` });
+      const urlPath = url.split("?")[0].split("/").filter(Boolean).pop() || "transcript";
+      let rawFilename = urlPath.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+      if (!rawFilename.includes(".")) rawFilename += ".json";
+      const safeFilename = rawFilename.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const TRANSCRIPT_SOURCES_DIR_BASE = path.join(process.cwd(), "uploads", "transcripts");
+      const srcDir = path.join(TRANSCRIPT_SOURCES_DIR_BASE, sourceSlug);
+      await mkdir(srcDir, { recursive: true });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
+      const resp = await fetch(url, { signal: controller.signal, headers: { "User-Agent": "a0p-agent/1.0", "Accept": "application/json, text/plain, */*" } });
+      clearTimeout(timer);
+      if (!resp.ok) return res.status(502).json({ error: `HTTP ${resp.status} from ${url}` });
+      const content = await resp.text();
+      if (!content || content.length < 10) return res.status(400).json({ error: "Content too short" });
+      const destPath = path.join(srcDir, safeFilename);
+      await writeFile(destPath, content, "utf-8");
+      const filesNow = (await readdir(srcDir)).length;
+      await storage.updateTranscriptSource(sourceSlug, { fileCount: filesNow });
+      res.json({ ok: true, filename: safeFilename, size: content.length, fileCount: filesNow });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ============ DATA EXPORT ENDPOINTS ============
 
   router.get("/export/transcripts", async (req: Request, res: Response) => {
@@ -6297,6 +6383,19 @@ ${moduleWritingBlock}`;
     }
   });
 
+  router.post("/psi/threshold", async (req, res) => {
+    try {
+      const { dimension, threshold } = req.body;
+      if (typeof dimension !== "number" || typeof threshold !== "number") {
+        return res.status(400).json({ error: "dimension and threshold required" });
+      }
+      const result = setPsiDimensionThreshold(dimension, threshold);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   router.post("/psi/mode", async (req, res) => {
     try {
       const { mode } = req.body;
@@ -6456,6 +6555,165 @@ ${moduleWritingBlock}`;
       const exportLine = `export { ${mod.name}Tab } from "./${mod.name}Tab";\n`;
       await writeFile(AGENT_BARREL, indexContent.replace(exportLine, ""), "utf8");
       res.json({ ok: true, deleted: safeTabId });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ SYSTEM TOGGLES (CRUD for PoliciesTab) ============
+
+  router.get("/system/toggles", async (_req, res) => {
+    try {
+      const toggles = await storage.getSystemToggles();
+      res.json(toggles);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.get("/system/toggle/:name", async (req, res) => {
+    try {
+      const { name } = req.params;
+      const toggle = await storage.getSystemToggle(name);
+      res.json(toggle || null);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.post("/system/toggles", async (req, res) => {
+    try {
+      const { name, enabled, parameters } = req.body;
+      if (!name || typeof name !== "string") return res.status(400).json({ error: "name required" });
+      const existing = await storage.getSystemToggle(name);
+      const newEnabled = typeof enabled === "boolean" ? enabled : (existing?.enabled ?? true);
+      const newParams = parameters !== undefined ? parameters : (existing?.parameters ?? null);
+      const toggle = await storage.upsertSystemToggle(name, newEnabled, newParams);
+      res.json(toggle);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.delete("/system/toggles/:name", async (req, res) => {
+    try {
+      const { name } = req.params;
+      await storage.deleteSystemToggle(name);
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ ALLOWED COMMANDS EXTRA (bulk GET/POST for ControlTab/PermissionsTab) ============
+
+  router.get("/allowed-commands-extra", async (_req, res) => {
+    try {
+      const toggle = await storage.getSystemToggle("allowed_commands_extra");
+      const commands: string[] = (toggle?.parameters as any)?.commands || [];
+      res.json({ commands });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.post("/allowed-commands-extra", async (req, res) => {
+    try {
+      const { commands } = req.body;
+      if (!Array.isArray(commands)) return res.status(400).json({ error: "commands array required" });
+      await storage.upsertSystemToggle("allowed_commands_extra", true, { commands });
+      res.json({ ok: true, commands });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ AUDIT LOG (paginated master log) ============
+
+  router.get("/audit", async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = 50;
+      const domain = req.query.domain as string || "all";
+      const search = (req.query.search as string || "").toLowerCase();
+      const offset = (page - 1) * pageSize;
+      const all = await readLogStream("master", { offset: 0, limit: 5000 });
+      let entries = (all.entries || []).map((l: any, i: number) => ({
+        id: i,
+        domain: l.subsystem || l.stream || "system",
+        stream: l.stream,
+        subsystem: l.subsystem,
+        event: l.event,
+        createdAt: l.timestamp,
+        params: l.data || {},
+      }));
+      if (domain !== "all") {
+        entries = entries.filter((l: any) =>
+          l.stream === domain || l.subsystem === domain ||
+          l.domain === domain || l.domain?.startsWith(domain)
+        );
+      }
+      if (search) entries = entries.filter((l: any) => (l.event || "").toLowerCase().includes(search) || JSON.stringify(l.params).toLowerCase().includes(search));
+      const total = entries.length;
+      const paged = entries.slice(offset, offset + pageSize);
+      res.json({ logs: paged, total, page, pageSize });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ RESEARCH FINDINGS ============
+
+  router.get("/research/findings", async (_req, res) => {
+    try {
+      const all = await readLogStream("master", { offset: 0, limit: 2000 });
+      const logs = (all.entries || []).filter((l: any) =>
+        l.stream === "synthesis" || l.subsystem === "synthesis" ||
+        l.event === "research_finding" || l.event === "finding_stored" ||
+        l.event === "draft_written" || l.event === "parallel_complete" ||
+        l.event === "stream_done" || l.event === "complete_done"
+      );
+      res.json(logs);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ EDCM SNAPSHOTS DELETE ============
+
+  router.delete("/edcm/snapshots", async (_req, res) => {
+    try {
+      const result = await db.execute(sql`DELETE FROM edcm_snapshots`);
+      const deleted = (result as any).rowCount ?? 0;
+      await logMaster("system", "edcm_snapshots_cleared", { count: deleted });
+      res.json({ ok: true, deleted });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ HEARTBEAT LOGS PURGE ============
+
+  router.delete("/heartbeat/logs", async (_req, res) => {
+    try {
+      const masterLogPath = path.resolve("logs", "a0p-master.jsonl");
+      let rawContent = "";
+      try { rawContent = await readFile(masterLogPath, "utf-8"); } catch {}
+      const lines = rawContent.split("\n").filter(Boolean);
+      const kept = lines.filter(line => {
+        try {
+          const entry = JSON.parse(line);
+          const isHeartbeat = entry.stream === "heartbeat" ||
+            (entry.subsystem && (
+              entry.subsystem.includes("heartbeat") ||
+              entry.subsystem === "omega_autonomy" ||
+              entry.subsystem === "psi_selfmodel"
+            ));
+          return !isHeartbeat;
+        } catch { return true; }
+      });
+      await writeFile(masterLogPath, kept.join("\n") + (kept.length ? "\n" : ""), "utf-8");
+      res.json({ ok: true, purged: lines.length - kept.length, remaining: kept.length });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

@@ -1,7 +1,14 @@
-import { Activity, Brain, ChevronDown, ChevronRight, Clock, Cpu, Database, DollarSign, Download, Eye, FileText, Flame, Gauge, GitBranch, Globe, Hash, Layers, Lock, Map, Package, Puzzle, Radio, ScrollText, Search, Settings, Shield, ShoppingBag, Square, Star, Target, Terminal, Triangle, User, Wand2, Wrench, Zap } from "lucide-react";
+import { Activity, AlertTriangle, BarChart2, BookOpen, Brain, ChevronDown, ChevronRight, Clock, Cpu, Database, DollarSign, Download, Edit3, Eye, FileSearch, FileText, Flame, Gauge, GitBranch, Globe, Hash, Layers, Library, Lock, Map, Package, Puzzle, Radio, RefreshCw, ScrollText, Search, Settings, Shield, ShoppingBag, Sliders, Square, Star, Target, Terminal, Triangle, Truck, Upload, User, Wand2, Wrench, Zap } from "lucide-react";
 import type { Persona } from "@/hooks/use-persona";
 
-export type TabId = "workflow" | "bandit" | "metrics" | "edcm" | "memory" | "brain" | "system" | "heartbeat" | "tools" | "credentials" | "export" | "logs" | "context" | "omega" | "psi" | "api" | "s17" | "deals" | "hub" | "tasks";
+export type TabId =
+  | "rt_status" | "heartbeat" | "rt_sentinels" | "rt_alerts" | "rt_control"
+  | "reasoning_overview" | "psi" | "reasoning_jury" | "reasoning_guardian" | "reasoning_policies"
+  | "memory" | "logs" | "context" | "memory_hygiene" | "export"
+  | "tools_builtin" | "tools" | "credentials" | "tools_permissions" | "metrics"
+  | "system" | "api" | "hub" | "sys_logs" | "sys_audit"
+  | "bandit" | "research_ingest" | "research_runs" | "research_findings" | "research_drafts"
+  | "workflow" | "omega" | "edcm" | "brain" | "s17" | "deals" | "tasks";
 
 export type TabGroup = { id: string; label: string; icon: any; tabs: Array<{ id: string; label: string; icon: any }> };
 
@@ -57,37 +64,63 @@ export function buildAgentGroups(modules: AgentModule[]): TabGroup[] {
 
 export const TAB_GROUPS: readonly TabGroup[] = [
   {
-    id: "agent", label: "Cognition", icon: Activity,
+    id: "runtime", label: "Runtime", icon: Activity,
     tabs: [
-      { id: "bandit", label: "ε-Explore", icon: GitBranch },
-      { id: "metrics", label: "Metrics", icon: DollarSign },
-      { id: "api", label: "API", icon: Cpu },
-      { id: "hub", label: "Hub", icon: Radio },
+      { id: "rt_status", label: "Status", icon: Gauge },
+      { id: "heartbeat", label: "Heartbeat", icon: Clock },
+      { id: "rt_sentinels", label: "Sentinels", icon: Shield },
+      { id: "rt_alerts", label: "Alerts", icon: AlertTriangle },
+      { id: "rt_control", label: "Control", icon: Sliders },
     ],
   },
   {
-    id: "memory", label: "Memory", icon: Brain,
+    id: "reasoning", label: "Reasoning", icon: Brain,
     tabs: [
-      { id: "memory", label: "Memory", icon: Brain },
-      { id: "logs", label: "Logs", icon: ScrollText },
+      { id: "reasoning_overview", label: "Overview", icon: Eye },
+      { id: "psi", label: "Triad", icon: Star },
+      { id: "reasoning_jury", label: "Jury", icon: Layers },
+      { id: "reasoning_guardian", label: "Guardian", icon: Shield },
+      { id: "reasoning_policies", label: "Policies", icon: ScrollText },
     ],
   },
   {
-    id: "triad", label: "Triad", icon: Star,
+    id: "memory", label: "Memory", icon: Database,
     tabs: [
-      { id: "psi", label: "Psi Ψ", icon: Eye },
-      { id: "tasks", label: "Tasks", icon: Target },
-      { id: "omega", label: "Omega Ω", icon: Gauge },
-      { id: "heartbeat", label: "Φ Heartbeat", icon: Clock },
+      { id: "memory", label: "Seeds", icon: Brain },
+      { id: "logs", label: "Activity", icon: Activity },
+      { id: "context", label: "Identity", icon: FileText },
+      { id: "memory_hygiene", label: "Hygiene", icon: RefreshCw },
+      { id: "export", label: "Import/Export", icon: Download },
     ],
   },
   {
     id: "tools", label: "Tools", icon: Wrench,
     tabs: [
-      { id: "tools", label: "Tools", icon: Wrench },
-      { id: "credentials", label: "Keys", icon: Lock },
-      { id: "context", label: "Context", icon: FileText },
-      { id: "export", label: "Export", icon: Download },
+      { id: "tools_builtin", label: "Built-in", icon: Package },
+      { id: "tools", label: "Custom", icon: Wrench },
+      { id: "credentials", label: "Auth", icon: Lock },
+      { id: "tools_permissions", label: "Permissions", icon: Settings },
+      { id: "metrics", label: "Budgets", icon: DollarSign },
+    ],
+  },
+  {
+    id: "system", label: "System", icon: Settings,
+    tabs: [
+      { id: "system", label: "Config", icon: Settings },
+      { id: "api", label: "Models", icon: Cpu },
+      { id: "hub", label: "aimmh-lib", icon: Radio },
+      { id: "sys_logs", label: "Logs", icon: ScrollText },
+      { id: "sys_audit", label: "Audit", icon: FileSearch },
+    ],
+  },
+  {
+    id: "research", label: "Research", icon: Search,
+    tabs: [
+      { id: "bandit", label: "Explore", icon: GitBranch },
+      { id: "research_ingest", label: "Ingest", icon: Upload },
+      { id: "research_runs", label: "Runs", icon: Target },
+      { id: "research_findings", label: "Findings", icon: BookOpen },
+      { id: "research_drafts", label: "Drafts", icon: Edit3 },
     ],
   },
 ] as const;
@@ -95,19 +128,22 @@ export const TAB_GROUPS: readonly TabGroup[] = [
 export const ALL_GROUPS: TabGroup[] = [...TAB_GROUPS];
 
 export const STATIC_TAB_IDS = new Set<string>([
-  "bandit", "metrics", "api", "hub",
-  "memory", "edcm", "brain", "s17", "logs",
-  "psi", "omega", "heartbeat", "tasks",
-  "system",
-  "tools", "credentials", "context", "export",
+  "rt_status", "heartbeat", "rt_sentinels", "rt_alerts", "rt_control",
+  "reasoning_overview", "psi", "reasoning_jury", "reasoning_guardian", "reasoning_policies",
+  "memory", "logs", "context", "memory_hygiene", "export",
+  "tools_builtin", "tools", "credentials", "tools_permissions", "metrics",
+  "system", "api", "hub", "sys_logs", "sys_audit",
+  "bandit", "research_ingest", "research_runs", "research_findings", "research_drafts",
 ]);
 
 export const TAB_TO_GROUP: Record<TabId, string> = {
-  workflow: "agent", bandit: "agent", metrics: "agent", deals: "agent", api: "agent", hub: "agent",
-  memory: "memory", edcm: "memory", brain: "memory", s17: "memory", logs: "memory",
-  psi: "triad", omega: "triad", heartbeat: "triad", tasks: "triad",
-  system: "tools",
-  tools: "tools", credentials: "tools", context: "tools", export: "tools",
+  rt_status: "runtime", heartbeat: "runtime", rt_sentinels: "runtime", rt_alerts: "runtime", rt_control: "runtime",
+  reasoning_overview: "reasoning", psi: "reasoning", reasoning_jury: "reasoning", reasoning_guardian: "reasoning", reasoning_policies: "reasoning",
+  memory: "memory", logs: "memory", context: "memory", memory_hygiene: "memory", export: "memory",
+  tools_builtin: "tools", tools: "tools", credentials: "tools", tools_permissions: "tools", metrics: "tools",
+  system: "system", api: "system", hub: "system", sys_logs: "system", sys_audit: "system",
+  bandit: "research", research_ingest: "research", research_runs: "research", research_findings: "research", research_drafts: "research",
+  workflow: "runtime", omega: "reasoning", edcm: "reasoning", brain: "memory", s17: "runtime", deals: "tools", tasks: "runtime",
 };
 
 export type MetricLabelMap = Record<string, { label: string; desc: string }>;
