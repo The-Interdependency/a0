@@ -1,0 +1,16 @@
+[project]
+name = "repl-nix-workspace"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "aiofiles>=25.1.0",
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.135.1",
+    "psycopg2-binary>=2.9.11",
+    "pydantic>=2.12.5",
+    "python-multipart>=0.0.22",
+    "sqlalchemy>=2.0.48",
+    "uvicorn[standard]>=0.42.0",
+]

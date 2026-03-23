@@ -18,7 +18,21 @@ a0p is a mobile-first autonomous AI agent application leveraging multi-model AI 
 - I want to be able to download/export all data (transcripts, conversations, credentials list, system config).
 
 ## System Architecture
-The application is built with a React + Vite + TypeScript frontend, an Express.js + TypeScript backend, and a PostgreSQL database managed by Drizzle ORM. Authentication is handled via Replit Auth (OpenID Connect). Payments are integrated with Stripe (sandbox) using managed webhooks.
+The application is built with a React + Vite + TypeScript frontend and a PostgreSQL database. Two backend services run concurrently:
+- **Python/FastAPI backend** on port 8000 (primary, actively being built) — `python/` directory
+- **Node.js/Express backend** on port 5000 (legacy, kept for reference during Python migration)
+
+The Vite dev server proxies all `/api` and `/api/v1` requests to the Python backend (port 8000). Both services start via `scripts/start-dev.sh` through the "Start application" workflow.
+
+**Python Backend (`python/`):**
+- `python/main.py` — FastAPI app with CORS, health endpoint (`GET /api/health`), static file serving
+- `python/database.py` — Async SQLAlchemy engine (asyncpg driver) connecting to PostgreSQL
+- `python/models.py` — SQLAlchemy ORM models for all tables (mirrors `shared/schema.ts` exactly)
+- `python/storage.py` — Full CRUD storage layer matching Node.js `server/storage.ts` interface
+- `python/logger.py` — JSONL append logger matching Node.js `server/logger.ts` streams
+
+**Node.js Backend (legacy, `server/`):**
+Built with Express.js + TypeScript, managed by Drizzle ORM. Authentication handled via Replit Auth (OpenID Connect). Payments integrated with Stripe (sandbox) using managed webhooks.
 
 **Modular Architecture (completed refactor):**
 - `client/src/lib/console-config.ts` — shared types: TabId, TabGroup, SliderOrientationProps, TAB_GROUPS, ALL_GROUPS, TAB_TO_GROUP, PERSONA_VISIBLE_TABS, PERSONA_METRIC_LABELS, DEFAULT_METRIC_LABELS, slotColor()
