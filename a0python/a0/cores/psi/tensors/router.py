@@ -14,17 +14,32 @@ LOG_DIR = Path(__file__).resolve().parent.parent.parent.parent / "logs"
 
 
 def _select_adapter(req: A0Request):
-    """Select the best available adapter.
+    """Select adapter based on A0_MODEL env tensor.
 
-    Prefers ClaudeAgentAdapter (full PTCA subagent pipeline).
-    Falls back to LocalEchoAdapter if SDK is unavailable.
+    Priority:
+        anthropic-api  → AnthropicAdapter (direct Anthropic Messages API)
+        claude-agent   → ClaudeAgentAdapter (full PTCA subagent pipeline)
+        local-echo     → LocalEchoAdapter (no network, always works)
+
+    Falls back to LocalEchoAdapter if the requested adapter is unavailable.
     """
-    try:
-        from .adapters.claude_agent_adapter import ClaudeAgentAdapter, _SDK_AVAILABLE
-        if _SDK_AVAILABLE and req.mode in ("analyze", "act", "route"):
-            return ClaudeAgentAdapter(mode=req.mode)
-    except ImportError:
-        pass
+    from .env import A0_MODEL
+
+    if A0_MODEL == "anthropic-api":
+        try:
+            from .adapters.anthropic_adapter import AnthropicAdapter
+            return AnthropicAdapter()
+        except (ImportError, Exception):
+            pass
+
+    if A0_MODEL == "claude-agent":
+        try:
+            from .adapters.claude_agent_adapter import ClaudeAgentAdapter, _SDK_AVAILABLE
+            if _SDK_AVAILABLE and req.mode in ("analyze", "act", "route"):
+                return ClaudeAgentAdapter(mode=req.mode)
+        except ImportError:
+            pass
+
     return LocalEchoAdapter()
 
 

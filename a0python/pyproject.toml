@@ -11,9 +11,15 @@ requires-python = ">=3.10"
 dependencies = [
     "anyio>=4.0",
     "textual>=0.50",
+    "gradio>=4.7",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
+anthropic = [
+    "anthropic>=0.25",
+]
 agent = [
     "claude-agent-sdk",
 ]
@@ -23,6 +29,7 @@ dev = [
 
 [project.scripts]
 a0 = "a0.a0:main"
+a0-web = "a0.guardian.ui.web.app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["a0"]
