@@ -634,7 +634,7 @@ Three private cores think. Phonon transports internally and remains private. Jur
       } else if (provider === "perplexity") {
         baseURL = "https://api.perplexity.ai";
       } else if (provider === "ollama") {
-        baseURL = "http://localhost:11434/v1";
+        baseURL = "http://0.0.0.0:11434/v1";
       } else {
         baseURL = "https://api.x.ai/v1";
       }
@@ -4664,7 +4664,7 @@ ${moduleWritingBlock}`;
         { id: "command-r-08-2024", name: "Command R", contextWindow: 128000, maxOutput: 4096 },
         { id: "command-a-03-2025", name: "Command A", contextWindow: 256000, maxOutput: 8192 },
       ]},
-      { name: "ollama", label: "Ollama (local)", baseURL: "http://localhost:11434/v1", authHeader: "Bearer ollama", requestFormat: "openai-chat", streamingFormat: "openai-sse", nativeIntegration: true, notes: "Local inference via embedded Ollama server. No API key required. Manage models in Guardian tab.", models: [] },
+      { name: "ollama", label: "Ollama (local)", baseURL: "http://0.0.0.0:11434/v1", authHeader: "Bearer ollama", requestFormat: "openai-chat", streamingFormat: "openai-sse", nativeIntegration: true, notes: "Local inference via embedded Ollama server. No API key required. Manage models in Guardian tab.", models: [] },
     ],
   };
 
@@ -4699,7 +4699,7 @@ ${moduleWritingBlock}`;
 
   async function ollamaApiReachable(): Promise<boolean> {
     try {
-      const r = await fetch("http://localhost:11434/api/tags", { signal: AbortSignal.timeout(2000) });
+      const r = await fetch("http://0.0.0.0:11434/api/tags", { signal: AbortSignal.timeout(2000) });
       return r.ok;
     } catch { return false; }
   }
@@ -4709,7 +4709,7 @@ ${moduleWritingBlock}`;
       const reachable = await ollamaApiReachable();
       let models: string[] = [];
       if (reachable) {
-        const r = await fetch("http://localhost:11434/api/tags");
+        const r = await fetch("http://0.0.0.0:11434/api/tags");
         const data = await r.json() as any;
         models = (data.models || []).map((m: any) => m.name);
       }
@@ -4771,7 +4771,7 @@ ${moduleWritingBlock}`;
       if (!model) return res.status(400).json({ error: "model required" });
       res.setHeader("Content-Type", "text/plain");
       res.setHeader("Transfer-Encoding", "chunked");
-      const pullProc = spawn("/usr/local/bin/ollama", ["pull", model], { env: { ...process.env, HOME: "/root" } });
+      const pullProc = spawn("/usr/local/bin/ollama", ["pull", model], { env: { ...process.env, HOME: "/root", OLLAMA_HOST: "0.0.0.0:11434" } });
       pullProc.stdout?.on("data", d => res.write(d));
       pullProc.stderr?.on("data", d => res.write(d));
       pullProc.on("exit", code => {
@@ -4786,7 +4786,7 @@ ${moduleWritingBlock}`;
 
   router.get("/ollama/models", async (_req, res) => {
     try {
-      const r = await fetch("http://localhost:11434/api/tags", { signal: AbortSignal.timeout(3000) });
+      const r = await fetch("http://0.0.0.0:11434/api/tags", { signal: AbortSignal.timeout(3000) });
       const data = await r.json() as any;
       res.json(data.models || []);
     } catch (e: any) {
@@ -4797,7 +4797,7 @@ ${moduleWritingBlock}`;
   router.delete("/ollama/models/:name", async (req, res) => {
     try {
       const name = decodeURIComponent(req.params.name);
-      await fetch("http://localhost:11434/api/delete", {
+      await fetch("http://0.0.0.0:11434/api/delete", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),

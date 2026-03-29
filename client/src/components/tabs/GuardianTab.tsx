@@ -528,7 +528,7 @@ function OllamaPanel() {
   const assignMutation = useMutation({
     mutationFn: ({ slotKey, model }: { slotKey: string; model: string }) =>
       apiRequest("PATCH", `/api/agent/slots/${slotKey}`, {
-        provider: "ollama", model, baseUrl: "http://localhost:11434/v1", label: slotKey.toUpperCase(),
+        provider: "ollama", model, baseUrl: "http://0.0.0.0:11434/v1", label: slotKey.toUpperCase(),
       }),
     onSuccess: (_, { slotKey, model }) => toast({ title: `Slot ${slotKey.toUpperCase()} → ${model}` }),
     onError: (e: any) => toast({ title: "Assign failed", description: e.message, variant: "destructive" }),
