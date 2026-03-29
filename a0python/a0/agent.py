@@ -14,6 +14,7 @@ See a0/cores/psi/tensors/env.py for configuration.
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 from typing import List, Optional
 
 from a0.cores.psi.tensors.contract import A0Request, A0Response, Mode
@@ -25,7 +26,22 @@ class AgentZero:
 
     Adapter (model) is selected at call time from the env tensor,
     so changing A0_MODEL in settings takes effect immediately.
+
+    Args:
+        home:        Optional path to an isolated instance directory.
+                     Logs and state are written there instead of the
+                     package defaults. Used by lifecycle operations.
+        instance_id: Optional stable identity for this instance.
+                     Assigned automatically if not provided.
     """
+
+    def __init__(
+        self,
+        home: Optional[Path] = None,
+        instance_id: Optional[str] = None,
+    ) -> None:
+        self.home = home
+        self.instance_id = instance_id or str(uuid.uuid4())
 
     def run(
         self,
@@ -43,7 +59,7 @@ class AgentZero:
             hmmm=hmmm or [],
             history=history or [],
         )
-        return handle(req)
+        return handle(req, home=self.home)
 
     async def run_async(
         self,
@@ -56,5 +72,5 @@ class AgentZero:
         """Non-blocking variant for async contexts (Gradio, Textual)."""
         import anyio
         return await anyio.to_thread.run_sync(
-            lambda: self.run(text, mode=mode, tools=tools, hmmm=hmmm, history=history)
+            lambda: self.run(text, mode=mode, tools=tools, hmmm=hmmm, history=history),
         )

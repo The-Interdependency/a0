@@ -8,9 +8,11 @@ from .tools.edcm_tool import run_edcm
 from .tools.pdf_tool import run_pdf_extract
 from .tools.whisper_tool import run_whisper_segments
 
+from typing import Optional
+
 from a0.state import load_state, save_state
 
-LOG_DIR = Path(__file__).resolve().parent.parent.parent.parent / "logs"
+_DEFAULT_LOG_DIR = Path(__file__).resolve().parent.parent.parent.parent / "logs"
 
 
 def _select_adapter(req: A0Request):
@@ -64,13 +66,14 @@ def _select_adapter(req: A0Request):
     return LocalEchoAdapter()
 
 
-def handle(req: A0Request) -> A0Response:
-    state = load_state()
+def handle(req: A0Request, home: Optional[Path] = None) -> A0Response:
+    log_dir = (home / "logs") if home else _DEFAULT_LOG_DIR
+    state = load_state(home)
     adapter = _select_adapter(req)
     state["last_model"] = adapter.name
-    save_state(state)
+    save_state(state, home)
 
-    log_event(LOG_DIR, req.task_id, {
+    log_event(log_dir, req.task_id, {
         "type": "request",
         "mode": req.mode,
         "tools_allowed": req.tools_allowed,
@@ -82,17 +85,17 @@ def handle(req: A0Request) -> A0Response:
 
     if "pdf_extract" in req.tools_allowed and files:
         out = run_pdf_extract(files)
-        log_event(LOG_DIR, req.task_id, {"type": "tool", "name": "pdf_extract", "hmmm": []})
+        log_event(log_dir, req.task_id, {"type": "tool", "name": "pdf_extract", "hmmm": []})
         return A0Response(task_id=req.task_id, result={"text": "", "artifacts": [out]}, hmmm=req.hmmm)
 
     if "whisper" in req.tools_allowed and files:
         out = run_whisper_segments(files)
-        log_event(LOG_DIR, req.task_id, {"type": "tool", "name": "whisper", "hmmm": []})
+        log_event(log_dir, req.task_id, {"type": "tool", "name": "whisper", "hmmm": []})
         return A0Response(task_id=req.task_id, result={"text": "", "artifacts": [out]}, hmmm=req.hmmm)
 
     if "edcm" in req.tools_allowed:
         out = run_edcm(text)
-        log_event(LOG_DIR, req.task_id, {"type": "tool", "name": "edcm", "hmmm": []})
+        log_event(log_dir, req.task_id, {"type": "tool", "name": "edcm", "hmmm": []})
         return A0Response(task_id=req.task_id, result={"text": "", "artifacts": [out]}, hmmm=req.hmmm)
 
     messages = list(req.history) + [{"role": "user", "content": text}]
@@ -101,7 +104,7 @@ def handle(req: A0Request) -> A0Response:
         mode=req.mode,
         hmmm=req.hmmm,
     )
-    log_event(LOG_DIR, req.task_id, {
+    log_event(log_dir, req.task_id, {
         "type": "model",
         "name": adapter.name,
         "subagents_used": resp.get("subagents_used", []),
