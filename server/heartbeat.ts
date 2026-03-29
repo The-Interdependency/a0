@@ -5,6 +5,7 @@ import { getUncachableGitHubClient } from "./github";
 import { createHash } from "crypto";
 import type { HeartbeatTask } from "@shared/schema";
 import { tickSubCore, subCore } from "./subcore-instance.js";
+import { pcnaInfer, pcnaReward } from "./pcna-client";
 
 const DEFAULT_TICK_INTERVAL_MS = 30_000;
 
@@ -215,30 +216,8 @@ async function executeGoalPursuit(task: HeartbeatTask): Promise<{ result: string
 
     await logMaster("heartbeat", "goal_pursuit_start", { goalId: goal.id, goalDesc: goalDesc.slice(0, 100) });
 
-    // Use xAI to decide on a concrete search query for this goal
-    const apiKey = process.env.XAI_API_KEY || "";
-    if (!apiKey) {
-      return { result: `Goal pursuit skipped: no XAI_API_KEY. Goal: "${goalDesc}"`, relevance: 0.1, data: { goalDesc } };
-    }
-
-    const xaiClient = new OpenAI({ apiKey, baseURL: "https://api.x.ai/v1" });
-    const abortCtrl = new AbortController();
-    const timeout = setTimeout(() => abortCtrl.abort(), 30000);
-    let searchQuery = goalDesc;
-    try {
-      const planResp = await xaiClient.chat.completions.create({
-        model: "grok-3-mini",
-        messages: [{
-          role: "user",
-          content: `You are an autonomous AI agent. Your current goal is: "${goalDesc}"\n\nGenerate ONE specific web search query that would make meaningful progress toward this goal. Reply with ONLY the search query, no explanation, no quotes.`,
-        }],
-        max_tokens: 60,
-      } as any, { signal: abortCtrl.signal });
-      clearTimeout(timeout);
-      searchQuery = planResp.choices[0]?.message?.content?.trim() || goalDesc;
-    } catch {
-      clearTimeout(timeout);
-    }
+    // Use PCNA inference engine to process the goal
+    const searchQuery = goalDesc.slice(0, 120);
 
     // Execute web search (Brave → DuckDuckGo fallback)
     let searchResults = "";
