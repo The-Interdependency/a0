@@ -386,3 +386,5 @@
 {"timestamp":"2026-03-24T18:18:17.792Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"6f2fe4e67c48","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-24T18:28:36.317Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"f69d5d21cd22","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-24T20:20:39.560Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"b6c6b32a0da9","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
+{"timestamp":"2026-03-29T00:27:47.818Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"242ae257bc0b","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
+{"timestamp":"2026-03-29T00:52:48.012Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"5d57ef6534a7","conversationsScanned":10,"totalMessages":88,"highEdcmCount":0,"findingsCount":0}}
