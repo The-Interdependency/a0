@@ -47,6 +47,20 @@ def _select_adapter(req: A0Request):
         except (ImportError, NotImplementedError):
             pass  # placeholder not yet configured — fall through to local-echo
 
+    if A0_MODEL == "local-ollama":
+        try:
+            from .adapters.local_model_adapter import OllamaAdapter
+            return OllamaAdapter()
+        except ImportError:
+            pass
+
+    if A0_MODEL == "local-llama":
+        try:
+            from .adapters.local_model_adapter import LlamaCppAdapter
+            return LlamaCppAdapter()
+        except ImportError:
+            pass
+
     return LocalEchoAdapter()
 
 
@@ -81,8 +95,9 @@ def handle(req: A0Request) -> A0Response:
         log_event(LOG_DIR, req.task_id, {"type": "tool", "name": "edcm", "hmmm": []})
         return A0Response(task_id=req.task_id, result={"text": "", "artifacts": [out]}, hmmm=req.hmmm)
 
+    messages = list(req.history) + [{"role": "user", "content": text}]
     resp = adapter.complete(
-        [{"role": "user", "content": text}],
+        messages,
         mode=req.mode,
         hmmm=req.hmmm,
     )

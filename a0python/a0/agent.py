@@ -33,6 +33,7 @@ class AgentZero:
         mode: Mode = "analyze",
         tools: Optional[List[str]] = None,
         hmmm: Optional[List[str]] = None,
+        history: Optional[List[dict]] = None,
     ) -> A0Response:
         req = A0Request(
             task_id=str(uuid.uuid4()),
@@ -40,6 +41,7 @@ class AgentZero:
             tools_allowed=tools or ["none"],
             mode=mode,
             hmmm=hmmm or [],
+            history=history or [],
         )
         return handle(req)
 
@@ -49,9 +51,10 @@ class AgentZero:
         mode: Mode = "analyze",
         tools: Optional[List[str]] = None,
         hmmm: Optional[List[str]] = None,
+        history: Optional[List[dict]] = None,
     ) -> A0Response:
         """Non-blocking variant for async contexts (Gradio, Textual)."""
         import anyio
         return await anyio.to_thread.run_sync(
-            lambda: self.run(text, mode=mode, tools=tools, hmmm=hmmm)
+            lambda: self.run(text, mode=mode, tools=tools, hmmm=hmmm, history=history)
         )

@@ -96,9 +96,21 @@ class ResourceLegalitySentinel:
         return SentinelResult(self.name, SentinelVerdict.PASS)
 
 
+class HmmmPresenceSentinel:
+    name = "hmmm_presence"
+
+    def check(self, event: Dict[str, Any]) -> SentinelResult:
+        from a0.invariants import require_hmmm, InvalidStateError
+        try:
+            require_hmmm(event)
+            return SentinelResult(self.name, SentinelVerdict.PASS)
+        except (InvalidStateError, Exception) as exc:
+            return SentinelResult(self.name, SentinelVerdict.FAIL, str(exc))
+
+
 @dataclass
 class SentinelSuite:
-    """The complete Guardian sentinel suite."""
+    """The complete Guardian sentinel suite — 12 sentinels."""
     _sentinels: List[Any] = field(default_factory=lambda: [
         StructuralLegalitySentinel(),
         ExecutableLegalitySentinel(),
@@ -111,6 +123,7 @@ class SentinelSuite:
         ConflictVisibilitySentinel(),
         DriftDetectionSentinel(),
         ResourceLegalitySentinel(),
+        HmmmPresenceSentinel(),
     ])
 
     def preflight(self, event: Dict[str, Any]) -> List[SentinelResult]:

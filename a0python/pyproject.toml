@@ -23,6 +23,13 @@ anthropic = [
 agent = [
     "claude-agent-sdk",
 ]
+local-llama = [
+    "llama-cpp-python>=0.2",
+]
+tools = [
+    "pypdf>=4.0",
+    "openai-whisper",
+]
 dev = [
     "pytest>=7.0",
 ]

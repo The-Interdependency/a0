@@ -11,6 +11,7 @@ class A0Request:
     tools_allowed: List[str] = field(default_factory=lambda: ["none"])
     mode: Mode = "analyze"
     hmmm: List[str] = field(default_factory=list)
+    history: List[Dict[str, str]] = field(default_factory=list)
 
 @dataclass
 class A0Response:

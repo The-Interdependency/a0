@@ -80,12 +80,12 @@ def _chat_respond(message: str, history: list) -> tuple[str, list]:
     if not message.strip():
         return "", history
 
-    resp = _agent.run(message.strip())
+    history = list(history or [])
+    resp = _agent.run(message.strip(), history=history)
     text = resp.result.get("text", "")
     if resp.hmmm:
         text += f"\n\n*hmmm: {resp.hmmm}*"
 
-    history = list(history or [])
     history.append({"role": "user", "content": message.strip()})
     history.append({"role": "assistant", "content": text})
     return "", history
@@ -174,10 +174,11 @@ def _build_settings_tab() -> None:
         gr.Markdown("### model adapter")
         with gr.Group(elem_classes="settings-group"):
             model_dd = gr.Dropdown(
-                choices=["local-echo", "anthropic-api", "claude-agent"],
+                choices=["local-echo", "local-ollama", "local-llama",
+                         "anthropic-api", "claude-agent"],
                 label="A0_MODEL",
                 value=_env.A0_MODEL,
-                info="local-echo: no API key needed. anthropic-api: direct Anthropic API.",
+                info="local-ollama: ollama daemon. local-llama: embedded llama-cpp. anthropic-api: Anthropic API.",
             )
             api_key_box = gr.Textbox(
                 label="ANTHROPIC_API_KEY",
