@@ -4,6 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
+packages = ["libxcrypt", "postgresql"]
 
 [[ports]]
 localPort = 5000
@@ -12,6 +13,10 @@ externalPort = 80
 [[ports]]
 localPort = 5904
 externalPort = 3000
+
+[[ports]]
+localPort = 8001
+externalPort = 3002
 
 [env]
 PORT = "5000"

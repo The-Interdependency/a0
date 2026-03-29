@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Shield, Code2, ExternalLink, Save, RotateCcw, Download, Play, Square, Trash2 } from "lucide-react";
+import { Shield, Code2, ExternalLink, Save, RotateCcw, Download, Play, Square, Trash2, Cpu, GitMerge, Zap } from "lucide-react";
 import { TAB_GROUPS } from "@/lib/console-config";
 
 interface Props {
@@ -470,8 +470,209 @@ export function GuardianTab({ activeTab, onNavigate }: Props) {
         <p className="text-xs text-muted-foreground">Current: <span className="font-medium capitalize">{omegaMode}</span></p>
       </div>
 
+      {/* ── PCNA Six-Ring Engine ── */}
+      <PCNAPanel />
+
       {/* ── Ollama Embedded Server ── */}
       <OllamaPanel />
+    </div>
+  );
+}
+
+// ── PCNA Ring definitions ────────────────────────────────────────────────────
+const PCNA_RINGS = [
+  { id: "phi",      label: "Φ",  n: 53, color: "#6366f1", desc: "Slot-A substrate" },
+  { id: "psi",      label: "Ψ",  n: 53, color: "#a855f7", desc: "Self-model" },
+  { id: "omega",    label: "Ω",  n: 53, color: "#22c55e", desc: "Autonomy" },
+  { id: "guardian", label: "G",  n: 29, color: "#f59e0b", desc: "Microkernel" },
+  { id: "memory_l", label: "ML", n: 19, color: "#06b6d4", desc: "Long-term" },
+  { id: "memory_s", label: "MS", n: 17, color: "#f97316", desc: "Short-term" },
+];
+
+function PrimeRingMini({ label, n, color, coherence, active }: {
+  label: string; n: number; color: string; coherence: number; active: boolean;
+}) {
+  const R = 28, cx = 36, cy = 36;
+  const nodes = Array.from({ length: Math.min(n, 29) }, (_, i) => {
+    const angle = (i / Math.min(n, 29)) * 2 * Math.PI - Math.PI / 2;
+    return { x: cx + R * Math.cos(angle), y: cy + R * Math.sin(angle) };
+  });
+  const fillOpacity = 0.25 + coherence * 0.55;
+
+  return (
+    <svg viewBox="0 0 72 72" width="72" height="72" className="overflow-visible">
+      <defs>
+        <radialGradient id={`mini-${label}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={color} stopOpacity={fillOpacity} />
+          <stop offset="100%" stopColor={color} stopOpacity="0.04" />
+        </radialGradient>
+      </defs>
+      <circle cx={cx} cy={cy} r={R} fill={`url(#mini-${label})`} stroke={color} strokeOpacity="0.25" strokeWidth="0.8" />
+      {nodes.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={1.4} fill={color} fillOpacity={0.4 + coherence * 0.5} />
+      ))}
+      <circle cx={cx} cy={cy} r={10} fill={color} fillOpacity={0.12} stroke={color} strokeOpacity="0.4" strokeWidth="0.8" />
+      <text x={cx} y={cy - 2} textAnchor="middle" fill={color} fontSize="9" fontFamily="monospace" fontWeight="bold">{label}</text>
+      <text x={cx} y={cy + 8} textAnchor="middle" fill={color} fontSize="6" fontFamily="monospace">{coherence.toFixed(2)}</text>
+      {active && <circle cx={cx} cy={cy} r={R + 3} fill="none" stroke={color} strokeOpacity="0.5" strokeWidth="1.2" strokeDasharray="3 2" />}
+    </svg>
+  );
+}
+
+function PCNAPanel() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [inferText, setInferText] = useState("");
+  const [lastResult, setLastResult] = useState<any>(null);
+
+  const { data: pcnaState, isLoading } = useQuery<any>({
+    queryKey: ["/api/pcna/state"],
+    refetchInterval: 6000,
+  });
+
+  const { data: instances } = useQuery<any>({
+    queryKey: ["/api/pcna/instances"],
+    refetchInterval: 10000,
+  });
+
+  const inferMut = useMutation({
+    mutationFn: (text: string) => apiRequest("POST", "/api/pcna/infer", { text }),
+    onSuccess: (data: any) => {
+      setLastResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/pcna/state"] });
+      toast({ title: `PCNA infer → ${data?.winner ?? "?"}`, description: `coherence ${data?.coherence_score?.toFixed(3) ?? "?"}` });
+    },
+    onError: (e: any) => toast({ title: "Infer failed", description: e.message, variant: "destructive" }),
+  });
+
+  const rewardMut = useMutation({
+    mutationFn: ({ winner, outcome }: { winner: string; outcome: number }) =>
+      apiRequest("POST", "/api/pcna/reward", { winner, outcome }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pcna/state"] });
+      toast({ title: "Reward applied", description: data?.memory_flush ? "Memory-S flushed → L" : "Rings nudged" });
+    },
+    onError: (e: any) => toast({ title: "Reward failed", description: e.message, variant: "destructive" }),
+  });
+
+  const spawnMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/pcna/instances/spawn", {}),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pcna/instances"] });
+      toast({ title: "Instance spawned", description: data?.child_id?.slice(0, 12) + "..." });
+    },
+    onError: (e: any) => toast({ title: "Spawn failed", description: e.message, variant: "destructive" }),
+  });
+
+  const rings = pcnaState?.rings ?? {};
+  const winner = lastResult?.winner ?? pcnaState?.last_winner ?? "phi";
+
+  function ringCoherence(id: string): number {
+    if (id === "phi") return rings.phi?.ring_coherence ?? 0.5;
+    if (id === "guardian") return rings.guardian?.ring_coherence ?? 0.5;
+    if (id === "memory_l") return rings.memory_l?.avg_hub ?? 0.5;
+    if (id === "memory_s") return rings.memory_s?.avg_hub ?? 0.5;
+    return 0.5;
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Cpu className="w-3.5 h-3.5 text-primary" />
+        <h4 className="text-xs font-semibold" data-testid="text-pcna-title">PCNA — Six-Ring Engine</h4>
+        {pcnaState && (
+          <Badge variant="outline" className="ml-auto text-[9px] font-mono">
+            infer×{pcnaState.infer_count} · rew×{pcnaState.reward_count}
+          </Badge>
+        )}
+      </div>
+
+      {/* Six ring mini panels */}
+      {isLoading ? (
+        <div className="flex gap-2 flex-wrap justify-center">
+          {PCNA_RINGS.map(r => <Skeleton key={r.id} className="w-[72px] h-[72px] rounded-full" />)}
+        </div>
+      ) : (
+        <div className="flex gap-2 flex-wrap justify-center" data-testid="pcna-ring-grid">
+          {PCNA_RINGS.map(r => (
+            <div key={r.id} className="flex flex-col items-center gap-0.5">
+              <PrimeRingMini
+                label={r.label}
+                n={r.n}
+                color={r.color}
+                coherence={ringCoherence(r.id)}
+                active={winner === r.id}
+              />
+              <span className="text-[8px] text-muted-foreground font-mono">{r.desc}</span>
+              <span className="text-[8px] font-mono" style={{ color: r.color }}>N={r.n}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Last infer result */}
+      {lastResult && (
+        <div className="rounded border border-border bg-muted/20 p-2 space-y-1" data-testid="pcna-last-result">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge className="text-[9px]" style={{ backgroundColor: PCNA_RINGS.find(r => r.id === lastResult.winner)?.color + "33" }}>
+              winner: {lastResult.winner}
+            </Badge>
+            <span className="text-[9px] font-mono text-muted-foreground">coherence {lastResult.coherence_score?.toFixed(4)}</span>
+            <span className="text-[9px] font-mono text-muted-foreground">conf {lastResult.confidence?.toFixed(3)}</span>
+            <span className="text-[9px] font-mono text-muted-foreground">{lastResult.elapsed_ms}ms</span>
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            {(["phi", "psi", "omega"] as const).map(slot => (
+              <Button key={slot} size="sm" variant="outline" className="h-5 text-[9px] px-1.5"
+                onClick={() => rewardMut.mutate({ winner: slot, outcome: slot === lastResult.winner ? 0.7 : -0.3 })}
+                disabled={rewardMut.isPending}
+                data-testid={`button-reward-${slot}`}>
+                +rew {slot}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Infer input */}
+      <div className="flex gap-1.5">
+        <Input
+          value={inferText}
+          onChange={e => setInferText(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && inferText.trim() && inferMut.mutate(inferText.trim())}
+          placeholder="Run PCNA inference…"
+          className="h-7 text-xs flex-1"
+          data-testid="input-pcna-infer"
+        />
+        <Button size="sm" className="h-7 px-2 gap-1"
+          onClick={() => inferMut.mutate(inferText.trim() || "ping")}
+          disabled={inferMut.isPending}
+          data-testid="button-pcna-infer">
+          <Zap className="w-3 h-3" />
+          {inferMut.isPending ? "…" : "Infer"}
+        </Button>
+      </div>
+
+      {/* Instance mesh */}
+      <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+        <GitMerge className="w-3 h-3 text-muted-foreground" />
+        <span className="text-[10px] text-muted-foreground flex-1">
+          Instances: {instances?.count ?? 1}
+        </span>
+        <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5"
+          onClick={() => spawnMut.mutate()}
+          disabled={spawnMut.isPending}
+          data-testid="button-pcna-spawn">
+          Fork
+        </Button>
+      </div>
+
+      {/* Guardian encryption badge */}
+      {pcnaState?.rings?.guardian?.encryption && (
+        <p className="text-[8px] font-mono text-muted-foreground truncate" data-testid="text-guardian-crypto">
+          🔐 {pcnaState.rings.guardian.encryption.algorithm} · {pcnaState.rings.guardian.encryption.kex}+{pcnaState.rings.guardian.encryption.signing} · key {pcnaState.rings.guardian.encryption.key_id?.slice(0, 10)}…
+        </p>
+      )}
     </div>
   );
 }

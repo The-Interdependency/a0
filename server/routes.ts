@@ -7216,6 +7216,67 @@ ${moduleWritingBlock}`;
     }
   });
 
+  // ============ PCNA PYTHON ENGINE — process manager + proxy ============
+
+  const PYTHON_PORT = 8001;
+  let _pythonProc: ChildProcess | null = null;
+  let _pythonReady = false;
+
+  function startPythonEngine() {
+    if (_pythonProc) return;
+    try {
+      const uvicornBin = process.env.HOME
+        ? `${process.env.HOME}/workspace/.pythonlibs/bin/uvicorn`
+        : "/home/runner/workspace/.pythonlibs/bin/uvicorn";
+      _pythonProc = spawn(
+        uvicornBin, ["python.main:app", `--port=${PYTHON_PORT}`, "--host=0.0.0.0", "--log-level=warning"],
+        { cwd: process.cwd(), detached: false, stdio: ["ignore", "pipe", "pipe"] }
+      );
+      _pythonProc.stdout?.on("data", (d: Buffer) => {
+        const msg = d.toString().trim();
+        if (msg) console.log(`[python-engine] ${msg}`);
+        if (msg.includes("Application startup complete")) _pythonReady = true;
+      });
+      _pythonProc.stderr?.on("data", (d: Buffer) => {
+        const msg = d.toString().trim();
+        if (msg && !msg.includes("INFO")) console.error(`[python-engine] ${msg}`);
+        if (msg.includes("Application startup complete") || msg.includes("started server")) _pythonReady = true;
+      });
+      _pythonProc.on("exit", (code) => {
+        console.log(`[python-engine] exited (${code}), restarting in 3s`);
+        _pythonProc = null;
+        _pythonReady = false;
+        setTimeout(startPythonEngine, 3000);
+      });
+      setTimeout(() => { _pythonReady = true; }, 5000);
+      console.log("[python-engine] spawned uvicorn on port", PYTHON_PORT);
+    } catch (e: any) {
+      console.error("[python-engine] spawn failed:", e.message);
+    }
+  }
+
+  startPythonEngine();
+
+  async function proxyToPython(req: Request, res: Response, subpath: string) {
+    const url = `http://localhost:${PYTHON_PORT}/api/${subpath}`;
+    try {
+      const init: RequestInit = { method: req.method, headers: { "content-type": "application/json" } };
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        init.body = JSON.stringify(req.body);
+      }
+      const r = await fetch(url, init);
+      const data = await r.json();
+      res.status(r.status).json(data);
+    } catch (e: any) {
+      res.status(503).json({ error: "Python engine unavailable", detail: e.message });
+    }
+  }
+
+  router.all(/^\/pcna(.*)$/, async (req: Request, res: Response) => {
+    const sub = "pcna" + (req.params[0] || "");
+    await proxyToPython(req, res, sub);
+  });
+
   // Mount router at both /api and /api/v1 for versioning support
   app.use("/api", router);
   app.use("/api/v1", router);
