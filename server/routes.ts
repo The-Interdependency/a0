@@ -7225,6 +7225,30 @@ ${moduleWritingBlock}`;
 
   // ============ SYSTEM TOGGLES (CRUD for PoliciesTab) ============
 
+  router.get("/system/readme", async (_req, res) => {
+    try {
+      const fs = await import("fs/promises");
+      const path = await import("path");
+      const candidates = ["README.md", "replit.md"].map(f => path.resolve(BASE_DIR, f));
+      let content = "";
+      let filename = "";
+      let updatedAt = new Date().toISOString();
+      for (const candidate of candidates) {
+        try {
+          const stat = await fs.stat(candidate);
+          content = await fs.readFile(candidate, "utf-8");
+          filename = path.basename(candidate);
+          updatedAt = stat.mtime.toISOString();
+          break;
+        } catch {}
+      }
+      if (!content) return res.status(404).json({ error: "No readme file found" });
+      res.json({ content, filename, updatedAt });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   router.get("/system/toggles", async (_req, res) => {
     try {
       const toggles = await storage.getSystemToggles();
