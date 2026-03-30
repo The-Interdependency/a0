@@ -18,6 +18,8 @@ import { getUncachableGmailClient } from "../gmail";
 import { getUncachableGoogleDriveClient } from "../drive";
 import { getUncachableGitHubClient, isPublicFallbackMode } from "../github";
 import { getModelSlots, buildSlotClient } from "./slots";
+import { initAgentSeeds } from "@shared/schema";
+import { pcnaInfer } from "../pcna-client";
 import { VALID_PERSONAS, getPersonaGrants } from "./persona";
 import { getBrainPresets, getActiveBrainPreset } from "./brain";
 import { extractMessagesFromFile } from "./transcripts-lib";
@@ -110,6 +112,8 @@ export const AGENT_TOOLS = [
   { name: "write_module", description: "Write a new React tab component to the live codebase and register it in the Console. The component file is written to client/src/components/tabs/, the barrel index.ts is updated, and the module registry is updated. Requires elevated Ψ gates (Ψ3≥0.6, Ψ4≥0.5, Ψ5≥0.5). Available icons: Activity, Brain, Clock, Cpu, Database, DollarSign, Download, Eye, FileText, Flame, Gauge, GitBranch, Globe, Hash, Layers, Lock, Map, Package, Puzzle, Radio, ScrollText, Search, Settings, Shield, ShoppingBag, Square, Star, Target, Terminal, Triangle, User, Wand2, Wrench, Zap.", parameters: { type: "object" as const, properties: { name: { type: "string" as const, description: "PascalCase component name, e.g. 'Research'" }, tabId: { type: "string" as const, description: "Slug ID for the tab, e.g. 'research' (lowercase, hyphens ok)" }, groupId: { type: "string" as const, description: "Which group to add the tab to: agent, memory, triad, system, tools, or a new custom group name" }, label: { type: "string" as const, description: "Display label shown in the tab bar" }, icon: { type: "string" as const, description: "Lucide icon name from the available set" }, description: { type: "string" as const, description: "Short description of what this module does" }, code: { type: "string" as const, description: "Full TypeScript/TSX source for the tab component. Must export a default or named export matching {name}Tab." } }, required: ["name", "tabId", "groupId", "label", "icon", "code"] } },
   { name: "list_agent_modules", description: "List all agent-written tab modules currently registered in the codebase.", parameters: { type: "object" as const, properties: {}, required: [] as string[] } },
   { name: "delete_agent_module", description: "Remove an agent-written tab module from the codebase and registry. The component file is deleted and the barrel/registry are updated.", parameters: { type: "object" as const, properties: { tabId: { type: "string" as const, description: "The tabId of the module to delete" } }, required: ["tabId"] } },
+  { name: "spawn_agent", description: "Instantiate a named autonomous sub-agent with its own 13-seed private memory (seeds 10-12 are sentinels), directives, scoped tool subset, and a ZFAE-powered observation loop. Returns the new agent instance.", parameters: { type: "object" as const, properties: { name: { type: "string" as const, description: "Unique agent name (lowercase, hyphens ok, e.g. 'researcher-1')" }, slot: { type: "string" as const, description: "Model slot to use: a, b, c, or zfae (default: zfae)" }, directives: { type: "string" as const, description: "System goal and directive text for this agent" }, tools: { type: "array" as const, items: { type: "string" as const }, description: "Subset of tool names this agent can use (empty = no tools)" }, sentinel_seed_indices: { type: "array" as const, items: { type: "number" as const }, description: "Which of the 13 seed indices are sentinel seeds (default [10,11,12])" } }, required: ["name", "directives"] } },
+  { name: "list_agents", description: "List all spawned sub-agent instances with their status, last output, sentinel seed values, and ZFAE observation count.", parameters: { type: "object" as const, properties: {}, required: [] as string[] } },
 ];
 
 export async function executeAgentTool(toolName: string, args: any, userId = "default"): Promise<string> {
@@ -894,6 +898,42 @@ export async function executeAgentTool(toolName: string, args: any, userId = "de
         await writeFile(indexPath, indexContent.replace(exportLine, ""), "utf8");
         await logMaster("agent", "delete_agent_module", { tabId: delTabId, name: mod.name });
         return `Module "${mod.name}Tab" (tabId: ${delTabId}) deleted from codebase and registry.`;
+      }
+      case "spawn_agent": {
+        const agentName = (args.name || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
+        if (!agentName) return "Error: agent name is required";
+        if (!args.directives) return "Error: directives are required";
+        const existing = await storage.getAgentInstance(agentName);
+        if (existing) return `Error: agent "${agentName}" already exists (id: ${existing.id})`;
+        const sentinelSeedIndices: number[] = Array.isArray(args.sentinel_seed_indices) && args.sentinel_seed_indices.length === 3
+          ? args.sentinel_seed_indices
+          : [10, 11, 12];
+        const seeds = initAgentSeeds().map(s => ({
+          ...s,
+          isSentinel: sentinelSeedIndices.includes(s.index),
+        }));
+        const agent = await storage.createAgentInstance({
+          name: agentName,
+          slot: args.slot || "zfae",
+          directives: args.directives,
+          tools: Array.isArray(args.tools) ? args.tools : [],
+          status: "idle",
+          seeds,
+          sentinelSeedIndices,
+          zfaeObservations: [],
+          isPersistent: false,
+        });
+        await logMaster("agent", "spawn_agent", { name: agentName, slot: agent.slot, tools: agent.tools });
+        return JSON.stringify({ id: agent.id, name: agent.name, slot: agent.slot, status: agent.status, seeds: agent.seeds?.length, sentinelSeedIndices });
+      }
+      case "list_agents": {
+        const agents = await storage.getAgentInstances();
+        if (agents.length === 0) return "No agent instances found.";
+        return agents.map(a => {
+          const sentinels = (a.seeds || []).filter((s: any) => a.sentinelSeedIndices?.includes(s.index));
+          const sentinelSummary = sentinels.map((s: any) => `s${s.index}=${s.value?.toFixed(3) ?? "?"}:${s.summary?.slice(0, 30) || "—"}`).join(" | ");
+          return `[${a.id}] ${a.name} (slot:${a.slot}, status:${a.status}, persistent:${a.isPersistent}) observations:${(a.zfaeObservations || []).length} sentinels:[${sentinelSummary}] last:"${(a.lastOutput || "").slice(0, 80)}"`;
+        }).join("\n");
       }
       default:
         return `Unknown tool: ${toolName}`;

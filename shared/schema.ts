@@ -328,6 +328,56 @@ export const insertDiscoveryDraftSchema = createInsertSchema(discoveryDrafts).om
 export type DiscoveryDraft = typeof discoveryDrafts.$inferSelect;
 export type InsertDiscoveryDraft = z.infer<typeof insertDiscoveryDraftSchema>;
 
+// ---- Agent Instances ----
+export type AgentSeed = {
+  index: number;
+  label: string;
+  value: number;
+  summary: string;
+  isSentinel: boolean;
+};
+
+export type ZfaeObservation = {
+  ts: string;
+  coherence: number;
+  winner: string;
+  confidence: number;
+  note: string;
+};
+
+function initAgentSeeds(): AgentSeed[] {
+  return Array.from({ length: 13 }, (_, i) => ({
+    index: i,
+    label: i >= 10 ? `sentinel_${i - 10}` : `seed_${i}`,
+    value: 1.0 / 13,
+    summary: "",
+    isSentinel: i >= 10,
+  }));
+}
+
+export const agentInstances = pgTable("agent_instances", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  slot: text("slot").notNull().default("zfae"),
+  directives: text("directives").notNull().default(""),
+  tools: jsonb("tools").$type<string[]>().default([]),
+  status: text("status").notNull().default("idle"),
+  seeds: jsonb("seeds").$type<AgentSeed[]>().default([]),
+  sentinelSeedIndices: jsonb("sentinel_seed_indices").$type<number[]>().default([10, 11, 12]),
+  zfaeObservations: jsonb("zfae_observations").$type<ZfaeObservation[]>().default([]),
+  lastOutput: text("last_output"),
+  lastTickAt: timestamp("last_tick_at"),
+  isPersistent: boolean("is_persistent").notNull().default(false),
+  banditArmId: integer("bandit_arm_id"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertAgentInstanceSchema = createInsertSchema(agentInstances).omit({ id: true, createdAt: true });
+export type AgentInstance = typeof agentInstances.$inferSelect;
+export type InsertAgentInstance = z.infer<typeof insertAgentInstanceSchema>;
+
+export { initAgentSeeds };
+
 export const transcriptSources = pgTable("transcript_sources", {
   id: serial("id").primaryKey(),
   slug: varchar("slug", { length: 100 }).notNull().unique(),

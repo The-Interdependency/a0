@@ -431,3 +431,4 @@
 {"timestamp":"2026-03-30T17:58:50.846Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"a33bb34a6b37","conversationsScanned":10,"totalMessages":18,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-30T18:09:14.632Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"76b138a95ed8","conversationsScanned":10,"totalMessages":18,"highEdcmCount":0,"findingsCount":0}}
 {"timestamp":"2026-03-30T18:20:15.742Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"ce1eb8695d16","conversationsScanned":10,"totalMessages":18,"highEdcmCount":0,"findingsCount":0}}
+{"timestamp":"2026-03-30T18:30:46.544Z","stream":"edcm","subsystem":"edcm","event":"transcript_search_batch","data":{"transcriptHash":"0e810e9e7c94","conversationsScanned":10,"totalMessages":18,"highEdcmCount":0,"findingsCount":0}}

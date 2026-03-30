@@ -22,6 +22,7 @@ import {
   S17Tab,
   PsiTab,
   HeartbeatTab,
+  AgentsTab,
   SystemTab,
   LogsTab,
   CustomToolsTab,
@@ -201,6 +202,7 @@ export default function ConsolePage() {
       <div className="flex-1 overflow-hidden min-w-0">
         {activeTab === "rt_status" && <StatusTab />}
         {activeTab === "heartbeat" && <HeartbeatTab {...sliderProps} />}
+        {activeTab === "agents" && <AgentsTab />}
         {activeTab === "rt_sentinels" && <SentinelsTab />}
         {activeTab === "rt_alerts" && <AlertsTab />}
         {activeTab === "rt_control" && <ControlTab />}

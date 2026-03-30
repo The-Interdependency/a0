@@ -1,4 +1,5 @@
 export { WorkflowTab } from "./WorkflowTab";
+export { AgentsTab } from "./AgentsTab";
 export { BanditTab } from "./BanditTab";
 export { MetricsTab } from "./MetricsTab";
 export { DealsTab } from "./DealsTab";

@@ -9,7 +9,7 @@ export type TabId =
   | "system" | "api" | "hub" | "sys_logs" | "sys_audit"
   | "bandit" | "research_ingest" | "research_runs" | "research_findings" | "research_drafts"
   | "workflow" | "omega" | "edcm" | "brain" | "s17" | "deals" | "tasks"
-  | "model_flow";
+  | "model_flow" | "agents";
 
 export type TabGroup = { id: string; label: string; icon: any; tabs: Array<{ id: string; label: string; icon: any }> };
 
@@ -69,6 +69,7 @@ export const TAB_GROUPS: readonly TabGroup[] = [
     tabs: [
       { id: "rt_status", label: "Status", icon: Gauge },
       { id: "heartbeat", label: "Heartbeat", icon: Clock },
+      { id: "agents", label: "Agents", icon: Brain },
       { id: "rt_sentinels", label: "Sentinels", icon: Shield },
       { id: "rt_alerts", label: "Alerts", icon: AlertTriangle },
       { id: "rt_control", label: "Control", icon: Sliders },
@@ -136,7 +137,7 @@ export const STATIC_TAB_IDS = new Set<string>([
   "tools_builtin", "tools", "credentials", "tools_permissions", "metrics",
   "system", "api", "hub", "sys_logs", "sys_audit",
   "bandit", "research_ingest", "research_runs", "research_findings", "research_drafts",
-  "model_flow",
+  "model_flow", "agents",
 ]);
 
 export const TAB_TO_GROUP: Record<TabId, string> = {
@@ -147,7 +148,7 @@ export const TAB_TO_GROUP: Record<TabId, string> = {
   system: "system", api: "system", hub: "system", sys_logs: "system", sys_audit: "system",
   bandit: "research", research_ingest: "research", research_runs: "research", research_findings: "research", research_drafts: "research",
   workflow: "runtime", omega: "reasoning", edcm: "reasoning", brain: "memory", s17: "runtime", deals: "tools", tasks: "runtime",
-  model_flow: "system",
+  model_flow: "system", agents: "runtime",
 };
 
 export type MetricLabelMap = Record<string, { label: string; desc: string }>;

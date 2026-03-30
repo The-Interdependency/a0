@@ -54,6 +54,14 @@ const DEFAULT_TASKS: Array<{
     intervalSeconds: 1800,
     enabled: false,
   },
+  {
+    name: "agent_bandit_tick",
+    description: "Select a persistent sub-agent via UCB bandit, run its directives via ZFAE, and store ZFAE observation back into its sentinel seeds",
+    taskType: "agent_bandit_tick",
+    weight: 1.2,
+    intervalSeconds: 600,
+    enabled: true,
+  },
 ];
 
 export async function initializeHeartbeatTasks(): Promise<void> {
@@ -196,6 +204,8 @@ async function executeTask(task: HeartbeatTask): Promise<{ result: string; relev
       return executeGoalPursuit(task);
     case "custom":
       return executeCustomTask(task);
+    case "agent_bandit_tick":
+      return executeAgentBanditTick(task);
     default:
       return { result: `Unknown task type: ${task.taskType}`, relevance: 0, data: {} };
   }
@@ -1229,6 +1239,102 @@ async function executeCustomTask(task: HeartbeatTask): Promise<{ result: string;
       relevance: 0,
       data: { taskName: task.name, status: "error", error: err.message },
     };
+  }
+}
+
+const ZFAE_OBS_MAX = 200;
+
+async function executeAgentBanditTick(_task: HeartbeatTask): Promise<{ result: string; relevance: number; data: any }> {
+  try {
+    const agents = await storage.getAgentInstances();
+    const persistent = agents.filter(a => a.isPersistent);
+    if (persistent.length === 0) {
+      return { result: "agent_bandit_tick: no persistent agents", relevance: 0, data: {} };
+    }
+
+    // UCB bandit selection from agent domain arms
+    const arms = await storage.getBanditArms("agent");
+    let selected = persistent[0];
+    if (arms.length > 0) {
+      const totalPulls = arms.reduce((s, a) => s + a.pulls, 0) + 1;
+      const scored = arms.map(a => {
+        const agent = persistent.find(p => p.name === a.armName);
+        if (!agent) return null;
+        const exploitation = a.avgReward;
+        const exploration = Math.sqrt((2 * Math.log(totalPulls)) / (a.pulls + 1));
+        return { agent, arm: a, ucb: exploitation + exploration };
+      }).filter(Boolean) as { agent: typeof persistent[0]; arm: typeof arms[0]; ucb: number }[];
+      if (scored.length > 0) {
+        scored.sort((a, b) => b.ucb - a.ucb);
+        selected = scored[0].agent;
+      }
+    }
+
+    // Run ZFAE inference on the agent's directives as a proxy tick
+    await storage.updateAgentInstance(selected.id, { status: "running" });
+    let output = "(no output)";
+    let coherence = 0.5;
+    let winner = "unknown";
+    let confidence = 0.5;
+    try {
+      const result = await pcnaInfer(selected.directives.slice(0, 400));
+      coherence = result.coherence_score;
+      winner = result.winner;
+      confidence = result.confidence;
+      output = `ZFAE[${winner}] coherence=${coherence.toFixed(3)} conf=${confidence.toFixed(3)}`;
+      await pcnaReward(winner, coherence);
+    } catch (err: any) {
+      output = `ZFAE inference failed: ${err.message}`;
+    }
+
+    // Write ZFAE observation and update sentinel seeds
+    const obs = {
+      ts: new Date().toISOString(),
+      coherence,
+      winner,
+      confidence,
+      note: `agent:${selected.name} — ${output.slice(0, 120)}`,
+    };
+
+    const prevObs: typeof obs[] = (selected.zfaeObservations as typeof obs[]) || [];
+    const newObs = [...prevObs, obs].slice(-ZFAE_OBS_MAX);
+
+    const seeds = ((selected.seeds || []) as any[]).map((s: any) => {
+      if (s.index === 10) return { ...s, value: coherence, summary: `coherence=${coherence.toFixed(3)} winner=${winner}` };
+      if (s.index === 11) return { ...s, value: confidence, summary: `confidence=${confidence.toFixed(3)}` };
+      if (s.index === 12) return { ...s, value: Math.min(1, prevObs.length / ZFAE_OBS_MAX), summary: `obs_count=${newObs.length}` };
+      return s;
+    });
+
+    await storage.updateAgentInstance(selected.id, {
+      status: "idle",
+      lastOutput: output,
+      lastTickAt: new Date(),
+      zfaeObservations: newObs as any,
+      seeds: seeds as any,
+    });
+
+    // Feed reward to bandit
+    const arm = arms.find(a => a.armName === selected.name);
+    if (arm) {
+      await storage.updateBanditArm(arm.id, {
+        pulls: arm.pulls + 1,
+        totalReward: arm.totalReward + coherence,
+        avgReward: (arm.totalReward + coherence) / (arm.pulls + 1),
+        emaReward: arm.emaReward * 0.9 + coherence * 0.1,
+        lastPulled: new Date(),
+      });
+    }
+
+    await logMaster("heartbeat", "agent_bandit_tick", { agent: selected.name, coherence, winner, obsCount: newObs.length });
+    return {
+      result: `agent_bandit_tick: ${selected.name} — ${output}`,
+      relevance: coherence,
+      data: { agent: selected.name, coherence, winner, confidence, obsCount: newObs.length },
+    };
+  } catch (err: any) {
+    await logMaster("heartbeat", "agent_bandit_tick_error", { error: err.message }).catch(() => {});
+    return { result: `agent_bandit_tick error: ${err.message}`, relevance: 0, data: { error: err.message } };
   }
 }
 

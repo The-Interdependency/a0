@@ -17,6 +17,7 @@ import { GoogleGenAI } from "@google/genai";
 import { callAnthropic } from "./providers/anthropic";
 import { callCohere } from "./providers/cohere";
 import type { InsertConversation, InsertMessage } from "@shared/schema";
+import { initAgentSeeds } from "@shared/schema";
 import {
   processA0Request, verifyHashChain, startHeartbeat, stopHeartbeat,
   emergencyStopEngine, resumeEngine, ENGINE_STATUS,
@@ -4995,12 +4996,73 @@ ${moduleWritingBlock}`;
     }
   }
 
+  // ============ PERSISTENT AGENT INITIALIZATION ============
+
+  async function initializePersistentAgents(): Promise<void> {
+    const BANDIT_TOOLS = ["web_search", "fetch_url", "search_files", "read_file", "get_triad_state", "get_omega_state", "get_psi_state", "list_goals"];
+    const MEMORY_TOOLS = ["get_triad_state", "get_omega_state", "get_psi_state", "list_goals", "search_files", "read_file"];
+    const PCNA_TOOLS = ["get_psi_state", "get_omega_state", "get_triad_state"];
+
+    const PERSISTENT_AGENTS: Array<{ name: string; slot: string; directives: string; tools: string[] }> = [
+      {
+        name: "alfa",
+        slot: "zfae",
+        directives: "You are Alfa, an explorer sub-agent. Your directive is to seek novel information, test unexplored strategies, and report surprising findings. Prioritize breadth over depth. Surface anything unexpected to the main agent's memory.",
+        tools: BANDIT_TOOLS,
+      },
+      {
+        name: "beta",
+        slot: "zfae",
+        directives: "You are Beta, an exploiter sub-agent. Your directive is to deepen known-good patterns, reinforce reliable reasoning chains, and optimize for consistency of output quality. Prioritize depth over breadth.",
+        tools: MEMORY_TOOLS,
+      },
+      {
+        name: "gamma",
+        slot: "zfae",
+        directives: "You are Gamma, an observer sub-agent. Your directive is to watch, synthesize, and report on what Alfa and Beta produce. You look for coherence, contradiction, and drift. You do not act — only observe and note.",
+        tools: PCNA_TOOLS,
+      },
+    ];
+
+    for (const def of PERSISTENT_AGENTS) {
+      const existing = await storage.getAgentInstance(def.name);
+      if (existing) continue;
+
+      const seeds = initAgentSeeds();
+      const agent = await storage.createAgentInstance({
+        name: def.name,
+        slot: def.slot,
+        directives: def.directives,
+        tools: def.tools,
+        status: "idle",
+        seeds,
+        sentinelSeedIndices: [10, 11, 12],
+        zfaeObservations: [],
+        isPersistent: true,
+      });
+
+      const arm = await storage.upsertBanditArm({
+        domain: "agent",
+        armName: def.name,
+        enabled: true,
+      });
+
+      await storage.updateAgentInstance(agent.id, { banditArmId: arm.id });
+    }
+  }
+
   // ============ BANDIT INITIALIZATION ============
 
   initializeBanditArms().then(() => {
     console.log("[a0p:bandit] Bandit arms initialized");
   }).catch((err) => {
     console.error("[a0p:bandit] Failed to initialize bandit arms:", err);
+  });
+
+  initializePersistentAgents().then(() => {
+    console.log("[a0p:agents] Persistent agents initialized");
+  }).catch((err) => {
+    console.error("[a0p:agents] Failed to initialize persistent agents:", err);
   });
 
   initializeMemorySeeds().then(() => {
@@ -7076,6 +7138,27 @@ ${moduleWritingBlock}`;
       const exportLine = `export { ${mod.name}Tab } from "./${mod.name}Tab";\n`;
       await writeFile(AGENT_BARREL, indexContent.replace(exportLine, ""), "utf8");
       res.json({ ok: true, deleted: safeTabId });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ AGENT INSTANCES ============
+
+  router.get("/agents", async (_req, res) => {
+    try {
+      const agents = await storage.getAgentInstances();
+      res.json(agents);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.get("/agents/:name", async (req: Request, res: Response) => {
+    try {
+      const agent = await storage.getAgentInstance(req.params.name);
+      if (!agent) return res.status(404).json({ error: "Agent not found" });
+      res.json(agent);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

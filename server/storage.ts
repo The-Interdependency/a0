@@ -6,7 +6,7 @@ import {
   banditArms, customTools, heartbeatTasks, edcmMetricSnapshots,
   memorySeeds, memoryProjections, memoryTensorSnapshots,
   banditCorrelations, systemToggles, discoveryDrafts,
-  transcriptSources, transcriptReports, deals,
+  transcriptSources, transcriptReports, deals, agentInstances,
   type Conversation, type InsertConversation,
   type Message, type InsertMessage,
   type AutomationTask, type InsertAutomationTask,
@@ -25,6 +25,7 @@ import {
   type TranscriptSource, type InsertTranscriptSource,
   type TranscriptReport, type InsertTranscriptReport,
   type Deal, type InsertDeal,
+  type AgentInstance, type InsertAgentInstance,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -148,6 +149,11 @@ export interface IStorage {
   addTranscriptReport(data: InsertTranscriptReport): Promise<TranscriptReport>;
   getLatestTranscriptReport(sourceSlug: string): Promise<TranscriptReport | undefined>;
   getTranscriptReports(sourceSlug: string, limit?: number): Promise<TranscriptReport[]>;
+
+  getAgentInstances(): Promise<AgentInstance[]>;
+  getAgentInstance(name: string): Promise<AgentInstance | undefined>;
+  createAgentInstance(data: InsertAgentInstance): Promise<AgentInstance>;
+  updateAgentInstance(id: number, updates: Partial<AgentInstance>): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -667,6 +673,24 @@ export class DatabaseStorage implements IStorage {
       .where(eq(transcriptReports.sourceSlug, sourceSlug))
       .orderBy(desc(transcriptReports.createdAt))
       .limit(limit);
+  }
+
+  async getAgentInstances(): Promise<AgentInstance[]> {
+    return db.select().from(agentInstances).orderBy(agentInstances.createdAt);
+  }
+
+  async getAgentInstance(name: string): Promise<AgentInstance | undefined> {
+    const [row] = await db.select().from(agentInstances).where(eq(agentInstances.name, name));
+    return row;
+  }
+
+  async createAgentInstance(data: InsertAgentInstance): Promise<AgentInstance> {
+    const [row] = await db.insert(agentInstances).values(data).returning();
+    return row;
+  }
+
+  async updateAgentInstance(id: number, updates: Partial<AgentInstance>): Promise<void> {
+    await db.update(agentInstances).set(updates).where(eq(agentInstances.id, id));
   }
 }
 
