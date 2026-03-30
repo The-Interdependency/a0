@@ -12,3 +12,4 @@ build/
 *.jsonl
 a0/state/a0_state.json
 a0/state/memory.json
+a0/instance.json
