@@ -7233,16 +7233,18 @@ ${moduleWritingBlock}`;
       let content = "";
       let filename = "";
       let updatedAt = new Date().toISOString();
+      let found = false;
       for (const candidate of candidates) {
         try {
           const stat = await fs.stat(candidate);
           content = await fs.readFile(candidate, "utf-8");
           filename = path.basename(candidate);
           updatedAt = stat.mtime.toISOString();
+          found = true;
           break;
         } catch {}
       }
-      if (!content) return res.status(404).json({ error: "No readme file found" });
+      if (!found) return res.status(404).json({ error: "No readme file found" });
       res.json({ content, filename, updatedAt });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
