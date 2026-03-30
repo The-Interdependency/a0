@@ -189,6 +189,13 @@ export function EdcmTab() {
   const reportMetrics = engineReport?.edcmMetrics;
   const liveSentinelCtx = engineReport?.sentinelContext || engineReport?.sentinel_context;
 
+  const { data: zetaObs } = useQuery<{ observations: any[]; sentinelState: { index: number; value: number; summary: string }[]; lastTickAt: string | null }>({
+    queryKey: ["/api/v1/agents/zeta-fun/observations"],
+    refetchInterval: 15000,
+  });
+  const zetaActive = zetaObs?.sentinelState?.some(s => s.value > 0) ?? false;
+  const zetaEdcmAlert = zetaObs?.sentinelState?.find(s => s.index === 10);
+
   const mv = (key: string) => {
     const m = reportMetrics?.[key];
     if (m == null) return "0.000";
@@ -198,11 +205,20 @@ export function EdcmTab() {
   return (
     <ScrollArea className="h-full px-3 py-3">
       <div className="space-y-4 pb-4">
+        {zetaActive && (
+          <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2" data-testid="banner-zeta-edcm-alert">
+            <span className="text-xs font-bold text-amber-400 font-mono">a0ζ</span>
+            <span className="text-xs text-amber-300">{zetaEdcmAlert?.summary || "Observer sentinel raised"}</span>
+          </div>
+        )}
         <TranscriptSourcesSection />
 
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-            <h3 className="font-semibold text-sm flex items-center gap-2"><Brain className="w-4 h-4 text-purple-400" /> EDCM Metric Families</h3>
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Brain className="w-4 h-4 text-purple-400" /> EDCM Metric Families
+              {zetaActive && <Badge className="text-[9px] font-mono bg-amber-500/20 text-amber-400 border-amber-500/40 ml-1" data-testid="badge-zeta-edcm">a0ζ</Badge>}
+            </h3>
             <Badge variant="secondary" className="text-[9px] font-mono" data-testid="badge-build-version">v1.1.0-M1</Badge>
           </div>
           {!latest && !reportMetrics ? (

@@ -37,6 +37,13 @@ export function HeartbeatTab({ orientation, isVertical }: SliderOrientationProps
     drafts: number; promotions: number; edcmSnapshots: number; memorySnapshots: number;
   }>({ queryKey: ["/api/v1/heartbeat/stats"], refetchInterval: 10000 });
 
+  const { data: zetaObs } = useQuery<{ observations: any[]; sentinelState: { index: number; value: number; summary: string }[]; lastTickAt: string | null }>({
+    queryKey: ["/api/v1/agents/zeta-fun/observations"],
+    refetchInterval: 15000,
+  });
+  const zetaActive = zetaObs?.sentinelState?.some(s => s.value > 0) ?? false;
+  const zetaAlertSummary = zetaObs?.sentinelState?.filter(s => s.value > 0).map(s => s.summary).join(" | ");
+
   const { data: status } = useQuery<{ running: boolean; tickIntervalMs: number }>({ queryKey: ["/api/v1/heartbeat/status"], refetchInterval: 10000 });
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<any[]>({ queryKey: ["/api/v1/heartbeat/tasks"], refetchInterval: 10000 });
   const { data: discoveries = [] } = useQuery<any[]>({ queryKey: ["/api/v1/discoveries"], refetchInterval: 10000 });
@@ -146,6 +153,14 @@ export function HeartbeatTab({ orientation, isVertical }: SliderOrientationProps
   return (
     <div className="h-full w-full overflow-y-auto overflow-x-hidden px-3 py-3">
       <div className="space-y-4 pb-4">
+
+        {/* a0ζ zeta-fun sentinel alert */}
+        {zetaActive && (
+          <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2" data-testid="banner-zeta-heartbeat-alert">
+            <span className="text-xs font-bold text-amber-400 font-mono">a0ζ</span>
+            <span className="text-xs text-amber-300 truncate">{zetaAlertSummary || "Observer sentinel raised"}</span>
+          </div>
+        )}
 
         {/* Φ Omega Goals */}
         <div className="rounded-lg border border-border bg-card p-3 space-y-2">

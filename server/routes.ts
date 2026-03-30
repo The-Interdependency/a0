@@ -5058,7 +5058,14 @@ ${moduleWritingBlock}`;
     const MEMORY_TOOLS = ["get_triad_state", "get_omega_state", "get_psi_state", "list_goals", "search_files", "read_file"];
     const PCNA_TOOLS = ["get_psi_state", "get_omega_state", "get_triad_state"];
 
-    const PERSISTENT_AGENTS: Array<{ name: string; slot: string; directives: string; tools: string[] }> = [
+    const PERSISTENT_AGENTS: Array<{ name: string; slot: string; directives: string; tools: string[]; skipBandit?: boolean }> = [
+      {
+        name: "zeta-fun",
+        slot: "zfae",
+        directives: "You are a0 zeta fun, a read-only observer sub-agent. Your directive is to watch four telemetry streams — EDCM metrics (CM/DA/DRIFT), rolling token spend, active context sections, and recent prompt/response pairs — and write structured notes. You raise sentinel alerts when: CM>0.6 or DA>0.5 or DRIFT>0.6 (EDCM), hourly cost exceeds threshold (token pressure), or consecutive prompts share <20% vocabulary (topic drift). You do not take action. You only observe and record.",
+        tools: [],
+        skipBandit: true,
+      },
       {
         name: "alfa",
         slot: "zfae",
@@ -5097,15 +5104,16 @@ ${moduleWritingBlock}`;
         });
       }
 
-      // Always upsert bandit arm and ensure banditArmId is linked
-      const arm = await storage.upsertBanditArm({
-        domain: "agent",
-        armName: def.name,
-        enabled: true,
-      });
-
-      if (!agentRow.banditArmId || agentRow.banditArmId !== arm.id) {
-        await storage.updateAgentInstance(agentRow.id, { banditArmId: arm.id });
+      // Skip bandit arm for observer agents (runs on its own dedicated task)
+      if (!def.skipBandit) {
+        const arm = await storage.upsertBanditArm({
+          domain: "agent",
+          armName: def.name,
+          enabled: true,
+        });
+        if (!agentRow.banditArmId || agentRow.banditArmId !== arm.id) {
+          await storage.updateAgentInstance(agentRow.id, { banditArmId: arm.id });
+        }
       }
     }
   }
@@ -7208,6 +7216,24 @@ ${moduleWritingBlock}`;
     try {
       const agents = await storage.getAgentInstances();
       res.json(agents);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.get("/agents/:name/observations", async (req: Request, res: Response) => {
+    try {
+      const agent = await storage.getAgentInstance(req.params.name);
+      if (!agent) return res.status(404).json({ error: "Agent not found" });
+      const sentinelIdx: number[] = (agent.sentinelSeedIndices as number[]) || [10, 11, 12];
+      const seeds = (agent.seeds as any[]) || [];
+      const sentinelState = sentinelIdx.map(idx => {
+        const seed = seeds.find((s: any) => s.index === idx);
+        return { index: idx, value: seed?.value ?? 0, summary: seed?.summary ?? "" };
+      });
+      const N = parseInt(req.query.limit as string) || 50;
+      const observations = ((agent.zfaeObservations as any[]) || []).slice(-N);
+      res.json({ observations, sentinelState, lastTickAt: agent.lastTickAt });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

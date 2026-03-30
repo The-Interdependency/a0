@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { logMaster, logTranscript, logEdcm, logOmega, logPsi } from "./logger";
+import { logMaster, logTranscript, logEdcm, logOmega, logPsi, readAiTranscripts } from "./logger";
 import { computeEdcmMetrics, updateSemanticMemory, omegaSolve, applyCrossTensorCoupling, applyMemoryBridge, persistOmegaState, getOmegaState, psiSolve, applyPsiOmegaCoupling, persistPsiState, ptcaSolveDetailed, touchOmegaGoalPursuit } from "./a0p-engine";
 import { getUncachableGitHubClient } from "./github";
 import { createHash } from "crypto";
@@ -60,6 +60,14 @@ const DEFAULT_TASKS: Array<{
     taskType: "agent_bandit_tick",
     weight: 1.2,
     intervalSeconds: 600,
+    enabled: true,
+  },
+  {
+    name: "zeta_fun_observe",
+    description: "a0 zeta fun: observe EDCM metrics, token spend, active context, and recent prompt/response; evaluate sentinel thresholds; write structured ZFAE notes",
+    taskType: "zeta_fun_observe",
+    weight: 1.0,
+    intervalSeconds: 300,
     enabled: true,
   },
 ];
@@ -206,6 +214,8 @@ async function executeTask(task: HeartbeatTask): Promise<{ result: string; relev
       return executeCustomTask(task);
     case "agent_bandit_tick":
       return executeAgentBanditTick(task);
+    case "zeta_fun_observe":
+      return executeZetaFunObserve(task);
     default:
       return { result: `Unknown task type: ${task.taskType}`, relevance: 0, data: {} };
   }
@@ -1246,6 +1256,163 @@ async function executeCustomTask(task: HeartbeatTask): Promise<{ result: string;
 }
 
 const ZFAE_OBS_MAX = 200;
+
+// ============ TOKEN SPEND THRESHOLD ============
+const HOURLY_COST_THRESHOLD_USD = 0.50; // flag when 1-hour rolling cost > $0.50
+
+function tokenizePrompt(text: string): Set<string> {
+  return new Set(
+    text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 2)
+  );
+}
+
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 1;
+  const intersection = [...a].filter(w => b.has(w)).length;
+  const union = new Set([...a, ...b]).size;
+  return union === 0 ? 1 : intersection / union;
+}
+
+async function executeZetaFunObserve(_task: HeartbeatTask): Promise<{ result: string; relevance: number; data: any }> {
+  try {
+    const zetaAgent = await storage.getAgentInstance("zeta-fun");
+    if (!zetaAgent) {
+      return { result: "zeta_fun_observe: agent not found (boot incomplete)", relevance: 0, data: {} };
+    }
+
+    // ── Stream 1: EDCM metrics ──────────────────────────────────────
+    let edcmAlert = 0;
+    let edcmSummary = "no alerts";
+    try {
+      const recentTranscripts = await readAiTranscripts({ limit: 5 });
+      const combinedText = recentTranscripts.entries.map(e =>
+        (typeof e.request === "string" ? e.request : JSON.stringify(e.request || "")) + " " + e.response
+      ).join("\n");
+      const edcm = computeEdcmMetrics(combinedText || "observe");
+      const cmVal = typeof edcm.CM === "object" ? edcm.CM.value : edcm.CM;
+      const daVal = typeof edcm.DA === "object" ? edcm.DA.value : edcm.DA;
+      const driftVal = typeof edcm.DRIFT === "object" ? edcm.DRIFT.value : edcm.DRIFT;
+      const alertParts: string[] = [];
+      if (cmVal > 0.6) alertParts.push(`CM=${cmVal.toFixed(3)}`);
+      if (daVal > 0.5) alertParts.push(`DA=${daVal.toFixed(3)}`);
+      if (driftVal > 0.6) alertParts.push(`DRIFT=${driftVal.toFixed(3)}`);
+      if (alertParts.length > 0) {
+        edcmAlert = 1.0;
+        edcmSummary = alertParts.join(", ");
+      } else {
+        edcmAlert = 0;
+        edcmSummary = `CM=${cmVal.toFixed(3)} DA=${daVal.toFixed(3)} DRIFT=${driftVal.toFixed(3)}`;
+      }
+    } catch (edcmErr: any) {
+      edcmSummary = `edcm_error: ${edcmErr.message}`;
+    }
+
+    // ── Stream 2: Token pressure (1-hour rolling cost) ────────────
+    let tokenPressure = 0;
+    let tokenSummary = "no pressure";
+    try {
+      const allCosts = await storage.getCostMetrics();
+      const oneHourAgo = Date.now() - 3_600_000;
+      const hourCosts = allCosts.filter(c => new Date(c.createdAt).getTime() >= oneHourAgo);
+      const hourlySpend = hourCosts.reduce((sum, c) => sum + (c.estimatedCost || 0), 0);
+      const hourlyTokens = hourCosts.reduce((sum, c) => sum + (c.promptTokens || 0) + (c.completionTokens || 0), 0);
+      const ratio = hourlySpend / HOURLY_COST_THRESHOLD_USD;
+      tokenPressure = Math.min(1, ratio);
+      tokenSummary = `spend=$${hourlySpend.toFixed(4)}/hr tokens=${hourlyTokens} threshold=$${HOURLY_COST_THRESHOLD_USD}`;
+    } catch (costErr: any) {
+      tokenSummary = `cost_error: ${costErr.message}`;
+    }
+
+    // ── Stream 3: Prompt drift (consecutive vocab overlap) ────────
+    let promptDrift = 0;
+    let driftSummary = "no drift";
+    try {
+      const recent = await readAiTranscripts({ limit: 2 });
+      if (recent.entries.length >= 2) {
+        const extractPromptText = (entry: any): string => {
+          const req = entry.request;
+          if (typeof req === "string") return req;
+          if (Array.isArray(req)) return req.map((m: any) => m.content || "").join(" ");
+          if (req?.messages) return req.messages.map((m: any) => m.content || "").join(" ");
+          return JSON.stringify(req || "");
+        };
+        const wordsA = tokenizePrompt(extractPromptText(recent.entries[0]));
+        const wordsB = tokenizePrompt(extractPromptText(recent.entries[1]));
+        const sim = jaccardSimilarity(wordsA, wordsB);
+        if (sim < 0.2) {
+          promptDrift = 1.0;
+          driftSummary = `jaccard=${sim.toFixed(3)} (<0.20) — topic shift detected`;
+        } else {
+          promptDrift = 0;
+          driftSummary = `jaccard=${sim.toFixed(3)}`;
+        }
+      } else {
+        driftSummary = "insufficient transcripts";
+      }
+    } catch (driftErr: any) {
+      driftSummary = `drift_error: ${driftErr.message}`;
+    }
+
+    // ── Stream 4: Context summary ─────────────────────────────────
+    let contextSummary = "no context";
+    try {
+      const ctxToggle = await storage.getSystemToggle("system_sections_override");
+      if (ctxToggle?.parameters) {
+        const params = ctxToggle.parameters as Record<string, any>;
+        const sections = Object.keys(params).filter(k => params[k]);
+        contextSummary = sections.length > 0
+          ? `sections=[${sections.slice(0, 6).join(",")}]`
+          : "context empty";
+      }
+    } catch {}
+
+    // ── ZFAE inference ────────────────────────────────────────────
+    const digest = [
+      `EDCM:${edcmSummary}`,
+      `TOKENS:${tokenSummary}`,
+      `DRIFT:${driftSummary}`,
+      `CONTEXT:${contextSummary}`,
+    ].join(" | ");
+
+    const zfaeResult = await pcnaInfer(digest).catch(() => ({ coherence_score: 0.5, winner: "ring-0", confidence: 0.5 }));
+
+    // ── Write sentinel seeds ───────────────────────────────────────
+    const sentinelIdx: number[] = (zetaAgent.sentinelSeedIndices as number[]) || [10, 11, 12];
+    const [si0, si1, si2] = sentinelIdx;
+    const seeds = ((zetaAgent.seeds || []) as any[]).map((s: any) => {
+      if (s.index === si0) return { ...s, value: edcmAlert, summary: `EDCM:${edcmSummary.slice(0, 80)}` };
+      if (s.index === si1) return { ...s, value: tokenPressure, summary: `TOK:${tokenSummary.slice(0, 80)}` };
+      if (s.index === si2) return { ...s, value: promptDrift, summary: `DRIFT:${driftSummary.slice(0, 80)}` };
+      return s;
+    });
+
+    const obs = {
+      ts: new Date().toISOString(),
+      coherence: zfaeResult.coherence_score,
+      winner: zfaeResult.winner,
+      confidence: zfaeResult.confidence,
+      note: digest.slice(0, 200),
+      sentinels: { edcmAlert, tokenPressure, promptDrift },
+    };
+    const prevObs = (zetaAgent.zfaeObservations as typeof obs[]) || [];
+    const newObs = [...prevObs, obs].slice(-ZFAE_OBS_MAX);
+
+    await storage.updateAgentInstance(zetaAgent.id, {
+      status: "idle",
+      lastOutput: digest.slice(0, 200),
+      lastTickAt: new Date(),
+      zfaeObservations: newObs as any,
+      seeds: seeds as any,
+    });
+
+    const result = `zeta_fun_observe: edcm=${edcmAlert} tok=${tokenPressure.toFixed(3)} drift=${promptDrift} | ${digest.slice(0, 120)}`;
+    await logMaster("heartbeat", "zeta_fun_observe", { edcmAlert, tokenPressure, promptDrift, obsCount: newObs.length });
+    return { result, relevance: 0.8, data: { edcmAlert, tokenPressure, promptDrift, obsCount: newObs.length } };
+  } catch (err: any) {
+    await logMaster("heartbeat", "zeta_fun_observe_error", { error: err.message }).catch(() => {});
+    return { result: `zeta_fun_observe error: ${err.message}`, relevance: 0, data: { error: err.message } };
+  }
+}
 
 async function executeAgentBanditTick(_task: HeartbeatTask): Promise<{ result: string; relevance: number; data: any }> {
   try {
