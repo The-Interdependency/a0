@@ -1,53 +1,55 @@
 """
-PCNA Inference Engine — six-step pipeline across all six prime rings.
+PCNA Inference Engine — six-ring pipeline, all rings real.
 
 Six rings:
-  Φ  (phi)       N=53  — slot-A substrate
-  Ψ  (psi)       N=53  — self-model (TypeScript triad, mirrored here as a lightweight proxy)
-  Ω  (omega)     N=53  — autonomy tensor (same)
-  Guardian       N=29  — microkernel gate
-  Memory-L       N=19  — long-term
-  Memory-S       N=17  — short-term
+  Φ  (phi)       N=53, seed=53  — cognitive substrate
+  Ψ  (psi)       N=53, seed=43  — self-model
+  Ω  (omega)     N=53, seed=47  — autonomy
+  Guardian       N=29           — microkernel gate
+  Memory-L       N=19, seed=19  — long-term
+  Memory-S       N=17, seed=17  — short-term
 
 Six inference steps:
   1. Project    — encode input text → normalized signal vector
-  2. Inject     — push signal into Φ ring
-  3. Propagate  — run heptagram propagation on Φ, Guardian, Memory
-  4. PTCA-seed  — per-prime-node audit (Φ only, full; others summarised)
-  5. PCTA-circle — per-ring circle audit (Guardian)
-  6. Coherence  — weighted ring coherence → winner + confidence score
+  2. Inject     — push signal into Φ, self-referential into Ψ, autonomy into Ω
+  3. Propagate  — run heptagram propagation on Φ/Ψ/Ω + guardian
+  4. PTCA-seed  — per-prime-node audit on all three PTCA cores
+  5. PCTA-circle — guardian circle audit
+  6. Coherence  — weighted ring coherence → winner + confidence
 
 Backprop:
-  pcna_reward(winner, outcome) → nudge all rings via reward signal
+  reward(winner, outcome) → nudge all three PTCA cores + guardian + memory flush
 """
 
 import hashlib
 import time
 import numpy as np
 
-from .phi import PhiRing
-from .memory import MemoryL, MemoryS
-from .guardian_tensor import GuardianTensor
+from .ptca_core import PTCACore
+from .memory_core import MemoryCore
+from .guardian import GuardianTensor
 
 RING_WEIGHTS = {
-    "phi": 0.35,
-    "guardian": 0.25,
-    "memory_l": 0.20,
-    "memory_s": 0.10,
-    "psi": 0.05,
-    "omega": 0.05,
+    "phi": 0.30,
+    "psi": 0.15,
+    "omega": 0.15,
+    "guardian": 0.20,
+    "memory_l": 0.12,
+    "memory_s": 0.08,
 }
 
 WINNER_RINGS = ["phi", "psi", "omega"]
 
 
 class PCNAEngine:
-    """PCNA six-ring inference engine with backpropagation."""
+    """PCNA six-ring inference engine — no stubs, all rings real."""
 
     def __init__(self):
-        self.phi = PhiRing()
-        self.memory_l = MemoryL()
-        self.memory_s = MemoryS()
+        self.phi = PTCACore(name="phi", symbol="Φ", role="cognitive", n=53, seed=53)
+        self.psi = PTCACore(name="psi", symbol="Ψ", role="self_model", n=53, seed=43)
+        self.omega = PTCACore(name="omega", symbol="Ω", role="autonomy", n=53, seed=47)
+        self.memory_l = MemoryCore(n=19, seed=19, role="long_term")
+        self.memory_s = MemoryCore(n=17, seed=17, role="short_term")
         self.guardian = GuardianTensor()
         self.infer_count = 0
         self.reward_count = 0
@@ -56,38 +58,46 @@ class PCNAEngine:
         self.blueprint_hash = self.guardian.blueprint_hash
         self.created_at = time.time()
 
-    # ── step 1: project ────────────────────────────────────────────────────────
     def _project(self, text: str) -> np.ndarray:
-        """Encode text → normalized float vector of length N=53."""
         h = hashlib.sha512(text.encode("utf-8")).digest()
         arr = np.frombuffer(h, dtype=np.uint8).astype(np.float64)
         arr = arr / 255.0
         padded = np.tile(arr, 4)[:53]
         return padded
 
-    # ── step 2: inject ─────────────────────────────────────────────────────────
     def _inject(self, signal: np.ndarray):
         self.phi.inject(signal)
         self.memory_s.write(signal)
 
-    # ── step 3: propagate ──────────────────────────────────────────────────────
+        psi_signal = np.full(53, self.phi.ring_coherence, dtype=np.float64)
+        phi_node_c = self.phi.node_coherence
+        psi_signal[:len(phi_node_c)] = phi_node_c
+        self.psi.inject(psi_signal)
+
+        ml_hub = self.memory_l.hub_avg
+        omega_base = np.full(53, float(ml_hub.mean()), dtype=np.float64)
+        omega_base[:len(ml_hub)] *= ml_hub
+        omega_base = np.clip(omega_base, 0.0, 1.0)
+        self.omega.inject(omega_base)
+
     def _propagate(self):
         self.phi.propagate(steps=10)
+        self.psi.propagate(steps=8)
+        self.omega.propagate(steps=6)
         self.guardian.propagate(steps=5)
 
-    # ── step 4: PTCA seed audit ────────────────────────────────────────────────
     def _ptca_seed_audit(self) -> dict:
-        phi_audit = self.phi.ptca_seed_audit()
-        phi_coherence = self.phi.ring_coherence
-        return {
-            "phi_nodes_audited": len(phi_audit),
-            "phi_coherence": round(phi_coherence, 4),
-            "phi_top3": sorted(phi_audit, key=lambda x: x["coherence"], reverse=True)[:3],
-            "phi_bottom3": sorted(phi_audit, key=lambda x: x["coherence"])[:3],
-            "memory_s_hub_avg": self.memory_s.state()["avg_hub"],
-        }
+        cores = {"phi": self.phi, "psi": self.psi, "omega": self.omega}
+        result = {}
+        for name, core in cores.items():
+            audit = core.ptca_seed_audit()
+            result[f"{name}_nodes_audited"] = len(audit)
+            result[f"{name}_coherence"] = round(core.ring_coherence, 4)
+            result[f"{name}_top3"] = sorted(audit, key=lambda x: x["coherence"], reverse=True)[:3]
+            result[f"{name}_bottom3"] = sorted(audit, key=lambda x: x["coherence"])[:3]
+        result["memory_s_hub_avg"] = self.memory_s.state()["avg_hub"]
+        return result
 
-    # ── step 5: PCTA circle audit ──────────────────────────────────────────────
     def _pcta_circle_audit(self) -> dict:
         g_audit = self.guardian.pcta_circle_audit()
         open_nodes = [n for n in g_audit if n["gate"]]
@@ -97,30 +107,22 @@ class PCNAEngine:
             "gates_open": len(open_nodes),
             "gates_closed": len(closed_nodes),
             "avg_circles": round(sum(n["circles"] for n in g_audit) / len(g_audit), 2),
-            "guardian_coherence": round(self.guardian.node_coherence.mean(), 4),
+            "guardian_coherence": round(float(self.guardian.node_coherence.mean()), 4),
             "memory_l_hub_avg": self.memory_l.state()["avg_hub"],
         }
 
-    # ── step 6: coherence score ────────────────────────────────────────────────
     def _coherence_score(self, seed_audit: dict, circle_audit: dict) -> dict:
-        phi_c = seed_audit["phi_coherence"]
-        guard_c = circle_audit["guardian_coherence"]
-        ml_c = self.memory_l.state()["avg_hub"]
-        ms_c = self.memory_s.state()["avg_hub"]
-        psi_c = 0.5
-        omega_c = 0.5
-
         ring_scores = {
-            "phi": phi_c,
-            "guardian": guard_c,
-            "memory_l": ml_c,
-            "memory_s": ms_c,
-            "psi": psi_c,
-            "omega": omega_c,
+            "phi": seed_audit["phi_coherence"],
+            "psi": seed_audit["psi_coherence"],
+            "omega": seed_audit["omega_coherence"],
+            "guardian": circle_audit["guardian_coherence"],
+            "memory_l": self.memory_l.state()["avg_hub"],
+            "memory_s": self.memory_s.state()["avg_hub"],
         }
 
         weighted = sum(RING_WEIGHTS[r] * ring_scores[r] for r in ring_scores)
-        winner = max(WINNER_RINGS, key=lambda r: ring_scores.get(r, 0.0))
+        winner = max(WINNER_RINGS, key=lambda r: ring_scores[r])
         confidence = float(np.clip(weighted, 0.0, 1.0))
 
         return {
@@ -130,9 +132,7 @@ class PCNAEngine:
             "confidence": round(confidence, 4),
         }
 
-    # ── full inference ─────────────────────────────────────────────────────────
     def infer(self, text: str) -> dict:
-        """Run 6-step PCNA inference on input text."""
         t0 = time.time()
 
         signal = self._project(text)
@@ -155,8 +155,8 @@ class PCNAEngine:
             "elapsed_ms": elapsed_ms,
             "signal_mean": round(float(signal.mean()), 4),
             "step1_project": {"signal_len": len(signal), "signal_mean": round(float(signal.mean()), 4)},
-            "step2_inject": {"phi_n": 53, "memory_s_n": 17},
-            "step3_propagate": {"phi_steps": 10, "guardian_steps": 5},
+            "step2_inject": {"phi_n": 53, "psi_n": 53, "omega_n": 53, "memory_s_n": 17},
+            "step3_propagate": {"phi_steps": 10, "psi_steps": 8, "omega_steps": 6, "guardian_steps": 5},
             "step4_ptca_seed": seed_audit,
             "step5_pcta_circle": circle_audit,
             "step6_coherence": coherence,
@@ -168,46 +168,43 @@ class PCNAEngine:
             "memory_s_state": self.memory_s.state(),
         }
 
-    # ── reward / backprop ──────────────────────────────────────────────────────
     def reward(self, winner: str, outcome: float) -> dict:
-        """
-        Apply reward signal across all rings (backpropagation step).
-          winner:  which ring slot won ("phi"/"psi"/"omega")
-          outcome: float in [-1, 1], positive = good
-        """
         self.phi.nudge(outcome, lr=0.025)
+        self.psi.nudge(outcome, lr=0.020)
+        self.omega.nudge(outcome, lr=0.015)
         self.guardian.apply_reward(outcome)
         flushed = self.memory_s.flush_to(self.memory_l, outcome)
 
         self.reward_count += 1
-
-        circles_after = [int(v) for v in self.guardian.circle_count]
 
         return {
             "step": "pcna_reward",
             "reward_index": self.reward_count,
             "winner": winner,
             "outcome": round(outcome, 4),
-            "nudged": True,
+            "nudged_cores": ["phi", "psi", "omega", "guardian"],
             "memory_flush": flushed,
             "phi_coherence_after": round(self.phi.ring_coherence, 4),
+            "psi_coherence_after": round(self.psi.ring_coherence, 4),
+            "omega_coherence_after": round(self.omega.ring_coherence, 4),
             "guardian_coherence_after": round(float(self.guardian.node_coherence.mean()), 4),
-            "guardian_circles_after": circles_after,
+            "guardian_circles_after": [int(v) for v in self.guardian.circle_count],
             "memory_l_flush_count": self.memory_l.flush_count,
             "memory_s_flush_count": self.memory_s.flush_count,
         }
 
-    # ── state export ───────────────────────────────────────────────────────────
     def state(self) -> dict:
         return {
             "engine": "pcna",
-            "version": "1.0.0",
+            "version": "2.0.0",
             "infer_count": self.infer_count,
             "reward_count": self.reward_count,
             "last_coherence": round(self.last_coherence, 4),
             "last_winner": self.last_winner,
             "rings": {
                 "phi": self.phi.state(),
+                "psi": self.psi.state(),
+                "omega": self.omega.state(),
                 "guardian": self.guardian.state(),
                 "memory_l": self.memory_l.state(),
                 "memory_s": self.memory_s.state(),

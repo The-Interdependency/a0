@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from .database import engine
 from .engine import PCNAEngine, InstanceMerge
 
-# ── singleton engine ───────────────────────────────────────────────────────────
 _pcna: PCNAEngine | None = None
 _instances: dict[str, PCNAEngine] = {}
 
@@ -49,7 +48,6 @@ app.add_middleware(
 )
 
 
-# ── request models ─────────────────────────────────────────────────────────────
 class InferRequest(BaseModel):
     text: str
 
@@ -75,7 +73,6 @@ class PropagateRequest(BaseModel):
     guardian_steps: int = 5
 
 
-# ── health ─────────────────────────────────────────────────────────────────────
 @app.get("/api/health")
 async def health():
     pcna = get_pcna()
@@ -88,7 +85,6 @@ async def health():
     }
 
 
-# ── PCNA inference ─────────────────────────────────────────────────────────────
 @app.post("/api/pcna/infer")
 async def pcna_infer(req: InferRequest):
     if not req.text.strip():
@@ -108,7 +104,6 @@ async def pcna_state():
     return get_pcna().state()
 
 
-# ── Φ ring routes ──────────────────────────────────────────────────────────────
 @app.get("/api/pcna/phi/state")
 async def phi_state():
     return get_pcna().phi.state()
@@ -131,7 +126,50 @@ async def phi_nudge(req: NudgeRequest):
     return get_pcna().phi.state()
 
 
-# ── Guardian ring routes ───────────────────────────────────────────────────────
+@app.get("/api/pcna/psi/state")
+async def psi_state():
+    return get_pcna().psi.state()
+
+
+@app.get("/api/pcna/psi/audit")
+async def psi_audit():
+    return get_pcna().psi.ptca_seed_audit()
+
+
+@app.post("/api/pcna/psi/propagate")
+async def psi_propagate(req: PropagateRequest):
+    get_pcna().psi.propagate(steps=req.phi_steps)
+    return get_pcna().psi.state()
+
+
+@app.post("/api/pcna/psi/nudge")
+async def psi_nudge(req: NudgeRequest):
+    get_pcna().psi.nudge(req.reward, lr=req.lr)
+    return get_pcna().psi.state()
+
+
+@app.get("/api/pcna/omega/state")
+async def omega_state():
+    return get_pcna().omega.state()
+
+
+@app.get("/api/pcna/omega/audit")
+async def omega_audit():
+    return get_pcna().omega.ptca_seed_audit()
+
+
+@app.post("/api/pcna/omega/propagate")
+async def omega_propagate(req: PropagateRequest):
+    get_pcna().omega.propagate(steps=req.phi_steps)
+    return get_pcna().omega.state()
+
+
+@app.post("/api/pcna/omega/nudge")
+async def omega_nudge(req: NudgeRequest):
+    get_pcna().omega.nudge(req.reward, lr=req.lr)
+    return get_pcna().omega.state()
+
+
 @app.get("/api/pcna/guardian/state")
 async def guardian_state():
     return get_pcna().guardian.state()
@@ -164,7 +202,6 @@ async def guardian_reward(req: NudgeRequest):
     return get_pcna().guardian.state()
 
 
-# ── Memory routes ──────────────────────────────────────────────────────────────
 @app.get("/api/pcna/memory/l/state")
 async def memory_l_state():
     return get_pcna().memory_l.state()
@@ -185,7 +222,6 @@ async def memory_flush(req: RewardRequest):
     }
 
 
-# ── Instance mesh routes ───────────────────────────────────────────────────────
 @app.get("/api/pcna/instances")
 async def list_instances():
     return {
@@ -193,6 +229,8 @@ async def list_instances():
             {
                 "instance_id": iid,
                 "phi_coherence": round(eng.phi.ring_coherence, 4),
+                "psi_coherence": round(eng.psi.ring_coherence, 4),
+                "omega_coherence": round(eng.omega.ring_coherence, 4),
                 "guardian_coherence": round(float(eng.guardian.node_coherence.mean()), 4),
                 "infer_count": eng.infer_count,
                 "uptime_s": round(time.time() - eng.created_at, 1),
@@ -237,7 +275,6 @@ async def merge_instances(req: MergeRequest):
     raise HTTPException(status_code=400, detail="mode must be absorb|fork|converge")
 
 
-# ── static SPA ─────────────────────────────────────────────────────────────────
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "dist", "public")
 if os.path.isdir(STATIC_DIR):
     app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="assets")
