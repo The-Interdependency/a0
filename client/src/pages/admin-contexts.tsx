@@ -65,7 +65,7 @@ function ContextRow({ ctx, onSave }: { ctx: PromptContext; onSave: (name: string
 }
 
 export default function AdminContextsPage() {
-  useSEO({ title: "Prompt Contexts — a0p Admin" });
+  useSEO({ title: "Prompt Contexts — a0p Admin", description: "Admin-only prompt context editor for a0p system and tier contexts." });
   const [, navigate] = useLocation();
   const { isAdmin, isLoading: billingLoading } = useBillingStatus();
   const { toast } = useToast();

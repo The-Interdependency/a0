@@ -47,7 +47,7 @@ Replit OAuth. No username/password — only Replit account sign-in.
 
 ## Public Pages
 
-- `/` — Chat interface (requires login)
+- `/` — Chat interface (public; login required to send messages)
 - `/pricing` — Tier and pricing information (public)
 - `/splash` — Welcome / onboarding page (public)
 

@@ -32,7 +32,7 @@ function usePersistedTab(tabs: TabDef[]) {
 }
 
 export default function ConsolePage() {
-  useSEO({ title: "Console — a0p" });
+  useSEO({ title: "Console — a0p", description: "Your a0p operator console. Manage your agent, tools, and sessions." });
   const { data, isLoading, error } = useUiStructure();
   const { isAdmin } = useBillingStatus();
 
