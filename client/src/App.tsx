@@ -6,20 +6,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import ChatPage from "@/pages/chat";
-import TerminalPage from "@/pages/terminal";
-import FilesPage from "@/pages/files";
-import DrivePage from "@/pages/drive";
-import MailPage from "@/pages/mail";
-import AutomationPage from "@/pages/automation";
 import ConsolePage from "@/pages/console";
-import PersonaPage from "@/pages/persona";
-import PricingPage from "@/pages/pricing";
 import SplashPage from "@/pages/splash";
 import LoginPage from "@/pages/login";
 import TopNav from "@/components/top-nav";
 import HmmmDoctrine from "@/components/hmmm-doctrine";
-import PopoutPanel from "@/components/popout-panel";
-import { PopoutProvider } from "@/lib/popout-context";
 
 function Router() {
   return (
@@ -27,14 +18,7 @@ function Router() {
       <Route path="/splash" component={SplashPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/" component={ChatPage} />
-      <Route path="/terminal" component={TerminalPage} />
-      <Route path="/files" component={FilesPage} />
-      <Route path="/drive" component={DrivePage} />
-      <Route path="/mail" component={MailPage} />
-      <Route path="/automation" component={AutomationPage} />
       <Route path="/console" component={ConsolePage} />
-      <Route path="/persona" component={PersonaPage} />
-      <Route path="/pricing" component={PricingPage} />
       <Route component={ChatPage} />
     </Switch>
   );
@@ -82,7 +66,6 @@ function AppShell() {
           </div>
           <HmmmDoctrine />
         </div>
-        <PopoutPanel />
       </div>
     </AuthGate>
   );
@@ -92,10 +75,8 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <PopoutProvider>
-          <AppShell />
-          <Toaster />
-        </PopoutProvider>
+        <AppShell />
+        <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
   );

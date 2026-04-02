@@ -52,19 +52,22 @@ Each declares `UI_META` (tab config for frontend) + `DATA_SCHEMA` (field specs).
 - `pcna_api.py` — PCNA state and propagation
 
 ### Frontend (`client/`)
-React + Vite + TypeScript, Tailwind CSS, shadcn/ui components.
-- `client/src/pages/console.tsx` — Layout shell
-- `client/src/components/tabs/` — Tab components
-- `client/src/lib/console-config.ts` — Shared types and tab config
+React + Vite + TypeScript, Tailwind CSS, shadcn/ui components. Fully metadata-driven:
+- `client/src/hooks/use-ui-structure.ts` — polls GET /api/v1/ui/structure, returns tab tree
+- `client/src/components/FieldRenderer.tsx` — field.type → visual (gauge, text, badge, list, timeline, sparkline, json)
+- `client/src/components/TabRenderer.tsx` — fetches tab.endpoint, renders fields via FieldRenderer
+- `client/src/components/TabShell.tsx` — tab chrome: header, refresh, error boundary
+- `client/src/components/console-sidebar.tsx` — navigation from the tab tree
+- `client/src/components/icon-resolve.ts` — lucide icon resolver by name string
+- `client/src/pages/console.tsx` — renders tab tree from use-ui-structure, zero hardcoded tabs
+- `client/src/pages/chat.tsx` — chat shell with conversation list + message bubbles
+- `client/src/components/top-nav.tsx` — Agent/Console nav, shows agent name from API
+- `client/src/components/tabs/` — Legacy hardcoded tab components (unused, retained for reference)
 
 ### Database
 PostgreSQL via SQLAlchemy (Python) and Drizzle ORM (schema management).
 - `shared/schema.ts` — Drizzle schema (source of truth for `db:push`)
 - `drizzle.config.ts` — Drizzle Kit configuration
-
-### Legacy (kept for reference)
-- `server/` — Old Express/Node.js backend (not started in dev mode)
-- `script/build.ts` — Old production build script
 
 ## Agent Architecture
 

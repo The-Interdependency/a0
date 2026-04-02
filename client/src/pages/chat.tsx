@@ -6,608 +6,303 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { MarkdownContent } from "@/lib/markdown";
-import { usePopout } from "@/lib/popout-context";
-import {
-  Plus, Send, Trash2, Bot, User, ChevronRight,
-  PanelLeftOpen, PanelLeftClose, Terminal as TermIcon,
-  FileText, Mail, HardDrive, Search, Pencil,
-  Activity, Shield, Pin, ThumbsUp, ThumbsDown,
-} from "lucide-react";
+import { Plus, Send, Trash2, Bot, User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Conversation, Message } from "@shared/schema";
 
-const TOOL_ICONS: Record<string, typeof TermIcon> = {
-  run_command: TermIcon,
-  read_file: FileText,
-  write_file: Pencil,
-  list_files: FileText,
-  search_files: Search,
-  list_gmail: Mail,
-  read_gmail: Mail,
-  send_gmail: Mail,
-  list_drive: HardDrive,
-};
+interface Conversation {
+  id: number;
+  title: string | null;
+  model: string | null;
+  created_at: string;
+}
 
-const TOOL_LABELS: Record<string, string> = {
-  run_command: "Running command",
-  read_file: "Reading file",
-  write_file: "Writing file",
-  list_files: "Listing files",
-  search_files: "Searching files",
-  list_gmail: "Checking Gmail",
-  read_gmail: "Reading email",
-  send_gmail: "Sending email",
-  list_drive: "Browsing Drive",
-};
+interface Message {
+  id: number;
+  conversation_id: number;
+  role: string;
+  content: string;
+  model: string | null;
+  created_at: string;
+}
 
-interface ToolAction {
-  type: "tool_call" | "tool_result";
-  name: string;
-  args?: any;
-  result?: string;
+const CONV_KEY = "a0p_active_conv";
+
+function ConversationList({
+  conversations,
+  activeId,
+  onSelect,
+  onCreate,
+  onDelete,
+  isCreating,
+}: {
+  conversations: Conversation[];
+  activeId: number | null;
+  onSelect: (id: number) => void;
+  onCreate: () => void;
+  onDelete: (id: number) => void;
+  isCreating: boolean;
+}) {
+  return (
+    <div className="flex flex-col h-full border-r border-border bg-muted/30" data-testid="conversation-list">
+      <div className="flex items-center justify-between px-3 py-3 border-b border-border">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Conversations
+        </span>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6"
+          onClick={onCreate}
+          disabled={isCreating}
+          data-testid="btn-new-conversation"
+        >
+          {isCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+        </Button>
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="flex flex-col gap-0.5 p-2">
+          {conversations.map((c) => (
+            <div
+              key={c.id}
+              className={cn(
+                "group flex items-center justify-between px-3 py-2 rounded-md cursor-pointer text-xs transition-colors",
+                c.id === activeId
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted"
+              )}
+              onClick={() => onSelect(c.id)}
+              data-testid={`conversation-${c.id}`}
+            >
+              <span className="truncate flex-1">{c.title || `Conv #${c.id}`}</span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(c.id);
+                }}
+                data-testid={`delete-conversation-${c.id}`}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+          {conversations.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">No conversations</p>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+function MessageBubble({ message }: { message: Message }) {
+  const isUser = message.role === "user";
+  return (
+    <div
+      className={cn("flex gap-2 max-w-[85%]", isUser ? "ml-auto flex-row-reverse" : "")}
+      data-testid={`message-${message.id}`}
+    >
+      <div className={cn(
+        "flex items-center justify-center h-7 w-7 rounded-full shrink-0 mt-0.5",
+        isUser ? "bg-primary/20" : "bg-muted"
+      )}>
+        {isUser ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+      </div>
+      <div className={cn(
+        "rounded-lg px-3 py-2 text-sm break-words",
+        isUser ? "bg-primary text-primary-foreground" : "bg-muted"
+      )}>
+        <p className="whitespace-pre-wrap">{message.content}</p>
+        {message.model && (
+          <Badge variant="outline" className="mt-1 text-[9px]">{message.model}</Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ChatInput({
+  onSend,
+  isSending,
+}: {
+  onSend: (content: string) => void;
+  isSending: boolean;
+}) {
+  const [input, setInput] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleSubmit = () => {
+    const trimmed = input.trim();
+    if (!trimmed || isSending) return;
+    onSend(trimmed);
+    setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  }, [input]);
+
+  return (
+    <div className="flex gap-2 items-end px-4 py-3 border-t border-border" data-testid="chat-input-area">
+      <Textarea
+        ref={textareaRef}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Message a0... (Ctrl+Enter to send)"
+        className="resize-none min-h-[40px] max-h-[120px] text-sm"
+        rows={1}
+        data-testid="chat-input"
+      />
+      <Button
+        size="icon"
+        onClick={handleSubmit}
+        disabled={!input.trim() || isSending}
+        className="shrink-0 h-10 w-10"
+        data-testid="btn-send"
+      >
+        {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+      </Button>
+    </div>
+  );
 }
 
 export default function ChatPage() {
-  const qc = useQueryClient();
   const { toast } = useToast();
-  const [activeConvId, setActiveConvIdState] = useState<number | null>(() => {
-    const stored = localStorage.getItem("a0p-active-conv");
-    if (stored) {
-      const parsed = parseInt(stored, 10);
-      return isNaN(parsed) ? null : parsed;
-    }
-    return null;
+  const qc = useQueryClient();
+  const [activeConvId, setActiveConvId] = useState<number | null>(() => {
+    const saved = localStorage.getItem(CONV_KEY);
+    return saved ? parseInt(saved, 10) : null;
   });
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const setActiveConvId = (id: number | null) => {
-    setActiveConvIdState(id);
-    if (id !== null) {
-      localStorage.setItem("a0p-active-conv", String(id));
-    } else {
-      localStorage.removeItem("a0p-active-conv");
-    }
+  const selectConv = (id: number) => {
+    setActiveConvId(id);
+    localStorage.setItem(CONV_KEY, String(id));
   };
-  const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState(false);
-  const [streamContent, setStreamContent] = useState("");
-  const [toolActions, setToolActions] = useState<ToolAction[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeSlot, setActiveSlotState] = useState<"a" | "b" | "c">(() => {
-    const stored = localStorage.getItem("a0p-active-slot");
-    if (stored === "a" || stored === "b" || stored === "c") return stored;
-    return "a";
-  });
-
-  function setActiveSlot(slot: "a" | "b" | "c") {
-    setActiveSlotState(slot);
-    localStorage.setItem("a0p-active-slot", slot);
-  }
-
-  const { data: modelSlots } = useQuery<Record<string, { label: string; provider: string; model: string; baseUrl: string; apiKeySet: boolean }>>({
-    queryKey: ["/api/v1/agent/slots"],
-  });
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: conversations = [], isLoading: convsLoading } = useQuery<Conversation[]>({
     queryKey: ["/api/v1/conversations"],
+    refetchInterval: 15_000,
   });
 
-  const { data: convDetail, isLoading: messagesLoading } = useQuery<
-    Conversation & { messages: Message[] }
-  >({
-    queryKey: ["/api/v1/conversations", activeConvId],
+  const { data: messages = [], isLoading: msgsLoading } = useQuery<Message[]>({
+    queryKey: ["/api/v1/conversations", activeConvId, "messages"],
     enabled: !!activeConvId,
+    refetchInterval: 5_000,
   });
 
-  const { data: engineStatus } = useQuery<{ status: string }>({
-    queryKey: ["/api/v1/a0p/status"],
-    refetchInterval: 30000,
-  });
+  useEffect(() => {
+    if (conversations.length > 0 && !conversations.find((c) => c.id === activeConvId)) {
+      selectConv(conversations[0].id);
+    }
+  }, [conversations, activeConvId]);
 
-  const messages = convDetail?.messages || [];
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const createConv = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/conversations", { title: "New Task", model: "agent" });
-      return await res.json() as Conversation;
+      const res = await apiRequest("POST", "/api/v1/conversations", { title: "New conversation" });
+      return res.json();
     },
-    onSuccess: (conv: Conversation) => {
+    onSuccess: (data: Conversation) => {
       qc.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
-      setActiveConvId(conv.id);
-      setSidebarOpen(false);
+      selectConv(data.id);
     },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const deleteConv = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/conversations/${id}`),
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/v1/conversations/${id}`);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
-      setActiveConvId(null);
-    },
-  });
-
-  useEffect(() => {
-    if (!convsLoading && activeConvId !== null) {
-      const exists = conversations.some((c) => c.id === activeConvId);
-      if (!exists) {
+      if (conversations.length > 1) {
+        const remaining = conversations.filter((c) => c.id !== activeConvId);
+        if (remaining.length > 0) selectConv(remaining[0].id);
+      } else {
         setActiveConvId(null);
       }
-    }
-  }, [convsLoading, conversations]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamContent, toolActions]);
-
-  async function sendMessage() {
-    if (!input.trim() || streaming) return;
-    let convId = activeConvId;
-
-    if (!convId) {
-      const conv = await createConv.mutateAsync();
-      convId = conv.id;
-    }
-
-    const userMsg = input.trim();
-    setInput("");
-    setStreaming(true);
-    setStreamContent("");
-    setToolActions([]);
-
-    qc.setQueryData(
-      ["/api/v1/conversations", convId],
-      (prev: any) => ({
-        ...prev,
-        messages: [
-          ...(prev?.messages || []),
-          { id: Date.now(), role: "user", content: userMsg, conversationId: convId, model: "agent", createdAt: new Date() },
-        ],
-      })
-    );
-
-    try {
-      const response = await fetch(`/api/conversations/${convId}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: userMsg, slot: activeSlot }),
-      });
-
-      if (!response.ok) throw new Error("Failed to send");
-
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulated = "";
-
-      let gotDone = false;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.content) {
-                accumulated += data.content;
-                setStreamContent(accumulated);
-              }
-              if (data.tool_call) {
-                setToolActions((prev) => [...prev, { type: "tool_call", name: data.tool_call.name, args: data.tool_call.args }]);
-              }
-              if (data.tool_result) {
-                setToolActions((prev) => [...prev, { type: "tool_result", name: data.tool_result.name, result: data.tool_result.result }]);
-              }
-              if (data.error) {
-                toast({ title: "Agent error", description: data.error, variant: "destructive" });
-              }
-              if (data.done) {
-                gotDone = true;
-                setStreaming(false);
-                setStreamContent("");
-                setToolActions([]);
-                qc.invalidateQueries({ queryKey: ["/api/v1/conversations", convId] });
-                qc.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
-              }
-            } catch {}
-          }
-        }
-      }
-      if (!gotDone) {
-        setStreaming(false);
-        setStreamContent("");
-        setToolActions([]);
-        qc.invalidateQueries({ queryKey: ["/api/v1/conversations", convId] });
-        qc.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
-      }
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-      setStreaming(false);
-      setStreamContent("");
-      setToolActions([]);
-    }
-  }
-
-  function handleKey(e: React.KeyboardEvent) {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
-
-  function autoResize(el: HTMLTextAreaElement) {
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 200) + "px";
-  }
-
-  const isEngineRunning = engineStatus?.status === "RUNNING";
-
-  return (
-    <div className="flex h-full overflow-hidden">
-      <div
-        className={cn(
-          "absolute inset-y-0 left-0 z-40 w-72 flex flex-col bg-card border-r border-border transition-transform duration-200",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        <div className="flex items-center justify-between px-3 border-b border-border" style={{ minHeight: 48 }}>
-          <span className="font-semibold text-sm">Chat History</span>
-          <Button size="icon" variant="ghost" onClick={() => setSidebarOpen(false)} data-testid="button-close-sidebar">
-            <PanelLeftClose className="w-4 h-4" />
-          </Button>
-        </div>
-        <div className="px-2 pt-2 pb-1">
-          <Button
-            className="w-full justify-start gap-2"
-            variant="secondary"
-            onClick={() => { createConv.mutate(undefined); setSidebarOpen(false); }}
-            disabled={createConv.isPending}
-            data-testid="button-new-task"
-          >
-            <Plus className="w-4 h-4" />
-            New Chat
-          </Button>
-        </div>
-        <ScrollArea className="flex-1 px-2 pb-2">
-          {convsLoading ? (
-            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full mb-1 rounded-md" />)
-          ) : conversations.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">No chats yet</p>
-          ) : (
-            conversations.map((c) => (
-              <div
-                key={c.id}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-2 cursor-pointer mb-0.5",
-                  activeConvId === c.id ? "bg-accent text-accent-foreground" : "active:bg-accent/50"
-                )}
-                style={{ minHeight: 44 }}
-                onClick={() => { setActiveConvId(c.id); setSidebarOpen(false); }}
-                data-testid={`task-item-${c.id}`}
-              >
-                <Shield className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
-                <span className="text-xs flex-1 truncate py-3">{c.title}</span>
-                <button
-                  className="flex-shrink-0 text-muted-foreground/50 active:text-destructive p-2 -mr-1"
-                  onClick={(e) => { e.stopPropagation(); deleteConv.mutate(c.id); }}
-                  data-testid={`button-delete-task-${c.id}`}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))
-          )}
-        </ScrollArea>
-      </div>
-
-      {sidebarOpen && <div className="absolute inset-0 z-30 bg-black/40" onClick={() => setSidebarOpen(false)} />}
-
-      <div className="flex flex-col flex-1 min-w-0 h-full">
-        <header className="flex items-center gap-1 px-2 py-2 border-b border-border bg-card flex-shrink-0">
-          <Button size="icon" variant="ghost" onClick={() => setSidebarOpen(true)} data-testid="button-open-sidebar" title="Chat history">
-            <PanelLeftOpen className="w-4 h-4" />
-          </Button>
-          <div className="flex-1 min-w-0 px-1">
-            <span className="font-semibold text-sm truncate block" data-testid="text-agent-title">
-              {convDetail?.title || "a0p"}
-            </span>
-          </div>
-          <div className={cn(
-            "w-2 h-2 rounded-full flex-shrink-0 mr-1",
-            isEngineRunning ? "bg-green-400" : "bg-red-400"
-          )} data-testid="badge-engine-status" title={isEngineRunning ? "operational" : "stopped"} />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => createConv.mutate(undefined)}
-            disabled={createConv.isPending}
-            data-testid="button-new-chat"
-            className="gap-1 h-8 px-2 text-xs flex-shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New
-          </Button>
-        </header>
-
-        <ScrollArea className="flex-1 px-3 pr-4 py-2">
-          {!activeConvId && !streaming && (
-            <div className="flex flex-col items-center justify-center h-full py-12 gap-5 text-center">
-              <div className="relative">
-                <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
-                  <Shield className="w-10 h-10 text-primary" />
-                </div>
-                <div className={cn(
-                  "absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-background",
-                  isEngineRunning ? "bg-green-400" : "bg-red-400"
-                )} />
-              </div>
-              <div>
-                <h2 className="font-bold text-xl mb-1">agent zero</h2>
-                <p className="text-muted-foreground text-xs max-w-xs">
-                  Autonomous AI agent with tool access. Give me a task — I'll execute commands, manage files, check email, and browse Drive.
-                </p>
-              </div>
-              <div className="w-full max-w-sm space-y-2">
-                {[
-                  { label: "List project files", icon: FileText },
-                  { label: "Check my Gmail inbox", icon: Mail },
-                  { label: "Show system info", icon: TermIcon },
-                  { label: "Search codebase for TODO", icon: Search },
-                ].map((s) => (
-                  <button
-                    key={s.label}
-                    onClick={() => { setInput(s.label); textareaRef.current?.focus(); }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs border border-border bg-card hover-elevate text-left"
-                    data-testid={`suggestion-${s.label.replace(/\s+/g, "-").toLowerCase()}`}
-                  >
-                    <s.icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    <span>{s.label}</span>
-                    <ChevronRight className="w-3 h-3 text-muted-foreground ml-auto" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {messagesLoading && activeConvId && (
-            <div className="space-y-3 py-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className={cn("flex gap-2", i % 2 === 0 ? "" : "flex-row-reverse")}>
-                  <Skeleton className="w-6 h-6 rounded-full flex-shrink-0" />
-                  <Skeleton className={cn("h-14 rounded-xl", i % 2 === 0 ? "w-64" : "w-48")} />
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="space-y-3 pb-2">
-            {messages.map((msg) => (
-              <AgentMessage key={msg.id} message={msg} />
-            ))}
-            {streaming && toolActions.length > 0 && (
-              <ToolActionsDisplay actions={toolActions} />
-            )}
-            {streaming && streamContent && (
-              <AgentMessage
-                message={{
-                  id: -1, role: "assistant", content: streamContent,
-                  conversationId: activeConvId!, model: "agent", metadata: null, createdAt: new Date(),
-                }}
-                isStreaming
-              />
-            )}
-            {streaming && !streamContent && toolActions.length === 0 && (
-              <div className="flex gap-2 items-start">
-                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Shield className="w-3.5 h-3.5 text-primary" />
-                </div>
-                <div className="bg-card border border-border rounded-xl px-3 py-2">
-                  <div className="flex gap-1 items-center h-5">
-                    <span className="text-xs text-muted-foreground mr-1">thinking</span>
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0ms]" />
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:150ms]" />
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:300ms]" />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          <div ref={bottomRef} />
-        </ScrollArea>
-
-        <div
-          className="px-3 pt-2 border-t border-border bg-card flex-shrink-0 space-y-2"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
-        >
-          <div className="flex gap-2 items-end">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => { setInput(e.target.value); autoResize(e.target); }}
-              onKeyDown={handleKey}
-              placeholder="Give a0p a task…"
-              className="resize-none min-h-[44px] flex-1"
-              rows={2}
-              disabled={streaming}
-              data-testid="input-message"
-              style={{ overflow: "hidden" }}
-            />
-            <Button size="icon" className="h-11 w-11 flex-shrink-0" onClick={sendMessage} disabled={!input.trim() || streaming} data-testid="button-send">
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2 overflow-x-auto">
-            <span className="text-[9px] text-muted-foreground flex-shrink-0">slot:</span>
-            {(["a", "b", "c"] as const).map((s) => {
-              const slot = modelSlots?.[s];
-              const label = slot?.label || s.toUpperCase();
-              const model = slot?.model || "—";
-              const noKey = slot && !slot.apiKeySet;
-              return (
-                <button
-                  key={s}
-                  onClick={() => setActiveSlot(s)}
-                  title={noKey ? `${model} — no API key set` : model}
-                  className={cn(
-                    "flex items-center gap-1 px-3 py-2 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors border flex-shrink-0 min-h-[36px]",
-                    activeSlot === s
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-card text-muted-foreground border-border hover:text-foreground",
-                    noKey && activeSlot !== s && "border-amber-500/50 text-amber-500/70"
-                  )}
-                  data-testid={`slot-pill-${s}`}
-                >
-                  {label}
-                  {noKey && <span className="text-[8px] opacity-70">⚠</span>}
-                </button>
-              );
-            })}
-            {modelSlots && (
-              <span className="text-[9px] text-muted-foreground ml-1 truncate max-w-[120px]">
-                {modelSlots[activeSlot]?.model || ""}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ToolActionsDisplay({ actions }: { actions: ToolAction[] }) {
-  return (
-    <div className="space-y-1.5">
-      {actions.map((action, i) => {
-        const Icon = TOOL_ICONS[action.name] || TermIcon;
-        if (action.type === "tool_call") {
-          return (
-            <div key={i} className="flex items-start gap-2" data-testid={`tool-call-${i}`}>
-              <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Icon className="w-3 h-3 text-amber-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-medium text-amber-400">
-                  {TOOL_LABELS[action.name] || action.name}
-                </div>
-                {action.args && (
-                  <div className="text-[10px] font-mono text-muted-foreground truncate">
-                    {action.args.command || action.args.path || action.args.pattern || action.args.to || JSON.stringify(action.args).slice(0, 80)}
-                  </div>
-                )}
-              </div>
-              <div className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse mt-2" />
-            </div>
-          );
-        }
-        return (
-          <div key={i} className="ml-8 rounded-md bg-background border border-border p-2 max-h-32 overflow-auto min-w-0" data-testid={`tool-result-${i}`}>
-            <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-all max-w-full">
-              {action.result?.slice(0, 1000) || "(no output)"}
-            </pre>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function AgentMessage({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
-  const isUser = message.role === "user";
-  const { pinContent, content: pinnedContent } = usePopout();
-  const isPinned = pinnedContent === message.content;
-  const { toast } = useToast();
-  const [rating, setRating] = useState<1 | -1 | null>(null);
-
-  const feedbackMutation = useMutation({
-    mutationFn: (r: 1 | -1) => apiRequest("POST", "/api/v1/feedback", { conversationId: message.conversationId, rating: r }),
-    onSuccess: (_data, r) => {
-      setRating(r);
-      toast({ title: r === 1 ? "Good — reward signal sent" : "Noted — penalty signal sent" });
     },
-    onError: () => toast({ title: "Feedback failed", variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const sendMessage = useMutation({
+    mutationFn: async (content: string) => {
+      if (!activeConvId) throw new Error("No conversation selected");
+      const res = await apiRequest("POST", `/api/v1/conversations/${activeConvId}/messages`, {
+        role: "user",
+        content,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/v1/conversations", activeConvId, "messages"] });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   return (
-    <div className={cn("flex gap-2 items-start group", isUser && "flex-row-reverse")}>
-      <div
-        className={cn(
-          "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5",
-          isUser ? "bg-secondary" : "bg-primary/10"
-        )}
-      >
-        {isUser ? <User className="w-3.5 h-3.5 text-secondary-foreground" /> : <Shield className="w-3.5 h-3.5 text-primary" />}
+    <div className="flex h-full" data-testid="chat-page">
+      <div className="w-56 shrink-0 hidden md:block">
+        <ConversationList
+          conversations={conversations}
+          activeId={activeConvId}
+          onSelect={selectConv}
+          onCreate={() => createConv.mutate()}
+          onDelete={(id) => deleteConv.mutate(id)}
+          isCreating={createConv.isPending}
+        />
       </div>
-      <div className="flex flex-col gap-1 max-w-[85%] min-w-0">
-        <div
-          className={cn(
-            "rounded-xl px-3 py-2 text-sm overflow-hidden min-w-0",
-            isUser
-              ? "bg-primary text-primary-foreground rounded-tr-sm"
-              : "bg-card border border-border rounded-tl-sm"
-          )}
-          data-testid={`message-${message.id}`}
-        >
-          {isUser ? (
-            <p className="whitespace-pre-wrap break-words">{message.content}</p>
-          ) : (
-            <div className="break-words min-w-0 [&_.markdown-content]:text-sm [&_.markdown-content]:min-w-0 [&_.code-block]:bg-black/20 [&_.code-block]:rounded-md [&_.code-block]:p-2 [&_.code-block]:text-xs [&_.code-block]:overflow-x-auto [&_.code-block]:my-1 [&_.code-block]:font-mono [&_.code-block]:max-w-full [&_.inline-code]:bg-black/20 [&_.inline-code]:px-1 [&_.inline-code]:rounded [&_.inline-code]:text-xs [&_.inline-code]:font-mono [&_.inline-code]:break-all [&_.md-h1]:text-base [&_.md-h1]:font-bold [&_.md-h1]:mb-1 [&_.md-h2]:text-sm [&_.md-h2]:font-bold [&_.md-h2]:mb-1 [&_.md-h3]:text-sm [&_.md-h3]:font-semibold [&_.md-h3]:mb-0.5 [&_.md-ul]:pl-4 [&_.md-li]:list-disc">
-              <MarkdownContent content={message.content} />
-              {isStreaming && (
-                <span className="inline-block w-0.5 h-3.5 bg-current ml-0.5 animate-pulse" />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {!activeConvId ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground" data-testid="chat-empty">
+            <Bot className="h-10 w-10" />
+            <p className="text-sm">Start a conversation</p>
+            <Button size="sm" onClick={() => createConv.mutate()} disabled={createConv.isPending} data-testid="btn-start-chat">
+              <Plus className="h-3.5 w-3.5 mr-1" /> New Chat
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div ref={scrollRef} className="flex-1 overflow-auto p-4">
+              {msgsLoading ? (
+                <div className="flex flex-col gap-3">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-3/4" />)}
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground" data-testid="no-messages">
+                  <p className="text-sm">No messages yet</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {messages.map((m) => <MessageBubble key={m.id} message={m} />)}
+                </div>
               )}
             </div>
-          )}
-        </div>
-        {!isUser && !isStreaming && (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => pinContent(message.content, "Pinned Response")}
-              className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-colors active:scale-95",
-                isPinned
-                  ? "text-primary bg-primary/10"
-                  : "text-muted-foreground/60 bg-muted/40 active:bg-primary/10 active:text-primary"
-              )}
-              data-testid={`button-pin-${message.id}`}
-              title="Pin this response"
-            >
-              <Pin className="w-3 h-3" />
-              {isPinned ? "pinned" : "pin"}
-            </button>
-            <button
-              onClick={() => { if (rating === null) feedbackMutation.mutate(1); }}
-              disabled={rating !== null || feedbackMutation.isPending}
-              className={cn(
-                "flex items-center gap-0.5 px-2 py-1 rounded text-[10px] transition-colors active:scale-95",
-                rating === 1
-                  ? "text-green-500 bg-green-500/10"
-                  : "text-muted-foreground/60 bg-muted/40 active:bg-green-500/10 active:text-green-500 disabled:opacity-40"
-              )}
-              data-testid={`button-thumbs-up-${message.id}`}
-              title="Good response — trains reward signal"
-            >
-              <ThumbsUp className="w-3 h-3" />
-            </button>
-            <button
-              onClick={() => { if (rating === null) feedbackMutation.mutate(-1); }}
-              disabled={rating !== null || feedbackMutation.isPending}
-              className={cn(
-                "flex items-center gap-0.5 px-2 py-1 rounded text-[10px] transition-colors active:scale-95",
-                rating === -1
-                  ? "text-red-500 bg-red-500/10"
-                  : "text-muted-foreground/60 bg-muted/40 active:bg-red-500/10 active:text-red-500 disabled:opacity-40"
-              )}
-              data-testid={`button-thumbs-down-${message.id}`}
-              title="Bad response — trains penalty signal"
-            >
-              <ThumbsDown className="w-3 h-3" />
-            </button>
-          </div>
+            <ChatInput onSend={(c) => sendMessage.mutate(c)} isSending={sendMessage.isPending} />
+          </>
         )}
       </div>
     </div>
