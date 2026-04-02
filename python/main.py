@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from .database import engine
 from .engine import PCNAEngine
@@ -83,6 +83,22 @@ async def auth_user(request: Request):
         "createdAt": None,
         "updatedAt": None,
     }
+
+
+@app.get("/api/login")
+async def login(request: Request):
+    domains = os.environ.get("REPLIT_DOMAINS", "")
+    domain = domains.split(",")[0].strip() if domains else ""
+    if domain:
+        redirect_url = f"https://{domain}/"
+        auth_url = f"https://replit.com/auth_with_repl_site?domain={domain}&redirect_url={redirect_url}"
+        return RedirectResponse(url=auth_url)
+    return RedirectResponse(url="/")
+
+
+@app.get("/api/logout")
+async def logout(request: Request):
+    return RedirectResponse(url="/login")
 
 
 @app.get("/api/health")
