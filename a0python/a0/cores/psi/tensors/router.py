@@ -110,6 +110,20 @@ def handle(req: A0Request, home: Optional[Path] = None) -> A0Response:
         "subagents_used": resp.get("subagents_used", []),
         "hmmm": req.hmmm,
     })
+
+    # Path B training capture: when A0_RUNTIME=training, store the external
+    # model's response as a (reservoir_state, omega_target) training example
+    # so ZFAE's readout W_out can be trained offline via train_readout().
+    from .env import A0_RUNTIME
+    if A0_RUNTIME == "training":
+        try:
+            from a0.cores.pcna.inference import get_backend
+            backend = get_backend()
+            if hasattr(backend, "capture_training_example"):
+                backend.capture_training_example(text, resp.get("text", ""))
+        except Exception:
+            pass  # training capture is best-effort; never block a response
+
     return A0Response(
         task_id=req.task_id,
         result={"text": resp.get("text", ""), "artifacts": []},

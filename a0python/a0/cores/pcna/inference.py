@@ -6,10 +6,12 @@ Path A (adapted — works today):
     PatternMatchBackend  no model, lexical proxy — always available
     LlamaCppBackend      GGUF model via llama-cpp-python (set A0_MODEL_PATH)
 
-Path B (native — future):
-    Custom transformer where attention head groups map directly to
-    phi/psi/omega/guardian/memory tensor fields and routing follows
-    the 7:3 heptagram pattern. Requires training from scratch.
+Path B (native — ZFAE):
+    ZFAEBackend  Zeta-structured, Field-partitioned, Alpha-regulated,
+                 Echo-state engine.  Set A0_MODEL=zfae to activate.
+                 Reservoir (53 nodes, PTCA topology) is fixed; only the
+                 readout W_out is trained from external-model output.
+                 See a0/cores/pcna/zfae.py for architecture details.
 
 In Path A the tensor "slices" are proxies:
     phi   — structural features of the input (no model call needed)
@@ -26,6 +28,7 @@ from __future__ import annotations
 import math
 import os
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
@@ -150,21 +153,65 @@ class LlamaCppBackend:
         )
 
 
+class ZFAEBackend:
+    """Path B backend — delegates to ZFAEEngine.
+
+    Activate with A0_MODEL=zfae.  If A0_TRAINING_DIR contains a
+    zfae_weights.json the saved weights are loaded automatically.
+    """
+
+    name = "zfae"
+
+    def __init__(self) -> None:
+        from a0.cores.pcna.zfae import ZFAEEngine
+        from a0.cores.psi.tensors.env import A0_TRAINING_DIR
+        weight_path = Path(A0_TRAINING_DIR) / "zfae_weights.json" if A0_TRAINING_DIR else None
+        if weight_path and weight_path.exists():
+            self._engine = ZFAEEngine.load_weights(str(weight_path))
+        else:
+            self._engine = ZFAEEngine()
+
+    def generate(self, prompt: str, context: List[Dict[str, Any]]) -> _TensorSlices:
+        return self._engine.generate(prompt, context)
+
+    def capture_training_example(self, prompt: str, response_text: str) -> None:
+        self._engine.capture_training_example(prompt, response_text)
+
+    def train_readout(self, training_dir: str) -> int:
+        return self._engine.train_readout(training_dir)
+
+    def save_weights(self, path: str) -> None:
+        self._engine.save_weights(path)
+
+
 # Module-level singleton — lazy init, never re-initialized mid-session.
 _backend: Optional[Any] = None
 
 
 def get_backend() -> Any:
-    """Return the best available PCNA backend (cached)."""
+    """Return the best available PCNA backend (cached).
+
+    Selection order:
+        1. ZFAEBackend   when A0_MODEL=zfae
+        2. LlamaCppBackend  when A0_MODEL_PATH is set
+        3. PatternMatchBackend  always available (fallback)
+    """
     global _backend
     if _backend is not None:
         return _backend
 
-    from a0.cores.psi.tensors.env import A0_MODEL_PATH
-    model_path = A0_MODEL_PATH
-    if model_path:
+    from a0.cores.psi.tensors.env import A0_MODEL, A0_MODEL_PATH
+
+    if A0_MODEL == "zfae":
         try:
-            _backend = LlamaCppBackend(model_path)
+            _backend = ZFAEBackend()
+            return _backend
+        except Exception:
+            pass
+
+    if A0_MODEL_PATH:
+        try:
+            _backend = LlamaCppBackend(A0_MODEL_PATH)
             return _backend
         except (ImportError, Exception):
             pass

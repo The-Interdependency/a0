@@ -369,7 +369,7 @@ Copy `.env.example` to `.env` and fill in values.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `A0_MODEL` | `local-echo` | adapter: `local-echo` / `anthropic-api` / `claude-agent` / `local-ollama` / `local-llama` / `emergent` |
+| `A0_MODEL` | `local-echo` | adapter: `local-echo` / `anthropic-api` / `claude-agent` / `local-ollama` / `local-llama` / `emergent` / `zfae` |
 | `A0_LOCAL_MODEL` | `llama3.2` | ollama model name |
 | `A0_OLLAMA_BASE` | `http://localhost:11434` | ollama daemon URL |
 | `A0_MODEL_PATH` | _(empty)_ | absolute path to `.gguf` model file |
@@ -401,6 +401,54 @@ soft_reset(child)                                              # clear Tier 1; k
 ```
 
 Each instance has an isolated home directory with its own `state/`, `logs/`, and `instance.json`.
+
+---
+
+## ZFAE — Path B Inference Engine
+
+**Zeta-structured, Field-partitioned, Alpha-regulated, Echo-state**
+
+ZFAE is the native PCNA inference engine — an echo state network whose reservoir topology mirrors the PTCA seed lattice.
+
+| Letter | Meaning | Technical role |
+|--------|---------|----------------|
+| **Z** | Zeta-structured | Reservoir connections follow prime {7:3}/{7:2} heptagram topology — same structure as the Riemann zeta function's connection to prime distribution |
+| **F** | Field-partitioned | Reservoir is split into phi / psi / omega / sentinel field groups, not a monolithic matrix |
+| **A** | Alpha-regulated | Spectral radius α < 1 enforces the echo-state property; α controls memory depth (also echoes EDCM's α persistence parameter) |
+| **E** | Echo-state | Current reservoir state x(t) is entirely determined by past inputs — no hidden intent, observable only. Also: external models exist first; ZFAE is trained on their echoes |
+
+**Architecture:**
+```
+Reservoir (fixed — 53 nodes = PTCA topology)
+    49 compute nodes: 7 meta-groups × 7 nodes, {7:3} heptagram within each
+    4 sentinel nodes: {7:2} schedule across all meta-groups
+
+    x(t+1) = tanh( W_r · x(t) + W_in · u(t) )     ← echo state update
+    y(t)   = W_out · x(t)                           ← readout (only trained part)
+
+Input:   phi_features(text) ++ psi_features(text)  →  6-dim
+State:   53-dim reservoir  (phi | psi | omega | sentinel partitions)
+Output:  3-dim omega synthesis features
+```
+
+**Path B training workflow:**
+```python
+# 1. Collect training data (run with external model active)
+#    .env: A0_MODEL=anthropic-api, A0_RUNTIME=training, A0_TRAINING_DIR=/path/to/data
+
+# 2. Train the readout W_out
+from a0.cores.pcna.inference import get_backend
+import os; os.environ["A0_MODEL"] = "zfae"
+backend = get_backend()
+n = backend.train_readout("/path/to/data")
+backend.save_weights("/path/to/data/zfae_weights.json")
+print(f"Trained on {n} examples")
+
+# 3. Switch to ZFAE inference
+#    .env: A0_MODEL=zfae, A0_TRAINING_DIR=/path/to/data   (weights auto-loaded)
+```
+
+Install numpy for accurate training: `pip install "a0python[zfae]"`
 
 ---
 

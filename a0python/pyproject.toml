@@ -33,6 +33,9 @@ tools = [
 encryption = [
     "cryptography>=42.0",
 ]
+zfae = [
+    "numpy>=1.24",   # for accurate lstsq in train_readout(); falls back to pure-Python otherwise
+]
 dev = [
     "pytest>=7.0",
 ]
