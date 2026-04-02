@@ -15,6 +15,10 @@ localPort = 5904
 externalPort = 3000
 
 [[ports]]
+localPort = 8000
+externalPort = 8000
+
+[[ports]]
 localPort = 8001
 externalPort = 3002
 
@@ -45,7 +49,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
+args = "bash scripts/start-dev.sh"
 waitForPort = 5000
 
 [agent]

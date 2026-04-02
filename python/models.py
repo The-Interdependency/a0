@@ -47,7 +47,7 @@ class Message(Base):
     role = Column(Text, nullable=False)
     content = Column(Text, nullable=False)
     model = Column(Text)
-    metadata = Column(JSONB)
+    metadata_ = Column("metadata", JSONB)
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
 
