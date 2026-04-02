@@ -67,6 +67,7 @@ class PCNAEngine:
 
     def _inject(self, signal: np.ndarray):
         self.phi.inject(signal)
+        self.phi._recompute_coherence()
         self.memory_s.write(signal)
 
         psi_signal = np.full(53, self.phi.ring_coherence, dtype=np.float64)
@@ -182,6 +183,7 @@ class PCNAEngine:
             "reward_index": self.reward_count,
             "winner": winner,
             "outcome": round(outcome, 4),
+            "nudged": True,
             "nudged_cores": ["phi", "psi", "omega", "guardian"],
             "memory_flush": flushed,
             "phi_coherence_after": round(self.phi.ring_coherence, 4),
