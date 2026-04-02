@@ -303,6 +303,12 @@ async def stripe_webhook(request: Request):
                 updates["subscription_status"] = "active"
             if lookup_key == "addon_byok_monthly":
                 updates["byok_enabled"] = True
+
+            if tier == "founder":
+                slot = await _allocate_founder_slot(uid)
+                if slot:
+                    updates["founder_slot"] = slot
+
             if updates:
                 set_clause = ", ".join(f"{k} = :{k}" for k in updates)
                 updates["uid"] = uid
@@ -311,6 +317,9 @@ async def stripe_webhook(request: Request):
                         text(f"UPDATE users SET {set_clause} WHERE id = :uid"),
                         updates,
                     )
+
+            if tier in ("founder", "patron"):
+                await _sync_founder_registry(uid, tier, action="upsert")
 
     elif etype in ("customer.subscription.updated", "customer.subscription.created"):
         sub = event["data"]["object"]
@@ -328,19 +337,33 @@ async def stripe_webhook(request: Request):
                 set_parts.append("subscription_tier = :tier")
                 params["tier"] = tier
             async with engine.begin() as conn:
+                uid_row = await conn.execute(
+                    text("SELECT id FROM users WHERE stripe_customer_id = :cid"),
+                    {"cid": customer_id},
+                )
+                uid_rec = uid_row.mappings().first()
                 await conn.execute(
                     text(f"UPDATE users SET {', '.join(set_parts)} WHERE stripe_customer_id = :cid"),
                     params,
                 )
+            if tier in ("founder", "patron") and uid_rec:
+                await _sync_founder_registry(uid_rec["id"], tier, action="upsert")
 
     elif etype == "customer.subscription.deleted":
         customer_id = event["data"]["object"].get("customer")
         if customer_id:
             async with engine.begin() as conn:
+                uid_row = await conn.execute(
+                    text("SELECT id FROM users WHERE stripe_customer_id = :cid"),
+                    {"cid": customer_id},
+                )
+                uid_rec = uid_row.mappings().first()
                 await conn.execute(
                     text("UPDATE users SET subscription_tier = 'free', subscription_status = 'canceled' WHERE stripe_customer_id = :cid"),
                     {"cid": customer_id},
                 )
+            if uid_rec:
+                await _sync_founder_registry(uid_rec["id"], "free", action="downgrade")
 
     elif etype == "invoice.payment_failed":
         customer_id = event["data"]["object"].get("customer")
@@ -361,3 +384,43 @@ async def stripe_webhook(request: Request):
                 )
 
     return {"received": True}
+
+
+async def _allocate_founder_slot(uid: str) -> Optional[int]:
+    """Assign the next available founder slot (1-53). Idempotent."""
+    async with engine.begin() as conn:
+        row = await conn.execute(
+            text("SELECT founder_slot FROM users WHERE id = :uid"),
+            {"uid": uid},
+        )
+        rec = row.mappings().first()
+        if rec and rec["founder_slot"]:
+            return rec["founder_slot"]
+
+        cnt_row = await conn.execute(
+            text("SELECT COUNT(*) FROM founders WHERE tier = 'founder'")
+        )
+        used = cnt_row.scalar() or 0
+        if used >= 53:
+            return None
+        return int(used) + 1
+
+
+async def _sync_founder_registry(uid: str, tier: str, action: str) -> None:
+    """Create/update founders table entry for patron or founder tier users."""
+    async with engine.begin() as conn:
+        if action == "upsert" and tier in ("founder", "patron"):
+            await conn.execute(
+                text("""
+                    INSERT INTO founders (user_id, display_name, listed, subscribed_since, tier)
+                    VALUES (:uid, '', false, CURRENT_TIMESTAMP, :tier)
+                    ON CONFLICT (user_id) DO UPDATE
+                      SET tier = EXCLUDED.tier
+                """),
+                {"uid": uid, "tier": tier},
+            )
+        elif action == "downgrade":
+            await conn.execute(
+                text("UPDATE founders SET tier = 'free', listed = false WHERE user_id = :uid AND tier != 'founder'"),
+                {"uid": uid},
+            )
