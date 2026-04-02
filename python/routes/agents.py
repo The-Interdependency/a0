@@ -68,39 +68,45 @@ class SetProviderRequest(BaseModel):
 
 async def ensure_primary_agent(pcna: PCNAEngine):
     from ..database import get_session
-    from ..models import A0pEvent as AgentInstanceModel
-    from sqlalchemy import select, delete as sa_delete
+    from sqlalchemy import text
 
     agent_name = compose_name(energy_registry.get_active_provider())
-    existing = None
-    try:
-        existing = await storage.get_conversation(0)
-    except Exception:
-        pass
 
-    all_agents = []
     try:
-        from ..models import HeartbeatTask
-        from sqlalchemy import text
         async with get_session() as session:
-            result = await session.execute(
-                text("SELECT name FROM agent_instances")
-            )
+            result = await session.execute(text("SELECT name FROM agent_instances"))
             all_agents = [r[0] for r in result.fetchall()]
     except Exception:
-        pass
+        all_agents = []
 
-    for name in all_agents:
-        if is_deprecated(name):
-            try:
-                from sqlalchemy import text as sa_text
-                async with get_session() as session:
+    deprecated_found = [n for n in all_agents if is_deprecated(n)]
+    if deprecated_found:
+        try:
+            async with get_session() as session:
+                for name in deprecated_found:
                     await session.execute(
-                        sa_text("DELETE FROM agent_instances WHERE name = :n"),
+                        text("DELETE FROM agent_instances WHERE name = :n"),
                         {"n": name},
                     )
-            except Exception:
-                pass
+                print(f"[boot] Cleaned {len(deprecated_found)} deprecated agent rows")
+        except Exception as e:
+            print(f"[boot] Deprecated cleanup failed: {e}")
+
+    primary_exists = agent_name in all_agents
+    if not primary_exists:
+        try:
+            async with get_session() as session:
+                await session.execute(
+                    text(
+                        "INSERT INTO agent_instances (name, slot, status, is_persistent) "
+                        "VALUES (:name, :slot, 'active', true) "
+                        "ON CONFLICT (name) DO UPDATE SET status = 'active'"
+                    ),
+                    {"name": agent_name, "slot": ZFAE_AGENT_DEF["slot"]},
+                )
+                print(f"[boot] Primary agent row ensured: {agent_name}")
+        except Exception as e:
+            print(f"[boot] Primary agent row creation skipped (table may not exist): {e}")
 
 
 @router.get("/agents")

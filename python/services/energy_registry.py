@@ -1,6 +1,7 @@
 import os
+from sqlalchemy import text as sa_text
 
-PROVIDERS = {
+BUILTIN_PROVIDERS = {
     "gemini": {
         "id": "gemini",
         "label": "Gemini 2.5 Pro",
@@ -41,11 +42,44 @@ class EnergyRegistry:
 
     def __init__(self):
         self._active: str | None = None
+        self._providers: dict = dict(BUILTIN_PROVIDERS)
+        self._db_loaded = False
+
+    async def load_from_db(self):
+        if self._db_loaded:
+            return
+        try:
+            from ..database import get_session
+            async with get_session() as session:
+                result = await session.execute(
+                    sa_text("SELECT key, model_id, api_identifier, vendor, is_default "
+                            "FROM model_registry WHERE enabled = true")
+                )
+                rows = result.fetchall()
+                for row in rows:
+                    pid = row[0]
+                    if pid not in self._providers:
+                        self._providers[pid] = {
+                            "id": pid,
+                            "label": row[1],
+                            "model": row[2],
+                            "vendor": row[3],
+                            "env_key": "",
+                            "cost_per_1k_input": 0.0,
+                            "cost_per_1k_output": 0.0,
+                            "max_tokens": 8192,
+                            "supports_streaming": True,
+                        }
+                    if row[4]:
+                        self._active = pid
+            self._db_loaded = True
+        except Exception:
+            self._db_loaded = True
 
     def list_providers(self) -> list[dict]:
         result = []
-        for pid, info in PROVIDERS.items():
-            available = bool(os.environ.get(info["env_key"]))
+        for pid, info in self._providers.items():
+            available = bool(os.environ.get(info.get("env_key", ""))) or not info.get("env_key")
             result.append({
                 "id": pid,
                 "label": info["label"],
@@ -57,19 +91,20 @@ class EnergyRegistry:
         return result
 
     def get_provider(self, provider_id: str) -> dict | None:
-        return PROVIDERS.get(provider_id)
+        return self._providers.get(provider_id)
 
     def get_active_provider(self) -> str | None:
-        if self._active and self._active in PROVIDERS:
+        if self._active and self._active in self._providers:
             return self._active
-        for pid, info in PROVIDERS.items():
-            if os.environ.get(info["env_key"]):
+        for pid, info in self._providers.items():
+            env_key = info.get("env_key", "")
+            if env_key and os.environ.get(env_key):
                 self._active = pid
                 return pid
         return None
 
     def set_active_provider(self, provider_id: str) -> bool:
-        if provider_id not in PROVIDERS:
+        if provider_id not in self._providers:
             return False
         self._active = provider_id
         return True
@@ -77,12 +112,12 @@ class EnergyRegistry:
     def compose_agent_name(self, base_name: str = "a0(zeta fun alpha echo)") -> str:
         active = self.get_active_provider()
         if active:
-            label = PROVIDERS[active]["label"]
+            label = self._providers[active]["label"]
             return f"{base_name} {{{label}}}"
         return base_name
 
     def estimate_cost(self, provider_id: str, prompt_tokens: int, completion_tokens: int) -> float:
-        info = PROVIDERS.get(provider_id)
+        info = self._providers.get(provider_id)
         if not info:
             return 0.0
         return (
