@@ -3,6 +3,17 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    if (res.status === 429) {
+      try {
+        const body = JSON.parse(text);
+        if (body.upgrade_url) {
+          const event = new CustomEvent("a0p:upgrade-required", {
+            detail: { upgrade_url: body.upgrade_url },
+          });
+          window.dispatchEvent(event);
+        }
+      } catch {}
+    }
     throw new Error(`${res.status}: ${text}`);
   }
 }

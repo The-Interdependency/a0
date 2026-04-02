@@ -9,6 +9,8 @@ import ChatPage from "@/pages/chat";
 import ConsolePage from "@/pages/console";
 import SplashPage from "@/pages/splash";
 import LoginPage from "@/pages/login";
+import PricingPage from "@/pages/pricing";
+import AdminContextsPage from "@/pages/admin-contexts";
 import TopNav from "@/components/top-nav";
 import HmmmDoctrine from "@/components/hmmm-doctrine";
 
@@ -19,6 +21,8 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/" component={ChatPage} />
       <Route path="/console" component={ConsolePage} />
+      <Route path="/pricing" component={PricingPage} />
+      <Route path="/admin/contexts" component={AdminContextsPage} />
       <Route component={ChatPage} />
     </Switch>
   );

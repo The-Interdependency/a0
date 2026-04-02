@@ -412,3 +412,33 @@ export const transcriptReports = pgTable("transcript_reports", {
 export const insertTranscriptReportSchema = createInsertSchema(transcriptReports).omit({ id: true, createdAt: true });
 export type TranscriptReport = typeof transcriptReports.$inferSelect;
 export type InsertTranscriptReport = z.infer<typeof insertTranscriptReportSchema>;
+
+export const founders = pgTable("founders", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().unique(),
+  displayName: varchar("display_name", { length: 200 }).notNull(),
+  listed: boolean("listed").notNull().default(false),
+  subscribedSince: timestamp("subscribed_since").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  tier: varchar("tier", { length: 50 }).notNull().default("patron"),
+});
+
+export const insertFounderSchema = createInsertSchema(founders).omit({ id: true, subscribedSince: true });
+export type Founder = typeof founders.$inferSelect;
+export type InsertFounder = z.infer<typeof insertFounderSchema>;
+
+export const promptContexts = pgTable("prompt_contexts", {
+  name: varchar("name", { length: 100 }).primaryKey(),
+  value: text("value").notNull().default(""),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedBy: varchar("updated_by"),
+});
+
+export type PromptContext = typeof promptContexts.$inferSelect;
+
+export const byokKeys = pgTable("byok_keys", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  provider: varchar("provider", { length: 50 }).notNull(),
+  keyHash: varchar("key_hash", { length: 256 }).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});

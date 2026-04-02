@@ -37,6 +37,11 @@ async def lifespan(app: FastAPI):
     from .routes.agents import ensure_primary_agent
     await ensure_primary_agent(pcna)
     print("[python] Primary agent verified, deprecated names cleaned")
+    from .routes.contexts import _ensure_defaults as ensure_contexts
+    await ensure_contexts()
+    print("[python] Default prompt contexts ensured")
+    from .services.stripe_service import ensure_stripe_products
+    await ensure_stripe_products()
     await heartbeat_service.start()
     yield
     await heartbeat_service.stop()

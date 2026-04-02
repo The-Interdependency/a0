@@ -7,6 +7,9 @@ from .system import router as system_router
 from .tools import router as tools_router
 from .heartbeat_api import router as heartbeat_api_router
 from .pcna_api import router as pcna_router
+from .billing import router as billing_router
+from .contexts import router as contexts_router
+from .founders import router as founders_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -18,6 +21,9 @@ ALL_ROUTERS = [
     tools_router,
     heartbeat_api_router,
     pcna_router,
+    billing_router,
+    contexts_router,
+    founders_router,
 ]
 
 
@@ -33,6 +39,9 @@ def collect_ui_meta() -> list[dict]:
         "python.routes.tools",
         "python.routes.heartbeat_api",
         "python.routes.pcna_api",
+        "python.routes.billing",
+        "python.routes.contexts",
+        "python.routes.founders",
     ]
     tabs = []
     for mod_name in modules:
