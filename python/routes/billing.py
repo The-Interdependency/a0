@@ -144,10 +144,14 @@ async def list_plans():
     return plans
 
 
+_DEFAULT_SUCCESS_PATH = "/console?billing=success"
+_DEFAULT_CANCEL_PATH = "/pricing"
+
+
 class CheckoutBody(BaseModel):
     product: str
-    success_url: str
-    cancel_url: str
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
 
 
 @router.post("/checkout")
@@ -162,6 +166,10 @@ async def create_checkout(body: CheckoutBody, request: Request):
     spec = next((p for p in PRODUCTS if p["product_key"] == body.product), None)
     if not spec or spec["amount"] == 0:
         raise HTTPException(status_code=404, detail="Plan not found")
+
+    origin = request.headers.get("origin") or "https://a0p.replit.app"
+    success_url = body.success_url or f"{origin}{_DEFAULT_SUCCESS_PATH}"
+    cancel_url = body.cancel_url or f"{origin}{_DEFAULT_CANCEL_PATH}"
 
     price_id = PRICE_ID_CACHE.get(body.product)
     if not price_id:
@@ -178,20 +186,20 @@ async def create_checkout(body: CheckoutBody, request: Request):
         rec = row.mappings().first()
 
     customer_id = rec["stripe_customer_id"] if rec else None
-    email = rec["email"] if rec else None
+    user_email = rec["email"] if rec else None
 
     mode = "subscription" if price.recurring else "payment"
     session_kwargs: dict = {
         "mode": mode,
         "line_items": [{"price": price_id, "quantity": 1}],
-        "success_url": body.success_url,
-        "cancel_url": body.cancel_url,
+        "success_url": success_url,
+        "cancel_url": cancel_url,
         "metadata": {"user_id": uid, "product_key": body.product, "lookup_key": spec["lookup_key"]},
     }
     if customer_id:
         session_kwargs["customer"] = customer_id
-    elif email:
-        session_kwargs["customer_email"] = email
+    elif user_email:
+        session_kwargs["customer_email"] = user_email
 
     session = stripe.checkout.Session.create(**session_kwargs)
     return {"checkout_url": session.url}
