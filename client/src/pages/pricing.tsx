@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useBillingStatus } from "@/hooks/use-billing-status";
+import { useSEO } from "@/hooks/use-seo";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Loader2, Check, Star, Key, Users } from "lucide-react";
@@ -130,6 +131,7 @@ function PlanCard({
 }
 
 export default function PricingPage() {
+  useSEO({ title: "Pricing — a0p", description: "Choose your tier: Free, Seeker, Operator, Way Seer Patron, or Founder Lifetime." });
   const { tier, isPaid } = useBillingStatus();
   const { toast } = useToast();
   const [loadingKey, setLoadingKey] = useState<string | null>(null);

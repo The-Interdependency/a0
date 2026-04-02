@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/button";
 import { SiGoogle, SiGithub } from "react-icons/si";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
+import { useSEO } from "@/hooks/use-seo";
 import { useEffect } from "react";
 
 export default function LoginPage() {
+  useSEO({ title: "Sign In — a0p", description: "Sign in to a0p with your Replit account." });
   const { isAuthenticated, isLoading } = useAuth();
   const [, setLocation] = useLocation();
 

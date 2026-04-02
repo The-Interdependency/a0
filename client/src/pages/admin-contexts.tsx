@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useBillingStatus } from "@/hooks/use-billing-status";
+import { useSEO } from "@/hooks/use-seo";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ function ContextRow({ ctx, onSave }: { ctx: PromptContext; onSave: (name: string
 }
 
 export default function AdminContextsPage() {
+  useSEO({ title: "Prompt Contexts — a0p Admin" });
   const [, navigate] = useLocation();
   const { isAdmin, isLoading: billingLoading } = useBillingStatus();
   const { toast } = useToast();

@@ -1,8 +1,10 @@
 import { Link } from "wouter";
 import { Shield, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useSEO } from "@/hooks/use-seo";
 
 export default function SplashPage() {
+  useSEO({ title: "a0p — Welcome", description: "Welcome to a0p. One agent. The Interdependent Way." });
   return (
     <div
       className="min-h-screen bg-black text-white flex flex-col"

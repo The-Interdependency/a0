@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://a0p.replit.app/sitemap.xml

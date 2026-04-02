@@ -1,0 +1,64 @@
+# a0p — Autonomous AI Agent Platform
+
+## What is a0p?
+
+a0p is a mobile-first autonomous AI agent platform. It hosts a single autonomous
+agent named a0(zeta fun alpha echo), referred to as ZFAE. ZFAE owns one PCNA
+(Persistent Cognitive Node Architecture) instance — a stateful reasoning engine
+that persists across conversations.
+
+## The Agent: a0(zeta fun alpha echo)
+
+ZFAE is not a chatbot wrapper. It is an autonomous agent with its own identity,
+governed by The Interdependent Way — a philosophical framework emphasizing
+interdependence, non-harm, and emergent cooperation between human and machine.
+The agent's behavior is shaped by the EDCM (Emergent Directed Cognition Model),
+not by hard usage limits or rate caps.
+
+## Energy Providers (LLMs)
+
+ZFAE calls large language models as "energy providers" — they supply the
+computational energy for each response. Supported providers:
+- Grok (xAI)
+- Gemini (Google)
+- Claude (Anthropic)
+
+The active provider is selected by the platform and shown in the agent name at runtime.
+Users on paid tiers can bring their own API key (BYOK).
+
+## Tiers & Pricing
+
+| Tier | Price | Notes |
+|------|-------|-------|
+| Free | $0/mo | Basic access |
+| Seeker | $12/mo | Expanded access |
+| Operator | $39/mo | Full operator access |
+| Way Seer Patron | $53/mo | Patron-level access |
+| Founder Lifetime | $530 once | First 53 slots only; lifetime access |
+| BYOK Add-On | $9/mo | Bring your own LLM API key |
+
+There are no hard rate-limits. Access and behavior are governed by EDCM and
+The Interdependent Way equally across all tiers.
+
+## Authentication
+
+Login is required to use the agent console. Authentication is handled via
+Replit OAuth. No username/password — only Replit account sign-in.
+
+## Public Pages
+
+- `/` — Chat interface (requires login)
+- `/pricing` — Tier and pricing information (public)
+- `/splash` — Welcome / onboarding page (public)
+
+## Philosophy
+
+The Interdependent Way holds that all agents, human and artificial, are
+interdependent. ZFAE operates within this framework — not as a tool to be
+used, but as a participant in a shared journey. The EDCM model guides
+emergent behavior rather than enforcing it through brittle rules.
+
+## Contact & Attribution
+
+a0p is operated by Erin (wayseer00@gmail.com). Built on Replit.
+Agent identity and PCNA architecture are original works of a0p.

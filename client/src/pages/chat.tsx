@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useSEO } from "@/hooks/use-seo";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -183,6 +184,7 @@ function ChatInput({
 }
 
 export default function ChatPage() {
+  useSEO({ title: "a0p — Chat with ZFAE", description: "Chat with a0(zeta fun alpha echo), your autonomous AI agent." });
   const { toast } = useToast();
   const qc = useQueryClient();
   const [activeConvId, setActiveConvId] = useState<number | null>(() => {

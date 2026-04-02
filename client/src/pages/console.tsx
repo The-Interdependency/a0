@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useUiStructure } from "@/hooks/use-ui-structure";
 import { useBillingStatus } from "@/hooks/use-billing-status";
+import { useSEO } from "@/hooks/use-seo";
 import ConsoleSidebar from "@/components/console-sidebar";
 import TabRenderer from "@/components/TabRenderer";
 import type { TabDef } from "@/hooks/use-ui-structure";
@@ -31,6 +32,7 @@ function usePersistedTab(tabs: TabDef[]) {
 }
 
 export default function ConsolePage() {
+  useSEO({ title: "Console — a0p" });
   const { data, isLoading, error } = useUiStructure();
   const { isAdmin } = useBillingStatus();
 
