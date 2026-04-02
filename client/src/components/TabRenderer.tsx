@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -7,7 +8,7 @@ import FieldRenderer from "@/components/FieldRenderer";
 import type { TabDef, SectionDef } from "@/hooks/use-ui-structure";
 
 function SectionRenderer({ section }: { section: SectionDef }) {
-  const { data, isLoading, error, refetch, isFetching } = useQuery<unknown>({
+  const { data, isLoading, error } = useQuery<unknown>({
     queryKey: [section.endpoint],
     refetchInterval: section.refresh_ms ?? 30_000,
   });
@@ -62,8 +63,24 @@ interface TabRendererProps {
 }
 
 export default function TabRenderer({ tab }: TabRendererProps) {
+  const qc = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await Promise.all(
+      tab.sections.map((s) => qc.invalidateQueries({ queryKey: [s.endpoint] }))
+    );
+    setIsRefreshing(false);
+  }, [tab.sections, qc]);
+
   return (
-    <TabShell label={tab.label} icon={tab.icon}>
+    <TabShell
+      label={tab.label}
+      icon={tab.icon}
+      onRefresh={handleRefresh}
+      isRefreshing={isRefreshing}
+    >
       <div className="flex flex-col gap-6">
         {tab.sections.map((section, i) => (
           <div key={section.id}>

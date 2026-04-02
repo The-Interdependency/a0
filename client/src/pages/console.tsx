@@ -33,9 +33,8 @@ export default function ConsolePage() {
   const { data, isLoading, error } = useUiStructure();
 
   const tabs = data?.tabs ?? [];
-  const nonChatTabs = tabs.filter((t) => t.tab_id !== "chat");
-  const { activeTab, selectTab } = usePersistedTab(nonChatTabs);
-  const currentTab = nonChatTabs.find((t) => t.tab_id === activeTab);
+  const { activeTab, selectTab } = usePersistedTab(tabs);
+  const currentTab = tabs.find((t) => t.tab_id === activeTab);
 
   if (isLoading) {
     return (
@@ -57,7 +56,7 @@ export default function ConsolePage() {
     <div className="flex h-full" data-testid="console-page">
       <div className="w-48 shrink-0 hidden md:block">
         <ConsoleSidebar
-          tabs={nonChatTabs}
+          tabs={tabs}
           activeTab={activeTab}
           onSelectTab={selectTab}
           agentName={data?.agent}
@@ -66,7 +65,7 @@ export default function ConsolePage() {
 
       <div className="md:hidden w-full flex flex-col">
         <div className="overflow-x-auto border-b border-border px-2 py-1 flex gap-1 shrink-0" data-testid="console-mobile-tabs">
-          {nonChatTabs.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.tab_id}
               onClick={() => selectTab(tab.tab_id)}
