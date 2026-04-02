@@ -7,6 +7,12 @@ from typing import Optional
 from sqlalchemy import text
 from ..database import engine
 from ..services.stripe_service import STRIPE_SECRET_KEY, PRODUCTS, PRICE_ID_CACHE
+from .billing_helpers import (
+    allocate_founder_slot,
+    sync_founder_registry,
+    get_subscription_tier_from_items,
+    is_addon_lookup_key,
+)
 
 UI_META = {
     "tab_id": "billing",
@@ -57,6 +63,9 @@ TIER_MAP = {
     "tier_founder_lifetime": "founder",
 }
 
+_DEFAULT_SUCCESS_PATH = "/console?billing=success"
+_DEFAULT_CANCEL_PATH = "/pricing"
+
 
 def _user_id(request: Request) -> Optional[str]:
     return request.headers.get("x-replit-user-id")
@@ -83,14 +92,8 @@ async def get_status(request: Request):
     is_admin = _check_admin(uid or "", email)
 
     if not uid:
-        return {
-            "plan": "free",
-            "status": "active",
-            "provider_pool": "standard",
-            "byok_enabled": False,
-            "founder_slot": None,
-            "is_admin": is_admin,
-        }
+        return {"plan": "free", "status": "active", "provider_pool": "standard",
+                "byok_enabled": False, "founder_slot": None, "is_admin": is_admin}
 
     async with engine.connect() as conn:
         row = await conn.execute(
@@ -100,24 +103,15 @@ async def get_status(request: Request):
         rec = row.mappings().first()
 
     if not rec:
-        return {
-            "plan": "free",
-            "status": "active",
-            "provider_pool": "standard",
-            "byok_enabled": False,
-            "founder_slot": None,
-            "is_admin": is_admin,
-        }
+        return {"plan": "free", "status": "active", "provider_pool": "standard",
+                "byok_enabled": False, "founder_slot": None, "is_admin": is_admin}
 
     tier = rec["subscription_tier"]
     provider_pool = "patron" if tier in ("patron", "founder") else tier if tier != "free" else "standard"
     return {
-        "plan": tier,
-        "status": rec["subscription_status"],
-        "provider_pool": provider_pool,
-        "byok_enabled": rec["byok_enabled"],
-        "founder_slot": rec["founder_slot"],
-        "is_admin": is_admin,
+        "plan": tier, "status": rec["subscription_status"],
+        "provider_pool": provider_pool, "byok_enabled": rec["byok_enabled"],
+        "founder_slot": rec["founder_slot"], "is_admin": is_admin,
     }
 
 
@@ -133,19 +127,12 @@ async def list_plans():
         else:
             display = f"${amount // 100} one-time"
         plans.append({
-            "name": p["name"],
-            "product_key": p["product_key"],
-            "lookup_key": p["lookup_key"],
-            "amount": amount,
-            "amount_display": display,
-            "interval": p["interval"],
+            "name": p["name"], "product_key": p["product_key"],
+            "lookup_key": p["lookup_key"], "amount": amount,
+            "amount_display": display, "interval": p["interval"],
             "description": p["description"],
         })
     return plans
-
-
-_DEFAULT_SUCCESS_PATH = "/console?billing=success"
-_DEFAULT_CANCEL_PATH = "/pricing"
 
 
 class CheckoutBody(BaseModel):
@@ -180,20 +167,17 @@ async def create_checkout(body: CheckoutBody, request: Request):
         PRICE_ID_CACHE[body.product] = price_id
 
     price = stripe.Price.retrieve(price_id)
-
     async with engine.connect() as conn:
         row = await conn.execute(text("SELECT email, stripe_customer_id FROM users WHERE id = :id"), {"id": uid})
         rec = row.mappings().first()
 
     customer_id = rec["stripe_customer_id"] if rec else None
     user_email = rec["email"] if rec else None
-
     mode = "subscription" if price.recurring else "payment"
     session_kwargs: dict = {
         "mode": mode,
         "line_items": [{"price": price_id, "quantity": 1}],
-        "success_url": success_url,
-        "cancel_url": cancel_url,
+        "success_url": success_url, "cancel_url": cancel_url,
         "metadata": {"user_id": uid, "product_key": body.product, "lookup_key": spec["lookup_key"]},
     }
     if customer_id:
@@ -226,8 +210,7 @@ async def customer_portal(body: PortalBody, request: Request):
         raise HTTPException(status_code=404, detail="No billing account found")
 
     session = stripe.billing_portal.Session.create(
-        customer=rec["stripe_customer_id"],
-        return_url=body.return_url,
+        customer=rec["stripe_customer_id"], return_url=body.return_url,
     )
     return {"url": session.url}
 
@@ -244,9 +227,7 @@ async def save_byok(body: ByokBody, request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     async with engine.connect() as conn:
-        row = await conn.execute(
-            text("SELECT byok_enabled FROM users WHERE id = :id"), {"id": uid}
-        )
+        row = await conn.execute(text("SELECT byok_enabled FROM users WHERE id = :id"), {"id": uid})
         rec = row.mappings().first()
 
     if not rec or not rec["byok_enabled"]:
@@ -258,7 +239,7 @@ async def save_byok(body: ByokBody, request: Request):
             text("""
                 INSERT INTO byok_keys (user_id, provider, key_hash)
                 VALUES (:uid, :provider, :key_hash)
-                ON CONFLICT (user_id, provider) DO UPDATE SET key_hash = EXCLUDED.key_hash
+                ON CONFLICT ON CONSTRAINT uq_byok_user_provider DO UPDATE SET key_hash = EXCLUDED.key_hash
             """),
             {"uid": uid, "provider": body.provider, "key_hash": key_hash},
         )
@@ -282,145 +263,134 @@ async def stripe_webhook(request: Request):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    etype = event["type"]
-
-    if etype == "checkout.session.completed":
-        sess = event["data"]["object"]
-        uid = sess.get("metadata", {}).get("user_id")
-        lookup_key = sess.get("metadata", {}).get("lookup_key", "")
-        customer_id = sess.get("customer")
-        subscription_id = sess.get("subscription")
-
-        if uid:
-            tier = TIER_MAP.get(lookup_key)
-            updates: dict = {}
-            if customer_id:
-                updates["stripe_customer_id"] = customer_id
-            if subscription_id:
-                updates["stripe_subscription_id"] = subscription_id
-            if tier:
-                updates["subscription_tier"] = tier
-                updates["subscription_status"] = "active"
-            if lookup_key == "addon_byok_monthly":
-                updates["byok_enabled"] = True
-
-            if tier == "founder":
-                slot = await _allocate_founder_slot(uid)
-                if slot:
-                    updates["founder_slot"] = slot
-
-            if updates:
-                set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-                updates["uid"] = uid
-                async with engine.begin() as conn:
-                    await conn.execute(
-                        text(f"UPDATE users SET {set_clause} WHERE id = :uid"),
-                        updates,
-                    )
-
-            if tier in ("founder", "patron"):
-                await _sync_founder_registry(uid, tier, action="upsert")
-
-    elif etype in ("customer.subscription.updated", "customer.subscription.created"):
-        sub = event["data"]["object"]
-        customer_id = sub.get("customer")
-        status = sub.get("status", "active")
-        if customer_id:
-            items = sub.get("items", {}).get("data", [])
-            tier = None
-            if items:
-                lk = items[0].get("price", {}).get("lookup_key", "")
-                tier = TIER_MAP.get(lk)
-            set_parts = ["subscription_status = :status"]
-            params: dict = {"status": status, "cid": customer_id}
-            if tier:
-                set_parts.append("subscription_tier = :tier")
-                params["tier"] = tier
-            async with engine.begin() as conn:
-                uid_row = await conn.execute(
-                    text("SELECT id FROM users WHERE stripe_customer_id = :cid"),
-                    {"cid": customer_id},
-                )
-                uid_rec = uid_row.mappings().first()
-                await conn.execute(
-                    text(f"UPDATE users SET {', '.join(set_parts)} WHERE stripe_customer_id = :cid"),
-                    params,
-                )
-            if tier in ("founder", "patron") and uid_rec:
-                await _sync_founder_registry(uid_rec["id"], tier, action="upsert")
-
-    elif etype == "customer.subscription.deleted":
-        customer_id = event["data"]["object"].get("customer")
-        if customer_id:
-            async with engine.begin() as conn:
-                uid_row = await conn.execute(
-                    text("SELECT id FROM users WHERE stripe_customer_id = :cid"),
-                    {"cid": customer_id},
-                )
-                uid_rec = uid_row.mappings().first()
-                await conn.execute(
-                    text("UPDATE users SET subscription_tier = 'free', subscription_status = 'canceled' WHERE stripe_customer_id = :cid"),
-                    {"cid": customer_id},
-                )
-            if uid_rec:
-                await _sync_founder_registry(uid_rec["id"], "free", action="downgrade")
-
-    elif etype == "invoice.payment_failed":
-        customer_id = event["data"]["object"].get("customer")
-        if customer_id:
-            async with engine.begin() as conn:
-                await conn.execute(
-                    text("UPDATE users SET subscription_status = 'past_due' WHERE stripe_customer_id = :cid"),
-                    {"cid": customer_id},
-                )
-
-    elif etype == "invoice.paid":
-        customer_id = event["data"]["object"].get("customer")
-        if customer_id:
-            async with engine.begin() as conn:
-                await conn.execute(
-                    text("UPDATE users SET subscription_status = 'active' WHERE stripe_customer_id = :cid AND subscription_status = 'past_due'"),
-                    {"cid": customer_id},
-                )
-
+    await _dispatch_webhook(event)
     return {"received": True}
 
 
-async def _allocate_founder_slot(uid: str) -> Optional[int]:
-    """Assign the next available founder slot (1-53). Idempotent."""
+async def _dispatch_webhook(event: dict) -> None:
+    etype = event["type"]
+
+    if etype == "checkout.session.completed":
+        await _handle_checkout_completed(event["data"]["object"])
+
+    elif etype in ("customer.subscription.updated", "customer.subscription.created"):
+        await _handle_subscription_updated(event["data"]["object"])
+
+    elif etype == "customer.subscription.deleted":
+        await _handle_subscription_deleted(event["data"]["object"])
+
+    elif etype == "invoice.payment_failed":
+        cid = event["data"]["object"].get("customer")
+        if cid:
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("UPDATE users SET subscription_status = 'past_due' WHERE stripe_customer_id = :cid"),
+                    {"cid": cid},
+                )
+
+    elif etype == "invoice.paid":
+        cid = event["data"]["object"].get("customer")
+        if cid:
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("UPDATE users SET subscription_status = 'active' WHERE stripe_customer_id = :cid AND subscription_status = 'past_due'"),
+                    {"cid": cid},
+                )
+
+
+async def _handle_checkout_completed(sess: dict) -> None:
+    uid = sess.get("metadata", {}).get("user_id")
+    lookup_key = sess.get("metadata", {}).get("lookup_key", "")
+    customer_id = sess.get("customer")
+    subscription_id = sess.get("subscription")
+
+    if not uid:
+        return
+
+    tier = TIER_MAP.get(lookup_key)
+    updates: dict = {}
+    if customer_id:
+        updates["stripe_customer_id"] = customer_id
+    if subscription_id:
+        updates["stripe_subscription_id"] = subscription_id
+    if tier:
+        updates["subscription_tier"] = tier
+        updates["subscription_status"] = "active"
+    if is_addon_lookup_key(lookup_key):
+        updates["byok_enabled"] = True
+
+    if tier == "founder":
+        slot = await allocate_founder_slot(uid)
+        if slot:
+            updates["founder_slot"] = slot
+
+    if updates:
+        set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+        updates["uid"] = uid
+        async with engine.begin() as conn:
+            await conn.execute(text(f"UPDATE users SET {set_clause} WHERE id = :uid"), updates)
+
+    if tier in ("founder", "patron"):
+        await sync_founder_registry(uid, tier, action="upsert")
+
+
+async def _handle_subscription_updated(sub: dict) -> None:
+    customer_id = sub.get("customer")
+    status = sub.get("status", "active")
+    if not customer_id:
+        return
+
+    items = sub.get("items", {}).get("data", [])
+    lk = items[0].get("price", {}).get("lookup_key", "") if items else ""
+
+    if is_addon_lookup_key(lk):
+        return
+
+    tier = get_subscription_tier_from_items(items)
+    set_parts = ["subscription_status = :status"]
+    params: dict = {"status": status, "cid": customer_id}
+    if tier:
+        set_parts.append("subscription_tier = :tier")
+        params["tier"] = tier
+
     async with engine.begin() as conn:
-        row = await conn.execute(
-            text("SELECT founder_slot FROM users WHERE id = :uid"),
-            {"uid": uid},
+        uid_row = await conn.execute(
+            text("SELECT id FROM users WHERE stripe_customer_id = :cid"), {"cid": customer_id}
         )
-        rec = row.mappings().first()
-        if rec and rec["founder_slot"]:
-            return rec["founder_slot"]
-
-        cnt_row = await conn.execute(
-            text("SELECT COUNT(*) FROM founders WHERE tier = 'founder'")
+        uid_rec = uid_row.mappings().first()
+        await conn.execute(
+            text(f"UPDATE users SET {', '.join(set_parts)} WHERE stripe_customer_id = :cid"), params
         )
-        used = cnt_row.scalar() or 0
-        if used >= 53:
-            return None
-        return int(used) + 1
+
+    if tier in ("founder", "patron") and uid_rec:
+        await sync_founder_registry(uid_rec["id"], tier, action="upsert")
 
 
-async def _sync_founder_registry(uid: str, tier: str, action: str) -> None:
-    """Create/update founders table entry for patron or founder tier users."""
+async def _handle_subscription_deleted(sub: dict) -> None:
+    customer_id = sub.get("customer")
+    if not customer_id:
+        return
+
+    items = sub.get("items", {}).get("data", [])
+    lk = items[0].get("price", {}).get("lookup_key", "") if items else ""
+
+    if is_addon_lookup_key(lk):
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("UPDATE users SET byok_enabled = false WHERE stripe_customer_id = :cid"),
+                {"cid": customer_id},
+            )
+        return
+
     async with engine.begin() as conn:
-        if action == "upsert" and tier in ("founder", "patron"):
-            await conn.execute(
-                text("""
-                    INSERT INTO founders (user_id, display_name, listed, subscribed_since, tier)
-                    VALUES (:uid, '', false, CURRENT_TIMESTAMP, :tier)
-                    ON CONFLICT (user_id) DO UPDATE
-                      SET tier = EXCLUDED.tier
-                """),
-                {"uid": uid, "tier": tier},
-            )
-        elif action == "downgrade":
-            await conn.execute(
-                text("UPDATE founders SET tier = 'free', listed = false WHERE user_id = :uid AND tier != 'founder'"),
-                {"uid": uid},
-            )
+        uid_row = await conn.execute(
+            text("SELECT id FROM users WHERE stripe_customer_id = :cid"), {"cid": customer_id}
+        )
+        uid_rec = uid_row.mappings().first()
+        await conn.execute(
+            text("UPDATE users SET subscription_tier = 'free', subscription_status = 'canceled' WHERE stripe_customer_id = :cid"),
+            {"cid": customer_id},
+        )
+
+    if uid_rec:
+        await sync_founder_registry(uid_rec["id"], "free", action="downgrade")
