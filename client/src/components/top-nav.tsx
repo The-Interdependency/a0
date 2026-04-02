@@ -2,15 +2,47 @@ import { useLocation, Link } from "wouter";
 import { Zap, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiStructure } from "@/hooks/use-ui-structure";
+import { useBillingStatus } from "@/hooks/use-billing-status";
+import { useAuth } from "@/hooks/use-auth";
+import { useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 const NAV_ITEMS = [
   { path: "/", icon: Zap, label: "Agent" },
   { path: "/console", icon: Shield, label: "Console" },
 ];
 
+const TIER_COLORS: Record<string, string> = {
+  free: "bg-muted text-muted-foreground",
+  seeker: "bg-blue-500/20 text-blue-400",
+  operator: "bg-violet-500/20 text-violet-400",
+  patron: "bg-amber-500/20 text-amber-400",
+  founder: "bg-emerald-500/20 text-emerald-400",
+};
+
 export default function TopNav() {
   const [location] = useLocation();
   const { data } = useUiStructure();
+  const { user } = useAuth();
+  const { tier, tierLabel } = useBillingStatus();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    function handleUpgrade(e: Event) {
+      const evt = e as CustomEvent<{ upgrade_url: string }>;
+      toast({
+        title: "Limit reached",
+        description: "Upgrade on the pricing page to continue.",
+        action: (
+          <a href="/pricing" className="underline text-primary text-sm">
+            View pricing
+          </a>
+        ) as any,
+      });
+    }
+    window.addEventListener("a0p:upgrade-required", handleUpgrade);
+    return () => window.removeEventListener("a0p:upgrade-required", handleUpgrade);
+  }, [toast]);
 
   return (
     <nav
@@ -39,10 +71,23 @@ export default function TopNav() {
       })}
       {data?.agent && (
         <div
-          className="flex items-center justify-center px-3 min-h-[44px] text-muted-foreground"
+          className="flex items-center justify-center px-3 min-h-[44px] text-muted-foreground gap-2"
           data-testid="nav-agent-name"
         >
-          <span className="text-[9px] font-mono truncate max-w-[140px]">{data.agent}</span>
+          <span className="text-[9px] font-mono truncate max-w-[100px]">{data.agent}</span>
+          {user && (
+            <Link href="/pricing">
+              <span
+                className={cn(
+                  "text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide cursor-pointer",
+                  TIER_COLORS[tier] ?? TIER_COLORS.free
+                )}
+                data-testid="nav-tier-badge"
+              >
+                {tierLabel}
+              </span>
+            </Link>
+          )}
         </div>
       )}
     </nav>

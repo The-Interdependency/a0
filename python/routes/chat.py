@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 
 from ..storage import storage
+from ..services.stripe_service import get_tier_context_name
+from .contexts import get_context_value
 
 UI_META = {
     "tab_id": "chat",
@@ -103,14 +105,35 @@ async def list_messages(conv_id: int):
 
 
 @router.post("/conversations/{conv_id}/messages")
-async def send_message(conv_id: int, body: SendMessage):
+async def send_message(conv_id: int, body: SendMessage, request: Request):
     conv = await storage.get_conversation(conv_id)
     if not conv:
         raise HTTPException(status_code=404, detail="conversation not found")
+
+    from ..database import engine
+    from sqlalchemy import text as _text
+    uid = request.headers.get("x-replit-user-id", "")
+    tier = "free"
+    if uid:
+        async with engine.connect() as conn:
+            row = await conn.execute(_text("SELECT subscription_tier FROM users WHERE id = :id"), {"id": uid})
+            rec = row.mappings().first()
+            if rec:
+                tier = rec["subscription_tier"]
+
+    context_name = get_tier_context_name(tier)
+    tier_context = await get_context_value(context_name)
+    system_context = await get_context_value("system_base")
+
     user_msg = await storage.create_message({
         "conversation_id": conv_id,
         "role": "user",
         "content": body.content,
         "model": body.model or conv.get("model", "gemini"),
+        "metadata": {
+            "tier": tier,
+            "tier_context": tier_context,
+            "system_context": system_context,
+        },
     })
     return {"user_message": user_msg, "conversation_id": conv_id}

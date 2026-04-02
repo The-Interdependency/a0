@@ -41,7 +41,7 @@ a0p is a mobile-first autonomous AI agent platform. One agent `a0(zeta fun alpha
 
 ### Route Modules (`python/routes/`)
 Each declares `UI_META` (tab config for frontend) + `DATA_SCHEMA` (field specs).
-- `chat.py` — Conversations and messages
+- `chat.py` — Conversations and messages (injects tier context into message metadata)
 - `agents.py` — Agent listing, sub-agent spawn/merge
 - `memory.py` — Memory seeds, projections, tensor snapshots
 - `edcm.py` — EDCM metrics and snapshots
@@ -50,6 +50,9 @@ Each declares `UI_META` (tab config for frontend) + `DATA_SCHEMA` (field specs).
 - `tools.py` — Custom tools CRUD
 - `heartbeat_api.py` — Heartbeat tasks and logs
 - `pcna_api.py` — PCNA state and propagation
+- `billing.py` — Stripe billing: status, plans, checkout, portal, webhook
+- `contexts.py` — Prompt contexts CRUD (admin-only write via ADMIN_USER_ID)
+- `founders.py` — Founders registry (53-slot lifetime tier)
 
 ### Frontend (`client/`)
 React + Vite + TypeScript, Tailwind CSS, shadcn/ui components. Fully metadata-driven:
@@ -61,8 +64,11 @@ React + Vite + TypeScript, Tailwind CSS, shadcn/ui components. Fully metadata-dr
 - `client/src/components/icon-resolve.ts` — lucide icon resolver by name string
 - `client/src/pages/console.tsx` — renders tab tree from use-ui-structure, zero hardcoded tabs
 - `client/src/pages/chat.tsx` — chat shell with conversation list + message bubbles
-- `client/src/components/top-nav.tsx` — Agent/Console nav, shows agent name from API
+- `client/src/components/top-nav.tsx` — Agent/Console nav, agent name + tier badge, upgrade toast listener
 - `client/src/components/tabs/` — Legacy hardcoded tab components (unused, retained for reference)
+- `client/src/hooks/use-billing-status.ts` — fetches /api/v1/billing/status (5-min stale), exposes tier, isAdmin
+- `client/src/pages/pricing.tsx` — Pricing page: 4 tier cards, Founder Lifetime, BYOK Add-On, Stripe checkout
+- `client/src/pages/admin-contexts.tsx` — Admin-only prompt context editor (guarded by isAdmin)
 
 ### Database
 PostgreSQL via SQLAlchemy (Python) and Drizzle ORM (schema management).
@@ -93,6 +99,8 @@ Each ring has coherence tracking and propagation.
 - **Bandits**: UCB1 + EMA decay across tool, model, routing domains
 - **EDCM**: Behavioral directive scoring (CM, DA, DRIFT, DVG, INT, TBF)
 - **Sub-agent lifecycle**: fork() at spawn → absorb() on completion → retired
+- **Monetization**: 4 tiers (Free/$0, Seeker/$12, Operator/$39, Patron/$53) + Founder Lifetime ($530, 53 slots) + BYOK add-on ($9/mo) + credit packs. Stripe webhook updates `subscription_tier` on user record; tier determines which `prompt_context` is injected into chat system prompt. No hard rate limiting — EDCM + The Way constrain behavior.
+- **ADMIN_USER_ID**: Env var set to Erin's Replit user ID; only this user can write to `prompt_contexts` via `PUT /api/v1/contexts/{name}`
 
 ## External Dependencies
 - **AI**: Gemini 2.5 Flash (Replit integration), Grok-3 Mini (XAI_API_KEY), Claude (Anthropic)

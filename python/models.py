@@ -26,6 +26,12 @@ class User(Base):
     first_name = Column(String)
     last_name = Column(String)
     profile_image_url = Column(String)
+    subscription_tier = Column(String(50), nullable=False, server_default="free")
+    stripe_customer_id = Column(String)
+    stripe_subscription_id = Column(String)
+    subscription_status = Column(String(50), nullable=False, server_default="active")
+    byok_enabled = Column(Boolean, nullable=False, server_default="false")
+    founder_slot = Column(Integer)
     created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
 
@@ -302,3 +308,31 @@ class TranscriptReport(Base):
     top_snippets = Column(JSONB)
     file_breakdown = Column(JSONB)
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+
+class Founder(Base):
+    __tablename__ = "founders"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False, unique=True)
+    display_name = Column(String(200), nullable=False)
+    listed = Column(Boolean, nullable=False, server_default="false")
+    subscribed_since = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    tier = Column(String(50), nullable=False, server_default="patron")
+
+
+class PromptContext(Base):
+    __tablename__ = "prompt_contexts"
+    name = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=False, server_default="")
+    updated_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    updated_by = Column(String)
+
+
+class ByokKey(Base):
+    __tablename__ = "byok_keys"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False)
+    provider = Column(String(50), nullable=False)
+    key_hash = Column(String(256), nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_byok_user_provider"),)

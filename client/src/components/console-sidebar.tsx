@@ -1,7 +1,8 @@
 import { cn } from "@/lib/utils";
 import { resolveIcon } from "@/components/icon-resolve";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2 } from "lucide-react";
+import { Loader2, Settings } from "lucide-react";
+import { Link } from "wouter";
 import type { TabDef } from "@/hooks/use-ui-structure";
 
 interface ConsoleSidebarProps {
@@ -10,6 +11,7 @@ interface ConsoleSidebarProps {
   onSelectTab: (tabId: string) => void;
   agentName?: string;
   isLoading?: boolean;
+  isAdmin?: boolean;
 }
 
 export default function ConsoleSidebar({
@@ -18,6 +20,7 @@ export default function ConsoleSidebar({
   onSelectTab,
   agentName,
   isLoading,
+  isAdmin,
 }: ConsoleSidebarProps) {
   if (isLoading) {
     return (
@@ -65,6 +68,17 @@ export default function ConsoleSidebar({
         </nav>
       </ScrollArea>
       <div className="px-3 py-2 border-t border-border">
+        {isAdmin && (
+          <Link href="/admin/contexts">
+            <button
+              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors mb-1"
+              data-testid="sidebar-admin-contexts-link"
+            >
+              <Settings className="h-3.5 w-3.5 shrink-0" />
+              <span>Contexts editor</span>
+            </button>
+          </Link>
+        )}
         <p className="text-[10px] text-muted-foreground text-center">
           {tabs.length} modules
         </p>

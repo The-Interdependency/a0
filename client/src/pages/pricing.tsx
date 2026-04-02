@@ -1,159 +1,328 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
-import { usePersona, PERSONA_META, type Persona } from "@/hooks/use-persona";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useBillingStatus } from "@/hooks/use-billing-status";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Check, Loader2, ChevronLeft } from "lucide-react";
+import { Loader2, Check, Star, Key, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
-const PERSONAS: Persona[] = ["free", "legal", "researcher", "political"];
+interface Plan {
+  name: string;
+  lookup_key: string;
+  amount: number;
+  amount_display: string;
+  interval: string | null;
+  description: string;
+}
 
-const PERSONA_FEATURES: Record<Persona, string[]> = {
-  free: [
-    "All console tabs unlocked",
-    "Full agent + bandit access",
-    "EDCM default metric labels",
-    "Brain pipeline & model slots",
-    "S17 · Psi Ψ · Omega Ω tensors",
-    "Custom tools & credentials",
-    "Export & logs",
+const TIER_LOOKUP: Record<string, string> = {
+  free: "tier_free",
+  seeker: "tier_seeker_monthly",
+  operator: "tier_operator_monthly",
+  patron: "tier_patron_monthly",
+  founder: "tier_founder_lifetime",
+};
+
+const TIER_FEATURES: Record<string, string[]> = {
+  tier_free: [
+    "Full console access — every tab unlocked",
+    "ZFAE agent with EDCM awareness",
+    "PCNA alignment engine active",
+    "Bandit model routing",
+    "The Interdependent Way principles active",
   ],
-  legal: [
-    "EDCM → legal constructs (Compliance Gap, Adversarial Tone…)",
-    "Agent prompt tuned for statutory analysis",
-    "Case framing + jurisdiction awareness",
-    "Workflow · Metrics · Deals · Memory",
-    "Psi Ψ · Heartbeat · Context · Logs",
-    "Credentials & Export",
-    "Bandit & Omega hidden for focus",
+  tier_seeker_monthly: [
+    "Everything in Free",
+    "Extended context window",
+    "Priority PCNA cycle depth",
+    "Seeker-tier system prompt context",
+    "Deeper memory seed weighting",
   ],
-  researcher: [
-    "EDCM → academic constructs (Methodological Inconsistency, Citation Density…)",
-    "Agent prompt tuned for literature analysis",
-    "Hypothesis tracking & methodological critique",
-    "Brain pipeline included for deep research",
-    "Workflow · Metrics · Deals · Memory · Brain",
-    "Psi Ψ · Omega Ω · Heartbeat · Context",
-    "Logs · Credentials · Export",
+  tier_operator_monthly: [
+    "Everything in Seeker",
+    "Full operator context injection",
+    "Advanced EDCM analytics",
+    "Agent orchestration access",
+    "Tool creation & management",
   ],
-  political: [
-    "EDCM → political science constructs (Policy Constraint Violation, Rhetoric Intensity…)",
-    "Agent prompt tuned for discourse analysis",
-    "Stakeholder & power-dynamics framing",
-    "Workflow · Metrics · Deals · Memory",
-    "Psi Ψ · Heartbeat · Context · Logs",
-    "Credentials & Export",
-    "Bandit & Omega hidden for focus",
+  tier_patron_monthly: [
+    "Everything in Operator",
+    "Way Seer Patron context layer",
+    "Elevated ZFAE alignment scope",
+    "Patron-priority energy routing",
+    "Direct influence on development direction",
+  ],
+  tier_founder_lifetime: [
+    "Lifetime access at Patron level",
+    "Numbered founder slot (1–53)",
+    "Name in founders registry",
+    "All future tier upgrades included",
+    "Founding-era energy provider access",
   ],
 };
 
-const PERSONA_TAGLINES: Record<Persona, string> = {
-  free: "No framing constraints. Full access.",
-  legal: "Statutory precision. Case-first reasoning.",
-  researcher: "Evidence-grounded. Hypothesis-aware.",
-  political: "Discourse analysis. Stakeholder-aware.",
-};
+const TIER_ORDER = [
+  "tier_free",
+  "tier_seeker_monthly",
+  "tier_operator_monthly",
+  "tier_patron_monthly",
+];
 
-export default function PricingPage() {
-  const { persona: current, isLoading, setPersona, isPending } = usePersona();
-  const [, navigate] = useLocation();
+function PlanCard({
+  plan,
+  currentTier,
+  onSelect,
+  loading,
+}: {
+  plan: Plan;
+  currentTier: string;
+  onSelect: (key: string) => void;
+  loading: string | null;
+}) {
+  const activeLookup = TIER_LOOKUP[currentTier] ?? "tier_free";
+  const isCurrent = plan.lookup_key === activeLookup;
+  const isLoading = loading === plan.lookup_key;
 
   return (
-    <div className="flex flex-col h-full overflow-auto bg-background" data-testid="pricing-page">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border flex-shrink-0">
-        <button
-          onClick={() => navigate("/console")}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          data-testid="button-back-console"
-        >
-          <ChevronLeft className="w-3.5 h-3.5" />
-          Console
-        </button>
+    <div
+      className={cn(
+        "flex flex-col rounded-xl border p-5 gap-4 transition-all",
+        isCurrent
+          ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.3)]"
+          : "border-border bg-card hover:border-muted-foreground/40"
+      )}
+      data-testid={`plan-card-${plan.lookup_key}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h3 className="font-semibold text-foreground">{plan.name}</h3>
+          <p className="text-sm text-muted-foreground mt-0.5">{plan.description}</p>
+        </div>
+        <div className="text-right shrink-0">
+          <span className="text-lg font-bold text-foreground">{plan.amount_display}</span>
+        </div>
       </div>
 
-      <div className="flex-1 px-4 py-6 max-w-xl mx-auto w-full space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-plans-title">
-            Choose your Plan
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-            Each plan adapts the console views, EDCM metric labels, and the agent's reasoning style to your domain. Switch any time.
-          </p>
-        </div>
+      <ul className="space-y-1.5 flex-1">
+        {(TIER_FEATURES[plan.lookup_key] ?? []).map((feat) => (
+          <li key={feat} className="flex items-start gap-2 text-sm text-muted-foreground">
+            <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
+            <span>{feat}</span>
+          </li>
+        ))}
+      </ul>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {PERSONAS.map((p) => {
-              const meta = PERSONA_META[p];
-              const isSelected = p === current;
-              const features = PERSONA_FEATURES[p];
-              const tagline = PERSONA_TAGLINES[p];
+      {isCurrent ? (
+        <Badge variant="outline" className="self-start border-primary text-primary" data-testid={`badge-current-${plan.lookup_key}`}>
+          Current plan
+        </Badge>
+      ) : plan.amount === 0 ? null : (
+        <Button
+          size="sm"
+          onClick={() => onSelect(plan.lookup_key)}
+          disabled={isLoading}
+          data-testid={`btn-select-${plan.lookup_key}`}
+        >
+          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Choose plan"}
+        </Button>
+      )}
+    </div>
+  );
+}
 
-              return (
-                <div
-                  key={p}
-                  data-testid={`pricing-card-${p}`}
-                  className={cn(
-                    "rounded-xl border p-4 transition-all",
-                    isSelected
-                      ? "border-primary bg-primary/5"
-                      : "border-border bg-card"
-                  )}
-                >
-                  <div className="flex items-start gap-3 mb-3">
-                    <span className="text-3xl leading-none mt-0.5 select-none">{meta.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={cn("font-bold text-base", meta.color)}>{meta.label}</span>
-                        {p === "free" && (
-                          <span className="text-[10px] uppercase tracking-widest border border-muted-foreground/30 rounded px-1.5 py-0.5 text-muted-foreground">
-                            default
-                          </span>
-                        )}
-                        {isSelected && (
-                          <span
-                            className="text-[10px] uppercase tracking-widest bg-primary/20 text-primary rounded px-1.5 py-0.5 font-semibold"
-                            data-testid={`badge-active-${p}`}
-                          >
-                            active
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">{tagline}</p>
-                    </div>
-                  </div>
+export default function PricingPage() {
+  const { tier, isPaid } = useBillingStatus();
+  const { toast } = useToast();
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
 
-                  <ul className="space-y-1.5 mb-4">
-                    {features.map((f, i) => (
-                      <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                        <Check className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
-                        <span>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
+  const { data: plans = [], isLoading: plansLoading } = useQuery<Plan[]>({
+    queryKey: ["/api/v1/billing/plans"],
+    staleTime: 10 * 60 * 1000,
+  });
 
-                  <Button
-                    size="sm"
-                    variant={isSelected ? "secondary" : "default"}
-                    className="w-full"
-                    disabled={isSelected || isPending}
-                    onClick={() => !isSelected && !isPending && setPersona(p)}
-                    data-testid={`button-select-${p}`}
-                  >
-                    {isSelected ? "Current plan" : isPending ? "Switching…" : `Switch to ${meta.label}`}
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        )}
+  const { data: founderCount } = useQuery<{ count: number; max: number; slots_remaining: number }>({
+    queryKey: ["/api/v1/founders/count"],
+    staleTime: 60 * 1000,
+  });
 
-        <p className="text-[11px] text-muted-foreground text-center pb-4">
-          Plans are domain presets — no payment required. The owner can also grant plans to specific users.
+  const checkoutMutation = useMutation({
+    mutationFn: async (lookup_key: string) => {
+      const res = await apiRequest("POST", "/api/v1/billing/checkout", {
+        lookup_key,
+        success_url: `${window.location.origin}/console?billing=success`,
+        cancel_url: `${window.location.origin}/pricing`,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      window.location.href = data.url;
+    },
+    onError: (err: Error) => {
+      setLoadingKey(null);
+      toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const portalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/v1/billing/portal", {
+        return_url: `${window.location.origin}/pricing`,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      window.location.href = data.url;
+    },
+    onError: (err: Error) => {
+      toast({ title: "Portal error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  function handleSelect(lookup_key: string) {
+    setLoadingKey(lookup_key);
+    checkoutMutation.mutate(lookup_key);
+  }
+
+  const mainTiers = plans.filter((p) => TIER_ORDER.includes(p.lookup_key));
+  const founderPlan = plans.find((p) => p.lookup_key === "tier_founder_lifetime");
+  const byokPlan = plans.find((p) => p.lookup_key === "addon_byok_monthly");
+  const slotsLeft = founderCount?.slots_remaining ?? 53;
+
+  return (
+    <div className="min-h-screen bg-background pb-16 px-4 pt-6 max-w-2xl mx-auto">
+      <div className="mb-8 text-center">
+        <h1 className="text-2xl font-bold text-foreground mb-2">Choose your path</h1>
+        <p className="text-sm text-muted-foreground max-w-md mx-auto">
+          The way you engage with a0 determines the depth of alignment available to you.
+          Each tier unlocks a richer context layer — the same Way governs all.
         </p>
       </div>
+
+      {plansLoading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            {mainTiers.map((plan) => (
+              <PlanCard
+                key={plan.lookup_key}
+                plan={plan}
+                currentTier={tier}
+                onSelect={handleSelect}
+                loading={loadingKey}
+              />
+            ))}
+          </div>
+
+          {founderPlan && (
+            <div className="border border-amber-500/30 rounded-xl p-5 mb-4 bg-amber-500/5">
+              <div className="flex items-center gap-2 mb-3">
+                <Star className="w-4 h-4 text-amber-400" />
+                <h3 className="font-semibold text-foreground">{founderPlan.name}</h3>
+                <Badge variant="outline" className="text-amber-400 border-amber-400/40 ml-auto">
+                  {slotsLeft} of 53 remaining
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mb-3">{founderPlan.description}</p>
+              <ul className="space-y-1 mb-4">
+                {(TIER_FEATURES["tier_founder_lifetime"] ?? []).map((f) => (
+                  <li key={f} className="text-sm text-muted-foreground flex gap-2">
+                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-400" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-lg font-bold text-foreground">{founderPlan.amount_display}</span>
+                {tier === "founder" ? (
+                  <Badge variant="outline" className="border-amber-400 text-amber-400">Founder</Badge>
+                ) : slotsLeft > 0 ? (
+                  <Button
+                    size="sm"
+                    className="bg-amber-500 hover:bg-amber-600 text-black"
+                    onClick={() => handleSelect("tier_founder_lifetime")}
+                    disabled={loadingKey === "tier_founder_lifetime"}
+                    data-testid="btn-select-founder"
+                  >
+                    {loadingKey === "tier_founder_lifetime" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "Secure your slot"
+                    )}
+                  </Button>
+                ) : (
+                  <Button size="sm" disabled variant="outline">Slots filled</Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {byokPlan && (
+            <div className="border border-border rounded-xl p-5 mb-6 bg-card">
+              <div className="flex items-center gap-2 mb-2">
+                <Key className="w-4 h-4 text-muted-foreground" />
+                <h3 className="font-semibold text-foreground">{byokPlan.name}</h3>
+                <span className="text-sm text-muted-foreground ml-auto">{byokPlan.amount_display}</span>
+              </div>
+              <p className="text-sm text-muted-foreground mb-3">
+                Bring your own API keys for Grok, Gemini, or other providers.
+                Your keys — your inference costs. Available as an add-on to any paid tier.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleSelect("addon_byok_monthly")}
+                disabled={loadingKey === "addon_byok_monthly"}
+                data-testid="btn-select-byok"
+              >
+                {loadingKey === "addon_byok_monthly" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Add BYOK"
+                )}
+              </Button>
+            </div>
+          )}
+
+          {isPaid && (
+            <div className="border border-border rounded-xl p-4 flex items-center justify-between gap-3 bg-card">
+              <div>
+                <p className="text-sm font-medium text-foreground">Manage subscription</p>
+                <p className="text-xs text-muted-foreground">Update payment method, cancel, or view invoices</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => portalMutation.mutate()}
+                disabled={portalMutation.isPending}
+                data-testid="btn-manage-subscription"
+              >
+                {portalMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Manage"
+                )}
+              </Button>
+            </div>
+          )}
+
+          <div className="mt-8 text-center">
+            <div className="flex items-center justify-center gap-2 text-muted-foreground mb-2">
+              <Users className="w-4 h-4" />
+              <span className="text-xs">The Way governs all tiers equally.</span>
+            </div>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+              Higher tiers don't bypass principles — they deepen the alignment scope available
+              within the same ethical framework.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }
