@@ -5,6 +5,8 @@ from sqlalchemy import text
 from ..database import engine
 
 MAX_FOUNDER_SLOTS = 53
+FOUNDER_TIERS = ("founder",)
+LISTED_TIERS = ("founder", "patron")
 
 UI_META = {
     "tab_id": "founders",
@@ -19,6 +21,7 @@ UI_META = {
             "fields": [
                 {"key": "founder_slot", "type": "badge", "label": "Slot"},
                 {"key": "display_name", "type": "text", "label": "Name"},
+                {"key": "tier", "type": "badge", "label": "Tier"},
                 {"key": "subscribed_since", "type": "text", "label": "Member Since"},
             ],
         }
@@ -36,11 +39,17 @@ DATA_SCHEMA = {
 router = APIRouter(prefix="/api/v1/founders", tags=["founders"])
 
 
+async def _lifetime_count() -> int:
+    async with engine.connect() as conn:
+        row = await conn.execute(
+            text("SELECT COUNT(*) FROM founders WHERE tier = 'founder'")
+        )
+        return row.scalar() or 0
+
+
 @router.get("/count")
 async def founder_count():
-    async with engine.connect() as conn:
-        row = await conn.execute(text("SELECT COUNT(*) as cnt FROM founders"))
-        cnt = row.scalar() or 0
+    cnt = await _lifetime_count()
     slots_remaining = max(0, MAX_FOUNDER_SLOTS - cnt)
     return {"count": cnt, "max": MAX_FOUNDER_SLOTS, "slots_remaining": slots_remaining}
 
@@ -55,14 +64,13 @@ async def list_founders():
                 FROM founders f
                 LEFT JOIN users u ON u.id = f.user_id
                 WHERE f.listed = true
+                  AND f.tier IN ('founder', 'patron')
                 ORDER BY f.subscribed_since ASC
             """)
         )
         items = [dict(r) for r in rows.mappings()]
 
-        count_row = await conn.execute(text("SELECT COUNT(*) as cnt FROM founders"))
-        cnt = count_row.scalar() or 0
-
+    cnt = await _lifetime_count()
     slots_remaining = max(0, MAX_FOUNDER_SLOTS - cnt)
     return {
         "founders": items,

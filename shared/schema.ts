@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, integer, timestamp, jsonb, real, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, timestamp, jsonb, real, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -441,4 +441,4 @@ export const byokKeys = pgTable("byok_keys", {
   provider: varchar("provider", { length: 50 }).notNull(),
   keyHash: varchar("key_hash", { length: 256 }).notNull(),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
+}, (t) => [uniqueIndex("uq_byok_user_provider").on(t.userId, t.provider)]);

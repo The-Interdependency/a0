@@ -4,6 +4,8 @@ from typing import Optional
 
 from ..storage import storage
 from ..services.stripe_service import get_tier_context_name
+from ..services.energy_registry import energy_registry
+from ..services.inference import call_energy_provider
 from .contexts import get_context_value
 
 UI_META = {
@@ -104,6 +106,18 @@ async def list_messages(conv_id: int):
     return await storage.get_messages(conv_id)
 
 
+async def _build_system_prompt(tier: str) -> str:
+    context_name = get_tier_context_name(tier)
+    a0_identity = await get_context_value("a0_identity")
+    tier_context = await get_context_value(context_name)
+    parts = []
+    if a0_identity:
+        parts.append(a0_identity)
+    if tier_context:
+        parts.append(tier_context)
+    return "\n\n".join(parts)
+
+
 @router.post("/conversations/{conv_id}/messages")
 async def send_message(conv_id: int, body: SendMessage, request: Request):
     conv = await storage.get_conversation(conv_id)
@@ -121,29 +135,42 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             if rec:
                 tier = rec["subscription_tier"]
 
-    context_name = get_tier_context_name(tier)
-    a0_identity = await get_context_value("a0_identity")
-    tier_context = await get_context_value(context_name)
+    model_id = body.model or conv.get("model", "grok")
+    provider_id = energy_registry.get_active_provider() or model_id
 
-    system_parts = []
-    if a0_identity:
-        system_parts.append(a0_identity)
-    if tier_context:
-        system_parts.append(tier_context)
-    system_prompt = "\n\n".join(system_parts) if system_parts else None
+    system_prompt = await _build_system_prompt(tier)
 
     user_msg = await storage.create_message({
         "conversation_id": conv_id,
         "role": "user",
         "content": body.content,
-        "model": body.model or conv.get("model", "gemini"),
-        "metadata": {
-            "tier": tier,
-            "system_prompt": system_prompt,
-        },
+        "model": model_id,
+        "metadata": {"tier": tier},
     })
+
+    prior_msgs = await storage.get_messages(conv_id)
+    history = [
+        {"role": m["role"], "content": m["content"]}
+        for m in prior_msgs
+        if m["role"] in ("user", "assistant")
+    ]
+
+    content, usage = await call_energy_provider(
+        provider_id=provider_id,
+        messages=history,
+        system_prompt=system_prompt or None,
+    )
+
+    assistant_msg = await storage.create_message({
+        "conversation_id": conv_id,
+        "role": "assistant",
+        "content": content,
+        "model": provider_id,
+        "metadata": {"tier": tier, "usage": usage},
+    })
+
     return {
         "user_message": user_msg,
+        "assistant_message": assistant_msg,
         "conversation_id": conv_id,
-        "system_prompt": system_prompt,
     }
