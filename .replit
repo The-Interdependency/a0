@@ -63,6 +63,7 @@ integrations = ["javascript_database:1.0.0", "javascript_xai:1.0.0", "javascript
 
 [userenv.shared]
 A0P_EMAIL = "wayseer00@gmail.com"
+ADMIN_EMAIL = "wayseer00@gmail.com"
 
 [postMerge]
 path = "scripts/post-merge.sh"
