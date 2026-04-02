@@ -50,6 +50,7 @@ class PTCACore:
         self.step_count = 0
         self.last_reward = 0.0
         self.created_at = time.time()
+        self._recompute_coherence()
 
     def _adjacents(self, i: int) -> list[int]:
         fwd = [(i + d) % self.n for d in self._adj_dists]
