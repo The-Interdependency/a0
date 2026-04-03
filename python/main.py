@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from .database import engine
 from .engine import PCNAEngine
@@ -12,13 +12,7 @@ from .routes import ALL_ROUTERS, collect_ui_meta
 from .services.heartbeat import heartbeat_service
 from .agents.zfae import compose_name
 from .services.energy_registry import energy_registry
-from .auth import (
-    ReplitAuthMiddleware,
-    make_session_cookie,
-    verify_access_key,
-    get_access_key,
-    SESSION_COOKIE,
-)
+from .auth import ReplitAuthMiddleware
 
 _pcna: PCNAEngine | None = None
 _instances: dict[str, PCNAEngine] = {}
@@ -52,11 +46,6 @@ async def lifespan(app: FastAPI):
     from .services.stripe_service import ensure_stripe_products
     await ensure_stripe_products()
     await heartbeat_service.start()
-    try:
-        key = get_access_key()
-        print(f"[auth] Access key: {key}")
-    except Exception:
-        pass
     yield
     await heartbeat_service.stop()
     await engine.dispose()
@@ -85,79 +74,6 @@ for r in ALL_ROUTERS:
     app.include_router(r)
 
 
-@app.get("/api/auth/debug-headers")
-async def debug_headers(request: Request):
-    return dict(request.headers)
-
-
-@app.get("/api/auth/user")
-async def auth_user(request: Request):
-    user_id = request.headers.get("x-replit-user-id", "")
-    if not user_id:
-        return JSONResponse(status_code=401, content={"error": "Not authenticated"})
-    return {
-        "id": user_id,
-        "email": request.headers.get("x-replit-user-email"),
-        "firstName": request.headers.get("x-replit-user-name", "Operator"),
-        "lastName": None,
-        "profileImageUrl": request.headers.get("x-replit-user-profile-image"),
-        "createdAt": None,
-        "updatedAt": None,
-    }
-
-
-@app.post("/api/auth/login")
-async def key_login(request: Request):
-    """
-    Key-based login. Accepts JSON {"key": "XXXX-XXXX"}.
-    Returns 200 + sets session cookie on success, 401 on failure.
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
-
-    provided_key = body.get("key", "").strip()
-    if not provided_key or not verify_access_key(provided_key):
-        return JSONResponse(status_code=401, content={"error": "Invalid access key"})
-
-    user_id = os.environ.get("REPLIT_USERID", "operator")
-    user_name = os.environ.get("REPLIT_USER", "Operator")
-    admin_email = os.environ.get("ADMIN_EMAIL", "")
-
-    user_info = {
-        "id": user_id,
-        "email": admin_email or None,
-        "firstName": user_name,
-        "lastName": None,
-        "profileImageUrl": None,
-    }
-
-    cookie_value = make_session_cookie(user_info)
-    response = JSONResponse(content={"ok": True, "user": user_info})
-    response.set_cookie(
-        key=SESSION_COOKIE,
-        value=cookie_value,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=60 * 60 * 24 * 7,
-        path="/",
-    )
-    print(f"[auth] Session created for {user_name} ({user_id})")
-    return response
-
-
-@app.get("/api/login")
-async def login_redirect():
-    return RedirectResponse(url="/login", status_code=302)
-
-
-@app.get("/api/logout")
-async def logout(request: Request):
-    response = RedirectResponse(url="/login", status_code=302)
-    response.delete_cookie(key=SESSION_COOKIE, path="/")
-    return response
 
 
 @app.get("/api/health")

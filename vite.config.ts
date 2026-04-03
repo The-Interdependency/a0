@@ -32,22 +32,12 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5000,
+    port: 5001,
     host: "0.0.0.0",
     allowedHosts: true,
     fs: {
       strict: true,
       deny: ["**/.*"],
-    },
-    proxy: {
-      "/api": {
-        target: "http://localhost:8001",
-        changeOrigin: true,
-      },
-      "/__repl_auth": {
-        target: "http://localhost:8001",
-        changeOrigin: true,
-      },
     },
   },
 });
