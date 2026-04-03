@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, HTMLResponse
 
 from .database import engine
 from .engine import PCNAEngine
@@ -12,6 +12,13 @@ from .routes import ALL_ROUTERS, collect_ui_meta
 from .services.heartbeat import heartbeat_service
 from .agents.zfae import compose_name
 from .services.energy_registry import energy_registry
+from .auth import (
+    ReplitAuthMiddleware,
+    verify_replit_token,
+    make_session_cookie,
+    read_session_cookie,
+    SESSION_COOKIE,
+)
 
 _pcna: PCNAEngine | None = None
 _instances: dict[str, PCNAEngine] = {}
@@ -67,6 +74,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(ReplitAuthMiddleware)
+
 for r in ALL_ROUTERS:
     app.include_router(r)
 
@@ -94,14 +103,61 @@ async def login(request: Request):
     domain = domains.split(",")[0].strip() if domains else ""
     if domain:
         redirect_url = f"https://{domain}/"
-        auth_url = f"https://replit.com/auth_with_repl_site?domain={domain}&redirect_url={quote(redirect_url, safe='')}"
+        auth_url = (
+            f"https://replit.com/auth_with_repl_site"
+            f"?domain={domain}"
+            f"&redirect_url={quote(redirect_url, safe='')}"
+        )
         return RedirectResponse(url=auth_url)
     return RedirectResponse(url="/")
 
 
+@app.post("/__repl_auth")
+async def repl_auth_callback(request: Request):
+    redirect_to = request.query_params.get("redirect_url", "/")
+
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        body = await request.json()
+        token = body.get("token", "")
+    else:
+        form = await request.form()
+        token = form.get("token", "")
+
+    if not token:
+        return HTMLResponse(
+            content="<p>Auth Error: missing token</p>",
+            status_code=400,
+        )
+
+    try:
+        user_info = await verify_replit_token(token)
+    except ValueError as exc:
+        return HTMLResponse(
+            content=f"<p>Auth Error: {exc}</p>",
+            status_code=400,
+        )
+
+    cookie_value = make_session_cookie(user_info)
+    response = RedirectResponse(url=redirect_to, status_code=302)
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=cookie_value,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7,
+        path="/",
+    )
+    print(f"[auth] Session set for user {user_info.get('id')} ({user_info.get('email')})")
+    return response
+
+
 @app.get("/api/logout")
 async def logout(request: Request):
-    return RedirectResponse(url="/login")
+    response = RedirectResponse(url="/login", status_code=302)
+    response.delete_cookie(key=SESSION_COOKIE, path="/")
+    return response
 
 
 @app.get("/api/health")
