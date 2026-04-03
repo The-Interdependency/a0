@@ -100,15 +100,19 @@ async def login(request: Request):
     from urllib.parse import quote
     domains = os.environ.get("REPLIT_DOMAINS", "")
     domain = domains.split(",")[0].strip() if domains else ""
-    if domain:
-        redirect_url = f"https://{domain}/"
-        auth_url = (
-            f"https://replit.com/auth_with_repl_site"
-            f"?domain={domain}"
-            f"&redirect_url={quote(redirect_url, safe='')}"
-        )
-        return RedirectResponse(url=auth_url)
-    return RedirectResponse(url="/")
+    if not domain:
+        return RedirectResponse(url="/")
+    is_deployed = os.environ.get("REPLIT_DEPLOYMENT", "") == "1"
+    if is_deployed:
+        goto = quote(f"https://{domain}/", safe="")
+        return RedirectResponse(url=f"https://replit.com/login?goto={goto}")
+    redirect_url = f"https://{domain}/"
+    auth_url = (
+        f"https://replit.com/auth_with_repl_site"
+        f"?domain={domain}"
+        f"&redirect_url={quote(redirect_url, safe='')}"
+    )
+    return RedirectResponse(url=auth_url)
 
 
 @app.post("/__repl_auth")
