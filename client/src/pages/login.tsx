@@ -1,4 +1,4 @@
-import { Shield } from "lucide-react";
+import { Shield, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -15,6 +15,9 @@ export default function LoginPage() {
       setLocation("/");
     }
   }, [isAuthenticated, setLocation]);
+
+  const domains = (import.meta.env.VITE_REPLIT_DOMAINS ?? "").split(",");
+  const appUrl = domains[0] ? `https://${domains[0].trim()}` : null;
 
   if (isLoading) {
     return (
@@ -46,20 +49,32 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="space-y-3 w-full">
-            <Button
-              size="lg"
-              className="w-full"
-              onClick={() => { window.location.href = "/api/login"; }}
-              data-testid="button-sign-in"
-            >
-              Sign in with Replit
-            </Button>
+          <div className="space-y-4 w-full">
+            {appUrl ? (
+              <Button
+                size="lg"
+                className="w-full gap-2"
+                onClick={() => { window.location.href = appUrl; }}
+                data-testid="button-open-in-replit"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Open in Replit Workspace
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                className="w-full"
+                onClick={() => { window.location.reload(); }}
+                data-testid="button-sign-in"
+              >
+                Reload
+              </Button>
+            )}
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Access this app through the Replit workspace tab — authentication
+              happens automatically when you're logged in to Replit.
+            </p>
           </div>
-
-          <p className="text-[11px] text-zinc-600 leading-relaxed">
-            Uses your Replit account. No separate password needed.
-          </p>
         </div>
       </div>
 
