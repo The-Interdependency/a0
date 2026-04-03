@@ -6,11 +6,12 @@ Path A (adapted — works today):
     PatternMatchBackend  no model, lexical proxy — always available
     LlamaCppBackend      GGUF model via llama-cpp-python (set A0_MODEL_PATH)
 
-Path B (native — ZFAE):
+Path B (native — ZFAE v2):
     ZFAEBackend  Zeta-structured, Field-partitioned, Alpha-regulated,
-                 Echo-state engine.  Set A0_MODEL=zfae to activate.
-                 Reservoir (53 nodes, PTCA topology) is fixed; only the
-                 readout W_out is trained from external-model output.
+                 Echo-state engine v2.  Set A0_MODEL=zfae to activate.
+                 Four independent 53-node PTCA reservoirs (phi, psi, omega,
+                 synthesis); only the synthesis readout W_out is trained.
+                 Per-field alphas are sourced from ModelConfig when provided.
                  See a0/cores/pcna/zfae.py for architecture details.
 
 In Path A the tensor "slices" are proxies:
@@ -154,22 +155,34 @@ class LlamaCppBackend:
 
 
 class ZFAEBackend:
-    """Path B backend — delegates to ZFAEEngine.
+    """Path B backend — delegates to ZFAEEngine v2.
 
     Activate with A0_MODEL=zfae.  If A0_TRAINING_DIR contains a
     zfae_weights.json the saved weights are loaded automatically.
+
+    Args:
+        config: Optional ModelConfig.  When provided, per-field alpha values
+                (phi_alpha, psi_alpha, omega_alpha, synthesis_alpha) are read
+                from the config and passed to ZFAEEngine.  Falls back to
+                ZFAE defaults when config is None.
     """
 
     name = "zfae"
 
-    def __init__(self) -> None:
+    def __init__(self, config: Optional[Any] = None) -> None:
         from a0.cores.pcna.zfae import ZFAEEngine
         from a0.cores.psi.tensors.env import A0_TRAINING_DIR
         weight_path = Path(A0_TRAINING_DIR) / "zfae_weights.json" if A0_TRAINING_DIR else None
         if weight_path and weight_path.exists():
             self._engine = ZFAEEngine.load_weights(str(weight_path))
         else:
-            self._engine = ZFAEEngine()
+            kwargs: Dict[str, Any] = {}
+            if config is not None:
+                for key in ("phi_alpha", "psi_alpha", "omega_alpha", "synthesis_alpha"):
+                    val = getattr(config, key, None)
+                    if val is not None:
+                        kwargs[key] = val
+            self._engine = ZFAEEngine(**kwargs)
 
     def generate(self, prompt: str, context: List[Dict[str, Any]]) -> _TensorSlices:
         return self._engine.generate(prompt, context)
@@ -188,15 +201,28 @@ class ZFAEBackend:
 _backend: Optional[Any] = None
 
 
-def get_backend() -> Any:
-    """Return the best available PCNA backend (cached).
+def get_backend(config: Optional[Any] = None) -> Any:
+    """Return the best available PCNA backend (cached when config is None).
+
+    Args:
+        config: Optional ModelConfig.  When provided, bypasses the cache and
+                constructs a fresh ZFAEBackend with the config's field alphas.
+                When None, returns the cached singleton.
 
     Selection order:
-        1. ZFAEBackend   when A0_MODEL=zfae
+        1. ZFAEBackend   when A0_MODEL=zfae or config.adapter=="zfae"
         2. LlamaCppBackend  when A0_MODEL_PATH is set
         3. PatternMatchBackend  always available (fallback)
     """
     global _backend
+
+    # Config-aware path: construct fresh, do not cache
+    if config is not None and getattr(config, "adapter", None) == "zfae":
+        try:
+            return ZFAEBackend(config=config)
+        except Exception:
+            pass
+
     if _backend is not None:
         return _backend
 
@@ -204,7 +230,7 @@ def get_backend() -> Any:
 
     if A0_MODEL == "zfae":
         try:
-            _backend = ZFAEBackend()
+            _backend = ZFAEBackend(config=config)
             return _backend
         except Exception:
             pass

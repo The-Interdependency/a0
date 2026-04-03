@@ -404,31 +404,124 @@ Each instance has an isolated home directory with its own `state/`, `logs/`, and
 
 ---
 
-## ZFAE — Path B Inference Engine
+## Model Registry
+
+The model registry decouples LLM instantiation from hard-coded configuration.
+Every part of a model's context — model name, max tokens, temperature, system
+prompt, ZFAE field alphas — is editable.  Modelled on the
+`DEFAULT_REGISTRY / make_call_fn()` pattern from
+[erinepshovel-code/aimmh](https://github.com/erinepshovel-code/aimmh).
+
+### Built-in models
+
+| model_id | adapter | model_name | max_tokens |
+|----------|---------|-----------|------------|
+| `claude-opus-4-6` | anthropic-api | claude-opus-4-6 | 4096 |
+| `claude-sonnet-4-6` | anthropic-api | claude-sonnet-4-6 | 2048 |
+| `claude-haiku-4-5` | anthropic-api | claude-haiku-4-5-20251001 | 1024 |
+| `llama3.2` | local-ollama | llama3.2 | 2048 |
+| `zfae-v2` | zfae | — | — |
+| `local-echo` | local-echo | — | — |
+
+### Usage
+
+```python
+from a0.model_registry import ModelRegistry, ModelConfig, make_complete_fn
+
+# In-memory registry (no file I/O)
+reg = ModelRegistry.defaults()
+
+# Edit any field
+reg.update("claude-sonnet-4-6",
+           max_tokens=4096,
+           system_prompt="You are a PTCA router.")
+
+# Register a developer-specific config
+reg.register(ModelConfig(
+    model_id="alice-opus",
+    adapter="anthropic-api",
+    model_name="claude-opus-4-6",
+    developer="alice",
+    system_prompt="You are a PTCA training oracle.",
+))
+
+# Get per-developer defaults
+alice_models = reg.get_defaults_for("alice")
+
+# aimmh-style: wrap registry + per-instance context into a callable
+complete = make_complete_fn(registry=reg, context={"model_id": "alice-opus"})
+response = complete("alice-opus", [{"role": "user", "content": "hello"}])
+print(response.result["text"])
+```
+
+### Context merging chain
+
+```
+DEFAULT_REGISTRY[model_id]   ← built-in defaults
+        ↓ merge
+InstanceDescriptor.config    ← per-instance settings (stored in instance.json)
+        ↓ merge
+handle(..., context={...})   ← per-call overrides
+```
+
+Per-instance model selection uses `config["model_id"]` in the instance
+descriptor; set it via `diversify()` or by editing `instance.json` directly.
+
+### Persist to file
+
+```python
+reg = ModelRegistry(path=Path("model_registry.json"))
+reg.update("claude-sonnet-4-6", system_prompt="Custom prompt")
+reg.save()                # writes model_registry.json
+```
+
+---
+
+## ZFAE v2 — Path B Inference Engine
 
 **Zeta-structured, Field-partitioned, Alpha-regulated, Echo-state**
 
-ZFAE is the native PCNA inference engine — an echo state network whose reservoir topology mirrors the PTCA seed lattice.
+ZFAE v2 gives each cognitive field its own complete 53-node PTCA reservoir.
+A fourth synthesis reservoir aggregates all field signals.
 
 | Letter | Meaning | Technical role |
 |--------|---------|----------------|
-| **Z** | Zeta-structured | Reservoir connections follow prime {7:3}/{7:2} heptagram topology — same structure as the Riemann zeta function's connection to prime distribution |
-| **F** | Field-partitioned | Reservoir is split into phi / psi / omega / sentinel field groups, not a monolithic matrix |
-| **A** | Alpha-regulated | Spectral radius α < 1 enforces the echo-state property; α controls memory depth (also echoes EDCM's α persistence parameter) |
-| **E** | Echo-state | Current reservoir state x(t) is entirely determined by past inputs — no hidden intent, observable only. Also: external models exist first; ZFAE is trained on their echoes |
+| **Z** | Zeta-structured | Connections follow prime {7:3}/{7:2} heptagram topology |
+| **F** | Field-partitioned | Each field owns its own independent 53-node reservoir |
+| **A** | Alpha-regulated | Per-field spectral radius controls field-specific memory depth |
+| **E** | Echo-state | State is entirely determined by past inputs — observable only |
 
-**Architecture:**
-```
-Reservoir (fixed — 53 nodes = PTCA topology)
-    49 compute nodes: 7 meta-groups × 7 nodes, {7:3} heptagram within each
-    4 sentinel nodes: {7:2} schedule across all meta-groups
+**Architecture (v2):**
 
-    x(t+1) = tanh( W_r · x(t) + W_in · u(t) )     ← echo state update
-    y(t)   = W_out · x(t)                           ← readout (only trained part)
+| Reservoir | alpha | seed | n_input | feeds on |
+|-----------|-------|------|---------|---------|
+| `phi_field` | 0.7 | 42 | 3 | `phi_features(text)` |
+| `psi_field` | 0.9 | 43 | 3 | `psi_features(text)` |
+| `omega_field` | 0.95 | 44 | 6 | phi + psi features |
+| `synthesis` | 0.9 | 45 | 19 | field summaries + proxies |
 
-Input:   phi_features(text) ++ psi_features(text)  →  6-dim
-State:   53-dim reservoir  (phi | psi | omega | sentinel partitions)
-Output:  3-dim omega synthesis features
+Synthesis input (19-dim): `phi_summary[3] + psi_summary[3] + omega_summary[3]
++ guardian_proxy[4] + mem_long_proxy[3] + mem_short_proxy[3]`
+
+Per-field alphas reflect natural memory depth:
+- `phi` 0.7 — local syntax is turn-scoped, short memory
+- `psi` 0.9 — semantic meaning persists across turns
+- `omega` 0.95 — synthesis context accumulates longest
+- `synthesis` 0.9 — integrates all fields with moderate memory
+
+Override alphas via ModelConfig:
+```python
+from a0.model_registry import ModelRegistry, ModelConfig
+
+reg = ModelRegistry.defaults()
+reg.register(ModelConfig(
+    model_id="zfae-custom",
+    adapter="zfae",
+    phi_alpha=0.5,    # fast structural reset
+    psi_alpha=0.95,   # very long semantic memory
+    omega_alpha=0.99,
+    synthesis_alpha=0.85,
+))
 ```
 
 **Path B training workflow:**
@@ -436,7 +529,7 @@ Output:  3-dim omega synthesis features
 # 1. Collect training data (run with external model active)
 #    .env: A0_MODEL=anthropic-api, A0_RUNTIME=training, A0_TRAINING_DIR=/path/to/data
 
-# 2. Train the readout W_out
+# 2. Train the synthesis readout W_out
 from a0.cores.pcna.inference import get_backend
 import os; os.environ["A0_MODEL"] = "zfae"
 backend = get_backend()
@@ -446,6 +539,11 @@ print(f"Trained on {n} examples")
 
 # 3. Switch to ZFAE inference
 #    .env: A0_MODEL=zfae, A0_TRAINING_DIR=/path/to/data   (weights auto-loaded)
+
+# 4. Compare training runs (optional)
+from a0.cores.pcna.zfae import compare_training_runs
+result = compare_training_runs({"opus": "/data/opus", "sonnet": "/data/sonnet"})
+print(result["similarity"]["opus"]["sonnet"])
 ```
 
 Install numpy for accurate training: `pip install "a0python[zfae]"`

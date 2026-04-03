@@ -1,7 +1,9 @@
 """anthropic_adapter — calls the Anthropic Messages API directly.
 
-Selected when A0_MODEL=anthropic-api in .env.
-Requires ANTHROPIC_API_KEY and the `anthropic` package.
+Selected when A0_MODEL=anthropic-api in .env, or when a ModelConfig with
+adapter="anthropic-api" is resolved via the model registry.
+
+Requires ANTHROPIC_API_KEY and the ``anthropic`` package.
 
 Install::
 
@@ -9,7 +11,7 @@ Install::
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 Message = Dict[str, str]
 
@@ -22,6 +24,24 @@ except ImportError:
 
 class AnthropicAdapter:
     name = "anthropic-api"
+
+    def __init__(self, config: Optional[Any] = None) -> None:
+        """
+        Args:
+            config: Optional ModelConfig.  When provided, model_name,
+                    max_tokens, temperature, and system_prompt are read
+                    from it.  Falls back to built-in defaults when None.
+        """
+        if config is not None:
+            self._model        = getattr(config, "model_name", None) or "claude-sonnet-4-6"
+            self._max_tokens   = getattr(config, "max_tokens", 2048) or 2048
+            self._temperature  = getattr(config, "temperature", 0.7)
+            self._system_prompt = getattr(config, "system_prompt", None)
+        else:
+            self._model        = "claude-sonnet-4-6"
+            self._max_tokens   = 2048
+            self._temperature  = 0.7
+            self._system_prompt = None
 
     def complete(self, messages: List[Message], **kwargs: Any) -> Dict[str, Any]:
         if not _ANTHROPIC_AVAILABLE:
@@ -37,11 +57,16 @@ class AnthropicAdapter:
             )
 
         client = _anthropic_lib.Anthropic(api_key=ANTHROPIC_API_KEY)
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            messages=messages,
-            max_tokens=2048,
-        )
+
+        create_kwargs: Dict[str, Any] = {
+            "model":      self._model,
+            "messages":   messages,
+            "max_tokens": self._max_tokens,
+        }
+        if self._system_prompt:
+            create_kwargs["system"] = self._system_prompt
+
+        response = client.messages.create(**create_kwargs)
         text = response.content[0].text if response.content else ""
         return {
             "text": text,
