@@ -1,43 +1,41 @@
-import type { Express } from "express";
-import passport from "passport";
+import type { Express, Request, Response } from "express";
 import { authStorage } from "./storage";
 
 export function registerAuthRoutes(app: Express) {
-  app.get("/api/login", (req, res, next) => {
-    const domain =
-      req.hostname ||
-      (process.env.REPLIT_DOMAINS ?? "").split(",")[0].trim();
-    passport.authenticate(`replitauth:${domain}`, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile"],
-    })(req, res, next);
-  });
-
-  app.get("/api/callback", (req, res, next) => {
-    const domain =
-      req.hostname ||
-      (process.env.REPLIT_DOMAINS ?? "").split(",")[0].trim();
-    passport.authenticate(`replitauth:${domain}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
-    })(req, res, next);
-  });
-
-  app.get("/api/logout", (req, res) => {
-    req.logout(() => {
-      res.redirect("/");
-    });
-  });
-
-  app.get("/api/auth/user", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user?.claims?.sub) {
+  app.get("/api/auth/user", async (req: Request, res: Response) => {
+    const userId = req.session.userId || (req.headers["x-replit-user-id"] as string);
+    if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
     try {
-      const user = await authStorage.getUser(req.user.claims.sub);
+      let user = await authStorage.getUser(userId);
+      if (!user) {
+        user = await authStorage.upsertUser({
+          id: userId,
+          email: (req.headers["x-replit-user-email"] as string) ?? null,
+          firstName: (req.headers["x-replit-user-name"] as string) ?? null,
+          lastName: null,
+          profileImageUrl: (req.headers["x-replit-user-profile-image"] as string) ?? null,
+        });
+      }
       res.json(user);
     } catch {
       res.status(500).json({ message: "Internal server error" });
     }
+  });
+
+  app.get("/api/login", (req: Request, res: Response) => {
+    const domains = process.env.REPLIT_DOMAINS ?? "";
+    const domain = domains.split(",")[0].trim();
+    if (domain) {
+      return res.redirect(`https://${domain}/`);
+    }
+    res.redirect("/");
+  });
+
+  app.get("/api/logout", (req: Request, res: Response) => {
+    req.session.destroy(() => {
+      res.redirect("/");
+    });
   });
 }

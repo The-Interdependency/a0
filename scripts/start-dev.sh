@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Kill any stale processes on our ports
+fuser -k 5000/tcp 2>/dev/null || true
+fuser -k 5001/tcp 2>/dev/null || true
+fuser -k 8001/tcp 2>/dev/null || true
+
 uvicorn python.main:app --host 0.0.0.0 --port 8001 --reload &
 UVICORN_PID=$!
 
