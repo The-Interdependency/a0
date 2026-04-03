@@ -4,9 +4,10 @@ import logging
 from typing import Optional
 
 import httpx
+import jwt
+from jwt.algorithms import RSAAlgorithm, ECAlgorithm
+from jwt.exceptions import PyJWTError
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from jose import jwt, jwk
-from jose.exceptions import JWTError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -56,7 +57,7 @@ async def verify_replit_token(token: str) -> dict:
     """
     try:
         header = jwt.get_unverified_header(token)
-    except JWTError as exc:
+    except PyJWTError as exc:
         raise ValueError(f"Invalid JWT header: {exc}") from exc
 
     kid = header.get("kid", "")
@@ -73,13 +74,20 @@ async def verify_replit_token(token: str) -> dict:
         raise ValueError(f"Unknown keyID: {kid}")
 
     try:
-        pub_key = jwk.construct(key_data, algorithm=alg)
+        if alg.startswith("RS") or alg.startswith("PS"):
+            pub_key = RSAAlgorithm.from_jwk(key_data)
+        elif alg.startswith("ES"):
+            pub_key = ECAlgorithm.from_jwk(key_data)
+        else:
+            raise ValueError(f"Unsupported algorithm: {alg}")
+
         claims = jwt.decode(
-            token, pub_key,
+            token,
+            pub_key,
             algorithms=[alg],
             options={"verify_aud": False},
         )
-    except JWTError as exc:
+    except PyJWTError as exc:
         raise ValueError(f"JWT verification failed: {exc}") from exc
 
     user_id = str(claims.get("sub") or claims.get("id") or "")
