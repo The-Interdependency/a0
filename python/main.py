@@ -16,7 +16,6 @@ from .auth import (
     ReplitAuthMiddleware,
     verify_replit_token,
     make_session_cookie,
-    read_session_cookie,
     SESSION_COOKIE,
 )
 
