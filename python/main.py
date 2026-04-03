@@ -79,6 +79,11 @@ for r in ALL_ROUTERS:
     app.include_router(r)
 
 
+@app.get("/api/auth/debug-headers")
+async def debug_headers(request: Request):
+    return dict(request.headers)
+
+
 @app.get("/api/auth/user")
 async def auth_user(request: Request):
     user_id = request.headers.get("x-replit-user-id", "")
