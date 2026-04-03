@@ -1,4 +1,6 @@
 import "./types.d.ts";
+import path from "path";
+import fs from "fs";
 import express from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
@@ -7,6 +9,7 @@ const app = express();
 const PORT = parseInt(process.env.PORT ?? "5000", 10);
 const PYTHON_URL = "http://localhost:8001";
 const VITE_URL = "http://localhost:5001";
+const IS_PROD = process.env.NODE_ENV === "production";
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -44,24 +47,38 @@ app.use(
   })
 );
 
-app.use(
-  "/",
-  createProxyMiddleware({
-    target: VITE_URL,
-    changeOrigin: true,
-    ws: true,
-    on: {
-      error: (_err, _req, res) => {
-        (res as express.Response)
-          .status(502)
-          .send("Frontend build server unavailable");
+if (IS_PROD) {
+  const STATIC_DIR = path.resolve(import.meta.dirname, "..", "dist", "public");
+  if (fs.existsSync(STATIC_DIR)) {
+    app.use(express.static(STATIC_DIR));
+    app.get("*", (_req, res) => {
+      res.sendFile(path.join(STATIC_DIR, "index.html"));
+    });
+  } else {
+    console.warn("[express] dist/public not found — run npm run build first");
+  }
+} else {
+  app.use(
+    "/",
+    createProxyMiddleware({
+      target: VITE_URL,
+      changeOrigin: true,
+      ws: true,
+      on: {
+        error: (_err, _req, res) => {
+          (res as express.Response)
+            .status(502)
+            .send("Frontend build server unavailable");
+        },
       },
-    },
-  })
-);
+    })
+  );
+}
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`[express] Auth + proxy server on port ${PORT}`);
+  console.log(
+    `[express] Auth + proxy server on port ${PORT} (${IS_PROD ? "production" : "development"})`
+  );
 });
 
 export default app;
