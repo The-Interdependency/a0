@@ -23,18 +23,18 @@ export function registerAuthRoutes(app: Express) {
   });
 
   app.post("/api/auth/login", async (req: Request, res: Response) => {
-    const { email, passphrase } = req.body ?? {};
-    if (!email || !passphrase) {
-      return res.status(400).json({ message: "Email and passphrase are required" });
+    const { username, passphrase } = req.body ?? {};
+    if (!username || !passphrase) {
+      return res.status(400).json({ message: "Username and passphrase are required" });
     }
     try {
-      const user = await authStorage.getUserByEmail(email);
+      const user = await authStorage.getUserByUsername(username);
       if (!user || !user.passphraseHash || !user.isActive) {
-        return res.status(401).json({ message: "Invalid email or passphrase" });
+        return res.status(401).json({ message: "Invalid username or passphrase" });
       }
       const ok = await verifyPassphrase(passphrase, user.passphraseHash);
       if (!ok) {
-        return res.status(401).json({ message: "Invalid email or passphrase" });
+        return res.status(401).json({ message: "Invalid username or passphrase" });
       }
       await authStorage.updateLastLogin(user.id);
       req.session.userId = user.id;

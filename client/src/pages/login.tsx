@@ -11,7 +11,7 @@ import { useLocation, Link } from "wouter";
 import { useSEO } from "@/hooks/use-seo";
 
 const loginSchema = z.object({
-  email: z.string().email("Enter a valid email address"),
+  username: z.string().min(1, "Username is required"),
   passphrase: z.string().min(1, "Passphrase is required"),
 });
 
@@ -192,18 +192,18 @@ export default function LoginPage() {
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", passphrase: "" },
+    defaultValues: { username: "", passphrase: "" },
   });
 
   async function onSubmit(values: LoginForm) {
     setAuthError(null);
     try {
-      await loginAsync({ email: values.email, passphrase: values.passphrase });
+      await loginAsync({ username: values.username, passphrase: values.passphrase });
       setLocation("/");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
       if (msg.includes("401")) {
-        setAuthError("Invalid email or passphrase.");
+        setAuthError("Invalid username or passphrase.");
       } else {
         setAuthError("Something went wrong. Please try again.");
       }
@@ -238,17 +238,17 @@ export default function LoginPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="email"
+                name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-zinc-400 text-xs">Email</FormLabel>
+                    <FormLabel className="text-zinc-400 text-xs">Username</FormLabel>
                     <FormControl>
                       <Input
-                        type="email"
-                        placeholder="you@example.com"
-                        autoComplete="email"
+                        type="text"
+                        placeholder="your username"
+                        autoComplete="username"
                         className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 focus:border-primary"
-                        data-testid="input-email"
+                        data-testid="input-username"
                         {...field}
                       />
                     </FormControl>

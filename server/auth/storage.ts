@@ -18,6 +18,14 @@ export const authStorage = {
     return user ?? null;
   },
 
+  async getUserByUsername(username: string) {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username.toLowerCase().trim()));
+    return user ?? null;
+  },
+
   async createUser(data: {
     username: string;
     email: string;
