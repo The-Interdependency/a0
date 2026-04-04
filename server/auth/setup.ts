@@ -6,6 +6,12 @@ import { pool } from "../db";
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
 
+  const IS_PROD = process.env.NODE_ENV === "production";
+  const secret = process.env.SESSION_SECRET;
+  if (!secret && IS_PROD) {
+    throw new Error("[auth] SESSION_SECRET env var is required in production. Set it before starting the server.");
+  }
+
   const sessionTtl = 7 * 24 * 60 * 60 * 1000;
   const PgStore = ConnectPgSimple(session);
 
@@ -18,7 +24,7 @@ export async function setupAuth(app: Express) {
 
   app.use(
     session({
-      secret: process.env.SESSION_SECRET ?? "a0p-dev-secret-change-in-production",
+      secret: secret ?? "a0p-dev-secret-change-in-production",
       resave: false,
       saveUninitialized: false,
       cookie: {

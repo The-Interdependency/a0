@@ -83,11 +83,20 @@ export const authStorage = {
       .orderBy(challengeResponses.sortOrder);
   },
 
-  async verifyChallengeAnswer(challengeId: number, answer: string): Promise<boolean> {
+  async verifyChallengeAnswer(
+    userId: string,
+    challengeId: number,
+    answer: string
+  ): Promise<boolean> {
     const [row] = await db
       .select()
       .from(challengeResponses)
-      .where(eq(challengeResponses.id, challengeId));
+      .where(
+        and(
+          eq(challengeResponses.id, challengeId),
+          eq(challengeResponses.userId, userId)
+        )
+      );
     if (!row) return false;
     return verifyPassphrase(answer.trim().toLowerCase(), row.answerHash);
   },

@@ -120,6 +120,7 @@ export function registerAuthRoutes(app: Express) {
       if (questions.length === 0) {
         return res.status(404).json({ message: "No recovery questions set for this account" });
       }
+      req.session.pendingResetUserId = user.id;
       res.json({ userId: user.id, questions });
     } catch {
       res.status(500).json({ message: "Internal server error" });
@@ -127,18 +128,25 @@ export function registerAuthRoutes(app: Express) {
   });
 
   app.post("/api/auth/reset/verify", async (req: Request, res: Response) => {
-    const { userId, challengeId, answer } = req.body ?? {};
-    if (!userId || !challengeId || !answer) {
-      return res.status(400).json({ message: "userId, challengeId, and answer are required" });
+    const { challengeId, answer } = req.body ?? {};
+    if (!challengeId || !answer) {
+      return res.status(400).json({ message: "challengeId and answer are required" });
+    }
+    const userId = req.session.pendingResetUserId;
+    if (!userId) {
+      return res.status(400).json({ message: "No pending reset session. Start from the email step." });
     }
     try {
-      const ok = await authStorage.verifyChallengeAnswer(Number(challengeId), answer);
+      const ok = await authStorage.verifyChallengeAnswer(userId, Number(challengeId), answer);
       if (!ok) {
         return res.status(401).json({ message: "Incorrect answer" });
       }
       const resetToken = crypto.randomBytes(32).toString("hex");
-      req.session.resetUserId = userId;
+      const FIFTEEN_MIN = 15 * 60 * 1000;
       req.session.resetToken = resetToken;
+      req.session.resetTokenExpiry = Date.now() + FIFTEEN_MIN;
+      req.session.resetVerifiedUserId = userId;
+      delete req.session.pendingResetUserId;
       res.json({ resetToken });
     } catch {
       res.status(500).json({ message: "Internal server error" });
@@ -150,11 +158,15 @@ export function registerAuthRoutes(app: Express) {
     if (!resetToken || !newPassphrase) {
       return res.status(400).json({ message: "resetToken and newPassphrase are required" });
     }
-    if (
-      !req.session.resetToken ||
-      !req.session.resetUserId ||
-      req.session.resetToken !== resetToken
-    ) {
+    const tokenValid =
+      req.session.resetToken &&
+      req.session.resetTokenExpiry &&
+      req.session.resetToken === resetToken &&
+      Date.now() <= req.session.resetTokenExpiry;
+    if (!tokenValid || !req.session.resetVerifiedUserId) {
+      delete req.session.resetToken;
+      delete req.session.resetTokenExpiry;
+      delete req.session.resetVerifiedUserId;
       return res.status(401).json({ message: "Invalid or expired reset token" });
     }
 
@@ -163,11 +175,14 @@ export function registerAuthRoutes(app: Express) {
       return res.status(400).json({ message: validation.error });
     }
 
+    const resetUserId = req.session.resetVerifiedUserId;
+
     try {
       const newHash = await hashPassphrase(newPassphrase);
-      await authStorage.updatePassphrase(req.session.resetUserId, newHash);
+      await authStorage.updatePassphrase(resetUserId, newHash);
       delete req.session.resetToken;
-      delete req.session.resetUserId;
+      delete req.session.resetTokenExpiry;
+      delete req.session.resetVerifiedUserId;
       res.json({ ok: true });
     } catch {
       res.status(500).json({ message: "Internal server error" });

@@ -5,8 +5,10 @@ declare module "express-session" {
     userId?: string;
     userEmail?: string;
     userRole?: string;
-    resetUserId?: string;
+    pendingResetUserId?: string;
+    resetVerifiedUserId?: string;
     resetToken?: string;
+    resetTokenExpiry?: number;
   }
 }
 
