@@ -91,8 +91,13 @@ export function registerAuthRoutes(app: Express) {
 
       const { passphraseHash: _, ...safe } = user;
       res.status(201).json({ user: safe });
-    } catch (err: any) {
-      if (err?.code === "23505") {
+    } catch (err: unknown) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as Record<string, unknown>).code === "23505"
+      ) {
         return res.status(409).json({ message: "Username or email already taken" });
       }
       console.error("[auth] Register error:", err);
