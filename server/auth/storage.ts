@@ -127,11 +127,27 @@ export async function getOrCreateGuestWindow(ipHash: string): Promise<{ id: numb
   return created;
 }
 
-export async function incrementGuestTokens(id: number, tokensToAdd: number): Promise<number> {
+export async function incrementGuestTokensAtomic(
+  id: number,
+  tokensToAdd: number,
+  limit: number
+): Promise<number> {
   const [updated] = await db
     .update(guestTokenUsage)
     .set({ tokensUsed: sql`${guestTokenUsage.tokensUsed} + ${tokensToAdd}` })
-    .where(eq(guestTokenUsage.id, id))
+    .where(
+      and(
+        eq(guestTokenUsage.id, id),
+        sql`${guestTokenUsage.tokensUsed} + ${tokensToAdd} <= ${limit}`
+      )
+    )
     .returning();
-  return updated?.tokensUsed ?? tokensToAdd;
+  if (!updated) {
+    const [current] = await db
+      .select({ tokensUsed: guestTokenUsage.tokensUsed })
+      .from(guestTokenUsage)
+      .where(eq(guestTokenUsage.id, id));
+    return current?.tokensUsed ?? limit;
+  }
+  return updated.tokensUsed;
 }

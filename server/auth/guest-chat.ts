@@ -1,19 +1,18 @@
 import crypto from "crypto";
 import type { Express, Request, Response } from "express";
-import { getOrCreateGuestWindow, incrementGuestTokens } from "./storage";
+import { getOrCreateGuestWindow, incrementGuestTokensAtomic } from "./storage";
 
 const PYTHON_URL = "http://localhost:8001";
 const DEFAULT_TOKEN_LIMIT = 2000;
 
 function hashIp(ip: string): string {
-  return crypto.createHash("sha256").update(ip + (process.env.SESSION_SECRET ?? "salt")).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(ip + (process.env.SESSION_SECRET ?? "salt"))
+    .digest("hex");
 }
 
 function getClientIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") {
-    return forwarded.split(",")[0].trim();
-  }
   return req.ip ?? req.socket?.remoteAddress ?? "unknown";
 }
 
@@ -21,8 +20,7 @@ export function registerGuestChatRoute(app: Express) {
   const LIMIT = parseInt(process.env.GUEST_TOKEN_LIMIT ?? String(DEFAULT_TOKEN_LIMIT), 10);
 
   app.get("/api/guest/status", async (req: Request, res: Response) => {
-    const ip = getClientIp(req);
-    const ipHash = hashIp(ip);
+    const ipHash = hashIp(getClientIp(req));
     try {
       const window = await getOrCreateGuestWindow(ipHash);
       const remaining = Math.max(0, LIMIT - window.tokensUsed);
@@ -38,8 +36,7 @@ export function registerGuestChatRoute(app: Express) {
       return res.status(400).json({ message: "message is required" });
     }
 
-    const ip = getClientIp(req);
-    const ipHash = hashIp(ip);
+    const ipHash = hashIp(getClientIp(req));
 
     try {
       const window = await getOrCreateGuestWindow(ipHash);
@@ -64,10 +61,10 @@ export function registerGuestChatRoute(app: Express) {
         return res.status(502).json({ message: "AI backend error", detail: err });
       }
 
-      const data = await pyRes.json() as { content: string; tokens_used: number };
-      const tokensUsed = typeof data.tokens_used === "number" ? data.tokens_used : 50;
+      const data = (await pyRes.json()) as { content: string; tokens_used: number };
+      const tokensToAdd = typeof data.tokens_used === "number" ? data.tokens_used : 50;
 
-      const newTotal = await incrementGuestTokens(window.id, tokensUsed);
+      const newTotal = await incrementGuestTokensAtomic(window.id, tokensToAdd, LIMIT);
       const remaining = Math.max(0, LIMIT - newTotal);
 
       res.json({
