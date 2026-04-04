@@ -110,6 +110,12 @@ export function currentHourStart(): Date {
 
 export async function getOrCreateGuestWindow(ipHash: string): Promise<{ id: number; tokensUsed: number }> {
   const windowStart = currentHourStart();
+  const [upserted] = await db
+    .insert(guestTokenUsage)
+    .values({ ipHash, tokensUsed: 0, windowStart })
+    .onConflictDoNothing()
+    .returning();
+  if (upserted) return upserted;
   const [existing] = await db
     .select()
     .from(guestTokenUsage)
@@ -119,12 +125,7 @@ export async function getOrCreateGuestWindow(ipHash: string): Promise<{ id: numb
         gte(guestTokenUsage.windowStart, windowStart)
       )
     );
-  if (existing) return existing;
-  const [created] = await db
-    .insert(guestTokenUsage)
-    .values({ ipHash, tokensUsed: 0, windowStart })
-    .returning();
-  return created;
+  return existing;
 }
 
 export async function incrementGuestTokensAtomic(
