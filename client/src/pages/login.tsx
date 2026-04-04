@@ -200,8 +200,8 @@ export default function LoginPage() {
     try {
       await loginAsync({ email: values.email, passphrase: values.passphrase });
       setLocation("/");
-    } catch (err: any) {
-      const msg = err?.message ?? "";
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
       if (msg.includes("401")) {
         setAuthError("Invalid email or passphrase.");
       } else {
