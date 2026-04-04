@@ -86,7 +86,7 @@ class FounderPatch(BaseModel):
 
 @router.patch("/me")
 async def update_my_founder_profile(body: FounderPatch, request: Request):
-    uid = request.headers.get("x-replit-user-id", "")
+    uid = request.headers.get("x-user-id", "")
     if not uid:
         raise HTTPException(status_code=401, detail="Not authenticated")
 

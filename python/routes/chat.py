@@ -126,7 +126,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 
     from ..database import engine
     from sqlalchemy import text as _text
-    uid = request.headers.get("x-replit-user-id", "")
+    uid = request.headers.get("x-user-id", "")
     tier = "free"
     if uid:
         async with engine.connect() as conn:

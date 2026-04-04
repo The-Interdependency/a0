@@ -12,7 +12,6 @@ from .routes import ALL_ROUTERS, collect_ui_meta
 from .services.heartbeat import heartbeat_service
 from .agents.zfae import compose_name
 from .services.energy_registry import energy_registry
-from .auth import ReplitAuthMiddleware
 
 _pcna: PCNAEngine | None = None
 _instances: dict[str, PCNAEngine] = {}
@@ -68,12 +67,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_middleware(ReplitAuthMiddleware)
-
 for r in ALL_ROUTERS:
     app.include_router(r)
-
-
 
 
 @app.get("/api/health")

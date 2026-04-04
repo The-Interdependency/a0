@@ -11,6 +11,7 @@ from .billing import router as billing_router
 from .contexts import router as contexts_router
 from .founders import router as founders_router
 from .admin import router as admin_router
+from .guest import router as guest_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -26,6 +27,7 @@ ALL_ROUTERS = [
     contexts_router,
     founders_router,
     admin_router,
+    guest_router,
 ]
 
 

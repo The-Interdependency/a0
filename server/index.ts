@@ -3,7 +3,12 @@ import path from "path";
 import fs from "fs";
 import express from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
-import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import {
+  setupAuth,
+  registerAuthRoutes,
+  registerGuestChatRoute,
+  seedAdminUser,
+} from "./auth";
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "5000", 10);
@@ -17,22 +22,26 @@ app.use(express.urlencoded({ extended: false }));
 (async () => {
   await setupAuth(app);
   registerAuthRoutes(app);
+  registerGuestChatRoute(app);
+  await seedAdminUser();
 
   app.use(
     "/api",
     (req, _res, next) => {
-      if (req.isAuthenticated() && req.user?.claims?.sub) {
-        req.headers["x-replit-user-id"] = req.user.claims.sub;
-        req.headers["x-replit-user-name"] =
-          req.user.claims.first_name ?? req.user.claims.name ?? "";
-        req.headers["x-replit-user-email"] = req.user.claims.email ?? "";
-        req.headers["x-replit-user-profile-image"] =
-          req.user.claims.profile_image_url ?? "";
+      const userId = req.session?.userId;
+      if (userId) {
+        req.headers["x-user-id"] = userId;
+        req.headers["x-user-email"] = req.session?.userEmail ?? "";
+        req.headers["x-user-role"] = req.session?.userRole ?? "user";
       } else {
-        delete req.headers["x-replit-user-id"];
-        delete req.headers["x-replit-user-name"];
-        delete req.headers["x-replit-user-email"];
+        delete req.headers["x-user-id"];
+        delete req.headers["x-user-email"];
+        delete req.headers["x-user-role"];
       }
+      delete req.headers["x-replit-user-id"];
+      delete req.headers["x-replit-user-name"];
+      delete req.headers["x-replit-user-email"];
+      delete req.headers["x-replit-user-profile-image"];
       next();
     },
     createProxyMiddleware({

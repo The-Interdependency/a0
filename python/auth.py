@@ -2,10 +2,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 
-class ReplitAuthMiddleware(BaseHTTPMiddleware):
+class UserContextMiddleware(BaseHTTPMiddleware):
     """
-    Pass-through middleware. Auth headers (x-replit-user-id, etc.) are
-    now set by the upstream Express auth proxy before requests reach
+    Pass-through middleware. Auth headers (x-user-id, x-user-email, x-user-role)
+    are injected by the upstream Express auth proxy before requests reach
     this Python backend.
     """
 

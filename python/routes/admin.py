@@ -10,16 +10,19 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 
 def _user_id(request: Request) -> Optional[str]:
-    return request.headers.get("x-replit-user-id")
+    return request.headers.get("x-user-id")
 
 
 def _user_email(request: Request) -> Optional[str]:
-    return request.headers.get("x-replit-user-email")
+    return request.headers.get("x-user-email")
 
 
-async def _is_admin(uid: str, email: Optional[str]) -> bool:
-    admin_uid = os.environ.get("ADMIN_USER_ID", "")
-    if admin_uid and uid == admin_uid:
+def _user_role(request: Request) -> str:
+    return request.headers.get("x-user-role", "user")
+
+
+async def _is_admin(uid: str, email: Optional[str], role: str = "user") -> bool:
+    if role == "admin":
         return True
     if not email:
         return False
@@ -39,7 +42,8 @@ class AddEmailBody(BaseModel):
 async def list_admin_emails(request: Request):
     uid = _user_id(request) or ""
     email = _user_email(request)
-    if not await _is_admin(uid, email):
+    role = _user_role(request)
+    if not await _is_admin(uid, email, role):
         return JSONResponse(status_code=403, content={"error": "Forbidden"})
     async with engine.connect() as conn:
         rows = await conn.execute(
@@ -53,7 +57,8 @@ async def list_admin_emails(request: Request):
 async def add_admin_email(request: Request, body: AddEmailBody):
     uid = _user_id(request) or ""
     email = _user_email(request)
-    if not await _is_admin(uid, email):
+    role = _user_role(request)
+    if not await _is_admin(uid, email, role):
         return JSONResponse(status_code=403, content={"error": "Forbidden"})
     new_email = body.email.strip().lower()
     if not new_email or "@" not in new_email:
@@ -74,7 +79,8 @@ async def add_admin_email(request: Request, body: AddEmailBody):
 async def remove_admin_email(request: Request, email: str):
     uid = _user_id(request) or ""
     caller_email = _user_email(request)
-    if not await _is_admin(uid, caller_email):
+    role = _user_role(request)
+    if not await _is_admin(uid, caller_email, role):
         return JSONResponse(status_code=403, content={"error": "Forbidden"})
     target = email.strip().lower()
     if caller_email and target == caller_email.lower():
