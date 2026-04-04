@@ -25,6 +25,10 @@ app.use(express.urlencoded({ extended: false }));
   registerGuestChatRoute(app);
   await seedAdminUser();
 
+  app.use("/api/v1/guest", (_req, res) => {
+    res.status(404).json({ error: "Not found" });
+  });
+
   app.use(
     "/api",
     (req, _res, next) => {
