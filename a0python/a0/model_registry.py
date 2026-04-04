@@ -75,6 +75,12 @@ class ModelConfig:
     system_prompt: Optional[str] = None
     """System prompt injected before the user messages.  None → adapter default."""
 
+    include_memory: bool = True
+    """When True (default), committed Memory entries are injected into the system
+    prompt on every request, grounding the model in the instance's continuity
+    substrate.  Set False to disable for adapters that don't use text prompts
+    (e.g. zfae, local-echo)."""
+
     # ----- ZFAE field alphas (used when adapter="zfae") -----
     phi_alpha: float = 0.7
     """Spectral radius for the phi (structural) field reservoir.
@@ -170,6 +176,7 @@ DEFAULT_REGISTRY: Dict[str, ModelConfig] = {
         max_tokens=0,
         temperature=0.0,
         phi_alpha=0.7, psi_alpha=0.9, omega_alpha=0.95, synthesis_alpha=0.9,
+        include_memory=False,  # ZFAE uses numeric memory proxies, not text injection
         description="ZFAE v2 — four independent 53-node PTCA field reservoirs",
     ),
     "local-echo": ModelConfig(
@@ -178,6 +185,7 @@ DEFAULT_REGISTRY: Dict[str, ModelConfig] = {
         model_name=None,
         max_tokens=0,
         temperature=0.0,
+        include_memory=False,  # local-echo echoes input verbatim; no system prompt
         description="Local echo adapter — always available, baseline",
     ),
 }

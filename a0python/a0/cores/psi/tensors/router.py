@@ -149,6 +149,25 @@ def handle(
     state["last_model"] = adapter.name
     save_state(state, home)
 
+    # Load instance memory (gracefully — no-op if file absent or decryption fails)
+    memory = None
+    try:
+        from a0.memory import Memory
+        mem_path = (home / "state" / "memory.json") if home else None
+        memory = Memory(path=mem_path) if mem_path else Memory()
+    except Exception:
+        pass
+
+    # Assemble effective system prompt: committed memory block + ModelConfig.system_prompt
+    effective_system_prompt: Optional[str] = None
+    if memory is not None:
+        from .context_builder import build_memory_context
+        effective_system_prompt = build_memory_context(
+            memory=memory,
+            base_system_prompt=getattr(model_config, "system_prompt", None),
+            include=getattr(model_config, "include_memory", True),
+        )
+
     log_event(log_dir, req.task_id, {
         "type": "request",
         "mode": req.mode,
@@ -179,6 +198,7 @@ def handle(
         messages,
         mode=req.mode,
         hmmm=req.hmmm,
+        system_prompt=effective_system_prompt,
     )
     log_event(log_dir, req.task_id, {
         "type": "model",

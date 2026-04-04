@@ -63,8 +63,10 @@ class AnthropicAdapter:
             "messages":   messages,
             "max_tokens": self._max_tokens,
         }
-        if self._system_prompt:
-            create_kwargs["system"] = self._system_prompt
+        # system_prompt kwarg (memory injection from router) overrides instance default
+        system = kwargs.get("system_prompt") or self._system_prompt
+        if system:
+            create_kwargs["system"] = system
 
         response = client.messages.create(**create_kwargs)
         text = response.content[0].text if response.content else ""
