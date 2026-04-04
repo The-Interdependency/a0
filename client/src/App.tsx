@@ -9,6 +9,8 @@ import ChatPage from "@/pages/chat";
 import ConsolePage from "@/pages/console";
 import SplashPage from "@/pages/splash";
 import LoginPage from "@/pages/login";
+import RegisterPage from "@/pages/register";
+import ResetPage from "@/pages/reset";
 import PricingPage from "@/pages/pricing";
 import AdminContextsPage from "@/pages/admin-contexts";
 import TopNav from "@/components/top-nav";
@@ -19,6 +21,8 @@ function Router() {
     <Switch>
       <Route path="/splash" component={SplashPage} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/register" component={RegisterPage} />
+      <Route path="/reset" component={ResetPage} />
       <Route path="/" component={ChatPage} />
       <Route path="/console" component={ConsolePage} />
       <Route path="/pricing" component={PricingPage} />
@@ -48,7 +52,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 function AppShell() {
   const [location] = useLocation();
-  const isPublicPage = location === "/splash" || location === "/login";
+  const isPublicPage =
+    location === "/splash" ||
+    location === "/login" ||
+    location === "/register" ||
+    location === "/reset";
 
   if (isPublicPage) {
     return (

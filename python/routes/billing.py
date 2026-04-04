@@ -68,16 +68,19 @@ _DEFAULT_CANCEL_PATH = "/pricing"
 
 
 def _user_id(request: Request) -> Optional[str]:
-    return request.headers.get("x-replit-user-id")
+    return request.headers.get("x-user-id")
 
 
 def _user_email(request: Request) -> Optional[str]:
-    return request.headers.get("x-replit-user-email")
+    return request.headers.get("x-user-email")
 
 
-async def _check_admin(uid: str, email: Optional[str], conn) -> bool:
-    admin_uid = os.environ.get("ADMIN_USER_ID", "")
-    if admin_uid and uid == admin_uid:
+def _user_role(request: Request) -> str:
+    return request.headers.get("x-user-role", "user")
+
+
+async def _check_admin(uid: str, email: Optional[str], conn, role: str = "user") -> bool:
+    if role == "admin":
         return True
     if not email:
         return False
@@ -107,9 +110,10 @@ async def ensure_admin_emails() -> None:
 async def get_status(request: Request):
     uid = _user_id(request)
     email = _user_email(request)
+    role = _user_role(request)
 
     async with engine.connect() as conn:
-        is_admin = await _check_admin(uid or "", email, conn)
+        is_admin = await _check_admin(uid or "", email, conn, role)
 
         if not uid:
             return {"plan": "free", "status": "active", "provider_pool": "standard",

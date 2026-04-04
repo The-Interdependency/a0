@@ -1,0 +1,84 @@
+import crypto from "crypto";
+import type { Express, Request, Response } from "express";
+import { getOrCreateGuestWindow, incrementGuestTokens } from "./storage";
+
+const PYTHON_URL = "http://localhost:8001";
+const DEFAULT_TOKEN_LIMIT = 2000;
+
+function hashIp(ip: string): string {
+  return crypto.createHash("sha256").update(ip + (process.env.SESSION_SECRET ?? "salt")).digest("hex");
+}
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string") {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.ip ?? req.socket?.remoteAddress ?? "unknown";
+}
+
+export function registerGuestChatRoute(app: Express) {
+  const LIMIT = parseInt(process.env.GUEST_TOKEN_LIMIT ?? String(DEFAULT_TOKEN_LIMIT), 10);
+
+  app.get("/api/guest/status", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const ipHash = hashIp(ip);
+    try {
+      const window = await getOrCreateGuestWindow(ipHash);
+      const remaining = Math.max(0, LIMIT - window.tokensUsed);
+      res.json({ tokensUsed: window.tokensUsed, tokensLimit: LIMIT, tokensRemaining: remaining });
+    } catch {
+      res.json({ tokensUsed: 0, tokensLimit: LIMIT, tokensRemaining: LIMIT });
+    }
+  });
+
+  app.post("/api/guest/chat", async (req: Request, res: Response) => {
+    const { message } = req.body ?? {};
+    if (!message || typeof message !== "string" || !message.trim()) {
+      return res.status(400).json({ message: "message is required" });
+    }
+
+    const ip = getClientIp(req);
+    const ipHash = hashIp(ip);
+
+    try {
+      const window = await getOrCreateGuestWindow(ipHash);
+      if (window.tokensUsed >= LIMIT) {
+        return res.status(429).json({
+          message: "Token limit reached for this hour",
+          tokensUsed: window.tokensUsed,
+          tokensLimit: LIMIT,
+          tokensRemaining: 0,
+          retryAfter: "Try again next hour",
+        });
+      }
+
+      const pyRes = await fetch(`${PYTHON_URL}/api/v1/guest/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: message.trim() }),
+      });
+
+      if (!pyRes.ok) {
+        const err = await pyRes.text();
+        return res.status(502).json({ message: "AI backend error", detail: err });
+      }
+
+      const data = await pyRes.json() as { content: string; tokens_used: number };
+      const tokensUsed = typeof data.tokens_used === "number" ? data.tokens_used : 50;
+
+      const newTotal = await incrementGuestTokens(window.id, tokensUsed);
+      const remaining = Math.max(0, LIMIT - newTotal);
+
+      res.json({
+        content: data.content,
+        tokensUsed: newTotal,
+        tokensLimit: LIMIT,
+        tokensRemaining: remaining,
+      });
+    } catch (err) {
+      console.error("[guest-chat] Error:", err);
+      res.status(502).json({ message: "AI backend unavailable" });
+    }
+  });
+}

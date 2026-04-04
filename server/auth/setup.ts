@@ -1,0 +1,33 @@
+import session from "express-session";
+import ConnectPgSimple from "connect-pg-simple";
+import type { Express } from "express";
+import { pool } from "../db";
+
+export async function setupAuth(app: Express) {
+  app.set("trust proxy", 1);
+
+  const sessionTtl = 7 * 24 * 60 * 60 * 1000;
+  const PgStore = ConnectPgSimple(session);
+
+  const sessionStore = new PgStore({
+    pool,
+    tableName: "sessions",
+    createTableIfMissing: true,
+    ttl: sessionTtl / 1000,
+  });
+
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET ?? "a0p-dev-secret-change-in-production",
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: sessionTtl,
+        sameSite: "lax",
+      },
+      store: sessionStore,
+    })
+  );
+}

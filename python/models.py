@@ -22,10 +22,14 @@ class Session(Base):
 class User(Base):
     __tablename__ = "users"
     id = Column(String, primary_key=True, server_default=text("gen_random_uuid()"))
+    username = Column(String, unique=True)
     email = Column(String, unique=True)
-    first_name = Column(String)
-    last_name = Column(String)
-    profile_image_url = Column(String)
+    passphrase_hash = Column(String)
+    display_name = Column(String)
+    role = Column(String, nullable=False, server_default="user")
+    is_active = Column(Boolean, nullable=False, server_default="true")
+    login_count = Column(Integer, nullable=False, server_default="0")
+    last_login_at = Column(DateTime)
     subscription_tier = Column(String(50), nullable=False, server_default="free")
     stripe_customer_id = Column(String)
     stripe_subscription_id = Column(String)

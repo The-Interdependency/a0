@@ -3,9 +3,10 @@ import "express-session";
 declare module "express-session" {
   interface SessionData {
     userId?: string;
-    userName?: string;
     userEmail?: string;
-    profileImageUrl?: string;
+    userRole?: string;
+    resetUserId?: string;
+    resetToken?: string;
   }
 }
 
