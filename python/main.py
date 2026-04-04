@@ -5,6 +5,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from .database import engine
 from .engine import PCNAEngine
@@ -53,6 +55,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="A0P Python Backend", lifespan=lifespan)
 
+_INTERNAL_SECRET = os.environ.get("INTERNAL_API_SECRET", "a0p-dev-internal-secret")
+
+_OPEN_PATHS = {"/api/health", "/api/v1/guest/chat"}
+
+
+class InternalAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        path = request.url.path
+        if any(path.startswith(p) for p in _OPEN_PATHS):
+            return await call_next(request)
+        token = request.headers.get("x-a0p-internal", "")
+        if token != _INTERNAL_SECRET:
+            return JSONResponse(status_code=403, content={"error": "Forbidden"})
+        return await call_next(request)
+
+
 _allowed_origins = []
 _domains = os.environ.get("REPLIT_DOMAINS", "")
 if _domains:
@@ -66,6 +84,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(InternalAuthMiddleware)
 
 for r in ALL_ROUTERS:
     app.include_router(r)

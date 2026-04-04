@@ -348,10 +348,14 @@ async def _handle_checkout_completed(sess: dict) -> None:
             updates["founder_slot"] = slot
 
     if updates:
-        set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-        updates["uid"] = uid
-        async with engine.begin() as conn:
-            await conn.execute(text(f"UPDATE users SET {set_clause} WHERE id = :uid"), updates)
+        _ALLOWED_USER_COLS = {"stripe_customer_id", "stripe_subscription_id", "subscription_tier",
+                              "subscription_status", "byok_enabled", "founder_slot"}
+        safe = {k: v for k, v in updates.items() if k in _ALLOWED_USER_COLS}
+        if safe:
+            set_clause = ", ".join(f"{k} = :{k}" for k in safe)
+            safe["uid"] = uid
+            async with engine.begin() as conn:
+                await conn.execute(text(f"UPDATE users SET {set_clause} WHERE id = :uid"), safe)
 
     if tier in ("founder", "patron"):
         await sync_founder_registry(uid, tier, action="upsert")

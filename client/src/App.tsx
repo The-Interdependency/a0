@@ -56,7 +56,8 @@ function AppShell() {
     location === "/splash" ||
     location === "/login" ||
     location === "/register" ||
-    location === "/reset";
+    location === "/reset" ||
+    location === "/pricing";
 
   if (isPublicPage) {
     return (

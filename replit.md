@@ -18,9 +18,17 @@ a0p is a mobile-first autonomous AI agent platform. One agent `a0(zeta fun alpha
 ## System Architecture
 
 ### Runtime
-- **Python/FastAPI backend** on port 8001 — `python/` directory (primary)
-- **Vite dev server** on port 5000 — proxies `/api` to port 8001
-- Both start via `scripts/start-dev.sh` through the "Start application" workflow
+- **Express server** on port 5000 (external port 80) — handles auth, session, guest chat, proxies `/api/*` to Python
+- **Vite dev server** on port 5001 — React frontend, proxied by Express in development
+- **Python/FastAPI backend** on port 8001 — primary AI + data backend (NOT externally exposed; all access via Express)
+- All three start via `scripts/start-dev.sh` through the "Start application" workflow
+
+### Security
+- Express adds `x-a0p-internal` header on all proxied requests; Python rejects any request missing it
+- Express is the only public entry point — Python never needs to be accessed directly
+- Session secret must be set via `SESSION_SECRET` env var in production; fallback is dev-only
+- `INTERNAL_API_SECRET` env var can override the default internal token (recommended for production)
+- Guest chat rate-limited by IP hash; token limits configurable via `GUEST_TOKEN_LIMIT` env var
 
 ### Python Backend (`python/`)
 - `python/main.py` — FastAPI app, mounts all routers, `/api/v1/ui/structure`, heartbeat lifespan
@@ -113,4 +121,6 @@ Each ring has coherence tracking and propagation.
 ## Hard Rules
 - No file over 400 lines
 - No stubs or TODOs in production code
-- Python-only backend (no Express routes in active use)
+- Express handles auth/session/guest; Python handles all other API logic
+- All API paths go through Express (`/api/*`) — never call Python (port 8001) directly from the frontend
+- SQL column names in dynamic UPDATE queries must use an explicit allowlist

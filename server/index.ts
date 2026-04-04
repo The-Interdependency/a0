@@ -15,6 +15,7 @@ const PORT = parseInt(process.env.PORT ?? "5000", 10);
 const PYTHON_URL = "http://localhost:8001";
 const VITE_URL = "http://localhost:5001";
 const IS_PROD = process.env.NODE_ENV === "production";
+const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "a0p-dev-internal-secret";
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -46,6 +47,7 @@ app.use(express.urlencoded({ extended: false }));
       delete req.headers["x-replit-user-name"];
       delete req.headers["x-replit-user-email"];
       delete req.headers["x-replit-user-profile-image"];
+      req.headers["x-a0p-internal"] = INTERNAL_SECRET;
       next();
     },
     createProxyMiddleware({

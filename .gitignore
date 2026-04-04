@@ -4,3 +4,6 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+logs/transcripts/
+logs/*.jsonl
+attached_assets/*-recovery-codes*.txt

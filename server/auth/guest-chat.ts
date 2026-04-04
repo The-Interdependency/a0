@@ -4,11 +4,12 @@ import { getOrCreateGuestWindow, incrementGuestTokensAtomic } from "./storage";
 
 const PYTHON_URL = "http://localhost:8001";
 const DEFAULT_TOKEN_LIMIT = 2000;
+const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "a0p-dev-internal-secret";
 
 function hashIp(ip: string): string {
   return crypto
     .createHash("sha256")
-    .update(ip + (process.env.SESSION_SECRET ?? "salt"))
+    .update(ip + (process.env.SESSION_SECRET ?? "a0p-dev-secret-change-in-production"))
     .digest("hex");
 }
 
@@ -52,7 +53,10 @@ export function registerGuestChatRoute(app: Express) {
 
       const pyRes = await fetch(`${PYTHON_URL}/api/v1/guest/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-a0p-internal": INTERNAL_SECRET,
+        },
         body: JSON.stringify({ message: message.trim() }),
       });
 
