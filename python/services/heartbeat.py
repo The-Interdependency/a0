@@ -212,12 +212,30 @@ class HeartbeatService:
         from ..services.inference import call_energy_provider
         from ..services.energy_registry import energy_registry
 
+        _DEFAULT_REVIEW_INTERVAL_S = 21600
+
+        interval_toggle = await storage.get_system_toggle("conversation_review_interval_seconds")
+        review_interval_s = _DEFAULT_REVIEW_INTERVAL_S
+        if interval_toggle and interval_toggle.get("parameters"):
+            override = interval_toggle["parameters"].get("seconds")
+            if override is not None:
+                try:
+                    review_interval_s = max(300, int(override))
+                except (ValueError, TypeError):
+                    pass
+
         toggle = await storage.get_system_toggle("last_conversation_review_at")
         since = datetime.utcfromtimestamp(0)
+        last_ts = 0.0
         if toggle and toggle.get("parameters"):
             ts = toggle["parameters"].get("ts")
             if ts:
-                since = datetime.utcfromtimestamp(float(ts))
+                last_ts = float(ts)
+                since = datetime.utcfromtimestamp(last_ts)
+
+        if last_ts and (time.time() - last_ts) < review_interval_s:
+            elapsed = round(time.time() - last_ts)
+            return f"conversation_review_skip: interval not elapsed ({elapsed}s < {review_interval_s}s)"
 
         messages = await storage.get_messages_since(since, limit=300)
         if not messages:

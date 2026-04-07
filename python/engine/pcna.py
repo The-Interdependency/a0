@@ -70,42 +70,63 @@ class PCNAEngine:
         self.blueprint_hash = self.guardian.blueprint_hash
         self.created_at = time.time()
         self.checkpoint_at: float | None = None
+        self.checkpoint_ring_means: dict[str, float] = {}
 
     async def load_checkpoint(self):
+        """
+        Atomically restore ring tensors from DB checkpoint.
+        Validates ALL rings first; assigns nothing if any shape mismatches.
+        """
         try:
             from ..storage import storage
             toggle = await storage.get_system_toggle("pcna_tensor_checkpoint")
             if not toggle or not toggle.get("parameters"):
                 return
             data = toggle["parameters"]
-            rings = {
+            ring_map = {
                 "phi": self.phi,
                 "psi": self.psi,
                 "omega": self.omega,
                 "memory_l": self.memory_l,
                 "memory_s": self.memory_s,
             }
-            for name, ring in rings.items():
+            decoded: dict[str, dict] = {}
+            for name, ring in ring_map.items():
                 t_key = f"{name}_tensor"
-                v_key = f"{name}_velocities"
                 if t_key not in data:
                     continue
-                restored = _b64_to_tensor(data[t_key])
-                if restored.shape != ring.tensor.shape:
-                    print(f"[pcna] checkpoint shape mismatch on {name}: {restored.shape} vs {ring.tensor.shape} — discarding")
+                tensor = _b64_to_tensor(data[t_key])
+                if tensor.shape != ring.tensor.shape:
+                    print(
+                        f"[pcna] checkpoint discarded — shape mismatch on {name}: "
+                        f"{tensor.shape} vs {ring.tensor.shape}"
+                    )
                     return
-                ring.tensor = restored
+                entry: dict = {"tensor": tensor}
+                v_key = f"{name}_velocities"
                 if hasattr(ring, "velocities") and v_key in data:
-                    rv = _b64_to_tensor(data[v_key])
-                    if rv.shape == ring.velocities.shape:
-                        ring.velocities = rv
+                    vel = _b64_to_tensor(data[v_key])
+                    if vel.shape == ring.velocities.shape:
+                        entry["velocities"] = vel
+                decoded[name] = entry
+
+            for name, entry in decoded.items():
+                ring = ring_map[name]
+                ring.tensor = entry["tensor"]
+                if "velocities" in entry:
+                    ring.velocities = entry["velocities"]
                 if hasattr(ring, "_recompute_coherence"):
                     ring._recompute_coherence()
                 elif hasattr(ring, "_recompute_hub_avg"):
                     ring._recompute_hub_avg()
+
             ts = data.get("saved_at", 0)
             self.checkpoint_at = float(ts) if ts else None
-            print(f"[pcna] checkpoint restored: {len(rings)} rings, saved_at={ts}")
+            self.checkpoint_ring_means = {
+                name: round(float(ring_map[name].tensor.mean()), 4)
+                for name in decoded
+            }
+            print(f"[pcna] checkpoint restored: {len(decoded)} rings, saved_at={ts}")
         except Exception as e:
             print(f"[pcna] checkpoint load failed (fresh start): {e}")
 
@@ -293,5 +314,6 @@ class PCNAEngine:
             "ring_weights": RING_WEIGHTS,
             "uptime_s": round(time.time() - self.created_at, 1),
             "checkpoint_at": self.checkpoint_at,
+            "checkpoint_ring_means": self.checkpoint_ring_means,
             "echo_history": echo_history[-20:],
         }

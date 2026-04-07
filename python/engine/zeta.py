@@ -62,7 +62,7 @@ class ZetaEngine:
             coherence = self._coherence_from_metrics(metrics)
 
             pcna = get_pcna()
-            pcna.reward(winner=pcna.last_winner or "phi", outcome=coherence)
+            pcna.phi.nudge(coherence, lr=0.025)
 
             self.eval_count += 1
             event = {
