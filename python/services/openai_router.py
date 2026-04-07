@@ -12,7 +12,7 @@ from ..config.policy_loader import (
 
 _MODEL_ENV_MAP = {
     "root_orchestrator": "OPENAI_MODEL_ROOT",
-    "high_risk_gate": "OPENAI_MODEL_GATE",
+    "high_risk_gate": "OPENAI_MODEL_ROOT",
     "worker": "OPENAI_MODEL_WORKER",
     "classifier": "OPENAI_MODEL_CLASSIFIER",
     "deep_pass": "OPENAI_MODEL_DEEP",
@@ -47,6 +47,7 @@ def resolve_model(role: str) -> str:
 
 
 def resolve_role_config(role: str) -> dict:
+    """Return call-level config (not part of structured route_decision schema)."""
     roles = get_roles()
     role_cfg = roles.get(role, roles.get(get_default_role(), {}))
     defaults = get_defaults()
@@ -64,20 +65,24 @@ def resolve_role_config(role: str) -> dict:
 
 
 def make_route_decision(task_text: str) -> dict[str, Any]:
+    """
+    Return a route_decision strictly conforming to the policy schema
+    (additionalProperties: false — only role, reason, requires_approval, hmmm).
+    Call config (model, effort, etc.) is returned separately via make_call_config().
+    """
     role = resolve_role(task_text)
     requires_approval = _check_approval_required(task_text)
-    cfg = resolve_role_config(role)
     return {
         "role": role,
         "reason": f"keyword match → {role}",
         "requires_approval": requires_approval,
-        "model": cfg["model"],
-        "reasoning_effort": cfg["reasoning_effort"],
-        "max_output_tokens": cfg["max_output_tokens"],
-        "temperature": cfg["temperature"],
-        "store": cfg["store"],
         "hmmm": {},
     }
+
+
+def make_call_config(role: str) -> dict[str, Any]:
+    """Return the call-level parameters for a resolved role (not part of structured schema)."""
+    return resolve_role_config(role)
 
 
 def _check_approval_required(task_text: str) -> bool:
@@ -87,12 +92,16 @@ def _check_approval_required(task_text: str) -> bool:
 
 
 def make_approval_packet(task_text: str, gate_id: str) -> dict[str, Any]:
+    """
+    Return an approval_packet strictly conforming to the policy schema
+    (additionalProperties: false — gate_id, action, impact, rollback, artifacts, hmmm).
+    approval_state is NOT included in the packet (it is a separate channel in usage metadata).
+    """
     return {
         "gate_id": gate_id,
         "action": task_text[:200],
         "impact": "External write or high-risk action detected — requires explicit approval.",
         "rollback": "Revert by discarding the pending action; no external state has been modified.",
         "artifacts": [],
-        "approval_state": "pending",
         "hmmm": {},
     }

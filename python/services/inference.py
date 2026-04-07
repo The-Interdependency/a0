@@ -64,30 +64,41 @@ async def _call_openai_routed(
     """
     Route to the appropriate role via openai_router, check approval gate,
     then call the Responses API.
+    route_decision and approval_packet are kept strictly schema-compliant.
+    Call config (model, effort, etc.) is obtained separately via make_call_config().
     """
-    from .openai_router import make_route_decision, make_approval_packet, _check_approval_required
+    from .openai_router import make_route_decision, make_call_config, make_approval_packet
     from ..logger import log_openai_event, seed_openai_hmmm_if_empty
     from ..config.policy_loader import get_hmmm_seed_items
 
     await seed_openai_hmmm_if_empty(get_hmmm_seed_items())
 
     task_text = " ".join(m.get("content", "") for m in messages if m.get("role") == "user")
-    decision = make_route_decision(task_text)
 
-    if decision["requires_approval"]:
+    route_decision = make_route_decision(task_text)
+    role = route_decision["role"]
+    call_cfg = make_call_config(role)
+
+    if route_decision["requires_approval"]:
         import uuid
         gate_id = f"gate-{uuid.uuid4().hex[:8]}"
         packet = make_approval_packet(task_text, gate_id)
         input_repr = json.dumps({"task": task_text})
         output_repr = json.dumps(packet)
         await log_openai_event(
-            role=decision["role"],
-            model=decision["model"],
-            reasoning_effort=decision["reasoning_effort"],
+            role=role,
+            model=call_cfg["model"],
+            reasoning_effort=call_cfg["reasoning_effort"],
             input_text=input_repr,
             output_text=output_repr,
             approval_state="pending",
         )
+        usage = {
+            "approval_state": "pending",
+            "gate_id": gate_id,
+            "approval_packet": packet,
+            "route_decision": route_decision,
+        }
         content = (
             f"[APPROVAL REQUIRED — gate_id: {gate_id}]\n"
             f"Action: {packet['action'][:120]}\n"
@@ -95,7 +106,7 @@ async def _call_openai_routed(
             f"Rollback: {packet['rollback']}\n"
             f"To approve, reply: APPROVE {gate_id}"
         )
-        return content, {"approval_state": "pending", "gate_id": gate_id}
+        return content, usage
 
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
@@ -108,23 +119,24 @@ async def _call_openai_routed(
 
     content, usage = await _call_openai_responses(
         api_key=api_key,
-        model=decision["model"],
+        model=call_cfg["model"],
         input_messages=full_input,
-        max_output_tokens=decision["max_output_tokens"],
-        temperature=decision["temperature"],
-        reasoning_effort=decision["reasoning_effort"],
-        store=decision["store"],
+        max_output_tokens=call_cfg["max_output_tokens"],
+        temperature=call_cfg["temperature"],
+        reasoning_effort=call_cfg["reasoning_effort"],
+        store=call_cfg["store"],
     )
 
     input_repr = json.dumps(full_input)
     await log_openai_event(
-        role=decision["role"],
-        model=decision["model"],
-        reasoning_effort=decision["reasoning_effort"],
+        role=role,
+        model=call_cfg["model"],
+        reasoning_effort=call_cfg["reasoning_effort"],
         input_text=input_repr,
         output_text=content,
         approval_state="not_required",
     )
+    usage["route_decision"] = route_decision
     return content, usage
 
 
