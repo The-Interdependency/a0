@@ -366,14 +366,14 @@ async def log_openai_event(
 ) -> None:
     if not is_stream_enabled("openai_events"):
         return
-    input_hash = sha256(input_text.encode()).hexdigest()
-    output_hash = sha256(output_text.encode()).hexdigest()
+    input_token_hash = sha256(input_text.encode()).hexdigest()
+    output_token_hash = sha256(output_text.encode()).hexdigest()
     entry = _build_entry("openai_events", "openai", "call", {
         "role": role,
         "model": model,
         "reasoning_effort": reasoning_effort,
-        "input_hash": input_hash,
-        "output_hash": output_hash,
+        "input_token_hash": input_token_hash,
+        "output_token_hash": output_token_hash,
         "approval_state": approval_state,
     })
     try:
