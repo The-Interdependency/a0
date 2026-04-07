@@ -87,7 +87,7 @@ export function JuryTab() {
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors",
                   selectedSlots.includes(key)
-                    ? "bg-primary text-primary-foreground border-primary"
+                    ? "bg-accent/15 text-accent border-accent"
                     : "border-border text-muted-foreground hover:text-foreground"
                 )}
                 data-testid={`slot-toggle-${key}`}
@@ -144,7 +144,7 @@ export function JuryTab() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">{r.responseTimeMs}ms</span>
-                  {winner === r.slotKey && <CheckCircle className="w-3.5 h-3.5 text-primary" />}
+                  {winner === r.slotKey && <CheckCircle className="w-3.5 h-3.5 text-accent" />}
                 </div>
               </div>
               <ScrollArea className="max-h-40">

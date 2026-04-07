@@ -165,7 +165,7 @@ export function CustomToolsTab() {
             <div className="border-t border-border px-3 py-2.5 space-y-2.5">
               <div className="flex items-center gap-2">
                 <p className="text-[10px] text-muted-foreground flex-1">Controls which tools are sent as function definitions each request. ~45 tokens each.</p>
-                <button onClick={() => toggleAll(true)} className="text-[10px] text-primary hover:underline flex-shrink-0" data-testid="button-all-on">all on</button>
+                <button onClick={() => toggleAll(true)} className="text-[10px] text-accent hover:underline flex-shrink-0" data-testid="button-all-on">all on</button>
                 <span className="text-muted-foreground text-[10px]">·</span>
                 <button onClick={() => toggleAll(false)} className="text-[10px] text-muted-foreground hover:text-foreground hover:underline flex-shrink-0" data-testid="button-all-off">all off</button>
               </div>
