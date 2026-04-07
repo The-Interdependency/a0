@@ -28,8 +28,14 @@ def _build_keyword_index() -> None:
     for rule in get_routing_rules():
         match_expr = rule.get("match", "")
         role = rule.get("route_to", "")
-        tokens = [t.strip().lower() for t in re.split(r"\s+OR\s+", match_expr)]
-        _RULE_KEYWORDS[role] = _RULE_KEYWORDS.get(role, []) + tokens
+        raw_tokens = [t.strip().lower() for t in re.split(r"\s+OR\s+", match_expr)]
+        normalized: list[str] = []
+        for tok in raw_tokens:
+            normalized.append(tok)
+            spaced = tok.replace("_", " ")
+            if spaced != tok:
+                normalized.append(spaced)
+        _RULE_KEYWORDS[role] = _RULE_KEYWORDS.get(role, []) + normalized
 
 
 def resolve_role(task_text: str) -> str:
