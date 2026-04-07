@@ -90,11 +90,15 @@ class PCNAEngine:
                 "memory_l": self.memory_l,
                 "memory_s": self.memory_s,
             }
+            expected_keys = {f"{name}_tensor" for name in ring_map}
+            missing = expected_keys - set(data.keys())
+            if missing:
+                print(f"[pcna] checkpoint discarded — missing keys: {missing}")
+                return
+
             decoded: dict[str, dict] = {}
             for name, ring in ring_map.items():
                 t_key = f"{name}_tensor"
-                if t_key not in data:
-                    continue
                 tensor = _b64_to_tensor(data[t_key])
                 if tensor.shape != ring.tensor.shape:
                     print(
@@ -148,6 +152,10 @@ class PCNAEngine:
                     data[f"{name}_velocities"] = _tensor_to_b64(ring.velocities)
             await storage.upsert_system_toggle("pcna_tensor_checkpoint", True, data)
             self.checkpoint_at = data["saved_at"]
+            self.checkpoint_ring_means = {
+                name: round(float(ring.tensor.mean()), 4)
+                for name, ring in rings.items()
+            }
             print(f"[pcna] checkpoint saved: {len(rings)} rings")
         except Exception as e:
             print(f"[pcna] checkpoint save failed: {e}")
