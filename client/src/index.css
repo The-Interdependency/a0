@@ -2,47 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
-/* LIGHT MODE */
+/* LIGHT MODE — TIW palette (lighter variants; app runs dark-always) */
 :root {
   --button-outline: rgba(0,0,0, .10);
   --badge-outline: rgba(0,0,0, .05);
   --opaque-button-border-intensity: -8;
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
-  --background: 220 14% 96%;
-  --foreground: 220 14% 9%;
-  --border: 220 14% 88%;
-  --card: 220 14% 99%;
-  --card-foreground: 220 14% 9%;
-  --card-border: 220 14% 92%;
-  --sidebar: 220 14% 94%;
-  --sidebar-foreground: 220 14% 9%;
-  --sidebar-border: 220 14% 90%;
-  --sidebar-primary: 210 85% 45%;
-  --sidebar-primary-foreground: 210 85% 98%;
-  --sidebar-accent: 220 14% 90%;
-  --sidebar-accent-foreground: 220 14% 9%;
-  --sidebar-ring: 210 85% 45%;
-  --popover: 220 14% 97%;
-  --popover-foreground: 220 14% 9%;
-  --popover-border: 220 14% 90%;
-  --primary: 210 85% 45%;
-  --primary-foreground: 210 85% 98%;
-  --secondary: 220 14% 90%;
-  --secondary-foreground: 220 14% 9%;
-  --muted: 220 14% 92%;
-  --muted-foreground: 220 14% 40%;
-  --accent: 210 15% 92%;
-  --accent-foreground: 210 15% 15%;
+  --background: 220 20% 97%;
+  --foreground: 220 15% 10%;
+  --border: 220 15% 85%;
+  --card: 220 15% 99%;
+  --card-foreground: 220 15% 10%;
+  --card-border: 220 15% 90%;
+  --sidebar: 220 15% 95%;
+  --sidebar-foreground: 220 15% 10%;
+  --sidebar-border: 220 15% 88%;
+  --sidebar-primary: 142 60% 35%;
+  --sidebar-primary-foreground: 220 15% 97%;
+  --sidebar-accent: 220 15% 90%;
+  --sidebar-accent-foreground: 220 15% 10%;
+  --sidebar-ring: 142 60% 35%;
+  --popover: 220 15% 98%;
+  --popover-foreground: 220 15% 10%;
+  --popover-border: 220 15% 88%;
+  --primary: 204 60% 40%;
+  --primary-foreground: 220 15% 97%;
+  --secondary: 218 25% 35%;
+  --secondary-foreground: 220 15% 97%;
+  --muted: 220 15% 92%;
+  --muted-foreground: 218 20% 40%;
+  --accent: 142 60% 35%;
+  --accent-foreground: 220 15% 97%;
   --destructive: 0 72% 42%;
   --destructive-foreground: 0 72% 98%;
-  --input: 220 14% 72%;
-  --ring: 210 85% 45%;
-  --chart-1: 210 85% 35%;
-  --chart-2: 195 75% 38%;
+  --input: 220 15% 75%;
+  --ring: 142 60% 35%;
+  --link: 230 70% 55%;
+  --btn-primary-bg: 173 44% 10%;
+  --btn-primary-text: 142 60% 35%;
+  --chart-1: 204 60% 40%;
+  --chart-2: 142 60% 35%;
   --chart-3: 30 80% 42%;
   --chart-4: 280 70% 40%;
-  --chart-5: 145 65% 35%;
+  --chart-5: 218 25% 40%;
   --font-sans: "Inter", sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
@@ -74,46 +77,73 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
+/* DARK MODE — TIW brand palette */
 .dark {
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
-  --background: 220 14% 8%;
-  --foreground: 220 14% 94%;
-  --border: 220 14% 16%;
-  --card: 220 14% 11%;
-  --card-foreground: 220 14% 94%;
-  --card-border: 220 14% 14%;
-  --sidebar: 220 14% 10%;
-  --sidebar-foreground: 220 14% 94%;
-  --sidebar-border: 220 14% 13%;
-  --sidebar-primary: 210 85% 55%;
-  --sidebar-primary-foreground: 210 85% 98%;
-  --sidebar-accent: 220 14% 14%;
-  --sidebar-accent-foreground: 220 14% 94%;
-  --sidebar-ring: 210 85% 55%;
-  --popover: 220 14% 12%;
-  --popover-foreground: 220 14% 94%;
-  --popover-border: 220 14% 15%;
-  --primary: 210 85% 55%;
-  --primary-foreground: 210 85% 98%;
-  --secondary: 220 14% 16%;
-  --secondary-foreground: 220 14% 94%;
-  --muted: 220 14% 14%;
-  --muted-foreground: 220 14% 55%;
-  --accent: 210 15% 16%;
-  --accent-foreground: 210 15% 90%;
+
+  /* ── Core surfaces ── */
+  --background: 240 20% 5%;          /* #0A0A0F near-black */
+  --foreground: 210 15% 92%;         /* off-white */
+  --border: 220 15% 13%;
+  --input: 240 15% 16%;
+
+  /* ── Card / Popover ── */
+  --card: 240 18% 8%;
+  --card-foreground: 210 15% 92%;
+  --card-border: 220 15% 11%;
+  --popover: 240 18% 8%;
+  --popover-foreground: 210 15% 92%;
+  --popover-border: 220 15% 12%;
+
+  /* ── Sidebar ── */
+  --sidebar: 240 20% 6%;
+  --sidebar-foreground: 210 15% 92%;
+  --sidebar-border: 220 15% 10%;
+  --sidebar-primary: 142 69% 58%;    /* #4ADE80 green — active indicators */
+  --sidebar-primary-foreground: 240 20% 5%;
+  --sidebar-accent: 240 18% 11%;
+  --sidebar-accent-foreground: 210 15% 92%;
+  --sidebar-ring: 142 69% 58%;
+
+  /* ── Brand primaries ── */
+  --primary: 204 94% 94%;            /* #E0F2FE ice blue — badges, highlights */
+  --primary-foreground: 240 20% 5%;
+  --secondary: 218 30% 71%;          /* #A0B0CC blue-gray */
+  --secondary-foreground: 240 20% 5%;
+
+  /* ── Muted / subdued ── */
+  --muted: 240 15% 11%;
+  --muted-foreground: 218 25% 55%;
+
+  /* ── Accent (green) ── */
+  --accent: 142 69% 58%;             /* #4ADE80 — interactive green */
+  --accent-foreground: 240 20% 5%;
+
+  /* ── Destructive ── */
   --destructive: 0 72% 42%;
   --destructive-foreground: 0 72% 98%;
-  --input: 220 14% 28%;
-  --ring: 210 85% 55%;
-  --chart-1: 210 85% 65%;
-  --chart-2: 195 75% 70%;
+
+  /* ── Focus ring ── */
+  --ring: 142 69% 58%;               /* green focus ring */
+
+  /* ── Link ── */
+  --link: 230 94% 82%;               /* #A5B4FC soft violet */
+
+  /* ── Primary button (dark bg + green text/border) ── */
+  --btn-primary-bg: 173 44% 8%;     /* #0B1C1A */
+  --btn-primary-text: 142 69% 58%;  /* #4ADE80 */
+
+  /* ── Charts ── */
+  --chart-1: 204 80% 80%;
+  --chart-2: 142 69% 58%;
   --chart-3: 30 80% 68%;
   --chart-4: 280 70% 72%;
-  --chart-5: 145 65% 68%;
+  --chart-5: 218 30% 71%;
+
   --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
   --shadow-sm: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 1px 2px -1px hsl(0 0% 0% / 0.00);
@@ -235,7 +265,7 @@
 
 .markdown-content a.md-link,
 .md-link {
-  color: hsl(var(--primary));
+  color: hsl(var(--link));
   text-decoration: underline;
   text-underline-offset: 2px;
   word-break: break-all;

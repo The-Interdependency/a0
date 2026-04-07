@@ -52,7 +52,7 @@ export default function ConsoleSidebar({
                 className={cn(
                   "flex items-center gap-2 px-3 py-2 rounded-md text-xs transition-colors w-full text-left",
                   isActive
-                    ? "bg-primary/10 text-primary font-medium"
+                    ? "bg-accent/10 text-accent font-medium"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
                 data-testid={`sidebar-tab-${tab.tab_id}`}
