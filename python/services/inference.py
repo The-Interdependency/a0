@@ -1,6 +1,5 @@
 import os
 import json
-from hashlib import sha256
 from typing import Optional
 import httpx
 
