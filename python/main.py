@@ -46,6 +46,10 @@ async def lifespan(app: FastAPI):
     await ensure_admin_emails()
     from .services.stripe_service import ensure_stripe_products
     await ensure_stripe_products()
+    from .logger import seed_openai_hmmm_if_empty
+    from .config.policy_loader import get_hmmm_seed_items, get_version as policy_version
+    await seed_openai_hmmm_if_empty(get_hmmm_seed_items())
+    print(f"[openai] policy loaded — {policy_version()}")
     await heartbeat_service.start()
     yield
     await heartbeat_service.stop()

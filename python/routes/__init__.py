@@ -12,6 +12,7 @@ from .contexts import router as contexts_router
 from .founders import router as founders_router
 from .admin import router as admin_router
 from .guest import router as guest_router
+from .openai_api import router as openai_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -28,6 +29,7 @@ ALL_ROUTERS = [
     founders_router,
     admin_router,
     guest_router,
+    openai_router,
 ]
 
 
@@ -46,6 +48,7 @@ def collect_ui_meta() -> list[dict]:
         "python.routes.billing",
         "python.routes.contexts",
         "python.routes.founders",
+        "python.routes.openai_api",
     ]
     tabs = []
     for mod_name in modules:

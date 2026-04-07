@@ -19,6 +19,8 @@ LOG_STREAMS: Dict[str, str] = {
     "attribution": "memory-attribution.jsonl",
     "omega": "omega-autonomy.jsonl",
     "psi": "psi-selfmodel.jsonl",
+    "openai_events": "openai-events.jsonl",
+    "openai_hmmm": "openai-hmmm.jsonl",
 }
 
 logging_enabled: bool = True
@@ -33,6 +35,8 @@ stream_toggles: Dict[str, bool] = {
     "psi": True,
     "transcripts": True,
     "ai-transcripts": True,
+    "openai_events": True,
+    "openai_hmmm": True,
 }
 _initialized: bool = False
 
@@ -350,6 +354,73 @@ async def read_ai_transcripts(
         return {"entries": sliced, "total": total}
     except FileNotFoundError:
         return {"entries": [], "total": 0}
+
+
+async def log_openai_event(
+    role: str,
+    model: str,
+    reasoning_effort: str,
+    input_text: str,
+    output_text: str,
+    approval_state: str,
+) -> None:
+    if not is_stream_enabled("openai_events"):
+        return
+    input_hash = sha256(input_text.encode()).hexdigest()
+    output_hash = sha256(output_text.encode()).hexdigest()
+    entry = _build_entry("openai_events", "openai", "call", {
+        "role": role,
+        "model": model,
+        "reasoning_effort": reasoning_effort,
+        "input_hash": input_hash,
+        "output_hash": output_hash,
+        "approval_state": approval_state,
+    })
+    try:
+        await _append_to_file(_get_stream_path("openai_events"), entry)
+        if is_stream_enabled("master"):
+            await _append_to_file(_get_stream_path("master"), entry)
+    except Exception as e:
+        print(f"Logger openai_events write error: {e}")
+
+
+async def seed_openai_hmmm_if_empty(items: List[Dict[str, Any]]) -> None:
+    hmmm_path = _get_stream_path("openai_hmmm")
+    await _ensure_dirs()
+    if hmmm_path.exists() and hmmm_path.stat().st_size > 0:
+        return
+    for item in items:
+        entry = _build_entry("openai_hmmm", "openai", "hmmm_item", item)
+        try:
+            await _append_to_file(hmmm_path, entry)
+        except Exception as e:
+            print(f"Logger openai_hmmm seed error: {e}")
+
+
+async def append_openai_hmmm(item: Dict[str, Any]) -> None:
+    if not is_stream_enabled("openai_hmmm"):
+        return
+    entry = _build_entry("openai_hmmm", "openai", "hmmm_item", item)
+    try:
+        await _append_to_file(_get_stream_path("openai_hmmm"), entry)
+    except Exception as e:
+        print(f"Logger openai_hmmm write error: {e}")
+
+
+async def read_openai_hmmm(limit: int = 100) -> List[Dict[str, Any]]:
+    hmmm_path = _get_stream_path("openai_hmmm")
+    try:
+        with open(hmmm_path, "r", encoding="utf-8") as f:
+            lines = [l.strip() for l in f if l.strip()]
+        results = []
+        for line in lines[-limit:]:
+            try:
+                results.append(json.loads(line))
+            except Exception:
+                results.append({"raw": line})
+        return results
+    except FileNotFoundError:
+        return []
 
 
 async def list_ai_transcript_files() -> List[Dict[str, Any]]:

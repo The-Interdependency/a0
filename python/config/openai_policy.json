@@ -1,0 +1,311 @@
+{
+  "version": "2026-04-06.a0.openai.policy.v1",
+  "attribution": "GPT generated; context, prompt Erin Spencer",
+  "hmmm": {
+    "items": [
+      {
+        "id": "hmmm-model-001",
+        "status": "open",
+        "note": "Pin snapshot model IDs once evals stabilize.",
+        "owner": "R0",
+        "created_at": "2026-04-06T18:00:00-07:00"
+      }
+    ]
+  },
+  "provider": "openai",
+  "api_family": "responses",
+  "defaults": {
+    "store": false,
+    "temperature": 1,
+    "parallel_tool_calls": false,
+    "max_output_tokens": 4000,
+    "text": {
+      "verbosity": "low"
+    },
+    "reasoning": {
+      "effort": "low"
+    }
+  },
+  "contracts": {
+    "require_structured_outputs": true,
+    "require_explicit_tool_allowlist": true,
+    "require_approval_gate_for_external_write": true,
+    "require_append_only_event_log": true,
+    "require_hmmm": true
+  },
+  "roles": {
+    "root_orchestrator": {
+      "model": "gpt-5.4",
+      "store": false,
+      "parallel_tool_calls": false,
+      "max_output_tokens": 4000,
+      "text": {
+        "verbosity": "low"
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "tools_policy": {
+        "mode": "allowlist",
+        "allowed": [
+          "search",
+          "fetch",
+          "code_exec",
+          "filesystem",
+          "email_draft",
+          "calendar_read",
+          "calendar_write_gated",
+          "github_gated"
+        ]
+      },
+      "use_cases": [
+        "routing",
+        "planning",
+        "synthesis",
+        "approval preparation",
+        "artifact drafting",
+        "repo analysis"
+      ]
+    },
+    "high_risk_gate": {
+      "model": "gpt-5.4",
+      "store": false,
+      "parallel_tool_calls": false,
+      "max_output_tokens": 5000,
+      "text": {
+        "verbosity": "low"
+      },
+      "reasoning": {
+        "effort": "medium"
+      },
+      "tools_policy": {
+        "mode": "allowlist",
+        "allowed": [
+          "search",
+          "fetch",
+          "code_exec",
+          "filesystem",
+          "email_draft",
+          "calendar_read",
+          "github_gated"
+        ]
+      },
+      "use_cases": [
+        "ambiguous tasks",
+        "safety review",
+        "costly or hard-to-undo actions",
+        "approval packet generation",
+        "conflict resolution"
+      ]
+    },
+    "worker": {
+      "model": "gpt-5.4-mini",
+      "store": false,
+      "parallel_tool_calls": false,
+      "max_output_tokens": 2500,
+      "text": {
+        "verbosity": "low"
+      },
+      "reasoning": {
+        "effort": "none"
+      },
+      "tools_policy": {
+        "mode": "allowlist",
+        "allowed": [
+          "search",
+          "fetch",
+          "code_exec",
+          "filesystem"
+        ]
+      },
+      "use_cases": [
+        "batch transcript passes",
+        "cleanup",
+        "light coding",
+        "summaries",
+        "subagent loops",
+        "extraction with light judgment"
+      ]
+    },
+    "classifier": {
+      "model": "gpt-5.4-nano",
+      "store": false,
+      "parallel_tool_calls": false,
+      "max_output_tokens": 1200,
+      "text": {
+        "verbosity": "low"
+      },
+      "reasoning": {
+        "effort": "none"
+      },
+      "tools_policy": {
+        "mode": "deny"
+      },
+      "output_policy": {
+        "strict_json_only": true,
+        "allowed_shapes": [
+          "enum",
+          "boolean",
+          "scorecard",
+          "label_set",
+          "ranked_list"
+        ]
+      },
+      "use_cases": [
+        "classification",
+        "ranking",
+        "metadata extraction",
+        "tagging",
+        "cheap triage"
+      ]
+    },
+    "deep_pass": {
+      "model": "gpt-5.4-pro",
+      "store": false,
+      "parallel_tool_calls": false,
+      "max_output_tokens": 8000,
+      "reasoning": {
+        "effort": "high"
+      },
+      "text": {
+        "verbosity": "low"
+      },
+      "tools_policy": {
+        "mode": "allowlist",
+        "allowed": [
+          "search",
+          "fetch",
+          "code_exec",
+          "filesystem"
+        ]
+      },
+      "entry_conditions": [
+        "architecture dispute",
+        "hard debugging",
+        "doctrine reconciliation",
+        "one-shot think-hard pass"
+      ],
+      "budget_guard": {
+        "requires_explicit_flag": true,
+        "max_calls_per_task": 1
+      }
+    }
+  },
+  "routing": {
+    "default_role": "root_orchestrator",
+    "rules": [
+      {
+        "match": "external_write OR publish OR send OR push OR spend_money",
+        "route_to": "high_risk_gate"
+      },
+      {
+        "match": "batch OR repetitive OR extraction OR cleanup",
+        "route_to": "worker"
+      },
+      {
+        "match": "classify OR rank OR label OR score OR triage",
+        "route_to": "classifier"
+      },
+      {
+        "match": "hard_debug OR architecture_dispute OR doctrine_reconciliation",
+        "route_to": "deep_pass"
+      }
+    ]
+  },
+  "approval_gates": {
+    "required_for": [
+      "publish",
+      "post",
+      "send_email",
+      "push_git",
+      "open_pr",
+      "create_issue_external",
+      "spend_money",
+      "change_permissions",
+      "change_secrets",
+      "outreach_to_humans"
+    ],
+    "approval_phrase": "APPROVE <gate_id>"
+  },
+  "logging": {
+    "source_of_truth": "append_only_events_jsonl",
+    "log_all_tool_calls": true,
+    "log_router_path": true,
+    "log_model_name": true,
+    "log_reasoning_effort": true,
+    "log_input_hash": true,
+    "log_output_hash": true,
+    "log_approval_state": true
+  },
+  "structured_outputs": {
+    "strict": true,
+    "schemas": {
+      "route_decision": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "root_orchestrator",
+              "high_risk_gate",
+              "worker",
+              "classifier",
+              "deep_pass"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requires_approval": {
+            "type": "boolean"
+          },
+          "hmmm": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "role",
+          "reason",
+          "requires_approval",
+          "hmmm"
+        ]
+      },
+      "approval_packet": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "gate_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "rollback": {
+            "type": "string"
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hmmm": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "gate_id",
+          "action",
+          "impact",
+          "rollback",
+          "artifacts",
+          "hmmm"
+        ]
+      }
+    }
+  }
+}

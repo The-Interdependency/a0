@@ -2,6 +2,19 @@ import os
 from sqlalchemy import text as sa_text
 
 BUILTIN_PROVIDERS = {
+    "openai": {
+        "id": "openai",
+        "label": "GPT-5.4 (Responses API)",
+        "model": "gpt-5.4",
+        "vendor": "openai",
+        "env_key": "OPENAI_API_KEY",
+        "cost_per_1k_input": 0.0025,
+        "cost_per_1k_output": 0.01,
+        "max_tokens": 16384,
+        "supports_streaming": False,
+        "api_family": "responses",
+        "note": "gpt-5.4 pricing TBD; using gpt-4o placeholder rates",
+    },
     "gemini": {
         "id": "gemini",
         "label": "Gemini 2.5 Pro",
