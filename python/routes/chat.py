@@ -109,12 +109,31 @@ async def list_messages(conv_id: int):
 async def _build_system_prompt(tier: str) -> str:
     context_name = get_tier_context_name(tier)
     a0_identity = await get_context_value("a0_identity")
+    system_base = await get_context_value("system_base")
     tier_context = await get_context_value(context_name)
+
     parts = []
     if a0_identity:
         parts.append(a0_identity)
+    if system_base:
+        parts.append(system_base)
     if tier_context:
         parts.append(tier_context)
+
+    seeds = await storage.get_memory_seeds()
+    active_seeds = [
+        s for s in seeds
+        if s.get("enabled") and (s.get("summary") or "").strip()
+    ]
+    active_seeds.sort(key=lambda s: float(s.get("weight", 1.0)), reverse=True)
+    if active_seeds:
+        seed_lines = []
+        for s in active_seeds:
+            label = s.get("label", f"Seed {s.get('seed_index', '?')}")
+            summary = s.get("summary", "").strip()
+            seed_lines.append(f"- [{label}]: {summary}")
+        parts.append("## Memory\n" + "\n".join(seed_lines))
+
     return "\n\n".join(parts)
 
 

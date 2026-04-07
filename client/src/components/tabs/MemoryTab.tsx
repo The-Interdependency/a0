@@ -78,19 +78,19 @@ export function MemoryTab({ orientation, isVertical }: SliderOrientationProps) {
   const { data: memoryHistory = [] } = useQuery<any[]>({ queryKey: ["/api/v1/memory/history"], refetchInterval: 15000 });
 
   const updateSeedMutation = useMutation({
-    mutationFn: ({ index, updates }: { index: number; updates: any }) => apiRequest("PATCH", `/api/memory/seeds/${index}`, updates),
+    mutationFn: ({ index, updates }: { index: number; updates: any }) => apiRequest("PATCH", `/api/v1/memory/seeds/${index}`, updates),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/v1/memory/state"] }); setEditingSeed(null); },
   });
   const clearSeedMutation = useMutation({
-    mutationFn: (index: number) => apiRequest("POST", `/api/memory/seeds/${index}/clear`),
+    mutationFn: (index: number) => apiRequest("POST", `/api/v1/memory/seeds/${index}/clear`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/v1/memory/state"] }); toast({ title: "Seed cleared" }); },
   });
   const importSeedMutation = useMutation({
-    mutationFn: ({ index, text }: { index: number; text: string }) => apiRequest("POST", `/api/memory/seeds/${index}/import`, { text }),
+    mutationFn: ({ index, text }: { index: number; text: string }) => apiRequest("POST", `/api/v1/memory/seeds/${index}/import`, { text }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/v1/memory/state"] }); setImportSeedIndex(null); setImportText(""); toast({ title: "Seed text imported" }); },
   });
   const exportMutation = useMutation({
-    mutationFn: async () => { const resp = await fetch("/api/memory/export"); if (!resp.ok) throw new Error("Export failed"); return resp.json(); },
+    mutationFn: async () => { const resp = await fetch("/api/v1/memory/export"); if (!resp.ok) throw new Error("Export failed"); return resp.json(); },
     onSuccess: (data) => {
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -101,7 +101,7 @@ export function MemoryTab({ orientation, isVertical }: SliderOrientationProps) {
     onError: (e: any) => toast({ title: "Export failed", description: e.message, variant: "destructive" }),
   });
   const importMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/memory/import", data),
+    mutationFn: (data: any) => apiRequest("POST", "/api/v1/memory/import", data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/v1/memory/state"] }); toast({ title: "Memory identity imported" }); },
     onError: (e: any) => toast({ title: "Import failed", description: e.message, variant: "destructive" }),
   });

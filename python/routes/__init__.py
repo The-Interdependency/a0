@@ -8,7 +8,7 @@ from .tools import router as tools_router
 from .heartbeat_api import router as heartbeat_api_router
 from .pcna_api import router as pcna_router
 from .billing import router as billing_router
-from .contexts import router as contexts_router
+from .contexts import router as contexts_router, context_tab_router
 from .founders import router as founders_router
 from .admin import router as admin_router
 from .guest import router as guest_router
@@ -26,6 +26,7 @@ ALL_ROUTERS = [
     pcna_router,
     billing_router,
     contexts_router,
+    context_tab_router,
     founders_router,
     admin_router,
     guest_router,
