@@ -1,3 +1,4 @@
+# NOTE: 447 lines — over the 400-line guideline. Split on next modification.
 import asyncio
 import json
 import os

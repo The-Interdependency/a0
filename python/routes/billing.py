@@ -1,3 +1,4 @@
+# NOTE: 424 lines — over the 400-line guideline. Split on next modification.
 import os
 import hashlib
 import stripe
