@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 import traceback
 from datetime import datetime, timedelta
@@ -14,7 +15,7 @@ DEFAULT_TASKS = [
     },
     {
         "name": "memory_snapshot",
-        "description": "Snapshot memory tensor state",
+        "description": "Snapshot memory tensor state + save PCNA checkpoint",
         "task_type": "snapshot",
         "enabled": True,
         "weight": 0.8,
@@ -28,9 +29,42 @@ DEFAULT_TASKS = [
         "weight": 1.0,
         "interval_seconds": 120,
     },
+    {
+        "name": "conversation_review",
+        "description": "LLM review of recent conversations → distill conclusions to memory seeds",
+        "task_type": "conversation_review",
+        "enabled": True,
+        "weight": 0.6,
+        "interval_seconds": 21600,
+    },
 ]
 
 TICK_INTERVAL = 30
+
+REVIEW_SEED_INDICES = {
+    "tool_patterns": 2,
+    "conversation_patterns": 3,
+    "error_patterns": 5,
+    "active_goals": 9,
+}
+
+REVIEW_PROMPT = """\
+You are reviewing recent conversations for the a0 agent system (The Interdependent Way).
+
+Below are the recent messages. Extract actionable conclusions for each of the four memory categories.
+Respond ONLY with valid JSON in exactly this format:
+{
+  "tool_patterns": "Brief observations about tool usage, API calls, and automation patterns seen in conversations.",
+  "conversation_patterns": "Brief observations about how conversations flow, what topics recur, communication style.",
+  "error_patterns": "Any errors, failures, misunderstandings, or friction points observed.",
+  "active_goals": "Updates to active goals based on what was discussed — what is being worked toward."
+}
+
+If there is nothing meaningful to note for a category, write an empty string for that field.
+Keep each value under 300 characters.
+
+Recent messages:
+"""
 
 
 class HeartbeatService:
@@ -89,6 +123,12 @@ class HeartbeatService:
             for t in DEFAULT_TASKS:
                 await storage.upsert_heartbeat_task(t)
             tasks = await storage.get_heartbeat_tasks()
+        else:
+            existing_names = {t["name"] for t in tasks}
+            for t in DEFAULT_TASKS:
+                if t["name"] not in existing_names:
+                    await storage.upsert_heartbeat_task(t)
+            tasks = await storage.get_heartbeat_tasks()
 
         now = datetime.utcnow()
         for task in tasks:
@@ -140,6 +180,7 @@ class HeartbeatService:
 
         if task_type == "snapshot":
             from ..storage import storage
+            from ..main import get_pcna
             seeds = await storage.get_memory_seeds()
             proj = await storage.get_memory_projection()
             await storage.add_memory_tensor_snapshot({
@@ -148,7 +189,9 @@ class HeartbeatService:
                 "projection_out": proj.get("projection_out") if proj else None,
                 "request_count": proj.get("request_count", 0) if proj else 0,
             })
-            return f"snapshot_ok: {len(seeds)} seeds"
+            pcna = get_pcna()
+            await pcna.save_checkpoint()
+            return f"snapshot_ok: {len(seeds)} seeds + pcna checkpoint saved"
 
         if task_type == "propagate":
             from ..main import get_pcna
@@ -159,7 +202,80 @@ class HeartbeatService:
             pcna.guardian.propagate(steps=2)
             return f"propagate_ok: phi={pcna.phi.ring_coherence:.4f}"
 
+        if task_type == "conversation_review":
+            return await self._run_conversation_review()
+
         return f"unknown_task_type: {task_type}"
+
+    async def _run_conversation_review(self) -> str:
+        from ..storage import storage
+        from ..services.inference import call_energy_provider
+        from ..services.energy_registry import energy_registry
+
+        toggle = await storage.get_system_toggle("last_conversation_review_at")
+        since = datetime.utcfromtimestamp(0)
+        if toggle and toggle.get("parameters"):
+            ts = toggle["parameters"].get("ts")
+            if ts:
+                since = datetime.utcfromtimestamp(float(ts))
+
+        messages = await storage.get_messages_since(since, limit=300)
+        if not messages:
+            return "conversation_review_skip: no new messages"
+
+        msg_lines = []
+        for m in messages[-100:]:
+            role = m.get("role", "?")
+            content = (m.get("content") or "")[:200]
+            msg_lines.append(f"[{role}]: {content}")
+        transcript = "\n".join(msg_lines)
+
+        prompt_text = REVIEW_PROMPT + transcript
+        provider_id = energy_registry.get_active_provider() or "gemini"
+
+        try:
+            raw_content, _ = await call_energy_provider(
+                provider_id=provider_id,
+                messages=[{"role": "user", "content": prompt_text}],
+                max_tokens=800,
+            )
+        except Exception as e:
+            return f"conversation_review_error: inference failed: {e}"
+
+        try:
+            start = raw_content.find("{")
+            end = raw_content.rfind("}") + 1
+            parsed = json.loads(raw_content[start:end]) if start >= 0 else {}
+        except Exception:
+            parsed = {}
+
+        seeds_written = []
+        for field_key, seed_index in REVIEW_SEED_INDICES.items():
+            value = parsed.get(field_key, "").strip()
+            if value:
+                existing = await storage.get_memory_seed(seed_index)
+                if existing:
+                    await storage.update_memory_seed(seed_index, {"summary": value})
+                    seeds_written.append(seed_index)
+
+        now_ts = time.time()
+        await storage.upsert_system_toggle(
+            "last_conversation_review_at", True, {"ts": now_ts}
+        )
+
+        await storage.append_event({
+            "task_id": "heartbeat",
+            "event_type": "conversation_review",
+            "payload": {
+                "provider": provider_id,
+                "messages_reviewed": len(messages),
+                "seeds_written": seeds_written,
+                "ts": now_ts,
+                "conclusions": parsed,
+            },
+        })
+
+        return f"conversation_review_ok: {len(messages)} msgs, seeds_written={seeds_written}"
 
 
 heartbeat_service = HeartbeatService()

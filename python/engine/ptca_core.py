@@ -9,7 +9,7 @@ import time
 import numpy as np
 
 DIMS = 4
-PHASES = 8
+PHASES = 7
 HEPT_SITES = 7
 
 DT = 0.01

@@ -110,18 +110,36 @@ def _is_admin(uid: str, email: str | None, role: str = "user") -> bool:
     return False
 
 
+def _is_tier_key(name: str) -> bool:
+    return name.startswith("tier_")
+
+
 @router.get("")
-async def list_contexts():
+async def list_contexts(request: Request):
     await _ensure_defaults()
+    uid = request.headers.get("x-user-id", "")
+    email = request.headers.get("x-user-email")
+    role = request.headers.get("x-user-role", "user")
+    caller_is_admin = _is_admin(uid, email, role)
     async with engine.connect() as conn:
         rows = await conn.execute(
             text("SELECT name, value, updated_by, updated_at FROM prompt_contexts ORDER BY name")
         )
-        return [dict(r) for r in rows.mappings()]
+        result = []
+        for r in rows.mappings():
+            row = dict(r)
+            if _is_tier_key(row["name"]) and not caller_is_admin:
+                row["value"] = ""
+            result.append(row)
+        return result
 
 
 @router.get("/{name}")
-async def get_context(name: str):
+async def get_context(name: str, request: Request):
+    uid = request.headers.get("x-user-id", "")
+    email = request.headers.get("x-user-email")
+    role = request.headers.get("x-user-role", "user")
+    caller_is_admin = _is_admin(uid, email, role)
     async with engine.connect() as conn:
         row = await conn.execute(
             text("SELECT name, value, updated_by, updated_at FROM prompt_contexts WHERE name = :name"),
@@ -130,7 +148,10 @@ async def get_context(name: str):
         rec = row.mappings().first()
     if not rec:
         raise HTTPException(status_code=404, detail="Context not found")
-    return dict(rec)
+    result = dict(rec)
+    if _is_tier_key(name) and not caller_is_admin:
+        result["value"] = ""
+    return result
 
 
 class ContextBody(BaseModel):
@@ -149,8 +170,12 @@ async def upsert_context(name: str, body: ContextBody, request: Request):
 
 
 @context_tab_router.get("/api/v1/context/full-preview")
-async def full_preview():
+async def full_preview(request: Request):
     await _ensure_defaults()
+    uid = request.headers.get("x-user-id", "")
+    email = request.headers.get("x-user-email")
+    role = request.headers.get("x-user-role", "user")
+    caller_is_admin = _is_admin(uid, email, role)
     async with engine.connect() as conn:
         rows = await conn.execute(
             text("SELECT name, value FROM prompt_contexts ORDER BY name")
@@ -159,11 +184,14 @@ async def full_preview():
 
     sections = []
     for key in DEFAULT_CONTEXTS:
+        value = db_map.get(key, "")
+        if _is_tier_key(key) and not caller_is_admin:
+            value = ""
         sections.append({
             "key": key,
             "label": _SECTION_LABELS.get(key, key),
             "editable": True,
-            "content": db_map.get(key, ""),
+            "content": value,
         })
     return {"sections": sections}
 

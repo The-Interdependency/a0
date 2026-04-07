@@ -60,6 +60,26 @@ class _CoreStorage:
             )
             return [_row_to_dict(r) for r in result.scalars().all()]
 
+    async def get_messages_since(self, since: datetime, limit: int = 500) -> List[Dict[str, Any]]:
+        async with get_session() as session:
+            result = await session.execute(
+                select(Message)
+                .where(Message.created_at >= since)
+                .order_by(asc(Message.created_at))
+                .limit(limit)
+            )
+            return [_row_to_dict(r) for r in result.scalars().all()]
+
+    async def get_events_by_type(self, event_type: str, limit: int = 10) -> List[Dict[str, Any]]:
+        async with get_session() as session:
+            result = await session.execute(
+                select(A0pEvent)
+                .where(A0pEvent.event_type == event_type)
+                .order_by(desc(A0pEvent.created_at))
+                .limit(limit)
+            )
+            return [_row_to_dict(r) for r in result.scalars().all()]
+
     async def create_message(self, data: Dict[str, Any]) -> Dict[str, Any]:
         async with get_session() as session:
             msg = Message(**data)

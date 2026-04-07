@@ -21,13 +21,25 @@ Backprop:
   reward(winner, outcome) → nudge all three PTCA cores + guardian + memory flush
 """
 
+import base64
 import hashlib
+import io
 import time
 import numpy as np
 
 from .ptca_core import PTCACore
 from .memory_core import MemoryCore
 from .guardian import GuardianTensor
+
+
+def _tensor_to_b64(arr: np.ndarray) -> str:
+    buf = io.BytesIO()
+    np.save(buf, arr)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def _b64_to_tensor(s: str) -> np.ndarray:
+    return np.load(io.BytesIO(base64.b64decode(s)))
 
 RING_WEIGHTS = {
     "phi": 0.30,
@@ -57,6 +69,67 @@ class PCNAEngine:
         self.last_winner = "phi"
         self.blueprint_hash = self.guardian.blueprint_hash
         self.created_at = time.time()
+        self.checkpoint_at: float | None = None
+
+    async def load_checkpoint(self):
+        try:
+            from ..storage import storage
+            toggle = await storage.get_system_toggle("pcna_tensor_checkpoint")
+            if not toggle or not toggle.get("parameters"):
+                return
+            data = toggle["parameters"]
+            rings = {
+                "phi": self.phi,
+                "psi": self.psi,
+                "omega": self.omega,
+                "memory_l": self.memory_l,
+                "memory_s": self.memory_s,
+            }
+            for name, ring in rings.items():
+                t_key = f"{name}_tensor"
+                v_key = f"{name}_velocities"
+                if t_key not in data:
+                    continue
+                restored = _b64_to_tensor(data[t_key])
+                if restored.shape != ring.tensor.shape:
+                    print(f"[pcna] checkpoint shape mismatch on {name}: {restored.shape} vs {ring.tensor.shape} — discarding")
+                    return
+                ring.tensor = restored
+                if hasattr(ring, "velocities") and v_key in data:
+                    rv = _b64_to_tensor(data[v_key])
+                    if rv.shape == ring.velocities.shape:
+                        ring.velocities = rv
+                if hasattr(ring, "_recompute_coherence"):
+                    ring._recompute_coherence()
+                elif hasattr(ring, "_recompute_hub_avg"):
+                    ring._recompute_hub_avg()
+            ts = data.get("saved_at", 0)
+            self.checkpoint_at = float(ts) if ts else None
+            print(f"[pcna] checkpoint restored: {len(rings)} rings, saved_at={ts}")
+        except Exception as e:
+            print(f"[pcna] checkpoint load failed (fresh start): {e}")
+
+    async def save_checkpoint(self):
+        """Serialize all ring tensors to DB via system_toggles."""
+        try:
+            from ..storage import storage
+            data: dict = {"saved_at": time.time()}
+            rings = {
+                "phi": self.phi,
+                "psi": self.psi,
+                "omega": self.omega,
+                "memory_l": self.memory_l,
+                "memory_s": self.memory_s,
+            }
+            for name, ring in rings.items():
+                data[f"{name}_tensor"] = _tensor_to_b64(ring.tensor)
+                if hasattr(ring, "velocities"):
+                    data[f"{name}_velocities"] = _tensor_to_b64(ring.velocities)
+            await storage.upsert_system_toggle("pcna_tensor_checkpoint", True, data)
+            self.checkpoint_at = data["saved_at"]
+            print(f"[pcna] checkpoint saved: {len(rings)} rings")
+        except Exception as e:
+            print(f"[pcna] checkpoint save failed: {e}")
 
     def _project(self, text: str) -> np.ndarray:
         h = hashlib.sha512(text.encode("utf-8")).digest()
@@ -196,9 +269,15 @@ class PCNAEngine:
         }
 
     def state(self) -> dict:
+        try:
+            from .zeta import _zeta_engine
+            echo_history = list(_zeta_engine.echo_buffer) if _zeta_engine else []
+        except Exception:
+            echo_history = []
         return {
             "engine": "pcna",
-            "version": "2.0.0",
+            "version": "2.1.0",
+            "phases": 7,
             "infer_count": self.infer_count,
             "reward_count": self.reward_count,
             "last_coherence": round(self.last_coherence, 4),
@@ -213,4 +292,6 @@ class PCNAEngine:
             },
             "ring_weights": RING_WEIGHTS,
             "uptime_s": round(time.time() - self.created_at, 1),
+            "checkpoint_at": self.checkpoint_at,
+            "echo_history": echo_history[-20:],
         }

@@ -188,6 +188,16 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         "metadata": {"tier": tier, "usage": usage},
     })
 
+    import asyncio as _asyncio
+    from ..engine.zeta import _zeta_engine
+    _asyncio.create_task(
+        _zeta_engine.evaluate(
+            assistant_text=content,
+            provider=provider_id,
+            user_text=body.content,
+        )
+    )
+
     return {
         "user_message": user_msg,
         "assistant_message": assistant_msg,

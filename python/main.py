@@ -31,6 +31,7 @@ def get_pcna() -> PCNAEngine:
 async def lifespan(app: FastAPI):
     print("[python] FastAPI starting — DB engine initialized")
     pcna = get_pcna()
+    await pcna.load_checkpoint()
     print(f"[python] PCNA engine online — blueprint {pcna.blueprint_hash[:12]}...")
     await energy_registry.load_from_db()
     provider = energy_registry.get_active_provider()

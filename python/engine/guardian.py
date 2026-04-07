@@ -17,7 +17,7 @@ import numpy as np
 
 N = 29
 DIMS = 4
-PHASES = 8
+PHASES = 7
 HEPT_SITES = 7
 MIN_CIRCLES = 1
 MAX_CIRCLES = 12

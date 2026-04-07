@@ -12,7 +12,7 @@ import time
 import numpy as np
 
 DIMS = 4
-PHASES = 8
+PHASES = 7
 HEPT_SITES = 7
 
 FLUSH_REWARD_THRESHOLD = 0.0
