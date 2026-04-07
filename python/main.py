@@ -12,7 +12,7 @@ from .database import engine
 from .engine import PCNAEngine
 from .routes import ALL_ROUTERS, collect_ui_meta
 from .services.heartbeat import heartbeat_service
-from .agents.zfae import compose_name
+from .agents.zfae import compose_name, ZFAE_AGENT_DEF
 from .services.energy_registry import energy_registry
 
 _pcna: PCNAEngine | None = None
@@ -33,6 +33,73 @@ def get_pcna_8() -> PCNAEngine:
     if _pcna_8 is None:
         _pcna_8 = PCNAEngine(phases=8)
     return _pcna_8
+
+
+_ZFAE_TOOL_SPECS = {
+    "pcna_infer": {
+        "description": "Run PCNA tensor inference — propagates a signal through phi/psi/omega rings and returns coherence output",
+        "handler_type": "internal",
+    },
+    "pcna_reward": {
+        "description": "Apply a reward signal to the PCNA engine — adjusts ring weights based on outcome quality",
+        "handler_type": "internal",
+    },
+    "memory_flush": {
+        "description": "Flush active memory seeds to checkpoint — persists summarized context for long-term retrieval",
+        "handler_type": "internal",
+    },
+    "bandit_pull": {
+        "description": "Pull a bandit arm from the EDCM reward router — selects energy provider based on expected coherence yield",
+        "handler_type": "internal",
+    },
+    "edcm_score": {
+        "description": "Compute EDCM (Energy Directional Coherence Metric) score for the current ring state",
+        "handler_type": "internal",
+    },
+    "web_search": {
+        "description": "Search the web for current information — results are injected into the agent's context window",
+        "handler_type": "internal",
+    },
+    "sub_agent_spawn": {
+        "description": "Spawn a ZFAE sub-agent with a forked PCNA instance — used for parallel or delegated task execution",
+        "handler_type": "internal",
+    },
+    "sub_agent_merge": {
+        "description": "Merge a completed sub-agent back into the primary PCNA — consolidates learned ring state",
+        "handler_type": "internal",
+    },
+}
+
+
+async def _ensure_default_tools() -> None:
+    """Upsert ZFAE tool definitions into custom_tools so the Tools tab is always populated."""
+    from .storage import storage
+    from .database import get_session
+    from sqlalchemy import text as sa_text
+
+    existing_names: set[str] = set()
+    async with get_session() as session:
+        result = await session.execute(sa_text("SELECT name FROM custom_tools"))
+        existing_names = {row[0] for row in result.fetchall()}
+
+    added = 0
+    for name, spec in _ZFAE_TOOL_SPECS.items():
+        if name not in existing_names:
+            await storage.create_custom_tool({
+                "name": name,
+                "description": spec["description"],
+                "handler_type": spec["handler_type"],
+                "handler_code": f"# Built-in ZFAE tool: {name}",
+                "is_generated": True,
+                "user_id": "system",
+                "enabled": True,
+            })
+            added += 1
+
+    if added:
+        print(f"[tools] Seeded {added} ZFAE tool(s)")
+    else:
+        print(f"[tools] {len(_ZFAE_TOOL_SPECS)} ZFAE tools already present")
 
 
 @asynccontextmanager
@@ -58,6 +125,7 @@ async def lifespan(app: FastAPI):
     await ensure_admin_emails()
     from .services.stripe_service import ensure_stripe_products
     await ensure_stripe_products()
+    await _ensure_default_tools()
     from .logger import seed_openai_hmmm_if_empty
     from .config.policy_loader import get_hmmm_seed_items, get_version as policy_version
     await seed_openai_hmmm_if_empty(get_hmmm_seed_items())
