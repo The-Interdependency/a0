@@ -9,7 +9,7 @@ description: >-
   api, flux, veo, claude api, image generation, video generation, openrouter,
   tavily, exa search, twitter api, grok
 allowed-tools: Bash(infsh *)
-enabled: false
+enabled: true
 ---
 
 # [inference.sh](https://inference.sh)
