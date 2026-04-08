@@ -1,14 +1,25 @@
 #!/bin/bash
 set -e
 
-# Kill any stale processes on our ports
-fuser -k 5000/tcp 2>/dev/null || true
-fuser -k 5001/tcp 2>/dev/null || true
-fuser -k 5002/tcp 2>/dev/null || true
-fuser -k 8001/tcp 2>/dev/null || true
+# Aggressively clear ports before starting — deployment leaves stale processes
+for _p in 5000 5001 5002 8001; do
+  fuser -k ${_p}/tcp 2>/dev/null || true
+done
 
-# Wait for ports to fully release
-sleep 1
+# Wait for OS to fully release sockets
+sleep 2
+
+# Verify key ports are free before starting (retry up to 5s each)
+for _p in 5001 8001; do
+  for _i in 1 2 3 4 5; do
+    if ! fuser ${_p}/tcp 2>/dev/null; then
+      break
+    fi
+    echo "Port ${_p} still in use, waiting..."
+    fuser -k ${_p}/tcp 2>/dev/null || true
+    sleep 1
+  done
+done
 
 uvicorn python.main:app --host 0.0.0.0 --port 8001 --reload &
 UVICORN_PID=$!

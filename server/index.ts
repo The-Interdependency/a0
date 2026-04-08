@@ -20,7 +20,25 @@ const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "a0p-dev-internal-sec
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+async function waitForPython(maxWaitMs = 120_000): Promise<void> {
+  if (!IS_PROD) return;
+  console.log("[express] waiting for Python backend to be ready...");
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    try {
+      const r = await fetch(`${PYTHON_URL}/api/health`);
+      if (r.ok) {
+        console.log("[express] Python backend ready — accepting connections");
+        return;
+      }
+    } catch {}
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+  console.warn("[express] Python backend not ready after 120 s — continuing anyway");
+}
+
 (async () => {
+  await waitForPython();
   await setupAuth(app);
   registerAuthRoutes(app);
   registerGuestChatRoute(app);
