@@ -231,6 +231,13 @@ async def _call_openai_responses(
                     break
             return content or "[openai: empty response]", accumulated_usage
 
+        # Responses API multi-turn: only function_call items from the model's output
+        # belong in the next round's input (ahead of function_call_output results).
+        # Including message/reasoning/web_search_call items causes 400/404 errors.
+        for item in output_items:
+            if item.get("type") == "function_call":
+                openai_input.append(item)
+
         for tc in tool_calls:
             call_id = tc.get("call_id", "")
             name = tc.get("name", "")

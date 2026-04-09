@@ -1,3 +1,4 @@
+import traceback
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
@@ -139,67 +140,74 @@ async def _build_system_prompt(tier: str) -> str:
 
 @router.post("/conversations/{conv_id}/messages")
 async def send_message(conv_id: int, body: SendMessage, request: Request):
-    conv = await storage.get_conversation(conv_id)
-    if not conv:
-        raise HTTPException(status_code=404, detail="conversation not found")
+    try:
+        conv = await storage.get_conversation(conv_id)
+        if not conv:
+            raise HTTPException(status_code=404, detail="conversation not found")
 
-    from ..database import engine
-    from sqlalchemy import text as _text
-    uid = request.headers.get("x-user-id", "")
-    tier = "free"
-    if uid:
-        async with engine.connect() as conn:
-            row = await conn.execute(_text("SELECT subscription_tier FROM users WHERE id = :id"), {"id": uid})
-            rec = row.mappings().first()
-            if rec:
-                tier = rec["subscription_tier"]
+        from ..database import engine
+        from sqlalchemy import text as _text
+        uid = request.headers.get("x-user-id", "")
+        tier = "free"
+        if uid:
+            async with engine.connect() as conn:
+                row = await conn.execute(_text("SELECT subscription_tier FROM users WHERE id = :id"), {"id": uid})
+                rec = row.mappings().first()
+                if rec:
+                    tier = rec["subscription_tier"]
 
-    model_id = body.model or conv.get("model", "grok")
-    provider_id = energy_registry.get_active_provider() or model_id
+        model_id = body.model or conv.get("model", "grok")
+        provider_id = energy_registry.get_active_provider() or model_id
 
-    system_prompt = await _build_system_prompt(tier)
+        system_prompt = await _build_system_prompt(tier)
 
-    user_msg = await storage.create_message({
-        "conversation_id": conv_id,
-        "role": "user",
-        "content": body.content,
-        "model": model_id,
-        "metadata": {"tier": tier},
-    })
+        user_msg = await storage.create_message({
+            "conversation_id": conv_id,
+            "role": "user",
+            "content": body.content,
+            "model": model_id,
+            "metadata": {"tier": tier},
+        })
 
-    prior_msgs = await storage.get_messages(conv_id)
-    history = [
-        {"role": m["role"], "content": m["content"]}
-        for m in prior_msgs
-        if m["role"] in ("user", "assistant")
-    ]
+        prior_msgs = await storage.get_messages(conv_id)
+        history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in prior_msgs
+            if m["role"] in ("user", "assistant")
+        ]
 
-    content, usage = await call_energy_provider(
-        provider_id=provider_id,
-        messages=history,
-        system_prompt=system_prompt or None,
-    )
-
-    assistant_msg = await storage.create_message({
-        "conversation_id": conv_id,
-        "role": "assistant",
-        "content": content,
-        "model": provider_id,
-        "metadata": {"tier": tier, "usage": usage},
-    })
-
-    import asyncio as _asyncio
-    from ..engine.zeta import _zeta_engine
-    _asyncio.create_task(
-        _zeta_engine.evaluate(
-            assistant_text=content,
-            provider=provider_id,
-            user_text=body.content,
+        content, usage = await call_energy_provider(
+            provider_id=provider_id,
+            messages=history,
+            system_prompt=system_prompt or None,
         )
-    )
 
-    return {
-        "user_message": user_msg,
-        "assistant_message": assistant_msg,
-        "conversation_id": conv_id,
-    }
+        assistant_msg = await storage.create_message({
+            "conversation_id": conv_id,
+            "role": "assistant",
+            "content": content,
+            "model": provider_id,
+            "metadata": {"tier": tier, "usage": usage},
+        })
+
+        import asyncio as _asyncio
+        from ..engine.zeta import _zeta_engine
+        _asyncio.create_task(
+            _zeta_engine.evaluate(
+                assistant_text=content,
+                provider=provider_id,
+                user_text=body.content,
+            )
+        )
+
+        return {
+            "user_message": user_msg,
+            "assistant_message": assistant_msg,
+            "conversation_id": conv_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(f"[chat] send_message error: {exc}\n{tb}")
+        raise HTTPException(status_code=500, detail=f"Chat error: {exc}")
