@@ -14,6 +14,7 @@ from .admin import router as admin_router
 from .guest import router as guest_router
 from .openai_api import router as openai_router
 from .zfae_api import router as zfae_router
+from .approval_scopes import router as approval_scopes_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -33,6 +34,7 @@ ALL_ROUTERS = [
     guest_router,
     openai_router,
     zfae_router,
+    approval_scopes_router,
 ]
 
 
@@ -53,6 +55,7 @@ def collect_ui_meta() -> list[dict]:
         "python.routes.founders",
         "python.routes.openai_api",
         "python.routes.zfae_api",
+        "python.routes.approval_scopes",
     ]
     tabs = []
     for mod_name in modules:

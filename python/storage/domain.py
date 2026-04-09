@@ -7,7 +7,7 @@ from ..models import (
     HeartbeatTask, EdcmMetricSnapshot, MemorySeed, MemoryProjection,
     MemoryTensorSnapshot, BanditCorrelation, SystemToggle, DiscoveryDraft,
     TranscriptSource, TranscriptReport, Deal, HeartbeatLog,
-    Conversation, A0pEvent, Message,
+    Conversation, A0pEvent, Message, ApprovalScope,
 )
 from .core import _CoreStorage, _row_to_dict
 
@@ -376,6 +376,38 @@ class DatabaseStorage(_CoreStorage):
                 .order_by(desc(TranscriptReport.created_at)).limit(limit)
             )
             return [_row_to_dict(r) for r in result.scalars().all()]
+
+    async def get_approval_scopes(self, user_id: str) -> List[Dict[str, Any]]:
+        async with get_session() as session:
+            result = await session.execute(
+                select(ApprovalScope).where(ApprovalScope.user_id == user_id)
+                .order_by(asc(ApprovalScope.scope))
+            )
+            return [_row_to_dict(r) for r in result.scalars().all()]
+
+    async def get_approval_scope_names(self, user_id: str) -> set:
+        rows = await self.get_approval_scopes(user_id)
+        return {r["scope"] for r in rows}
+
+    async def grant_approval_scope(self, user_id: str, scope: str) -> Dict[str, Any]:
+        existing = await self.get_approval_scopes(user_id)
+        for row in existing:
+            if row["scope"] == scope:
+                return row
+        async with get_session() as session:
+            record = ApprovalScope(user_id=user_id, scope=scope)
+            session.add(record)
+            await session.flush()
+            await session.refresh(record)
+            return _row_to_dict(record)
+
+    async def revoke_approval_scope(self, user_id: str, scope: str) -> bool:
+        async with get_session() as session:
+            result = await session.execute(
+                delete(ApprovalScope)
+                .where(ApprovalScope.user_id == user_id, ApprovalScope.scope == scope)
+            )
+            return result.rowcount > 0
 
 
 storage = DatabaseStorage()
