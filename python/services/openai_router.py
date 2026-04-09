@@ -8,6 +8,8 @@ from ..config.policy_loader import (
     get_default_role,
     get_approval_gate_actions,
     get_defaults,
+    get_action_scope,
+    get_safety_floor_actions,
 )
 
 _MODEL_ENV_MAP = {
@@ -70,14 +72,18 @@ def resolve_role_config(role: str) -> dict:
     }
 
 
-def make_route_decision(task_text: str) -> dict[str, Any]:
+def make_route_decision(
+    task_text: str,
+    pre_approved_scopes: set[str] | None = None,
+) -> dict[str, Any]:
     """
     Return a route_decision strictly conforming to the policy schema
     (additionalProperties: false — only role, reason, requires_approval, hmmm).
     Call config (model, effort, etc.) is returned separately via make_call_config().
+    pre_approved_scopes: set of scope names the user has pre-approved (skips gate).
     """
     role = resolve_role(task_text)
-    requires_approval = _check_approval_required(task_text)
+    requires_approval = _check_approval_required(task_text, pre_approved_scopes)
     return {
         "role": role,
         "reason": f"keyword match → {role}",
@@ -91,10 +97,41 @@ def make_call_config(role: str) -> dict[str, Any]:
     return resolve_role_config(role)
 
 
-def _check_approval_required(task_text: str) -> bool:
+def _check_approval_required(
+    task_text: str,
+    pre_approved_scopes: set[str] | None = None,
+) -> bool:
+    """
+    Return True if the task requires explicit approval.
+    Safety-floor actions (spend_money, change_permissions, change_secrets) always require approval.
+    Other actions are bypassed if the user has pre-approved the matching scope category.
+    """
     lower = task_text.lower()
     gate_actions = get_approval_gate_actions()
-    return any(action.replace("_", " ") in lower or action in lower for action in gate_actions)
+    safety_floor = set(get_safety_floor_actions())
+    approved = pre_approved_scopes or set()
+
+    for action in gate_actions:
+        matched = action.replace("_", " ") in lower or action in lower
+        if not matched:
+            continue
+        if action in safety_floor:
+            return True
+        scope = get_action_scope(action)
+        if scope and scope in approved:
+            continue
+        return True
+
+    return False
+
+
+def get_triggered_actions(task_text: str) -> list[str]:
+    """Return list of gate actions found in the task text."""
+    lower = task_text.lower()
+    return [
+        a for a in get_approval_gate_actions()
+        if a.replace("_", " ") in lower or a in lower
+    ]
 
 
 def make_approval_packet(task_text: str, gate_id: str) -> dict[str, Any]:

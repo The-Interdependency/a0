@@ -181,6 +181,35 @@ TOOL_SCHEMAS_CHAT = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_approval_scope",
+            "description": (
+                "Grant or revoke a pre-approved action scope for the current user, removing the need to "
+                "type 'APPROVE gate-xxx' for every action in that category. "
+                "Available scopes: 'github_write' (push, PRs, issues), 'publish' (post/publish content), "
+                "'email_send' (send emails), 'outreach' (contact humans). "
+                "Safety-floor scopes (spend_money, change_permissions, change_secrets) cannot be pre-approved. "
+                "action='grant' adds the scope; action='revoke' removes it."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["grant", "revoke", "list"],
+                        "description": "Whether to grant, revoke, or list approval scopes.",
+                    },
+                    "scope": {
+                        "type": "string",
+                        "description": "The scope name to grant or revoke (omit for 'list').",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+    },
 ]
 
 # OpenAI Responses API — native web_search_preview replaces the custom web_search function.
@@ -232,6 +261,11 @@ async def execute_tool(name: str, arguments: dict) -> str:
                 method=arguments.get("method", "GET"),
                 endpoint=arguments.get("endpoint", "/user"),
                 body=arguments.get("body"),
+            )
+        if name == "manage_approval_scope":
+            return await _manage_approval_scope(
+                action=arguments.get("action", "list"),
+                scope=arguments.get("scope"),
             )
         return f"[unknown tool: {name}]"
     except Exception as exc:
@@ -418,3 +452,70 @@ async def _github_api(method: str, endpoint: str, body: dict | None = None) -> s
 
     except Exception as exc:
         return f"[github_api error: {exc}]"
+
+
+_APPROVAL_SCOPE_USER_ID: str | None = None
+
+
+def set_approval_scope_user_id(uid: str | None) -> None:
+    """Set the current user_id context for manage_approval_scope tool calls."""
+    global _APPROVAL_SCOPE_USER_ID
+    _APPROVAL_SCOPE_USER_ID = uid
+
+
+async def _manage_approval_scope(action: str, scope: str | None = None) -> str:
+    """Grant, revoke, or list pre-approved action scopes for the current user."""
+    from ..storage import storage
+    from ..config.policy_loader import get_scope_categories, get_safety_floor_actions
+
+    uid = _APPROVAL_SCOPE_USER_ID
+    if not uid:
+        return "[manage_approval_scope: no user context — tool must be called within a chat request]"
+
+    categories = get_scope_categories()
+    safety_floor = set(get_safety_floor_actions())
+
+    if action == "list":
+        granted = await storage.get_approval_scopes(uid)
+        if not granted:
+            available = ", ".join(categories.keys())
+            return json.dumps({
+                "granted": [],
+                "available": list(categories.keys()),
+                "note": f"No scopes pre-approved. Available: {available}",
+            })
+        return json.dumps({
+            "granted": [r["scope"] for r in granted],
+            "available": list(categories.keys()),
+        })
+
+    if not scope:
+        return "[manage_approval_scope: 'scope' is required for grant/revoke]"
+
+    scope = scope.lower().strip()
+
+    if action == "grant":
+        if scope in safety_floor:
+            return json.dumps({
+                "ok": False,
+                "error": f"'{scope}' is on the safety floor and cannot be pre-approved.",
+            })
+        if scope not in categories:
+            return json.dumps({
+                "ok": False,
+                "error": f"Unknown scope '{scope}'. Valid: {list(categories.keys())}",
+            })
+        await storage.grant_approval_scope(uid, scope)
+        meta = categories[scope]
+        return json.dumps({
+            "ok": True,
+            "scope": scope,
+            "label": meta["label"],
+            "description": meta["description"],
+        })
+
+    if action == "revoke":
+        removed = await storage.revoke_approval_scope(uid, scope)
+        return json.dumps({"ok": removed, "scope": scope, "revoked": removed})
+
+    return f"[manage_approval_scope: unknown action '{action}']"

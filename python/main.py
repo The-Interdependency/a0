@@ -72,6 +72,10 @@ _ZFAE_TOOL_SPECS = {
         "description": "Make an authenticated GitHub REST API call — read/write repos, issues, PRs, commits, branches, releases. Auth is automatic.",
         "handler_type": "internal",
     },
+    "manage_approval_scope": {
+        "description": "Grant or revoke a pre-approved action scope for the current user — eliminates per-gate APPROVE prompts for that category.",
+        "handler_type": "internal",
+    },
 }
 
 
@@ -134,6 +138,19 @@ async def lifespan(app: FastAPI):
     from .config.policy_loader import get_hmmm_seed_items, get_version as policy_version
     await seed_openai_hmmm_if_empty(get_hmmm_seed_items())
     print(f"[openai] policy loaded — {policy_version()}")
+    from .database import get_session
+    from sqlalchemy import text as _sa_text
+    async with get_session() as _sess:
+        await _sess.execute(_sa_text("""
+            CREATE TABLE IF NOT EXISTS approval_scopes (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                scope VARCHAR(100) NOT NULL,
+                granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_approval_scope_user_scope UNIQUE (user_id, scope)
+            )
+        """))
+    print("[approval_scopes] table ensured")
     await heartbeat_service.start()
     yield
     await heartbeat_service.stop()

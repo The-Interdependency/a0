@@ -38,13 +38,15 @@ async def call_energy_provider(
     system_prompt: Optional[str] = None,
     max_tokens: int = 2048,
     use_tools: bool = True,
+    user_id: Optional[str] = None,
 ) -> tuple[str, dict]:
     """
     Forward messages to the active energy provider with the system prompt prepended.
     Returns (content, usage_dict).
+    user_id is threaded into the OpenAI path for approval-scope checking.
     """
     if provider_id == "openai":
-        return await _call_openai_routed(messages, system_prompt, use_tools=use_tools)
+        return await _call_openai_routed(messages, system_prompt, use_tools=use_tools, user_id=user_id)
 
     spec = PROVIDER_ENDPOINTS.get(provider_id)
     if not spec:
@@ -73,22 +75,32 @@ async def _call_openai_routed(
     messages: list[dict],
     system_prompt: Optional[str] = None,
     use_tools: bool = True,
+    user_id: Optional[str] = None,
 ) -> tuple[str, dict]:
     """
     Route to the appropriate role via openai_router, check approval gate,
     then call the Responses API.
     route_decision and approval_packet are kept strictly schema-compliant.
     Call config (model, effort, etc.) is obtained separately via make_call_config().
+    user_id is used to load pre-approved scopes so pre-authorized actions bypass the gate.
     """
     from .openai_router import make_route_decision, make_call_config, make_approval_packet
     from ..logger import log_openai_event, seed_openai_hmmm_if_empty
     from ..config.policy_loader import get_hmmm_seed_items
+    from ..storage import storage
 
     await seed_openai_hmmm_if_empty(get_hmmm_seed_items())
 
     task_text = " ".join(m.get("content", "") for m in messages if m.get("role") == "user")
 
-    route_decision = make_route_decision(task_text)
+    pre_approved_scopes: set[str] = set()
+    if user_id:
+        try:
+            pre_approved_scopes = await storage.get_approval_scope_names(user_id)
+        except Exception:
+            pass
+
+    route_decision = make_route_decision(task_text, pre_approved_scopes=pre_approved_scopes)
     role = route_decision["role"]
     call_cfg = make_call_config(role)
 

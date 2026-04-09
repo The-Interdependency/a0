@@ -225,7 +225,31 @@
       "change_secrets",
       "outreach_to_humans"
     ],
-    "approval_phrase": "APPROVE <gate_id>"
+    "approval_phrase": "APPROVE <gate_id>",
+    "scope_phrase": "APPROVE SCOPE <scope>",
+    "safety_floor": ["spend_money", "change_permissions", "change_secrets"],
+    "scope_categories": {
+      "github_write": {
+        "label": "GitHub writes",
+        "description": "Push to git, open PRs, create/close issues, create releases, manage branches",
+        "covers": ["push_git", "open_pr", "create_issue_external"]
+      },
+      "publish": {
+        "label": "Publish & post",
+        "description": "Publish content, post to platforms, create public-facing records",
+        "covers": ["publish", "post"]
+      },
+      "email_send": {
+        "label": "Send emails",
+        "description": "Send email drafts via connected mail accounts",
+        "covers": ["send_email"]
+      },
+      "outreach": {
+        "label": "Human outreach",
+        "description": "Initiate direct contact with humans via any channel",
+        "covers": ["outreach_to_humans"]
+      }
+    }
   },
   "logging": {
     "source_of_truth": "append_only_events_jsonl",

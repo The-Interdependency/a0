@@ -138,6 +138,14 @@ async def _build_system_prompt(tier: str) -> str:
     return "\n\n".join(parts)
 
 
+def _parse_approve_scope(content: str) -> str | None:
+    """Return scope name if message is 'APPROVE SCOPE <scope>', else None."""
+    stripped = content.strip()
+    import re as _re
+    m = _re.match(r"^APPROVE\s+SCOPE\s+(\S+)$", stripped, _re.IGNORECASE)
+    return m.group(1).lower() if m else None
+
+
 @router.post("/conversations/{conv_id}/messages")
 async def send_message(conv_id: int, body: SendMessage, request: Request):
     try:
@@ -159,6 +167,50 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         model_id = body.model or conv.get("model", "grok")
         provider_id = energy_registry.get_active_provider() or model_id
 
+        scope_to_grant = _parse_approve_scope(body.content)
+        if scope_to_grant and uid:
+            from ..config.policy_loader import get_scope_categories, get_safety_floor_actions
+            valid_scopes = get_scope_categories()
+            safety_floor = get_safety_floor_actions()
+            if scope_to_grant in safety_floor:
+                reply = (
+                    f"[SCOPE DENIED] `{scope_to_grant}` is on the safety floor and cannot be pre-approved. "
+                    f"It will always require explicit per-gate approval."
+                )
+            elif scope_to_grant not in valid_scopes:
+                known = ", ".join(f"`{s}`" for s in valid_scopes)
+                reply = (
+                    f"[SCOPE UNKNOWN] `{scope_to_grant}` is not a recognized scope. "
+                    f"Valid scopes: {known}"
+                )
+            else:
+                await storage.grant_approval_scope(uid, scope_to_grant)
+                meta = valid_scopes[scope_to_grant]
+                reply = (
+                    f"[SCOPE GRANTED] `{scope_to_grant}` — {meta['label']} pre-approved. "
+                    f"Covers: {meta['description']}. "
+                    f"To revoke: DELETE /api/v1/approval-scopes/{scope_to_grant}"
+                )
+            user_msg = await storage.create_message({
+                "conversation_id": conv_id,
+                "role": "user",
+                "content": body.content,
+                "model": model_id,
+                "metadata": {"tier": tier},
+            })
+            assistant_msg = await storage.create_message({
+                "conversation_id": conv_id,
+                "role": "assistant",
+                "content": reply,
+                "model": "system",
+                "metadata": {"tier": tier, "scope_grant": scope_to_grant},
+            })
+            return {
+                "user_message": user_msg,
+                "assistant_message": assistant_msg,
+                "conversation_id": conv_id,
+            }
+
         system_prompt = await _build_system_prompt(tier)
 
         user_msg = await storage.create_message({
@@ -176,11 +228,17 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             if m["role"] in ("user", "assistant")
         ]
 
-        content, usage = await call_energy_provider(
-            provider_id=provider_id,
-            messages=history,
-            system_prompt=system_prompt or None,
-        )
+        from ..services.tool_executor import set_approval_scope_user_id
+        set_approval_scope_user_id(uid or None)
+        try:
+            content, usage = await call_energy_provider(
+                provider_id=provider_id,
+                messages=history,
+                system_prompt=system_prompt or None,
+                user_id=uid or None,
+            )
+        finally:
+            set_approval_scope_user_id(None)
 
         assistant_msg = await storage.create_message({
             "conversation_id": conv_id,

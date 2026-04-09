@@ -340,3 +340,12 @@ class ByokKey(Base):
     key_hash = Column(String(256), nullable=False)
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_byok_user_provider"),)
+
+
+class ApprovalScope(Base):
+    __tablename__ = "approval_scopes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False)
+    scope = Column(String(100), nullable=False)
+    granted_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    __table_args__ = (UniqueConstraint("user_id", "scope", name="uq_approval_scope_user_scope"),)

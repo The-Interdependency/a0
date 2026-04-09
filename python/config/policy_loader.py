@@ -46,5 +46,21 @@ def get_hmmm_seed_items() -> list[dict]:
     return load_policy().get("hmmm", {}).get("items", [])
 
 
+def get_scope_categories() -> dict:
+    return load_policy().get("approval_gates", {}).get("scope_categories", {})
+
+
+def get_safety_floor_actions() -> list[str]:
+    return load_policy().get("approval_gates", {}).get("safety_floor", [])
+
+
+def get_action_scope(action: str) -> str | None:
+    """Return the scope category name that covers the given gate action, or None."""
+    for scope_name, meta in get_scope_categories().items():
+        if action in meta.get("covers", []):
+            return scope_name
+    return None
+
+
 def get_version() -> str:
     return load_policy().get("version", "unknown")
