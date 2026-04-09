@@ -4,6 +4,7 @@ Called by the inference loop when the LLM issues a tool_call.
 """
 import json
 import urllib.parse
+import contextvars as _cv
 import httpx
 
 TOOL_SCHEMAS_CHAT = [
@@ -454,13 +455,14 @@ async def _github_api(method: str, endpoint: str, body: dict | None = None) -> s
         return f"[github_api error: {exc}]"
 
 
-_APPROVAL_SCOPE_USER_ID: str | None = None
+_approval_scope_user_cv: _cv.ContextVar[str | None] = _cv.ContextVar(
+    "approval_scope_user", default=None
+)
 
 
 def set_approval_scope_user_id(uid: str | None) -> None:
-    """Set the current user_id context for manage_approval_scope tool calls."""
-    global _APPROVAL_SCOPE_USER_ID
-    _APPROVAL_SCOPE_USER_ID = uid
+    """Set the current user_id context for manage_approval_scope tool calls (per-async-task)."""
+    _approval_scope_user_cv.set(uid)
 
 
 async def _manage_approval_scope(action: str, scope: str | None = None) -> str:
@@ -468,7 +470,7 @@ async def _manage_approval_scope(action: str, scope: str | None = None) -> str:
     from ..storage import storage
     from ..config.policy_loader import get_scope_categories, get_safety_floor_actions
 
-    uid = _APPROVAL_SCOPE_USER_ID
+    uid = _approval_scope_user_cv.get()
     if not uid:
         return "[manage_approval_scope: no user context — tool must be called within a chat request]"
 
