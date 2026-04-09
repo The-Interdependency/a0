@@ -84,9 +84,9 @@ async def _call_openai_routed(
     Call config (model, effort, etc.) is obtained separately via make_call_config().
     user_id is used to load pre-approved scopes so pre-authorized actions bypass the gate.
     """
-    from .openai_router import make_route_decision, make_call_config, make_approval_packet
+    from .openai_router import make_route_decision, make_call_config, make_approval_packet, get_triggered_actions
     from ..logger import log_openai_event, seed_openai_hmmm_if_empty
-    from ..config.policy_loader import get_hmmm_seed_items
+    from ..config.policy_loader import get_hmmm_seed_items, get_action_scope, get_scope_categories
     from ..storage import storage
 
     await seed_openai_hmmm_if_empty(get_hmmm_seed_items())
@@ -124,12 +124,24 @@ async def _call_openai_routed(
             "approval_packet": packet,
             "route_decision": route_decision,
         }
+        triggered = get_triggered_actions(task_text)
+        scope_hints: list[str] = []
+        scope_categories = get_scope_categories()
+        seen_scopes: set[str] = set()
+        for action in triggered:
+            sc = get_action_scope(action)
+            if sc and sc not in seen_scopes and sc in scope_categories:
+                meta = scope_categories[sc]
+                scope_hints.append(f"  Pre-approve all {meta['label']}: APPROVE SCOPE {sc}")
+                seen_scopes.add(sc)
+        scope_section = "\n" + "\n".join(scope_hints) if scope_hints else ""
         content = (
             f"[APPROVAL REQUIRED — gate_id: {gate_id}]\n"
             f"Action: {packet['action'][:120]}\n"
             f"Impact: {packet['impact']}\n"
             f"Rollback: {packet['rollback']}\n"
-            f"To approve, reply: APPROVE {gate_id}"
+            f"To approve this action: APPROVE {gate_id}"
+            f"{scope_section}"
         )
         return content, usage
 
