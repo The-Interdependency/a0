@@ -144,6 +144,43 @@ TOOL_SCHEMAS_CHAT = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "github_api",
+            "description": (
+                "Make an authenticated call to the GitHub REST API. "
+                "Use this to read or write repositories, issues, pull requests, commits, "
+                "comments, branches, releases, or any other GitHub resource. "
+                "Authentication is handled automatically — never include a token yourself. "
+                "Endpoint examples: '/repos/The-Interdependency/a0/issues', "
+                "'/repos/owner/repo/pulls', '/user/repos', '/search/repositories?q=topic:ai'. "
+                "For the primary project repo use owner='The-Interdependency', repo='a0'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "method": {
+                        "type": "string",
+                        "enum": ["GET", "POST", "PATCH", "PUT", "DELETE"],
+                        "description": "HTTP method",
+                    },
+                    "endpoint": {
+                        "type": "string",
+                        "description": (
+                            "GitHub API path starting with '/'. "
+                            "Query parameters can be included inline, e.g. '/search/code?q=foo+repo:org/repo'."
+                        ),
+                    },
+                    "body": {
+                        "type": "object",
+                        "description": "Optional JSON body for POST/PATCH/PUT requests (omit for GET/DELETE).",
+                    },
+                },
+                "required": ["method", "endpoint"],
+            },
+        },
+    },
 ]
 
 # OpenAI Responses API — native web_search_preview replaces the custom web_search function.
@@ -190,6 +227,12 @@ async def execute_tool(name: str, arguments: dict) -> str:
             return await _sub_agent_spawn(arguments.get("task", ""))
         if name == "sub_agent_merge":
             return await _sub_agent_merge(arguments.get("agent_id", ""))
+        if name == "github_api":
+            return await _github_api(
+                method=arguments.get("method", "GET"),
+                endpoint=arguments.get("endpoint", "/user"),
+                body=arguments.get("body"),
+            )
         return f"[unknown tool: {name}]"
     except Exception as exc:
         return f"[tool error — {name}: {exc}]"
@@ -327,3 +370,51 @@ async def _sub_agent_merge(agent_id: str) -> str:
         "status": "merged",
         "note": "Ring state consolidated into primary PCNA",
     })
+
+
+async def _github_api(method: str, endpoint: str, body: dict | None = None) -> str:
+    pat = os.environ.get("GITHUB_PAT", "")
+    if not pat:
+        return "[github_api: GITHUB_PAT not configured]"
+
+    method = method.upper()
+    url = f"https://api.github.com{endpoint}"
+    headers = {
+        "Authorization": f"Bearer {pat}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "a0p-zfae/2.0",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            if method in ("POST", "PATCH", "PUT") and body:
+                resp = await client.request(method, url, json=body, headers=headers)
+            else:
+                resp = await client.request(method, url, headers=headers)
+
+        if resp.status_code == 204:
+            return json.dumps({"status": 204, "result": "ok (no content)"})
+
+        try:
+            data = resp.json()
+        except Exception:
+            data = resp.text
+
+        if resp.status_code >= 400:
+            return json.dumps({
+                "status": resp.status_code,
+                "error": data,
+            })
+
+        if isinstance(data, list):
+            truncated = data[:25]
+            result: dict = {"status": resp.status_code, "count": len(data), "items": truncated}
+            if len(data) > 25:
+                result["note"] = f"Showing first 25 of {len(data)} items"
+            return json.dumps(result, default=str)
+
+        return json.dumps({"status": resp.status_code, "data": data}, default=str)
+
+    except Exception as exc:
+        return f"[github_api error: {exc}]"

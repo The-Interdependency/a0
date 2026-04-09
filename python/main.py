@@ -68,6 +68,10 @@ _ZFAE_TOOL_SPECS = {
         "description": "Merge a completed sub-agent back into the primary PCNA — consolidates learned ring state",
         "handler_type": "internal",
     },
+    "github_api": {
+        "description": "Make an authenticated GitHub REST API call — read/write repos, issues, PRs, commits, branches, releases. Auth is automatic.",
+        "handler_type": "internal",
+    },
 }
 
 
