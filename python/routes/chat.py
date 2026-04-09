@@ -150,6 +150,13 @@ def _parse_approve_scope(content: str) -> str | None:
     return m.group(1).lower() if m else None
 
 
+def _parse_approve_gate(content: str) -> str | None:
+    """Return gate_id if message is 'APPROVE gate-<hex>', else None."""
+    import re as _re
+    m = _re.match(r"^APPROVE\s+(gate-[0-9a-f]+)$", content.strip(), _re.IGNORECASE)
+    return m.group(1).lower() if m else None
+
+
 @router.post("/conversations/{conv_id}/messages")
 async def send_message(conv_id: int, body: SendMessage, request: Request):
     try:
@@ -207,7 +214,6 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 )
                 pending = _pending_gates.pop(conv_id, None)
                 if pending:
-                    updated_scopes = await storage.get_approval_scope_names(uid)
                     from ..services.tool_executor import set_approval_scope_user_id
                     set_approval_scope_user_id(uid or None)
                     try:
@@ -230,6 +236,53 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 "content": reply,
                 "model": "system",
                 "metadata": {"tier": tier, "scope_grant": scope_to_grant, "replayed": replay_result is not None},
+            })
+            return {
+                "user_message": user_msg,
+                "assistant_message": assistant_msg,
+                "conversation_id": conv_id,
+            }
+
+        gate_id_to_approve = _parse_approve_gate(body.content)
+        if gate_id_to_approve:
+            pending = _pending_gates.get(conv_id)
+            user_msg = await storage.create_message({
+                "conversation_id": conv_id,
+                "role": "user",
+                "content": body.content,
+                "model": model_id,
+                "metadata": {"tier": tier},
+            })
+            gate_matched = pending and pending.get("gate_id") == gate_id_to_approve
+            if gate_matched:
+                _pending_gates.pop(conv_id, None)
+                replay_provider = pending["provider_id"]
+                from ..services.tool_executor import set_approval_scope_user_id
+                set_approval_scope_user_id(uid or None)
+                try:
+                    approved_content, approved_usage = await call_energy_provider(
+                        provider_id=replay_provider,
+                        messages=pending["history"],
+                        system_prompt=pending["system_prompt"],
+                        user_id=uid or None,
+                        skip_approval=True,
+                    )
+                finally:
+                    set_approval_scope_user_id(None)
+                reply = f"[APPROVED — gate {gate_id_to_approve} cleared]\n\n{approved_content}"
+            else:
+                replay_provider = "system"
+                reply = (
+                    f"[APPROVE ERROR] Gate `{gate_id_to_approve}` not found or already consumed. "
+                    f"If you meant to pre-approve a category, use: APPROVE SCOPE <scope>"
+                )
+                approved_usage = {}
+            assistant_msg = await storage.create_message({
+                "conversation_id": conv_id,
+                "role": "assistant",
+                "content": reply,
+                "model": replay_provider,
+                "metadata": {"tier": tier, "gate_approved": gate_id_to_approve, "usage": approved_usage},
             })
             return {
                 "user_message": user_msg,

@@ -39,14 +39,16 @@ async def call_energy_provider(
     max_tokens: int = 2048,
     use_tools: bool = True,
     user_id: Optional[str] = None,
+    skip_approval: bool = False,
 ) -> tuple[str, dict]:
     """
     Forward messages to the active energy provider with the system prompt prepended.
     Returns (content, usage_dict).
     user_id is threaded into the OpenAI path for approval-scope checking.
+    skip_approval=True bypasses the approval gate (used for replay after explicit APPROVE).
     """
     if provider_id == "openai":
-        return await _call_openai_routed(messages, system_prompt, use_tools=use_tools, user_id=user_id)
+        return await _call_openai_routed(messages, system_prompt, use_tools=use_tools, user_id=user_id, skip_approval=skip_approval)
 
     spec = PROVIDER_ENDPOINTS.get(provider_id)
     if not spec:
@@ -76,6 +78,7 @@ async def _call_openai_routed(
     system_prompt: Optional[str] = None,
     use_tools: bool = True,
     user_id: Optional[str] = None,
+    skip_approval: bool = False,
 ) -> tuple[str, dict]:
     """
     Route to the appropriate role via openai_router, check approval gate,
@@ -97,14 +100,14 @@ async def _call_openai_routed(
     if user_id:
         try:
             pre_approved_scopes = await storage.get_approval_scope_names(user_id)
-        except Exception:
-            pass
+        except Exception as _scope_err:
+            print(f"[approval_scopes] failed to load scopes for {user_id}: {_scope_err}")
 
     route_decision = make_route_decision(task_text, pre_approved_scopes=pre_approved_scopes)
     role = route_decision["role"]
     call_cfg = make_call_config(role)
 
-    if route_decision["requires_approval"]:
+    if route_decision["requires_approval"] and not skip_approval:
         import uuid
         gate_id = f"gate-{uuid.uuid4().hex[:8]}"
         packet = make_approval_packet(task_text, gate_id)
