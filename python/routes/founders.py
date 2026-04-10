@@ -104,14 +104,19 @@ async def update_my_founder_profile(body: FounderPatch, request: Request):
         updates["display_name"] = body.display_name
 
     if updates:
-        _ALLOWED_FOUNDER_COLS = {"listed", "display_name"}
-        safe = {k: v for k, v in updates.items() if k in _ALLOWED_FOUNDER_COLS}
-        if safe:
-            set_clause = ", ".join(f"{k} = :{k}" for k in safe)
-            safe["uid"] = uid
+        parts = []
+        params: dict = {"uid": uid}
+        if "listed" in updates:
+            parts.append("listed = :listed")
+            params["listed"] = updates["listed"]
+        if "display_name" in updates:
+            parts.append("display_name = :display_name")
+            params["display_name"] = updates["display_name"]
+        if parts:
+            set_clause = ", ".join(parts)
             async with engine.begin() as conn:
                 await conn.execute(
-                    text(f"UPDATE founders SET {set_clause} WHERE user_id = :uid"),
-                    safe,
+                    text("UPDATE founders SET " + set_clause + " WHERE user_id = :uid"),
+                    params,
                 )
     return {"ok": True}
