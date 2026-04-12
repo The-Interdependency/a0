@@ -63,6 +63,11 @@ def get_safety_floor_actions() -> list[str]:
     return load_policy().get("approval_gates", {}).get("safety_floor", [])
 
 
+def get_action_keywords() -> dict[str, list[str]]:
+    """Return action → list of natural language keyword phrases that should trigger that gate action."""
+    return load_policy().get("approval_gates", {}).get("action_keywords", {})
+
+
 def get_action_scope(action: str) -> str | None:
     """Return the scope category name that covers the given gate action, or None."""
     for scope_name, meta in get_scope_categories().items():

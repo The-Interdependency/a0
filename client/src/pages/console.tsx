@@ -5,6 +5,7 @@ import { useBillingStatus } from "@/hooks/use-billing-status";
 import { useSEO } from "@/hooks/use-seo";
 import ConsoleSidebar from "@/components/console-sidebar";
 import TabRenderer from "@/components/TabRenderer";
+import ApprovalScopesTab from "@/components/ApprovalScopesTab";
 import type { TabDef } from "@/hooks/use-ui-structure";
 
 const STORAGE_KEY = "a0p_active_tab";
@@ -86,13 +87,19 @@ export default function ConsolePage() {
           ))}
         </div>
         <div className="flex-1 overflow-hidden">
-          {currentTab && <TabRenderer tab={currentTab} />}
+          {currentTab && (
+            currentTab.tab_id === "approval_scopes"
+              ? <ApprovalScopesTab />
+              : <TabRenderer tab={currentTab} />
+          )}
         </div>
       </div>
 
       <div className="flex-1 overflow-hidden hidden md:block">
         {currentTab ? (
-          <TabRenderer tab={currentTab} />
+          currentTab.tab_id === "approval_scopes"
+            ? <ApprovalScopesTab />
+            : <TabRenderer tab={currentTab} />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground" data-testid="console-empty">
             <p className="text-sm">Select a tab</p>

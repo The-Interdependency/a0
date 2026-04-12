@@ -9,6 +9,7 @@ from ..config.policy_loader import (
     get_approval_gate_actions,
     get_defaults,
     get_action_scope,
+    get_action_keywords,
     get_safety_floor_actions,
 )
 
@@ -97,6 +98,16 @@ def make_call_config(role: str) -> dict[str, Any]:
     return resolve_role_config(role)
 
 
+def _action_matched(action: str, lower: str, aliases: dict[str, list[str]]) -> bool:
+    """Return True if the action's canonical name or any of its natural-language aliases appear in lower."""
+    if action.replace("_", " ") in lower or action in lower:
+        return True
+    for phrase in aliases.get(action, []):
+        if phrase in lower:
+            return True
+    return False
+
+
 def _check_approval_required(
     task_text: str,
     pre_approved_scopes: set[str] | None = None,
@@ -105,15 +116,16 @@ def _check_approval_required(
     Return True if the task requires explicit approval.
     Safety-floor actions (spend_money, change_permissions, change_secrets) always require approval.
     Other actions are bypassed if the user has pre-approved the matching scope category.
+    Matching uses both canonical action names and natural-language aliases from the policy.
     """
     lower = task_text.lower()
     gate_actions = get_approval_gate_actions()
     safety_floor = set(get_safety_floor_actions())
     approved = pre_approved_scopes or set()
+    aliases = get_action_keywords()
 
     for action in gate_actions:
-        matched = action.replace("_", " ") in lower or action in lower
-        if not matched:
+        if not _action_matched(action, lower, aliases):
             continue
         if action in safety_floor:
             return True
@@ -126,11 +138,12 @@ def _check_approval_required(
 
 
 def get_triggered_actions(task_text: str) -> list[str]:
-    """Return list of gate actions found in the task text."""
+    """Return list of gate actions found in the task text (canonical name or alias match)."""
     lower = task_text.lower()
+    aliases = get_action_keywords()
     return [
         a for a in get_approval_gate_actions()
-        if a.replace("_", " ") in lower or a in lower
+        if _action_matched(a, lower, aliases)
     ]
 
 

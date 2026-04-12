@@ -225,6 +225,18 @@
       "change_secrets",
       "outreach_to_humans"
     ],
+    "action_keywords": {
+      "publish": ["publish", "deploy it", "make it live", "go live", "release it", "ship it", "launch it", "make public", "publish this", "publishing"],
+      "post": ["post this", "post to", "post on", "share on", "submit post", "publish post"],
+      "send_email": ["send email", "send an email", "email to", "email this", "shoot an email", "fire off an email", "send this email", "emailing"],
+      "push_git": ["push to github", "push to git", "git push", "push branch", "push this", "push my changes", "push the code", "push commit", "push it up", "push up to", "push changes", "push codebase"],
+      "open_pr": ["open pr", "open pull request", "create pr", "create a pr", "create pull request", "raise a pr", "raise pr", "submit pr", "pr this", "merge request"],
+      "create_issue_external": ["create issue", "open issue", "file issue", "log issue", "create ticket", "open a ticket", "file a bug", "create a bug report", "submit issue"],
+      "spend_money": ["spend money", "purchase", "buy this", "charge my card", "pay for", "subscribe to", "place an order", "invoice"],
+      "change_permissions": ["change permissions", "update permissions", "grant access", "revoke access", "change roles", "modify access", "change acl", "update acl"],
+      "change_secrets": ["change secrets", "update secret", "rotate key", "change api key", "update token", "change credentials", "reset the api key", "rotate credentials"],
+      "outreach_to_humans": ["reach out to", "contact them", "message them", "outreach", "send a message to", "ping them", "dm them", "initiate contact", "send outreach"]
+    },
     "approval_phrase": "APPROVE <gate_id>",
     "scope_phrase": "APPROVE SCOPE <scope>",
     "safety_floor": ["spend_money", "change_permissions", "change_secrets"],
