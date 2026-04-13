@@ -1,4 +1,4 @@
-# 107:18
+# 118:18
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -147,4 +147,17 @@ async def revoke_approval_scope(scope: str, request: Request):
     if not removed:
         raise HTTPException(status_code=404, detail=f"Scope '{scope}' not found for this user.")
     return {"ok": True, "revoked": scope}
-# 107:18
+
+
+from ..services.editable_registry import editable_registry, EditableField
+editable_registry.register(EditableField(
+    key="approval_scope",
+    label="Approval Scope",
+    description="Pre-approved action scopes granted to this user. WSEM defers to the Approval Scopes tab for grant/revoke UI.",
+    control_type="toggle",
+    module="approval_scopes",
+    get_endpoint="/api/v1/approval-scopes",
+    patch_endpoint="/api/v1/approval-scopes",
+    query_key="/api/v1/approval-scopes",
+))
+# 118:18

@@ -118,6 +118,15 @@ Each ring has coherence tracking and propagation.
 - **Payments**: Stripe (sandbox, Replit integration)
 - **Database**: PostgreSQL (Replit managed)
 
+## Module Doctrine
+The authoritative reference for all module conventions (file annotation, naming, `# DOC` blocks, `UI_META`, registration checklist, hot-swap rules, 400-line budget) is `.agents/skills/a0p-module-doctrine/SKILL.md`. Load it before creating or modifying any route module, service, or component.
+
+### Self-Declaring Module Convention (summary)
+- Every `.py`, `.ts`, `.tsx` file opens and closes with `# N:M` / `// N:M` (code lines : comment lines). Run `python scripts/annotate.py` to re-stamp.
+- Python route files declare `# DOC module/label/description/tier/endpoint` comment blocks. `collect_doc_meta()` parses these and serves them via `GET /api/v1/docs`. DocsTab displays them live.
+- Route naming: `{name}.py` = self-contained handler. `{name}_api.py` = thin delegate to `python/{name}.py` or `python/services/{name}.py`.
+- Every new route file must be registered in 4 places in `python/routes/__init__.py`: router import, `ALL_ROUTERS`, `collect_doc_meta()` file list, `collect_ui_meta()` module list.
+
 ## Hard Rules
 - No file over 400 lines
 - No stubs or TODOs in production code
