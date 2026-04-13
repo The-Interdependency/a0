@@ -135,9 +135,30 @@ class ZetaEngine:
             coherence = self._coherence_from_metrics(metrics)
 
             pcna = get_pcna()
-            pcna.phi.nudge(coherence, lr=0.025)
+
+            gate_open = pcna.guardian.gate_open
+            gates_open_ratio = float(gate_open.sum()) / float(len(gate_open))
+            gate_factor = round(0.7 + gates_open_ratio * 0.6, 6)
+
+            change_boost = 1.0
+            substrate_factor = 1.0
+            try:
+                from . import sigma as _sigma_mod
+                _sigma_inst = _sigma_mod._sigma_instance
+                if _sigma_inst is not None:
+                    if hasattr(_sigma_inst, "change_boost"):
+                        change_boost = float(_sigma_inst.change_boost)
+                    if hasattr(_sigma_inst, "substrate_factor"):
+                        substrate_factor = float(_sigma_inst.substrate_factor)
+            except Exception:
+                pass
+
+            base_lr = 0.025
+            effective_lr = base_lr * gate_factor * change_boost * substrate_factor
+
+            pcna.phi.nudge(coherence, lr=effective_lr)
             pcna_8 = get_pcna_8()
-            pcna_8.phi.nudge(coherence, lr=0.025)
+            pcna_8.phi.nudge(coherence, lr=effective_lr)
 
             self.eval_count += 1
             event = {
@@ -150,13 +171,16 @@ class ZetaEngine:
                 "int_val": metrics.get("int_val"),
                 "resolution": resolution,
                 "path": path or None,
+                "gates_open_ratio": round(gates_open_ratio, 6),
+                "gate_factor": gate_factor,
                 "ts": time.time(),
             }
             self.echo_buffer.append(event)
             suffix = f" path={path}" if path else ""
             print(
                 f"[zfae:echo] provider={provider} coherence={coherence}"
-                f" resolution={resolution}{suffix}"
+                f" gate_factor={gate_factor} gates_open_ratio={round(gates_open_ratio, 4)}"
+                f" effective_lr={round(effective_lr, 6)} resolution={resolution}{suffix}"
             )
             return event
 
