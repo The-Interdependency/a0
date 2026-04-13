@@ -1,3 +1,4 @@
+// 357:0
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -11,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import {
   Blocks, Lock, LockOpen, ChevronRight, X, AlertTriangle, Shield, Eye,
 } from "lucide-react";
+import UiMetaFieldEditor from "@/components/UiMetaFieldEditor";
 
 interface WsModule {
   id: number;
@@ -216,21 +218,11 @@ function ModuleEditor({
           />
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor={`uimeta-${mod.id}`} className="text-xs">UI Meta (JSON)</Label>
-          <Textarea
-            id={`uimeta-${mod.id}`}
-            value={uiMetaStr}
-            onChange={(e) => {
-              setUiMetaStr(e.target.value);
-              setJsonError(null);
-            }}
-            disabled={!writeable}
-            className="font-mono text-xs min-h-[160px] resize-y"
-            spellCheck={false}
-            data-testid={`textarea-uimeta-${mod.id}`}
-          />
-        </div>
+        <UiMetaFieldEditor
+          value={uiMetaStr}
+          onChange={(json) => { setUiMetaStr(json); setJsonError(null); }}
+          disabled={!writeable}
+        />
 
         <div className="space-y-1.5">
           <Label htmlFor={`routeconfig-${mod.id}`} className="text-xs">Route Config (JSON)</Label>
@@ -397,3 +389,4 @@ export default function WsModulesTab() {
     </div>
   );
 }
+// 357:0
