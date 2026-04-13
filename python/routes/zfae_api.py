@@ -1,21 +1,31 @@
-# 70:13
+# 122:33
 """
 ZFAE API — Zeta Function Alpha Echo routes.
 
-GET /api/v1/zfae/echo          — rolling 50-event echo buffer
-GET /api/v1/zfae/state         — ZetaEngine state
-GET /api/v1/zfae/review-history — last 10 conversation review runs
+GET  /api/v1/zfae/echo                  — rolling 50-event echo buffer
+GET  /api/v1/zfae/state                 — ZetaEngine state (includes resolution config)
+GET  /api/v1/zfae/review-history        — last 10 conversation review runs
+GET  /api/v1/zfae/resolution            — current resolution config
+PUT  /api/v1/zfae/resolution            — set global resolution level (ws tier)
+PUT  /api/v1/zfae/resolution/directory  — set per-directory resolution (ws tier)
+DELETE /api/v1/zfae/resolution/directory — remove per-directory override (ws tier)
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 # DOC module: zfae
 # DOC label: ZFAE
-# DOC description: Zeta Function Alpha Echo subsystem. Maintains a rolling event echo buffer and exposes the ZetaEngine state and review history for ws-tier introspection.
+# DOC description: Zeta Function Alpha Echo subsystem. Maintains a rolling event echo buffer and exposes the ZetaEngine state and review history. Supports per-directory and global resolution levels (1–5) to control observation depth; comment lines are free of the 400-line budget.
 # DOC tier: ws
 # DOC endpoint: GET /api/v1/zfae/echo | Get the rolling 50-event echo buffer
-# DOC endpoint: GET /api/v1/zfae/state | Get current ZetaEngine state
+# DOC endpoint: GET /api/v1/zfae/state | Get ZetaEngine state including resolution config
 # DOC endpoint: GET /api/v1/zfae/review-history | Get recent review history entries
+# DOC endpoint: GET /api/v1/zfae/resolution | Get the full resolution config
+# DOC endpoint: PUT /api/v1/zfae/resolution | Set the global resolution level (body: {level})
+# DOC endpoint: PUT /api/v1/zfae/resolution/directory | Set resolution for a directory path (body: {path, level})
+# DOC endpoint: DELETE /api/v1/zfae/resolution/directory | Remove a per-directory override (body: {path})
+# DOC notes: Resolution levels run 1–5. Level 1 = minimal observation, level 5 = maximum depth. The most specific matching directory prefix wins; global is the fallback.
 
 UI_META = {
     "tab_id": "zfae",
@@ -30,6 +40,7 @@ UI_META = {
             "fields": [
                 {"key": "provider", "type": "badge", "label": "Provider"},
                 {"key": "coherence", "type": "gauge", "label": "Coherence"},
+                {"key": "resolution", "type": "text", "label": "Resolution"},
                 {"key": "cm", "type": "text", "label": "CM"},
                 {"key": "da", "type": "text", "label": "DA"},
                 {"key": "drift", "type": "text", "label": "Drift"},
@@ -49,13 +60,7 @@ UI_META = {
     ],
 }
 
-DATA_SCHEMA = {
-    "endpoints": [
-        {"method": "GET", "path": "/api/v1/zfae/echo"},
-        {"method": "GET", "path": "/api/v1/zfae/state"},
-        {"method": "GET", "path": "/api/v1/zfae/review-history"},
-    ],
-}
+_WS_TIERS = {"ws", "pro", "admin"}
 
 router = APIRouter(prefix="/api/v1/zfae", tags=["zfae"])
 
@@ -64,6 +69,35 @@ def _get_zeta():
     from ..engine.zeta import _zeta_engine
     return _zeta_engine
 
+
+async def _require_ws(request: Request) -> str:
+    """Require ws/pro/admin tier. Returns user_id."""
+    uid = request.headers.get("x-user-id", "").strip()
+    if not uid:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    from ..database import engine as _engine
+    from sqlalchemy import text as _sa_text
+    async with _engine.connect() as conn:
+        row = await conn.execute(
+            _sa_text("SELECT subscription_tier, role FROM users WHERE id = :id"),
+            {"id": uid},
+        )
+        rec = row.mappings().first()
+    tier = (rec["subscription_tier"] if rec else None) or "free"
+    is_admin = rec["role"] == "admin" if rec else False
+    if tier not in _WS_TIERS and not is_admin:
+        raise HTTPException(status_code=403, detail="ws, pro, or admin tier required")
+    return uid
+
+
+async def _persist_resolution(config: dict) -> None:
+    from ..storage import storage
+    await storage.upsert_system_toggle("zfae:resolution", True, config)
+
+
+# ------------------------------------------------------------------
+# Read endpoints (no tier check — InternalAuthMiddleware handles access)
+# ------------------------------------------------------------------
 
 @router.get("/echo")
 async def zfae_echo():
@@ -96,4 +130,62 @@ async def review_history():
             "created_at": ev.get("created_at"),
         })
     return {"reviews": results, "count": len(results)}
-# 70:13
+
+
+@router.get("/resolution")
+async def get_resolution():
+    """Return the full resolution config (global level + per-directory overrides)."""
+    return _get_zeta().resolution_config
+
+
+# ------------------------------------------------------------------
+# Write endpoints (ws tier required)
+# ------------------------------------------------------------------
+
+class SetGlobalResolutionBody(BaseModel):
+    level: int
+
+
+class SetDirectoryResolutionBody(BaseModel):
+    path: str
+    level: int
+
+
+class RemoveDirectoryResolutionBody(BaseModel):
+    path: str
+
+
+@router.put("/resolution")
+async def set_global_resolution(body: SetGlobalResolutionBody, request: Request):
+    """Set the global (fallback) resolution level. Requires ws tier."""
+    await _require_ws(request)
+    if not (1 <= body.level <= 5):
+        raise HTTPException(status_code=400, detail="Level must be between 1 and 5")
+    config = _get_zeta().set_global_resolution(body.level)
+    await _persist_resolution(config)
+    return config
+
+
+@router.put("/resolution/directory")
+async def set_directory_resolution(body: SetDirectoryResolutionBody, request: Request):
+    """Set resolution for a specific directory path. Requires ws tier."""
+    await _require_ws(request)
+    if not body.path.startswith("/"):
+        raise HTTPException(status_code=400, detail="Path must be absolute (start with /)")
+    if not (1 <= body.level <= 5):
+        raise HTTPException(status_code=400, detail="Level must be between 1 and 5")
+    if len(_get_zeta().resolution_config.get("directories", {})) >= 100:
+        raise HTTPException(status_code=400, detail="Directory resolution limit reached (100 max)")
+    config = _get_zeta().set_directory_resolution(body.path, body.level)
+    await _persist_resolution(config)
+    return config
+
+
+@router.delete("/resolution/directory")
+async def remove_directory_resolution(body: RemoveDirectoryResolutionBody, request: Request):
+    """Remove a per-directory resolution override. Requires ws tier."""
+    await _require_ws(request)
+    config = _get_zeta().remove_directory_resolution(body.path)
+    await _persist_resolution(config)
+    return config
+# 122:33
