@@ -144,7 +144,7 @@ def collect_doc_meta() -> list[dict]:
         "system.py", "tools.py", "heartbeat_api.py", "pcna_api.py",
         "billing.py", "contexts.py", "founders.py", "openai_api.py",
         "zfae_api.py", "approval_scopes.py", "ws_modules.py", "docs.py",
-        "sigma_api.py", "editable_schema.py",
+        "sigma_api.py", "editable_schema.py", "cli.py",
     ]
     results: list[dict] = []
     for fname in route_files:

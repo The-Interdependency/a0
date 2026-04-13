@@ -1,10 +1,12 @@
-# 124:14
+# 128:16
 # DOC module: cli
 # DOC label: CLI Keys
+# DOC description: API key management for CLI and Termux access. Users generate bearer tokens (a0k_...) used to authenticate one-shot or interactive terminal sessions without a browser session.
+# DOC tier: ws
 # DOC endpoint: POST /api/v1/cli/keys | Generate a new CLI API key
 # DOC endpoint: GET /api/v1/cli/keys | List your CLI keys
 # DOC endpoint: DELETE /api/v1/cli/keys/{key_id} | Revoke a CLI key
-# DOC endpoint: POST /api/v1/cli/chat | Send a message via CLI API key (no session required)
+# DOC endpoint: POST /api/v1/cli/chat | (public) Send a message via CLI bearer key — ownership-checked conversation resumption
 import os
 import secrets
 import hashlib
@@ -174,6 +176,8 @@ async def cli_chat(body: CliChatBody, request: Request):
         conv = await storage.get_conversation(body.conversation_id)
         if not conv:
             raise HTTPException(status_code=404, detail="conversation not found")
+        if conv.get("user_id") and conv["user_id"] != uid:
+            raise HTTPException(status_code=403, detail="Not your conversation")
         conv_id = body.conversation_id
         prior_msgs = await storage.get_messages(conv_id)
     else:
@@ -221,3 +225,4 @@ async def cli_chat(body: CliChatBody, request: Request):
         "tier": tier,
         "usage": usage,
     }
+# 128:16
