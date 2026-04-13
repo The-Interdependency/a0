@@ -7,11 +7,11 @@ export interface BackendEditableField {
   key: string;
   label: string;
   description: string;
-  control_type: "text" | "select" | "textarea" | "toggle";
+  controlType: "text" | "select" | "textarea" | "toggle";
   module: string;
-  get_endpoint: string;
-  patch_endpoint: string;
-  query_key: string;
+  getEndpoint: string;
+  patchEndpoint: string;
+  queryKey: string;
   options: string[];
 }
 

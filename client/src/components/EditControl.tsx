@@ -21,8 +21,8 @@ function ControlInput({
   value: string | boolean;
   onChange: (v: string | boolean) => void;
 }) {
-  const ct = field.source === "backend" ? field.control_type : field.controlType;
-  const opts = field.source === "backend" ? field.options : field.options ?? [];
+  const ct = field.controlType;
+  const opts = field.options ?? [];
 
   if (ct === "toggle") {
     return (
@@ -104,13 +104,13 @@ export default function EditControl({ fieldKey, valueOverride }: EditControlProp
         return;
       }
       const endpoint = valueOverride
-        ? field.patch_endpoint.replace("{id}", valueOverride).replace("{subsystem}", String(v))
-        : field.patch_endpoint;
+        ? field.patchEndpoint.replace("{id}", valueOverride).replace("{subsystem}", String(v))
+        : field.patchEndpoint;
       await apiRequest("PATCH", endpoint, { value: v });
     },
     onSuccess: () => {
       if (field?.source === "backend") {
-        queryClient.invalidateQueries({ queryKey: [field.query_key] });
+        queryClient.invalidateQueries({ queryKey: [field.queryKey] });
       }
       toast({ title: "Saved", description: field?.label });
     },
