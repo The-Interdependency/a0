@@ -1,3 +1,4 @@
+# 295:27
 """
 PCNA Inference Engine — six-ring pipeline, all rings real.
 
@@ -174,10 +175,30 @@ class PCNAEngine:
         self.phi._recompute_coherence()
         self.memory_s.write(signal)
 
+        # Θ (Theta/Guardian) → Φ: guardian gate state softly shapes phi (Task #72)
+        theta_nc = self.guardian.node_coherence
+        theta_signal = np.full(53, float(theta_nc.mean()), dtype=np.float64)
+        theta_signal[:len(theta_nc)] = theta_nc
+        self.phi.inject(theta_signal)
+        self.phi._recompute_coherence()
+
         psi_signal = np.full(53, self.phi.ring_coherence, dtype=np.float64)
         phi_node_c = self.phi.node_coherence
         psi_signal[:len(phi_node_c)] = phi_node_c
         self.psi.inject(psi_signal)
+
+        # Σ → Ψ: sigma substrate coherence informs psi's self-model (Task #71)
+        try:
+            from .sigma import get_sigma
+            _sig = get_sigma()
+            if _sig.tensor is not None and _sig.n > 0:
+                sigma_signal = np.full(53, _sig.ring_coherence, dtype=np.float64)
+                nc = _sig.node_coherence
+                top = min(len(nc), 53)
+                sigma_signal[:top] = nc[:top]
+                self.psi.inject(sigma_signal)
+        except Exception:
+            pass
 
         ml_hub = self.memory_l.hub_avg
         omega_base = np.full(53, float(ml_hub.mean()), dtype=np.float64)
@@ -279,6 +300,11 @@ class PCNAEngine:
         self.omega.nudge(outcome, lr=0.015)
         self.guardian.apply_reward(outcome)
         flushed = self.memory_s.flush_to(self.memory_l, outcome)
+        try:
+            from .sigma import get_sigma
+            get_sigma().nudge(outcome, lr=0.015)
+        except Exception:
+            pass
 
         self.reward_count += 1
 
@@ -288,12 +314,12 @@ class PCNAEngine:
             "winner": winner,
             "outcome": round(outcome, 4),
             "nudged": True,
-            "nudged_cores": ["phi", "psi", "omega", "guardian"],
+            "nudged_cores": ["phi", "psi", "omega", "theta", "sigma"],
             "memory_flush": flushed,
             "phi_coherence_after": round(self.phi.ring_coherence, 4),
             "psi_coherence_after": round(self.psi.ring_coherence, 4),
             "omega_coherence_after": round(self.omega.ring_coherence, 4),
-            "guardian_coherence_after": round(float(self.guardian.node_coherence.mean()), 4),
+            "theta_coherence_after": round(float(self.guardian.node_coherence.mean()), 4),
             "guardian_circles_after": [int(v) for v in self.guardian.circle_count],
             "memory_l_flush_count": self.memory_l.flush_count,
             "memory_s_flush_count": self.memory_s.flush_count,
@@ -305,9 +331,15 @@ class PCNAEngine:
             echo_history = list(_zeta_engine.echo_buffer) if _zeta_engine else []
         except Exception:
             echo_history = []
+        try:
+            from .sigma import get_sigma
+            sigma_state = get_sigma().state()
+        except Exception:
+            sigma_state = {}
+        guardian_state = self.guardian.state()
         return {
             "engine": "pcna",
-            "version": "2.1.0",
+            "version": "2.2.0",
             "phases": self.phases,
             "infer_count": self.infer_count,
             "reward_count": self.reward_count,
@@ -317,7 +349,9 @@ class PCNAEngine:
                 "phi": self.phi.state(),
                 "psi": self.psi.state(),
                 "omega": self.omega.state(),
-                "guardian": self.guardian.state(),
+                "theta": guardian_state,
+                "guardian": guardian_state,
+                "sigma": sigma_state,
                 "memory_l": self.memory_l.state(),
                 "memory_s": self.memory_s.state(),
             },
@@ -327,3 +361,4 @@ class PCNAEngine:
             "checkpoint_ring_means": self.checkpoint_ring_means,
             "echo_history": echo_history[-20:],
         }
+# 295:27

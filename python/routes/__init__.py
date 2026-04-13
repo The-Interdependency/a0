@@ -1,4 +1,4 @@
-# 133:4
+# 136:4
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -18,6 +18,7 @@ from .zfae_api import router as zfae_router
 from .approval_scopes import router as approval_scopes_router
 from .ws_modules import router as ws_modules_router
 from .docs import router as docs_router
+from .sigma_api import router as sigma_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -40,6 +41,7 @@ ALL_ROUTERS = [
     approval_scopes_router,
     ws_modules_router,
     docs_router,
+    sigma_router,
 ]
 
 
@@ -63,6 +65,7 @@ def collect_ui_meta() -> list[dict]:
         "python.routes.approval_scopes",
         "python.routes.ws_modules",
         "python.routes.docs",
+        "python.routes.sigma_api",
     ]
     tabs = []
     for mod_name in modules:
@@ -134,7 +137,7 @@ def collect_doc_meta() -> list[dict]:
         "chat.py", "agents.py", "memory.py", "edcm.py", "bandits.py",
         "system.py", "tools.py", "heartbeat_api.py", "pcna_api.py",
         "billing.py", "contexts.py", "founders.py", "openai_api.py",
-        "zfae_api.py", "approval_scopes.py", "ws_modules.py", "docs.py",
+        "zfae_api.py", "approval_scopes.py", "ws_modules.py", "docs.py", "sigma_api.py",
     ]
     results: list[dict] = []
     for fname in route_files:
@@ -148,4 +151,4 @@ def collect_doc_meta() -> list[dict]:
             results.append(meta)
     results.sort(key=lambda d: d.get("label", ""))
     return results
-# 133:4
+# 136:4

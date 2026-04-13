@@ -1,4 +1,4 @@
-# 110:39
+# 165:47
 """
 ZetaEngine — Zeta Function Alpha Echo
 
@@ -164,6 +164,75 @@ class ZetaEngine:
             print(f"[zfae:echo] error: {e}")
             return {}
 
+    # ------------------------------------------------------------------
+    # Σ Sigma integration helpers (Task #71)
+    # ------------------------------------------------------------------
+
+    def set_sigma_resolution(self, level: int) -> dict:
+        """Set Sigma scan resolution (1-5) and trigger a rescan."""
+        try:
+            from .sigma import get_sigma
+            get_sigma().set_resolution(level)
+            event = {"type": "sigma_resolution", "level": level, "ts": time.time()}
+            self.echo_buffer.append(event)
+            print(f"[zfae:sigma] resolution set to {level}")
+            return event
+        except Exception as exc:
+            print(f"[zfae:sigma] set_resolution error: {exc}")
+            return {}
+
+    def sigma_watch_file(self, path: str) -> dict:
+        """Add a file to Sigma's content-watch list."""
+        try:
+            from .sigma import get_sigma
+            get_sigma().add_content_watch(path)
+            event = {"type": "sigma_watch_add", "path": path, "ts": time.time()}
+            self.echo_buffer.append(event)
+            print(f"[zfae:sigma] watching {path}")
+            return event
+        except Exception as exc:
+            print(f"[zfae:sigma] watch_file error: {exc}")
+            return {}
+
+    def sigma_unwatch_file(self, path: str) -> dict:
+        """Remove a file from Sigma's content-watch list."""
+        try:
+            from .sigma import get_sigma
+            get_sigma().remove_content_watch(path)
+            event = {"type": "sigma_watch_remove", "path": path, "ts": time.time()}
+            self.echo_buffer.append(event)
+            print(f"[zfae:sigma] unwatched {path}")
+            return event
+        except Exception as exc:
+            print(f"[zfae:sigma] unwatch_file error: {exc}")
+            return {}
+
+    def set_sigma_structural_interval(self, seconds: float) -> dict:
+        """Set the structural scan interval (seconds)."""
+        try:
+            from .sigma import get_sigma
+            get_sigma().structural_interval = max(1.0, seconds)
+            event = {"type": "sigma_structural_interval", "seconds": seconds, "ts": time.time()}
+            self.echo_buffer.append(event)
+            print(f"[zfae:sigma] structural interval → {seconds}s")
+            return event
+        except Exception as exc:
+            print(f"[zfae:sigma] set_structural_interval error: {exc}")
+            return {}
+
+    def set_sigma_content_interval(self, seconds: float) -> dict:
+        """Set the content-watch poll interval (seconds)."""
+        try:
+            from .sigma import get_sigma
+            get_sigma().content_interval = max(1.0, seconds)
+            event = {"type": "sigma_content_interval", "seconds": seconds, "ts": time.time()}
+            self.echo_buffer.append(event)
+            print(f"[zfae:sigma] content interval → {seconds}s")
+            return event
+        except Exception as exc:
+            print(f"[zfae:sigma] set_content_interval error: {exc}")
+            return {}
+
     def state(self) -> dict:
         return {
             "agent": self.AGENT_NAME,
@@ -175,4 +244,4 @@ class ZetaEngine:
 
 
 _zeta_engine = ZetaEngine()
-# 110:39
+# 165:47
