@@ -1,4 +1,4 @@
-# 148:9
+# 160:9
 import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -182,4 +182,18 @@ async def merge_sub_agent(agent_name: str):
     result = InstanceMerge.absorb(get_pcna(), child)
     result["retired_agent"] = agent_name
     return result
-# 148:9
+
+
+from ..services.editable_registry import editable_registry, EditableField
+editable_registry.register(EditableField(
+    key="active_energy_provider",
+    label="Active Energy Provider",
+    description="Which LLM powers the agent. Changes take effect on the next inference.",
+    control_type="select",
+    module="agents",
+    get_endpoint="/api/v1/agents/energy-providers",
+    patch_endpoint="/api/v1/agents/energy-providers/active",
+    query_key="/api/v1/agents/energy-providers",
+    options=["grok", "gemini", "claude"],
+))
+# 160:9

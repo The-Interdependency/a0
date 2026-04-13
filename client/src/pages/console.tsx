@@ -1,9 +1,10 @@
-// 103:0
+// 132:0
 import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Pencil, PencilOff } from "lucide-react";
 import { useUiStructure } from "@/hooks/use-ui-structure";
 import { useBillingStatus } from "@/hooks/use-billing-status";
 import { useSEO } from "@/hooks/use-seo";
+import { useWsEditModeProvider, WsEditContext } from "@/hooks/use-ws-edit-mode";
 import ConsoleSidebar from "@/components/console-sidebar";
 import TabRenderer from "@/components/TabRenderer";
 import ApprovalScopesTab from "@/components/ApprovalScopesTab";
@@ -47,11 +48,13 @@ function renderTab(tab: TabDef) {
 export default function ConsolePage() {
   useSEO({ title: "Console — a0p", description: "Your a0p operator console. Manage your agent, tools, and sessions." });
   const { data, isLoading, error } = useUiStructure();
-  const { isAdmin } = useBillingStatus();
+  const { isAdmin, isWs } = useBillingStatus();
 
   const tabs = data?.tabs ?? [];
   const { activeTab, selectTab } = usePersistedTab(tabs);
   const currentTab = tabs.find((t) => t.tab_id === activeTab);
+
+  const wsEditContext = useWsEditModeProvider(isWs);
 
   if (isLoading) {
     return (
@@ -70,49 +73,77 @@ export default function ConsolePage() {
   }
 
   return (
-    <div className="flex h-full" data-testid="console-page">
-      <div className="w-48 shrink-0 hidden md:block">
-        <ConsoleSidebar
-          tabs={tabs}
-          activeTab={activeTab}
-          onSelectTab={selectTab}
-          agentName={data?.agent}
-          isAdmin={isAdmin}
-        />
-      </div>
-
-      <div className="md:hidden w-full flex flex-col">
-        <div className="overflow-x-auto border-b border-border px-2 py-1 flex gap-1 shrink-0" data-testid="console-mobile-tabs">
-          {tabs.map((tab) => (
+    <WsEditContext.Provider value={wsEditContext}>
+      <div className="flex flex-col h-full" data-testid="console-page">
+        {isWs && (
+          <div className="shrink-0 h-9 border-b border-border flex items-center justify-end px-4 gap-2 bg-background">
+            {wsEditContext.schemaLoading && (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            )}
             <button
-              key={tab.tab_id}
-              onClick={() => selectTab(tab.tab_id)}
-              className={`px-3 py-1.5 text-xs rounded-md whitespace-nowrap transition-colors ${
-                tab.tab_id === activeTab
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground"
+              onClick={wsEditContext.toggleEditMode}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded transition-colors ${
+                wsEditContext.editMode
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
-              data-testid={`mobile-tab-${tab.tab_id}`}
+              data-testid="button-edit-mode-toggle"
             >
-              {tab.label}
+              {wsEditContext.editMode ? (
+                <PencilOff className="h-3 w-3" />
+              ) : (
+                <Pencil className="h-3 w-3" />
+              )}
+              {wsEditContext.editMode ? "Exit Edit Mode" : "Edit Mode"}
             </button>
-          ))}
-        </div>
-        <div className="flex-1 overflow-hidden">
-          {currentTab && renderTab(currentTab)}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-hidden hidden md:block">
-        {currentTab ? (
-          renderTab(currentTab)
-        ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground" data-testid="console-empty">
-            <p className="text-sm">Select a tab</p>
           </div>
         )}
+
+        <div className="flex flex-1 overflow-hidden">
+          <div className="w-48 shrink-0 hidden md:block">
+            <ConsoleSidebar
+              tabs={tabs}
+              activeTab={activeTab}
+              onSelectTab={selectTab}
+              agentName={data?.agent}
+              isAdmin={isAdmin}
+            />
+          </div>
+
+          <div className="md:hidden w-full flex flex-col">
+            <div className="overflow-x-auto border-b border-border px-2 py-1 flex gap-1 shrink-0" data-testid="console-mobile-tabs">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.tab_id}
+                  onClick={() => selectTab(tab.tab_id)}
+                  className={`px-3 py-1.5 text-xs rounded-md whitespace-nowrap transition-colors ${
+                    tab.tab_id === activeTab
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-muted-foreground"
+                  }`}
+                  data-testid={`mobile-tab-${tab.tab_id}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-hidden">
+              {currentTab && renderTab(currentTab)}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-hidden hidden md:block">
+            {currentTab ? (
+              renderTab(currentTab)
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground" data-testid="console-empty">
+                <p className="text-sm">Select a tab</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-    </div>
+    </WsEditContext.Provider>
   );
 }
-// 103:0
+// 132:0

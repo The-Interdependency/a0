@@ -1,4 +1,4 @@
-# 76:9
+# 87:9
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Any
@@ -103,4 +103,17 @@ async def update_tool(tool_id: int, body: UpdateTool):
 async def delete_tool(tool_id: int):
     await storage.delete_custom_tool(tool_id)
     return {"ok": True}
-# 76:9
+
+
+from ..services.editable_registry import editable_registry, EditableField
+editable_registry.register(EditableField(
+    key="tool_enabled",
+    label="Tool Enabled",
+    description="Enable or disable a registered agent tool. Disabled tools are not offered to the LLM.",
+    control_type="toggle",
+    module="tools",
+    get_endpoint="/api/v1/tools",
+    patch_endpoint="/api/v1/tools/{id}",
+    query_key="/api/v1/tools",
+))
+# 87:9

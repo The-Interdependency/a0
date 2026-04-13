@@ -1,8 +1,8 @@
-// 178:0
+// 253:0
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, BookOpen, ChevronRight } from "lucide-react";
+import { Loader2, BookOpen, ChevronRight, FileText } from "lucide-react";
 
 interface Endpoint {
   method: string;
@@ -19,6 +19,11 @@ interface DocEntry {
   notes?: string[];
   code_lines?: number;
   comment_lines?: number;
+}
+
+interface ReadmeResponse {
+  content: string;
+  modules: DocEntry[];
 }
 
 function tierVariant(tier: string): string {
@@ -118,17 +123,83 @@ function ModuleDetail({ entry }: { entry: DocEntry }) {
   );
 }
 
+function ReadmePane() {
+  const { data, isLoading, error } = useQuery<ReadmeResponse>({
+    queryKey: ["/api/v1/docs/readme"],
+    staleTime: 60_000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full" data-testid="readme-loading">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex items-center justify-center h-full text-destructive text-sm" data-testid="readme-error">
+        Failed to load README
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6 p-6 overflow-y-auto h-full" data-testid="readme-pane">
+      <pre className="text-xs text-foreground whitespace-pre-wrap font-mono leading-relaxed bg-muted/40 rounded-md p-4 border border-border" data-testid="readme-content">
+        {data.content}
+      </pre>
+
+      {data.modules.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Module Index
+          </h3>
+          <div className="rounded-md border border-border overflow-hidden">
+            <table className="w-full text-xs" data-testid="readme-module-table">
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Module</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Tier</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">N:M</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Endpoints</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.modules.map((m) => (
+                  <tr key={m.module} className="border-b border-border last:border-0 hover:bg-muted/30" data-testid={`readme-module-row-${m.module}`}>
+                    <td className="px-3 py-2 font-medium text-foreground">{m.label}</td>
+                    <td className="px-3 py-2">
+                      <span className={`px-1.5 py-0.5 rounded-full ${tierVariant(m.tier)}`}>{m.tier}</span>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-muted-foreground">
+                      {m.code_lines !== undefined ? `${m.code_lines}:${m.comment_lines ?? 0}` : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">{m.endpoints.length}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DocsTab() {
   const { data, isLoading, error } = useQuery<DocEntry[]>({
     queryKey: ["/api/v1/docs"],
   });
 
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>("__readme__");
 
   const entries = data ?? [];
-  const activeModule = selected
+  const isReadme = selected === "__readme__" || selected === null;
+  const activeModule = !isReadme && selected
     ? entries.find((e) => e.module === selected)
-    : entries[0];
+    : undefined;
 
   if (isLoading) {
     return (
@@ -146,14 +217,6 @@ export default function DocsTab() {
     );
   }
 
-  if (entries.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm" data-testid="docs-empty">
-        No module documentation found
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-full overflow-hidden" data-testid="docs-tab">
       <div className="w-44 shrink-0 border-r border-border flex flex-col overflow-y-auto" data-testid="docs-sidebar">
@@ -161,8 +224,25 @@ export default function DocsTab() {
           <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Modules</span>
         </div>
+
+        <button
+          onClick={() => setSelected("__readme__")}
+          className={`w-full text-left px-3 py-2.5 text-sm flex items-center justify-between gap-1 transition-colors border-b border-border ${
+            isReadme
+              ? "bg-primary/10 text-primary font-medium"
+              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+          }`}
+          data-testid="docs-nav-readme"
+        >
+          <span className="truncate flex items-center gap-1.5">
+            <FileText className="h-3 w-3 shrink-0" />
+            README
+          </span>
+          {isReadme && <ChevronRight className="h-3 w-3 shrink-0" />}
+        </button>
+
         {entries.map((entry) => {
-          const isActive = (selected ?? entries[0]?.module) === entry.module;
+          const isActive = !isReadme && selected === entry.module;
           return (
             <button
               key={entry.module}
@@ -182,7 +262,9 @@ export default function DocsTab() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {activeModule ? (
+        {isReadme ? (
+          <ReadmePane />
+        ) : activeModule ? (
           <ModuleDetail entry={activeModule} />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -193,4 +275,4 @@ export default function DocsTab() {
     </div>
   );
 }
-// 178:0
+// 253:0

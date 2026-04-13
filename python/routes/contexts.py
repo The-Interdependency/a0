@@ -1,4 +1,4 @@
-# 81:145
+# 81:156
 import math
 import os
 from fastapi import APIRouter, HTTPException, Request
@@ -268,4 +268,17 @@ async def save_core_context(body: CoreContextBody, request: Request):
         await _upsert_context_value("system_base", body.contextPrefix, uid or "system")
         saved.append("system_base")
     return {"ok": True, "saved": saved}
-# 81:145
+
+
+from ..services.editable_registry import editable_registry, EditableField
+editable_registry.register(EditableField(
+    key="prompt_context",
+    label="Prompt Context",
+    description="Named prompt context block injected into the agent system prompt. Edit with care — values are live immediately.",
+    control_type="textarea",
+    module="contexts",
+    get_endpoint="/api/v1/contexts",
+    patch_endpoint="/api/v1/context/system-sections",
+    query_key="/api/v1/contexts",
+))
+# 81:156

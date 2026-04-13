@@ -1,4 +1,4 @@
-# 165:10
+# 176:10
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Any
@@ -213,4 +213,17 @@ async def promote_draft(draft_id: int, body: dict):
         raise HTTPException(status_code=400, detail="conversation_id required")
     await storage.promote_discovery_draft(draft_id, conv_id)
     return {"ok": True}
-# 165:10
+
+
+from ..services.editable_registry import editable_registry, EditableField
+editable_registry.register(EditableField(
+    key="system_toggle",
+    label="System Toggle",
+    description="Enable or disable a named platform subsystem. Changes apply immediately.",
+    control_type="toggle",
+    module="system",
+    get_endpoint="/api/v1/system/toggles",
+    patch_endpoint="/api/v1/system/toggles/{subsystem}",
+    query_key="/api/v1/system/toggles",
+))
+# 176:10
