@@ -1,4 +1,4 @@
-// 291:0
+// 410:0
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Send, Trash2, Bot, User, Loader2 } from "lucide-react";
+import { Plus, Send, Trash2, Bot, User, Loader2, AlertTriangle, ChevronDown, ChevronUp, Target, Zap, Copy, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Conversation {
@@ -27,6 +27,13 @@ interface Message {
   content: string;
   model: string | null;
   created_at: string;
+  metadata?: {
+    error?: boolean;
+    error_detail?: string;
+    focus_regain?: boolean;
+    subagent?: boolean;
+    [key: string]: unknown;
+  } | null;
 }
 
 const CONV_KEY = "a0p_active_conv";
@@ -103,26 +110,124 @@ function ConversationList({
 
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
+  const isError = !isUser && message.metadata?.error === true;
+  const isFocusRegain = message.metadata?.focus_regain === true;
+  const [showDetail, setShowDetail] = useState(false);
+  const { toast } = useToast();
+
+  const copyError = () => {
+    navigator.clipboard.writeText(message.metadata?.error_detail ?? message.content);
+    toast({ title: "Error detail copied" });
+  };
+
   return (
     <div
-      className={cn("flex gap-2 max-w-[85%]", isUser ? "ml-auto flex-row-reverse" : "")}
+      className={cn("flex gap-2 max-w-[90%]", isUser ? "ml-auto flex-row-reverse" : "")}
       data-testid={`message-${message.id}`}
     >
       <div className={cn(
         "flex items-center justify-center h-7 w-7 rounded-full shrink-0 mt-0.5",
-        isUser ? "bg-primary/20" : "bg-muted"
+        isUser ? "bg-primary/20" : isError ? "bg-destructive/20" : isFocusRegain ? "bg-amber-500/20" : "bg-muted"
       )}>
-        {isUser ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+        {isUser ? <User className="h-3.5 w-3.5" /> : isError ? <AlertTriangle className="h-3.5 w-3.5 text-destructive" /> : isFocusRegain ? <Target className="h-3.5 w-3.5 text-amber-500" /> : <Bot className="h-3.5 w-3.5" />}
       </div>
       <div className={cn(
-        "rounded-lg px-3 py-2 text-sm break-words",
-        isUser ? "bg-primary text-primary-foreground" : "bg-muted"
+        "rounded-lg px-3 py-2 text-sm break-words min-w-0",
+        isUser ? "bg-primary text-primary-foreground" :
+        isError ? "bg-destructive/10 border border-destructive/30 text-destructive-foreground" :
+        isFocusRegain ? "bg-amber-500/10 border border-amber-500/30" :
+        "bg-muted"
       )}>
+        {isError && (
+          <div className="flex items-center gap-1 mb-1">
+            <span className="text-[10px] font-semibold text-destructive uppercase tracking-wide">Model Error</span>
+            <button onClick={copyError} className="ml-auto opacity-60 hover:opacity-100" data-testid={`copy-error-${message.id}`}>
+              <Copy className="h-3 w-3" />
+            </button>
+            <button onClick={() => setShowDetail(!showDetail)} className="opacity-60 hover:opacity-100" data-testid={`toggle-error-${message.id}`}>
+              {showDetail ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+          </div>
+        )}
         <p className="whitespace-pre-wrap">{message.content}</p>
+        {isError && showDetail && message.metadata?.error_detail && (
+          <pre className="mt-2 text-[10px] bg-black/10 rounded p-2 overflow-x-auto whitespace-pre-wrap opacity-80" data-testid={`error-detail-${message.id}`}>
+            {message.metadata.error_detail}
+          </pre>
+        )}
         {message.model && (
           <Badge variant="outline" className="mt-1 text-[9px]">{message.model}</Badge>
         )}
       </div>
+    </div>
+  );
+}
+
+function ContextBoostPanel({ convId }: { convId: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const { data } = useQuery<{ context_boost: string }>({
+    queryKey: ["/api/v1/conversations", convId, "boost"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/v1/conversations/${convId}/boost`);
+      return res.json();
+    },
+    enabled: open,
+  });
+
+  const boost = data?.context_boost ?? "";
+
+  const save = useMutation({
+    mutationFn: async (text: string) => {
+      if (!text.trim()) {
+        await apiRequest("DELETE", `/api/v1/conversations/${convId}/boost`);
+      } else {
+        await apiRequest("PUT", `/api/v1/conversations/${convId}/boost`, { text });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/v1/conversations", convId, "boost"] });
+      toast({ title: draft.trim() ? "Context boost saved" : "Context boost cleared" });
+    },
+  });
+
+  useEffect(() => { if (open) setDraft(boost); }, [open, boost]);
+
+  return (
+    <div className="border-b border-border" data-testid="context-boost-panel">
+      <button
+        className="w-full flex items-center gap-2 px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+        onClick={() => setOpen(!open)}
+        data-testid="btn-toggle-boost"
+      >
+        <Zap className="h-3 w-3" />
+        <span>Context Boost {boost ? `(active)` : ""}</span>
+        {open ? <ChevronUp className="h-3 w-3 ml-auto" /> : <ChevronDown className="h-3 w-3 ml-auto" />}
+      </button>
+      {open && (
+        <div className="px-4 pb-3 space-y-2" data-testid="boost-editor">
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Additional context injected into every model call in this conversation…"
+            className="text-xs min-h-[60px] max-h-[140px] resize-none"
+            data-testid="boost-textarea"
+          />
+          <div className="flex gap-2">
+            <Button size="sm" className="text-xs h-7" onClick={() => save.mutate(draft)} disabled={save.isPending} data-testid="btn-save-boost">
+              {save.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+            </Button>
+            {boost && (
+              <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive" onClick={() => { setDraft(""); save.mutate(""); }} disabled={save.isPending} data-testid="btn-clear-boost">
+                <X className="h-3 w-3 mr-1" />Clear
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -265,6 +370,50 @@ export default function ChatPage() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const focusMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeConvId) throw new Error("No conversation selected");
+      const res = await apiRequest("POST", `/api/v1/conversations/${activeConvId}/focus`);
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/v1/conversations", activeConvId, "messages"] });
+    },
+    onError: (e: Error) => toast({ title: "Focus failed", description: e.message, variant: "destructive" }),
+  });
+
+  const [subagentTask, setSubagentTask] = useState("");
+  const [showSubagent, setShowSubagent] = useState(false);
+  const [subagentConvId, setSubagentConvId] = useState<number | null>(null);
+
+  const { data: subagentStatus, refetch: refetchSubagent } = useQuery<{
+    status: string; reply?: string; error?: string;
+  }>({
+    queryKey: ["/api/v1/subagent", subagentConvId, "status"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/v1/subagent/${subagentConvId}/status`);
+      return res.json();
+    },
+    enabled: !!subagentConvId && (subagentStatus?.status === "running" || !subagentStatus),
+    refetchInterval: subagentConvId && subagentStatus?.status === "running" ? 3000 : false,
+  });
+
+  const launchSubagent = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/v1/subagent", {
+        task: subagentTask,
+        parent_conv_id: activeConvId,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setSubagentConvId(data.subagent_conv_id);
+      setSubagentTask("");
+      toast({ title: "Sub-agent launched", description: "Primary a0 remains available." });
+    },
+    onError: (e: Error) => toast({ title: "Sub-agent failed", description: e.message, variant: "destructive" }),
+  });
+
   return (
     <div className="flex h-full" data-testid="chat-page">
       <div className="w-56 shrink-0 hidden md:block">
@@ -289,6 +438,64 @@ export default function ChatPage() {
           </div>
         ) : (
           <>
+            <ContextBoostPanel convId={activeConvId} />
+
+            {/* Sub-agent panel */}
+            <div className="border-b border-border" data-testid="subagent-panel">
+              <button
+                className="w-full flex items-center gap-2 px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                onClick={() => setShowSubagent(!showSubagent)}
+                data-testid="btn-toggle-subagent"
+              >
+                <Zap className="h-3 w-3" />
+                <span>Sub-agent {subagentConvId ? `(${subagentStatus?.status ?? "…"})` : ""}</span>
+                {showSubagent ? <ChevronUp className="h-3 w-3 ml-auto" /> : <ChevronDown className="h-3 w-3 ml-auto" />}
+              </button>
+              {showSubagent && (
+                <div className="px-4 pb-3 space-y-2" data-testid="subagent-editor">
+                  {subagentConvId && subagentStatus ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs">
+                        {subagentStatus.status === "running" && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                        {subagentStatus.status === "done" && <Target className="h-3 w-3 text-green-500" />}
+                        {subagentStatus.status === "error" && <AlertTriangle className="h-3 w-3 text-destructive" />}
+                        <span className="font-medium capitalize">{subagentStatus.status}</span>
+                        <button className="ml-auto text-muted-foreground hover:text-foreground" onClick={() => setSubagentConvId(null)} data-testid="btn-close-subagent">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                      {subagentStatus.reply && (
+                        <pre className="text-[10px] bg-muted rounded p-2 whitespace-pre-wrap max-h-32 overflow-auto" data-testid="subagent-reply">{subagentStatus.reply}</pre>
+                      )}
+                      {subagentStatus.error && (
+                        <p className="text-[10px] text-destructive" data-testid="subagent-error">{subagentStatus.error}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <Textarea
+                        value={subagentTask}
+                        onChange={(e) => setSubagentTask(e.target.value)}
+                        placeholder="Task for background sub-agent… (primary a0 stays available)"
+                        className="text-xs min-h-[60px] max-h-[120px] resize-none"
+                        data-testid="subagent-task-input"
+                      />
+                      <Button
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => launchSubagent.mutate()}
+                        disabled={!subagentTask.trim() || launchSubagent.isPending}
+                        data-testid="btn-launch-subagent"
+                      >
+                        {launchSubagent.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Zap className="h-3 w-3 mr-1" />}
+                        Launch
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div ref={scrollRef} className="flex-1 overflow-auto p-4">
               {msgsLoading ? (
                 <div className="flex flex-col gap-3">
@@ -303,6 +510,20 @@ export default function ChatPage() {
                   {messages.map((m) => <MessageBubble key={m.id} message={m} />)}
                 </div>
               )}
+            </div>
+            <div className="flex items-center gap-1 px-4 pt-2 border-t border-border">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-xs h-7 gap-1 text-muted-foreground"
+                onClick={() => focusMutation.mutate()}
+                disabled={focusMutation.isPending}
+                data-testid="btn-regain-focus"
+                title="Regain model focus"
+              >
+                {focusMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Target className="h-3 w-3" />}
+                Focus
+              </Button>
             </div>
             <ChatInput onSend={(c) => sendMessage.mutate(c)} isSending={sendMessage.isPending} />
           </>

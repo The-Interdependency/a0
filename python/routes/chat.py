@@ -338,6 +338,9 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             }
 
         system_prompt = await _build_system_prompt(tier)
+        context_boost = (conv.get("context_boost") or "").strip()
+        if context_boost:
+            system_prompt = (system_prompt or "") + "\n\n## Context Boost\n" + context_boost
 
         user_msg = await storage.create_message({
             "conversation_id": conv_id,
@@ -375,12 +378,14 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 "uid": uid,
             }
 
+        _is_error = content.startswith(("[openai", "[energy provider error", "[tool loop", "[sub-agent"))
+        _error_meta: dict = {"error": True, "error_detail": content} if _is_error else {}
         assistant_msg = await storage.create_message({
             "conversation_id": conv_id,
             "role": "assistant",
             "content": content,
             "model": provider_id,
-            "metadata": {"tier": tier, "usage": usage},
+            "metadata": {"tier": tier, "usage": usage, **_error_meta},
         })
 
         import asyncio as _asyncio

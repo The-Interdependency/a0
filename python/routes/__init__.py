@@ -21,6 +21,7 @@ from .docs import router as docs_router
 from .sigma_api import router as sigma_router
 from .editable_schema import router as editable_schema_router
 from .cli import router as cli_router
+from .focus import router as focus_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -46,6 +47,7 @@ ALL_ROUTERS = [
     sigma_router,
     editable_schema_router,
     cli_router,
+    focus_router,
 ]
 
 
@@ -144,7 +146,7 @@ def collect_doc_meta() -> list[dict]:
         "system.py", "tools.py", "heartbeat_api.py", "pcna_api.py",
         "billing.py", "contexts.py", "founders.py", "openai_api.py",
         "zfae_api.py", "approval_scopes.py", "ws_modules.py", "docs.py",
-        "sigma_api.py", "editable_schema.py", "cli.py",
+        "sigma_api.py", "editable_schema.py", "cli.py", "focus.py",
     ]
     results: list[dict] = []
     for fname in route_files:
