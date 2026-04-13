@@ -1,4 +1,4 @@
-// 345:0
+// 353:0
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -136,6 +136,7 @@ function ModuleEditor({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/ws/modules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/ui/structure"] });
       toast({ title: "Module deleted" });
       onClose();
     },
@@ -324,12 +325,19 @@ export default function WsModulesTab() {
               <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">User</p>
               {userModules.map((mod) => (
                 <button key={mod.id} onClick={() => { setSelectedId(mod.id === selectedId && !isCreating ? null : mod.id); setIsCreating(false); }}
-                  className={rowCls(mod.id)} data-testid={`module-row-${mod.id}`}>
+                  className={`${rowCls(mod.id)} items-start py-2`} data-testid={`module-row-${mod.id}`}>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate">{mod.name}</div>
-                    <div className="text-[10px] text-muted-foreground truncate">v{mod.version} · {mod.status}</div>
+                    <div className="truncate text-sm">{mod.name}</div>
+                    <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                      <Badge variant={STATUS_BADGE[mod.status]?.variant ?? "outline"} className="text-[9px] px-1 py-0 h-4 shrink-0">
+                        {mod.status}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground">v{mod.version}</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">{mod.slug}</div>
+                    <div className="text-[10px] text-muted-foreground truncate">{fmtTs(mod.updated_at)}</div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0 ml-1">
+                  <div className="flex items-center gap-1 shrink-0 ml-1 mt-0.5">
                     {mod.status === "locked" && <Lock className="h-3 w-3 text-muted-foreground" />}
                     {mod.status === "error" && <AlertTriangle className="h-3 w-3 text-destructive" />}
                     <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -377,4 +385,4 @@ export default function WsModulesTab() {
     </div>
   );
 }
-// 345:0
+// 353:0
