@@ -13,20 +13,23 @@ export async function seedAdminUser() {
 
   try {
     const existing = await authStorage.getUserByEmail(adminEmail);
-    if (existing) {
-      return;
-    }
 
     if (!adminPassword) {
-      console.warn(
-        "[auth] ADMIN_EMAIL is set but ADMIN_PASSWORD is not. Cannot seed admin user."
-      );
+      if (!existing) {
+        console.warn("[auth] ADMIN_EMAIL set but ADMIN_PASSWORD not set — cannot seed admin user.");
+      }
       return;
     }
 
     const passphraseHash = await hashPassphrase(adminPassword);
-    const adminUsername = adminEmail.split("@")[0].replace(/[^a-z0-9]/gi, "_");
 
+    if (existing) {
+      await authStorage.updatePassphrase(existing.id, passphraseHash);
+      console.log(`[auth] ✓ Admin passphrase updated — username: ${existing.username}, id: ${existing.id}`);
+      return;
+    }
+
+    const adminUsername = adminEmail.split("@")[0].replace(/[^a-z0-9]/gi, "_");
     const user = await authStorage.createUser({
       username: adminUsername,
       email: adminEmail,
