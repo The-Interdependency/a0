@@ -1,4 +1,4 @@
-# 243:138
+# 246:138
 # NOTE: 424 lines — over the 400-line guideline. Split on next modification.
 import os
 import hashlib
@@ -131,7 +131,8 @@ async def get_status(request: Request):
 
         if not uid:
             return {"plan": "free", "status": "active", "provider_pool": "standard",
-                    "byok_enabled": False, "founder_slot": None, "is_admin": is_admin}
+                    "byok_enabled": False, "founder_slot": None, "is_admin": is_admin,
+                    "user_id": None}
 
         row = await conn.execute(
             text("SELECT subscription_tier, subscription_status, byok_enabled, founder_slot FROM users WHERE id = :id"),
@@ -141,7 +142,8 @@ async def get_status(request: Request):
 
     if not rec:
         return {"plan": "free", "status": "active", "provider_pool": "standard",
-                "byok_enabled": False, "founder_slot": None, "is_admin": is_admin}
+                "byok_enabled": False, "founder_slot": None, "is_admin": is_admin,
+                "user_id": uid}
 
     tier = rec["subscription_tier"]
     if is_admin and tier == "free":
@@ -151,6 +153,7 @@ async def get_status(request: Request):
         "plan": tier, "status": rec["subscription_status"],
         "provider_pool": provider_pool, "byok_enabled": rec["byok_enabled"],
         "founder_slot": rec["founder_slot"], "is_admin": is_admin,
+        "user_id": uid,
     }
 
 
@@ -467,4 +470,4 @@ async def _handle_subscription_deleted(sub: dict) -> None:
 
     if uid_rec:
         await sync_founder_registry(uid_rec["id"], "free", action="downgrade")
-# 243:138
+# 246:138

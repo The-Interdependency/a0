@@ -1,4 +1,4 @@
-// 38:0
+// 40:0
 import { useQuery } from "@tanstack/react-query";
 
 export interface BillingStatus {
@@ -8,6 +8,7 @@ export interface BillingStatus {
   byok_enabled: boolean;
   founder_slot: number | null;
   is_admin: boolean;
+  user_id: string | null;
 }
 
 const TIER_LABELS: Record<string, string> = {
@@ -40,6 +41,7 @@ export function useBillingStatus() {
     isAdmin,
     isWs: WS_TIERS.has(plan) || isAdmin,
     isPaid: plan !== "free" || isAdmin,
+    userId: data?.user_id ?? null,
   };
 }
-// 38:0
+// 40:0
