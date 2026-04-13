@@ -1,4 +1,4 @@
-# 87:50
+# 90:55
 """
 ModuleRegistry — hot-swap Python route modules into the live FastAPI app
 without a server restart.
@@ -6,8 +6,9 @@ without a server restart.
 Handler code convention
 -----------------------
 The exec'd code must define a module-level variable ``router`` that is an
-``APIRouter`` instance.  It may optionally define ``UI_META`` (dict) which
-will be used to expose a console tab for the module.
+``APIRouter`` instance.  Console tab metadata is stored separately in the DB
+``ui_meta`` column (edited via PATCH /modules/{id}) — it is NOT extracted
+from the handler code at runtime.
 
 Example minimal handler::
 
@@ -115,8 +116,17 @@ class _ModuleRegistry:
         del self._mounted[module_id]
 
     def unmount(self, module_id: int) -> None:
-        """Remove all routes contributed by this module from the live app."""
+        """Remove all routes contributed by this module from the live app (no lock).
+
+        Prefer ``unmount_safe()`` when calling from async request handlers so
+        that concurrent swap/deactivate/delete operations are serialised.
+        """
         self._do_unmount(module_id)
+
+    async def unmount_safe(self, module_id: int) -> None:
+        """Lock-guarded async unmount — use from HTTP route handlers."""
+        async with self._lock:
+            self._do_unmount(module_id)
 
     def is_mounted(self, module_id: int) -> bool:
         return module_id in self._mounted
@@ -165,4 +175,4 @@ def initialize_registry(app: FastAPI) -> None:
 def get_registry() -> _ModuleRegistry:
     """Return the singleton ModuleRegistry."""
     return _registry
-# 87:50
+# 90:55

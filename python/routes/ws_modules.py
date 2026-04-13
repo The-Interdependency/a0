@@ -320,7 +320,7 @@ async def delete_module(module_id: int, body: DeleteBody, request: Request):
     ok = await storage.delete_ws_module(module_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Module not found")
-    get_registry().unmount(module_id)
+    await get_registry().unmount_safe(module_id)
     return {"ok": True, "deleted": module_id}
 
 
@@ -384,7 +384,7 @@ async def deactivate_module(module_id: int, body: DeactivateBody, request: Reque
             status_code=403,
             detail="Invalid or expired write token. Request a new one and retry.",
         )
-    get_registry().unmount(module_id)
+    await get_registry().unmount_safe(module_id)
     updated = await storage.update_ws_module(module_id, {"status": "inactive"})
     return updated
 # 255:58
