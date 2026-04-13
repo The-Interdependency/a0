@@ -1,3 +1,4 @@
+# 217:137
 # NOTE: 424 lines — over the 400-line guideline. Split on next modification.
 import os
 import hashlib
@@ -14,6 +15,17 @@ from .billing_helpers import (
     get_subscription_tier_from_items,
     is_addon_lookup_key,
 )
+
+# DOC module: billing
+# DOC label: Billing
+# DOC description: Stripe-backed subscription and billing management. Handles checkout sessions, customer portal access, BYOK key submission, and webhook processing for subscription lifecycle events.
+# DOC tier: free
+# DOC endpoint: GET /api/v1/billing/status | Get the current user's billing status and tier
+# DOC endpoint: GET /api/v1/billing/plans | List available subscription plans
+# DOC endpoint: POST /api/v1/billing/checkout | Create a Stripe checkout session
+# DOC endpoint: POST /api/v1/billing/portal | Create a Stripe customer portal session
+# DOC endpoint: POST /api/v1/billing/byok | Submit a bring-your-own-key API key
+# DOC endpoint: POST /api/v1/billing/webhook | Stripe webhook receiver
 
 UI_META = {
     "tab_id": "billing",
@@ -422,3 +434,4 @@ async def _handle_subscription_deleted(sub: dict) -> None:
 
     if uid_rec:
         await sync_founder_registry(uid_rec["id"], "free", action="downgrade")
+# 217:137

@@ -1,8 +1,18 @@
+# 81:8
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional, Any
 
 from ..storage import storage
+
+# DOC module: edcm
+# DOC label: EDCM
+# DOC description: Emotional-Dimensional Calibration Module. Tracks affective metrics and stores periodic snapshots of the agent's internal state dimensions.
+# DOC tier: free
+# DOC endpoint: GET /api/v1/edcm/metrics | Get current EDCM metric values
+# DOC endpoint: POST /api/v1/edcm/metrics | Update EDCM metrics
+# DOC endpoint: GET /api/v1/edcm/snapshots | List historical EDCM snapshots
+# DOC endpoint: POST /api/v1/edcm/snapshots | Record a new EDCM snapshot
 
 UI_META = {
     "tab_id": "edcm",
@@ -95,3 +105,4 @@ async def list_snapshots(limit: int = 50):
 @router.post("/edcm/snapshots")
 async def add_snapshot(body: EdcmSnapshotInput):
     return await storage.add_edcm_snapshot(body.model_dump(exclude_none=True))
+# 81:8

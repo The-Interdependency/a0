@@ -1,3 +1,4 @@
+# 81:145
 import math
 import os
 from fastapi import APIRouter, HTTPException, Request
@@ -7,6 +8,13 @@ from ..database import engine
 
 ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID", "")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
+
+# DOC module: contexts
+# DOC label: Contexts
+# DOC description: Manages named prompt context blocks injected into the agent's system prompt. Admin-only. Each context is a named text value retrieved by the agent at inference time.
+# DOC tier: admin
+# DOC endpoint: GET /api/v1/contexts/{name} | Get a named prompt context value
+# DOC endpoint: PUT /api/v1/contexts/{name} | Set or replace a named prompt context value
 
 UI_META = {
     "tab_id": "contexts",
@@ -260,3 +268,4 @@ async def save_core_context(body: CoreContextBody, request: Request):
         await _upsert_context_value("system_base", body.contextPrefix, uid or "system")
         saved.append("system_base")
     return {"ok": True, "saved": saved}
+# 81:145

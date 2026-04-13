@@ -1,8 +1,16 @@
+# 53:6
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
 
 from ..logger import append_openai_hmmm, read_openai_hmmm
+
+# DOC module: openai
+# DOC label: OpenAI
+# DOC description: OpenAI integration log and observation buffer. Stores and retrieves open questions (hmmm entries) captured during agent interactions with OpenAI models.
+# DOC tier: ws
+# DOC endpoint: GET /api/v1/openai/hmmm | Retrieve the rolling open-question buffer
+# DOC endpoint: POST /api/v1/openai/hmmm | Append a new open-question entry
 
 UI_META = {
     "tab_id": "openai",
@@ -61,3 +69,4 @@ async def add_hmmm(body: HmmmItem):
     }
     await append_openai_hmmm(item)
     return {"ok": True, "item": item}
+# 53:6

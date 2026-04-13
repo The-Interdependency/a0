@@ -1,6 +1,18 @@
+# 276:11
 import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+# DOC module: pcna
+# DOC label: PCNA Engine
+# DOC description: Probabilistic Cognitive Network Architecture engine. Manages inference, reward signaling, phi-state propagation, and audit trails for the core reasoning subsystem.
+# DOC tier: ws
+# DOC endpoint: GET /api/v1/pcna/state | Get current PCNA engine state
+# DOC endpoint: POST /api/v1/pcna/infer | Run an inference step
+# DOC endpoint: POST /api/v1/pcna/reward | Submit a reward signal
+# DOC endpoint: GET /api/v1/pcna/phi/state | Get phi-state values
+# DOC endpoint: GET /api/v1/pcna/phi/audit | Get phi-state audit history
+# DOC endpoint: POST /api/v1/pcna/phi/propagate | Trigger phi-state propagation
 
 UI_META = {
     "tab_id": "pcna",
@@ -352,3 +364,4 @@ async def pcna_compare():
         "psi_delta": round(p7_psi - p8_psi, 4),
         "omega_delta": round(p7_omega - p8_omega, 4),
     }
+# 276:11

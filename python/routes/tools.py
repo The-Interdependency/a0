@@ -1,8 +1,19 @@
+# 76:9
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Any
 
 from ..storage import storage
+
+# DOC module: tools
+# DOC label: Tools
+# DOC description: Registry for custom agent tools. Tools define callable capabilities the agent can invoke during conversations, with typed parameters and descriptions.
+# DOC tier: free
+# DOC endpoint: GET /api/v1/tools | List all registered tools
+# DOC endpoint: POST /api/v1/tools | Register a new tool
+# DOC endpoint: GET /api/v1/tools/{id} | Get a specific tool
+# DOC endpoint: PATCH /api/v1/tools/{id} | Update a tool definition
+# DOC endpoint: DELETE /api/v1/tools/{id} | Remove a tool
 
 UI_META = {
     "tab_id": "tools",
@@ -92,3 +103,4 @@ async def update_tool(tool_id: int, body: UpdateTool):
 async def delete_tool(tool_id: int):
     await storage.delete_custom_tool(tool_id)
     return {"ok": True}
+# 76:9

@@ -1,3 +1,4 @@
+# 194:47
 """WS Module registry API.
 
 Provides CRUD for user-defined and system-shadow console modules.
@@ -27,6 +28,19 @@ from typing import Optional
 
 from ..storage import storage
 from ..services.module_write_token import issue_token, consume_token
+
+# DOC module: ws_modules
+# DOC label: Modules
+# DOC description: WS-tier module registry. Users can register, configure, lock, and manage custom console modules. System shadow records mirror hardcoded tabs and are read-only via the API.
+# DOC tier: ws
+# DOC endpoint: GET /api/v1/ws/modules | List all modules including system shadows
+# DOC endpoint: GET /api/v1/ws/modules/{id} | Get a single module
+# DOC endpoint: GET /api/v1/ws/modules/{id}/write-token | Issue a single-use write token (120s TTL)
+# DOC endpoint: POST /api/v1/ws/modules | Create a new user module
+# DOC endpoint: PATCH /api/v1/ws/modules/{id} | Update a module's metadata
+# DOC endpoint: PATCH /api/v1/ws/modules/{id}/lock | Toggle a module's lock status
+# DOC endpoint: DELETE /api/v1/ws/modules/{id} | Delete a user module
+# DOC notes: Write tokens are required for all create/patch/delete operations. Lock toggle is a separate protected action that does not require a write token.
 
 UI_META = {
     "tab_id": "ws_modules",
@@ -290,3 +304,4 @@ async def delete_module(module_id: int, body: DeleteBody, request: Request):
     if not ok:
         raise HTTPException(status_code=404, detail="Module not found")
     return {"ok": True, "deleted": module_id}
+# 194:47

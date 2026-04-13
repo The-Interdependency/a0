@@ -1,8 +1,20 @@
+# 165:10
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Any
 
 from ..storage import storage
+
+# DOC module: system
+# DOC label: System
+# DOC description: Controls platform-level subsystem toggles, cost tracking, and event logs. Restricted to admin users.
+# DOC tier: admin
+# DOC endpoint: GET /api/v1/system/toggles | List all subsystem toggles
+# DOC endpoint: PUT /api/v1/system/toggles/{subsystem} | Enable or configure a subsystem toggle
+# DOC endpoint: DELETE /api/v1/system/toggles/{subsystem} | Remove a subsystem toggle
+# DOC endpoint: GET /api/v1/system/costs | List recorded cost entries
+# DOC endpoint: GET /api/v1/system/costs/summary | Get cost totals by provider
+# DOC endpoint: GET /api/v1/system/events | Stream recent system events
 
 UI_META = {
     "tab_id": "system",
@@ -201,3 +213,4 @@ async def promote_draft(draft_id: int, body: dict):
         raise HTTPException(status_code=400, detail="conversation_id required")
     await storage.promote_discovery_draft(draft_id, conv_id)
     return {"ok": True}
+# 165:10

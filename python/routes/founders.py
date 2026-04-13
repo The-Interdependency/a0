@@ -1,3 +1,4 @@
+# 58:51
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
@@ -7,6 +8,13 @@ from ..database import engine
 MAX_FOUNDER_SLOTS = 53
 FOUNDER_TIERS = ("founder",)
 LISTED_TIERS = ("founder", "patron")
+
+# DOC module: founders
+# DOC label: Founders
+# DOC description: Founder-tier management. Displays the founders list and allows founders to update their own profile entry. Restricted to founder and patron tier users.
+# DOC tier: founder
+# DOC endpoint: GET /api/v1/founders/count | Get the total number of founders
+# DOC endpoint: PATCH /api/v1/founders/me | Update the current user's founder profile
 
 UI_META = {
     "tab_id": "founders",
@@ -120,3 +128,4 @@ async def update_my_founder_profile(body: FounderPatch, request: Request):
                     params,
                 )
     return {"ok": True}
+# 58:51

@@ -1,3 +1,4 @@
+# 148:9
 import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -10,6 +11,16 @@ from ..agents.zfae import (
 )
 from ..services.energy_registry import energy_registry
 from ..engine import PCNAEngine, InstanceMerge
+
+# DOC module: agents
+# DOC label: Agents
+# DOC description: Manages agent instances, energy providers, and spawning. Controls which AI provider is active and allows merging named agent configurations.
+# DOC tier: free
+# DOC endpoint: GET /api/v1/agents | List all agent instances
+# DOC endpoint: GET /api/v1/agents/energy-providers | List available AI energy providers
+# DOC endpoint: POST /api/v1/agents/energy-providers/active | Set the active energy provider
+# DOC endpoint: POST /api/v1/agents/spawn | Spawn a new agent instance
+# DOC endpoint: POST /api/v1/agents/{name}/merge | Merge a named agent configuration
 
 UI_META = {
     "tab_id": "agents",
@@ -171,3 +182,4 @@ async def merge_sub_agent(agent_name: str):
     result = InstanceMerge.absorb(get_pcna(), child)
     result["retired_agent"] = agent_name
     return result
+# 148:9

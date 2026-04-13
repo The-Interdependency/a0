@@ -1,8 +1,20 @@
+# 91:10
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
 from ..storage import storage
+
+# DOC module: bandits
+# DOC label: Bandits
+# DOC description: Multi-armed bandit engine for reinforcement-based decision making. Manages arms, records rewards, and surfaces correlation data across bandit strategies.
+# DOC tier: free
+# DOC endpoint: GET /api/v1/bandits/arms | List all bandit arms
+# DOC endpoint: POST /api/v1/bandits/arms | Create a new arm
+# DOC endpoint: GET /api/v1/bandits/arms/{id} | Get a specific arm
+# DOC endpoint: PATCH /api/v1/bandits/arms/{id} | Update arm parameters
+# DOC endpoint: POST /api/v1/bandits/arms/reset | Reset all arm statistics
+# DOC endpoint: GET /api/v1/bandits/correlations | Get arm correlation data
 
 UI_META = {
     "tab_id": "bandits",
@@ -111,3 +123,4 @@ async def reset_domain(body: ResetDomain):
 @router.get("/bandits/correlations")
 async def list_correlations(limit: int = 50):
     return await storage.get_bandit_correlations(limit)
+# 91:10

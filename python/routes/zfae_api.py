@@ -1,3 +1,4 @@
+# 70:13
 """
 ZFAE API — Zeta Function Alpha Echo routes.
 
@@ -7,6 +8,14 @@ GET /api/v1/zfae/review-history — last 10 conversation review runs
 """
 
 from fastapi import APIRouter
+
+# DOC module: zfae
+# DOC label: ZFAE
+# DOC description: Zeta Function Alpha Echo subsystem. Maintains a rolling event echo buffer and exposes the ZetaEngine state and review history for ws-tier introspection.
+# DOC tier: ws
+# DOC endpoint: GET /api/v1/zfae/echo | Get the rolling 50-event echo buffer
+# DOC endpoint: GET /api/v1/zfae/state | Get current ZetaEngine state
+# DOC endpoint: GET /api/v1/zfae/review-history | Get recent review history entries
 
 UI_META = {
     "tab_id": "zfae",
@@ -87,3 +96,4 @@ async def review_history():
             "created_at": ev.get("created_at"),
         })
     return {"reviews": results, "count": len(results)}
+# 70:13

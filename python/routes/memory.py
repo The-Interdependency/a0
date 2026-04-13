@@ -1,3 +1,4 @@
+# 299:10
 import math
 import random
 from fastapi import APIRouter, HTTPException
@@ -5,6 +6,17 @@ from pydantic import BaseModel
 from typing import Optional, Any, List
 
 from ..storage import storage
+
+# DOC module: memory
+# DOC label: Memory
+# DOC description: Manages memory seeds — structured slots that persist context across sessions. Seeds can be seeded with initial values, updated, cleared, or imported in bulk.
+# DOC tier: free
+# DOC endpoint: GET /api/v1/memory/seeds | List all memory seeds
+# DOC endpoint: GET /api/v1/memory/seeds/{index} | Get a specific seed by index
+# DOC endpoint: PUT /api/v1/memory/seeds/{index} | Replace a seed's value
+# DOC endpoint: PATCH /api/v1/memory/seeds/{index} | Partially update a seed
+# DOC endpoint: POST /api/v1/memory/seeds/{index}/clear | Clear a seed's value
+# DOC endpoint: POST /api/v1/memory/seeds/{index}/import | Import data into a seed
 
 UI_META = {
     "tab_id": "memory",
@@ -353,3 +365,4 @@ async def get_subcore_state():
             "anomalies": anomalies,
         },
     }
+# 299:10

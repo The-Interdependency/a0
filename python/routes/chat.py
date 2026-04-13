@@ -1,3 +1,4 @@
+# 338:15
 import traceback
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -12,6 +13,18 @@ from .contexts import get_context_value
 # In-memory pending gate store: conv_id → {gate_id, history, system_prompt, provider_id, uid}
 # Used to replay a blocked action when the user grants a scope.
 _pending_gates: dict[int, dict] = {}
+
+# DOC module: chat
+# DOC label: Chat
+# DOC description: Manages conversations and messages between users and the agent. Supports streaming replies, conversation history, and per-conversation metadata.
+# DOC tier: free
+# DOC endpoint: GET /api/v1/conversations | List all conversations for the current user
+# DOC endpoint: POST /api/v1/conversations | Create a new conversation
+# DOC endpoint: GET /api/v1/conversations/{id} | Get a single conversation
+# DOC endpoint: PATCH /api/v1/conversations/{id} | Update conversation metadata
+# DOC endpoint: DELETE /api/v1/conversations/{id} | Delete a conversation
+# DOC endpoint: GET /api/v1/conversations/{id}/messages | List messages in a conversation
+# DOC endpoint: POST /api/v1/conversations/{id}/messages | Send a message and receive a reply
 
 UI_META = {
     "tab_id": "chat",
@@ -389,3 +402,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         tb = traceback.format_exc()
         print(f"[chat] send_message error: {exc}\n{tb}")
         raise HTTPException(status_code=500, detail=f"Chat error: {exc}")
+# 338:15
