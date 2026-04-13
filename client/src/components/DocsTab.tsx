@@ -125,7 +125,7 @@ function ModuleDetail({ entry }: { entry: DocEntry }) {
 
 function ReadmePane() {
   const { data, isLoading, error } = useQuery<ReadmeResponse>({
-    queryKey: ["/api/v1/docs/readme"],
+    queryKey: ["/api/v1/editable-schema/readme"],
     staleTime: 60_000,
   });
 
