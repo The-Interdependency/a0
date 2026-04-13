@@ -1,4 +1,4 @@
-// 101:0
+// 103:0
 import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useUiStructure } from "@/hooks/use-ui-structure";
@@ -9,6 +9,7 @@ import TabRenderer from "@/components/TabRenderer";
 import ApprovalScopesTab from "@/components/ApprovalScopesTab";
 import WsModulesTab from "@/components/WsModulesTab";
 import DocsTab from "@/components/DocsTab";
+import SigmaTab from "@/components/SigmaTab";
 import type { TabDef } from "@/hooks/use-ui-structure";
 
 const STORAGE_KEY = "a0p_active_tab";
@@ -39,6 +40,7 @@ function renderTab(tab: TabDef) {
   if (tab.tab_id === "approval_scopes") return <ApprovalScopesTab />;
   if (tab.tab_id === "ws_modules") return <WsModulesTab />;
   if (tab.tab_id === "docs") return <DocsTab />;
+  if (tab.tab_id === "sigma") return <SigmaTab />;
   return <TabRenderer tab={tab} />;
 }
 
@@ -113,4 +115,4 @@ export default function ConsolePage() {
     </div>
   );
 }
-// 101:0
+// 103:0

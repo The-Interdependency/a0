@@ -1,4 +1,4 @@
-# 276:11
+# 277:11
 import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -39,7 +39,8 @@ UI_META = {
                 {"key": "rings.phi.ring_coherence", "type": "gauge", "label": "Φ Coherence"},
                 {"key": "rings.psi.ring_coherence", "type": "gauge", "label": "Ψ Coherence"},
                 {"key": "rings.omega.ring_coherence", "type": "gauge", "label": "Ω Coherence"},
-                {"key": "rings.guardian.avg_coherence", "type": "gauge", "label": "Guardian"},
+                {"key": "rings.theta.ring_coherence", "type": "gauge", "label": "Θ (Theta)"},
+                {"key": "rings.sigma.ring_coherence", "type": "gauge", "label": "Σ (Sigma)"},
                 {"key": "rings.memory_l.avg_hub", "type": "gauge", "label": "Memory-L"},
                 {"key": "rings.memory_s.avg_hub", "type": "gauge", "label": "Memory-S"},
             ],
@@ -364,4 +365,4 @@ async def pcna_compare():
         "psi_delta": round(p7_psi - p8_psi, 4),
         "omega_delta": round(p7_omega - p8_omega, 4),
     }
-# 276:11
+# 277:11

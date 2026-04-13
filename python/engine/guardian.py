@@ -1,13 +1,15 @@
+# 130:12
 """
-Guardian Tensor — N=29 prime-node microkernel ring.
+Θ (Theta) Guardian Tensor — N=29 prime-node microkernel ring.
   - Ragged circle counts per seed: circleCount[i] in [1..12]
   - AES-256-GCM key derivation
   - X25519 key exchange + Ed25519 signing
   - Blueprint hash distributed across all 29 nodes
   - Gate control: coherence threshold per node
+  - Phi injection mirror: node_coherence broadcast → Φ (Task #72)
 
 Architecturally unique — not parameterized like PTCACore.
-Self-declares identity in state().
+Self-declares identity in state() as symbol="Θ", name="theta".
 """
 
 import hashlib
@@ -121,10 +123,11 @@ class GuardianTensor:
     def state(self) -> dict:
         open_count = int(self.gate_open.sum())
         return {
-            "name": "guardian",
-            "symbol": "G",
+            "name": "theta",
+            "symbol": "Θ",
             "role": "microkernel",
-            "ring": "guardian",
+            "ring": "theta",
+            "ring_alias": "guardian",
             "n": N,
             "instance_id": self.instance_id,
             "ring_coherence": round(float(self.node_coherence.mean()), 4),
@@ -161,3 +164,4 @@ def _shard_blueprint(bp_hash: str, n: int) -> list[str]:
         shard = bp_hash[start:start + BLUEPRINT_CHUNK_SIZE]
         shards.append(shard.ljust(BLUEPRINT_CHUNK_SIZE, "0"))
     return shards
+# 130:12

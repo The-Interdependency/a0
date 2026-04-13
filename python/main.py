@@ -1,4 +1,4 @@
-# 164:85
+# 164:89
 import os
 import time
 from contextlib import asynccontextmanager
@@ -201,6 +201,10 @@ async def lifespan(app: FastAPI):
         from .engine.zeta import _zeta_engine
         _zeta_engine.load_resolution_config(_res_toggle["parameters"])
         print(f"[zfae] resolution config loaded — global={_zeta_engine.resolution_config.get('global')}")
+    from .engine.sigma import get_sigma
+    _sigma = get_sigma()
+    _sigma.start_watch()
+    print(f"[sigma] Σ online — n={_sigma.n}, resolution={_sigma.resolution}")
     await heartbeat_service.start()
     yield
     await heartbeat_service.stop()
@@ -283,4 +287,4 @@ if IS_PROD and os.path.isdir(STATIC_DIR):
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
         return FileResponse(os.path.join(STATIC_DIR, "index.html"))
-# 164:85
+# 164:89
