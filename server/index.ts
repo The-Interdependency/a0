@@ -45,6 +45,18 @@ async function waitForPython(maxWaitMs = 120_000): Promise<void> {
   registerGuestChatRoute(app);
   await seedAdminUser();
 
+  // Serve the a0 CLI script as a downloadable file
+  const CLI_SCRIPT = path.resolve(process.cwd(), "scripts", "a0");
+  app.get("/a0", (_req, res) => {
+    if (fs.existsSync(CLI_SCRIPT)) {
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Content-Disposition", "attachment; filename=a0");
+      res.sendFile(CLI_SCRIPT);
+    } else {
+      res.status(404).json({ error: "CLI script not found" });
+    }
+  });
+
   app.use("/api/v1/guest", (_req, res) => {
     res.status(404).json({ error: "Not found" });
   });

@@ -229,7 +229,7 @@ initialize_registry(app)
 
 _INTERNAL_SECRET = os.environ.get("INTERNAL_API_SECRET", "a0p-dev-internal-secret")
 
-_OPEN_PATHS = {"/api/health", "/api/v1/guest/chat"}
+_OPEN_PATHS = {"/api/health", "/api/v1/guest/chat", "/api/v1/cli/chat"}
 
 
 class InternalAuthMiddleware(BaseHTTPMiddleware):

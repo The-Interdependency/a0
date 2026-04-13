@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""a0 — CLI client for the a0 agent platform.
+
+Setup:
+    export A0_KEY="a0k_..."
+    export A0_HOST="https://your-app.replit.app"
+
+One-shot:
+    a0 "what tier am I?"
+
+Interactive REPL:
+    a0
+
+Flags:
+    --conv <id>   Resume a conversation by ID
+    --model <m>   Specify model (default: grok)
+    --json        Output raw JSON response
+"""
+import argparse
+import json
+import os
+import sys
+import urllib.request
+import urllib.error
+
+A0_KEY = os.environ.get("A0_KEY", "")
+A0_HOST = os.environ.get("A0_HOST", "").rstrip("/")
+_CONV_ID: int | None = None
+
+
+def _err(msg: str) -> None:
+    print(f"\033[31merror:\033[0m {msg}", file=sys.stderr)
+
+
+def _post(message: str, conv_id: int | None, model: str | None) -> dict:
+    if not A0_KEY:
+        _err("A0_KEY is not set. Run: export A0_KEY='a0k_...'")
+        sys.exit(1)
+    if not A0_HOST:
+        _err("A0_HOST is not set. Run: export A0_HOST='https://your-app.replit.app'")
+        sys.exit(1)
+
+    url = f"{A0_HOST}/api/v1/cli/chat"
+    payload: dict = {"message": message}
+    if conv_id:
+        payload["conversation_id"] = conv_id
+    if model:
+        payload["model"] = model
+
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {A0_KEY}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        try:
+            detail = json.loads(body).get("detail", body)
+        except Exception:
+            detail = body
+        _err(f"HTTP {e.code}: {detail}")
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        _err(f"Connection failed: {e.reason}")
+        sys.exit(1)
+
+
+def _print_reply(result: dict, raw_json: bool) -> None:
+    if raw_json:
+        print(json.dumps(result, indent=2))
+    else:
+        reply = result.get("reply", "")
+        print(reply)
+
+
+def _repl(conv_id: int | None, model: str | None, raw_json: bool) -> None:
+    global _CONV_ID
+    _CONV_ID = conv_id
+
+    tier = None
+    print("\033[36ma0\033[0m  (ctrl-d or 'exit' to quit)", file=sys.stderr)
+    if _CONV_ID:
+        print(f"\033[90mResuming conversation {_CONV_ID}\033[0m", file=sys.stderr)
+
+    while True:
+        try:
+            line = input("\033[36m›\033[0m ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        line = line.strip()
+        if not line:
+            continue
+        if line.lower() in ("exit", "quit"):
+            break
+
+        result = _post(line, _CONV_ID, model)
+        _CONV_ID = result.get("conversation_id", _CONV_ID)
+        if not tier:
+            tier = result.get("tier")
+            if tier:
+                print(f"\033[90m[tier: {tier} · conv: {_CONV_ID}]\033[0m", file=sys.stderr)
+
+        _print_reply(result, raw_json)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="a0", add_help=True)
+    parser.add_argument("message", nargs="?", help="Message to send (one-shot mode)")
+    parser.add_argument("--conv", type=int, default=None, metavar="ID", help="Resume conversation ID")
+    parser.add_argument("--model", type=str, default=None, help="Model to use")
+    parser.add_argument("--json", dest="raw_json", action="store_true", help="Output raw JSON")
+    args = parser.parse_args()
+
+    if args.message:
+        result = _post(args.message, args.conv, args.model)
+        _print_reply(result, args.raw_json)
+    else:
+        _repl(args.conv, args.model, args.raw_json)
+
+
+if __name__ == "__main__":
+    main()
