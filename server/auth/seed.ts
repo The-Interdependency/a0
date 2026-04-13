@@ -1,6 +1,8 @@
 // 36:0
 import { authStorage } from "./storage";
 import { hashPassphrase } from "./password";
+import { db } from "../db";
+import { sql } from "drizzle-orm";
 
 export async function seedAdminUser() {
   const adminEmail = process.env.ADMIN_EMAIL?.trim();
@@ -25,6 +27,7 @@ export async function seedAdminUser() {
 
     if (existing) {
       await authStorage.updatePassphrase(existing.id, passphraseHash);
+      await db.execute(sql`UPDATE users SET subscription_tier = 'ws', role = 'admin' WHERE id = ${existing.id}`);
       console.log(`[auth] ✓ Admin passphrase updated — username: ${existing.username}, id: ${existing.id}`);
       return;
     }
@@ -37,6 +40,8 @@ export async function seedAdminUser() {
       displayName: "Admin",
       role: "admin",
     });
+
+    await db.execute(sql`UPDATE users SET subscription_tier = 'ws', role = 'admin' WHERE id = ${user.id}`);
 
     console.log(
       `[auth] ✓ Admin user created — email: ${adminEmail}, username: ${user.username}, id: ${user.id}`
