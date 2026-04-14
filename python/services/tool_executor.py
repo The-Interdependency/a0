@@ -156,9 +156,10 @@ TOOL_SCHEMAS_CHAT = [
                 "Use this to read or write repositories, issues, pull requests, commits, "
                 "comments, branches, releases, or any other GitHub resource. "
                 "Authentication is handled automatically — never include a token yourself. "
-                "Endpoint examples: '/repos/The-Interdependency/a0/issues', "
-                "'/repos/owner/repo/pulls', '/user/repos', '/search/repositories?q=topic:ai'. "
-                "For the primary project repo use owner='The-Interdependency', repo='a0'."
+                "To find the authenticated user and their repos call GET /user then GET /user/repos. "
+                "Endpoint examples: '/repos/owner/repo/issues', '/repos/owner/repo/pulls', "
+                "'/user/repos', '/search/repositories?q=topic:ai'. "
+                "For POST/PATCH/PUT always pass a body dict (use {} if no fields are required)."
             ),
             "parameters": {
                 "type": "object",
@@ -456,7 +457,7 @@ async def _github_api(method: str, endpoint: str, body: dict | None = None) -> s
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
-            if method in ("POST", "PATCH", "PUT") and body:
+            if method in ("POST", "PATCH", "PUT") and body is not None:
                 resp = await client.request(method, url, json=body, headers=headers)
             else:
                 resp = await client.request(method, url, headers=headers)
