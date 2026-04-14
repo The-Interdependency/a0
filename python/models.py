@@ -51,6 +51,7 @@ class Conversation(Base):
     parent_conv_id = Column(Integer, ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True)
     subagent_status = Column(String(20), nullable=True)
     subagent_error = Column(Text, nullable=True)
+    archived = Column(Boolean, nullable=False, server_default="false")
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 

@@ -287,6 +287,112 @@ async def customer_portal(body: PortalBody, request: Request):
     return {"url": session.url}
 
 
+class DonationConfigBody(BaseModel):
+    label: str = "Support a0"
+    amount: int = 500
+    note: str = ""
+    enabled: bool = True
+
+
+@router.get("/donation")
+async def get_donation_config():
+    async with engine.connect() as conn:
+        row = await conn.execute(
+            text("SELECT value FROM prompt_contexts WHERE name = 'donation_config'")
+        )
+        rec = row.mappings().first()
+    if rec:
+        import json as _json
+        try:
+            return _json.loads(rec["value"])
+        except Exception:
+            pass
+    return {"label": "Support a0", "amount": 500, "note": "", "enabled": False}
+
+
+@router.put("/donation")
+async def set_donation_config(body: DonationConfigBody, request: Request):
+    uid = _user_id(request)
+    email = _user_email(request)
+    role = _user_role(request)
+    async with engine.connect() as conn:
+        caller_is_admin = await _check_admin(uid or "", email, conn, role)
+    if not caller_is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    import json as _json
+    config_json = _json.dumps(body.model_dump())
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("""
+                INSERT INTO prompt_contexts (name, value, updated_at, updated_by)
+                VALUES ('donation_config', :val, CURRENT_TIMESTAMP, :uid)
+                ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
+            """),
+            {"val": config_json, "uid": uid or "admin"},
+        )
+    return {"ok": True, **body.model_dump()}
+
+
+class DonationCheckoutBody(BaseModel):
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
+
+
+@router.post("/donation/checkout")
+async def donation_checkout(body: DonationCheckoutBody, request: Request):
+    uid = _user_id(request)
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+
+    import json as _json
+    async with engine.connect() as conn:
+        row = await conn.execute(
+            text("SELECT value FROM prompt_contexts WHERE name = 'donation_config'")
+        )
+        rec = row.mappings().first()
+
+    config = {}
+    if rec:
+        try:
+            config = _json.loads(rec["value"])
+        except Exception:
+            pass
+
+    if not config.get("enabled"):
+        raise HTTPException(status_code=404, detail="Donations not enabled")
+
+    amount = int(config.get("amount", 500))
+    label = config.get("label", "Support a0")
+    stripe.api_key = STRIPE_SECRET_KEY
+    origin = request.headers.get("origin") or "https://a0p.replit.app"
+    success_url = body.success_url or f"{origin}/pricing?donation=thanks"
+    cancel_url = body.cancel_url or f"{origin}/pricing"
+
+    price = stripe.Price.create(
+        unit_amount=amount,
+        currency="usd",
+        product_data={"name": label},
+    )
+    session_kwargs: dict = {
+        "mode": "payment",
+        "line_items": [{"price": price.id, "quantity": 1}],
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "metadata": {"user_id": uid or "guest", "type": "donation"},
+    }
+    if uid:
+        async with engine.connect() as conn:
+            row = await conn.execute(text("SELECT email, stripe_customer_id FROM users WHERE id = :id"), {"id": uid})
+            urec = row.mappings().first()
+        if urec and urec["stripe_customer_id"]:
+            session_kwargs["customer"] = urec["stripe_customer_id"]
+        elif urec and urec["email"]:
+            session_kwargs["customer_email"] = urec["email"]
+
+    session = stripe.checkout.Session.create(**session_kwargs)
+    return {"checkout_url": session.url}
+
+
 class ByokBody(BaseModel):
     provider: str
     api_key: str

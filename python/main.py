@@ -217,6 +217,8 @@ async def lifespan(app: FastAPI):
     _sigma = get_sigma()
     _sigma.start_watch()
     print(f"[sigma] Σ online — n={_sigma.n}, resolution={_sigma.resolution}")
+    from .routes.chat import _ensure_chat_schema
+    await _ensure_chat_schema()
     await heartbeat_service.start()
     yield
     await heartbeat_service.stop()

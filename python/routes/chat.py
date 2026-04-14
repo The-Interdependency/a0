@@ -23,6 +23,7 @@ _pending_gates: dict[int, dict] = {}
 # DOC endpoint: GET /api/v1/conversations/{id} | Get a single conversation
 # DOC endpoint: PATCH /api/v1/conversations/{id} | Update conversation metadata
 # DOC endpoint: DELETE /api/v1/conversations/{id} | Delete a conversation
+# DOC endpoint: PATCH /api/v1/conversations/{id}/archive | Archive or unarchive a conversation
 # DOC endpoint: GET /api/v1/conversations/{id}/messages | List messages in a conversation
 # DOC endpoint: POST /api/v1/conversations/{id}/messages | Send a message and receive a reply
 
@@ -63,12 +64,22 @@ DATA_SCHEMA = {
         {"method": "GET", "path": "/api/v1/conversations/{id}"},
         {"method": "PATCH", "path": "/api/v1/conversations/{id}"},
         {"method": "DELETE", "path": "/api/v1/conversations/{id}"},
+        {"method": "PATCH", "path": "/api/v1/conversations/{id}/archive"},
         {"method": "GET", "path": "/api/v1/conversations/{id}/messages"},
         {"method": "POST", "path": "/api/v1/conversations/{id}/messages"},
     ],
 }
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
+
+
+async def _ensure_chat_schema() -> None:
+    from ..database import engine
+    from sqlalchemy import text as _text
+    async with engine.begin() as conn:
+        await conn.execute(_text(
+            "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
 
 
 class CreateConversation(BaseModel):
@@ -87,8 +98,28 @@ class SendMessage(BaseModel):
 
 
 @router.get("/conversations")
-async def list_conversations():
-    return await storage.get_conversations()
+async def list_conversations(archived: bool = False):
+    from ..database import engine
+    from sqlalchemy import text as _text
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            _text("""
+                SELECT c.id, c.title, c.model, c.user_id, c.context_boost,
+                       c.parent_conv_id, c.subagent_status, c.archived,
+                       c.created_at, c.updated_at,
+                       COALESCE(m.total_tokens, 0) AS total_tokens
+                FROM conversations c
+                LEFT JOIN (
+                    SELECT conversation_id,
+                           SUM(prompt_tokens + completion_tokens) AS total_tokens
+                    FROM cost_metrics GROUP BY conversation_id
+                ) m ON m.conversation_id = c.id
+                WHERE c.archived = :archived
+                ORDER BY c.updated_at DESC
+            """),
+            {"archived": archived},
+        )
+        return [dict(r) for r in rows.mappings()]
 
 
 @router.post("/conversations")
@@ -117,6 +148,43 @@ async def update_conversation(conv_id: int, body: UpdateConversation):
 async def delete_conversation(conv_id: int):
     await storage.delete_conversation(conv_id)
     return {"ok": True}
+
+
+class ArchiveConversation(BaseModel):
+    archived: bool = True
+
+
+@router.patch("/conversations/{conv_id}/archive")
+async def archive_conversation(conv_id: int, body: ArchiveConversation):
+    from ..database import engine
+    from sqlalchemy import text as _text
+    async with engine.begin() as conn:
+        await conn.execute(
+            _text("UPDATE conversations SET archived = :archived WHERE id = :id"),
+            {"archived": body.archived, "id": conv_id},
+        )
+    return {"ok": True, "archived": body.archived}
+
+
+@router.get("/conversations/{conv_id}/tokens")
+async def get_conversation_tokens(conv_id: int):
+    from ..database import engine
+    from sqlalchemy import text as _text
+    async with engine.connect() as conn:
+        row = await conn.execute(
+            _text("""
+                SELECT
+                    COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+                    COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+                    COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS total_tokens,
+                    COALESCE(SUM(estimated_cost), 0) AS estimated_cost
+                FROM cost_metrics
+                WHERE conversation_id = :conv_id
+            """),
+            {"conv_id": conv_id},
+        )
+        rec = row.mappings().first()
+    return dict(rec) if rec else {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "estimated_cost": 0}
 
 
 @router.get("/conversations/{conv_id}/messages")

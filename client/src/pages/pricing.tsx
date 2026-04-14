@@ -1,15 +1,15 @@
 // 305:0
 import { useState } from "react";
-import { useLocation } from "wouter";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useBillingStatus } from "@/hooks/use-billing-status";
 import { useSEO } from "@/hooks/use-seo";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Loader2, Check, Star, Key, Users } from "lucide-react";
+import { Loader2, Check, Star, Key, Users, Heart, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 
 interface Plan {
   name: string;
@@ -19,6 +19,13 @@ interface Plan {
   amount_display: string;
   interval: string | null;
   description: string;
+}
+
+interface DonationConfig {
+  label: string;
+  amount: number;
+  note: string;
+  enabled: boolean;
 }
 
 const TIER_PRODUCT_KEY: Record<string, string> = {
@@ -131,9 +138,151 @@ function PlanCard({
   );
 }
 
+function DonationButton({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<DonationConfig | null>(null);
+
+  const { data: config, isLoading } = useQuery<DonationConfig>({
+    queryKey: ["/api/v1/billing/donation"],
+    staleTime: 60_000,
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async (body: DonationConfig) => {
+      const res = await apiRequest("PUT", "/api/v1/billing/donation", body);
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/v1/billing/donation"] });
+      setEditing(false);
+      toast({ title: "Donation config saved" });
+    },
+    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  const checkoutMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/v1/billing/donation/checkout");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      window.location.href = data.checkout_url;
+    },
+    onError: (e: Error) => toast({ title: "Donation failed", description: e.message, variant: "destructive" }),
+  });
+
+  if (isLoading) return null;
+
+  const startEdit = () => {
+    setDraft(config ?? { label: "Support a0", amount: 500, note: "", enabled: true });
+    setEditing(true);
+  };
+
+  if (editing && draft) {
+    return (
+      <div className="border border-border rounded-xl p-5 mb-4 bg-card space-y-3" data-testid="donation-editor">
+        <div className="flex items-center gap-2">
+          <Heart className="w-4 h-4 text-rose-400" />
+          <h3 className="font-semibold text-foreground text-sm">Donation Button Config</h3>
+          <button className="ml-auto text-muted-foreground hover:text-foreground" onClick={() => setEditing(false)}>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Label</label>
+            <Input
+              value={draft.label}
+              onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+              className="text-xs h-8"
+              data-testid="donation-label-input"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Amount (cents)</label>
+            <Input
+              type="number"
+              value={draft.amount}
+              onChange={(e) => setDraft({ ...draft, amount: parseInt(e.target.value) || 0 })}
+              className="text-xs h-8"
+              data-testid="donation-amount-input"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground mb-1 block">Note (optional)</label>
+          <Input
+            value={draft.note}
+            onChange={(e) => setDraft({ ...draft, note: e.target.value })}
+            className="text-xs h-8"
+            placeholder="Shown below the button"
+            data-testid="donation-note-input"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-muted-foreground">Enabled</label>
+          <button
+            onClick={() => setDraft({ ...draft, enabled: !draft.enabled })}
+            className={cn("w-8 h-4 rounded-full transition-colors", draft.enabled ? "bg-primary" : "bg-muted")}
+            data-testid="donation-enabled-toggle"
+          >
+            <div className={cn("h-3 w-3 rounded-full bg-white mx-0.5 transition-transform", draft.enabled && "translate-x-4")} />
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" className="text-xs h-7" onClick={() => saveMutation.mutate(draft)} disabled={saveMutation.isPending} data-testid="btn-save-donation">
+            {saveMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
+          </Button>
+          <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditing(false)}>Cancel</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!config?.enabled && !isAdmin) return null;
+
+  return (
+    <div className={cn("border rounded-xl p-5 mb-4 text-center", config?.enabled ? "border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/20" : "border-dashed border-border bg-card")} data-testid="donation-section">
+      {config?.enabled ? (
+        <>
+          <Heart className="w-5 h-5 text-rose-400 mx-auto mb-2" />
+          <p className="text-sm font-medium text-foreground mb-1">{config.label}</p>
+          {config.note && <p className="text-xs text-muted-foreground mb-3">{config.note}</p>}
+          <div className="flex items-center justify-center gap-2">
+            <Button
+              size="sm"
+              className="bg-rose-500 hover:bg-rose-600 text-white"
+              onClick={() => checkoutMutation.mutate()}
+              disabled={checkoutMutation.isPending}
+              data-testid="btn-donate"
+            >
+              {checkoutMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Heart className="w-3.5 h-3.5 mr-1" />}
+              Donate ${(config.amount / 100).toFixed(2)}
+            </Button>
+            {isAdmin && (
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={startEdit} data-testid="btn-edit-donation">
+                <Pencil className="w-3 h-3" />
+              </Button>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">Donation button not configured</p>
+          <Button size="sm" variant="outline" className="text-xs h-7" onClick={startEdit} data-testid="btn-setup-donation">
+            <Pencil className="w-3 h-3 mr-1" />Set up donation
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PricingPage() {
   useSEO({ title: "Pricing — a0p", description: "Choose your tier: Free, Seeker, Operator, Way Seer Patron, or Founder Lifetime." });
-  const { tier, isPaid } = useBillingStatus();
+  const { tier, isPaid, isAdmin } = useBillingStatus();
   const { toast } = useToast();
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
 
@@ -176,7 +325,15 @@ export default function PricingPage() {
       window.location.href = data.url;
     },
     onError: (err: Error) => {
-      toast({ title: "Portal error", description: err.message, variant: "destructive" });
+      const msg = err.message.toLowerCase();
+      if (msg.includes("no billing account")) {
+        toast({
+          title: "No billing account yet",
+          description: "Subscribe to a paid plan first to access the billing portal.",
+        });
+      } else {
+        toast({ title: "Portal error", description: err.message, variant: "destructive" });
+      }
     },
   });
 
@@ -262,7 +419,7 @@ export default function PricingPage() {
           )}
 
           {byokPlan && (
-            <div className="border border-border rounded-xl p-5 mb-6 bg-card">
+            <div className="border border-border rounded-xl p-5 mb-4 bg-card">
               <div className="flex items-center gap-2 mb-2">
                 <Key className="w-4 h-4 text-muted-foreground" />
                 <h3 className="font-semibold text-foreground">{byokPlan.name}</h3>
@@ -288,8 +445,10 @@ export default function PricingPage() {
             </div>
           )}
 
+          <DonationButton isAdmin={!!isAdmin} />
+
           {isPaid && (
-            <div className="border border-border rounded-xl p-4 flex items-center justify-between gap-3 bg-card">
+            <div className="border border-border rounded-xl p-4 flex items-center justify-between gap-3 bg-card mb-4">
               <div>
                 <p className="text-sm font-medium text-foreground">Manage subscription</p>
                 <p className="text-xs text-muted-foreground">Update payment method, cancel, or view invoices</p>
