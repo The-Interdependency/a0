@@ -7,6 +7,7 @@ import { useSEO } from "@/hooks/use-seo";
 import { useWsEditModeProvider, WsEditContext } from "@/hooks/use-ws-edit-mode";
 import ConsoleSidebar from "@/components/console-sidebar";
 import TabRenderer from "@/components/TabRenderer";
+import AgentsTab from "@/components/AgentsTab";
 import ApprovalScopesTab from "@/components/ApprovalScopesTab";
 import WsModulesTab from "@/components/WsModulesTab";
 import DocsTab from "@/components/DocsTab";
@@ -39,6 +40,7 @@ function usePersistedTab(tabs: TabDef[]) {
 }
 
 function renderTab(tab: TabDef) {
+  if (tab.tab_id === "agents") return <AgentsTab />;
   if (tab.tab_id === "approval_scopes") return <ApprovalScopesTab />;
   if (tab.tab_id === "ws_modules") return <WsModulesTab />;
   if (tab.tab_id === "docs") return <DocsTab />;
