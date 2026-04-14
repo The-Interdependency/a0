@@ -441,6 +441,66 @@ async def _sub_agent_merge(agent_id: str) -> str:
     })
 
 
+_GH_NOISE_KEYS: frozenset[str] = frozenset({
+    "node_id", "svn_url", "git_url", "temp_clone_token",
+    "performed_via_github_app", "active_lock_reason", "author_association",
+    "squash_merge_commit_message", "squash_merge_commit_title",
+    "merge_commit_message", "merge_commit_title",
+    "pull_request_creation_policy", "web_commit_signoff_required",
+    "use_squash_pr_title_as_default", "allow_auto_merge",
+    "allow_update_branch", "delete_branch_on_merge",
+    "security_and_analysis", "network_count", "subscribers_count",
+    "watchers", "forks", "open_issues",  # duplicates of *_count
+    "mirror_url", "disabled", "is_template",
+    "verification",  # commit verification blob
+})
+
+_GH_USER_COMPACT_KEYS: frozenset[str] = frozenset({
+    "owner", "user", "actor", "merged_by", "closed_by",
+    "committer", "author",
+})
+
+_GH_USER_LIST_KEYS: frozenset[str] = frozenset({
+    "assignees", "requested_reviewers", "reviewers", "parents",
+})
+
+
+def _slim_github_obj(obj: object, depth: int = 0) -> object:
+    """Recursively strip GitHub API noise: API URL fields, node_ids, and verbose sub-objects."""
+    if isinstance(obj, dict):
+        out: dict = {}
+        for k, v in obj.items():
+            # Drop any value that is an api.github.com URL — always template / HATEOAS noise
+            if isinstance(v, str) and v.startswith("https://api.github.com"):
+                continue
+            if k in _GH_NOISE_KEYS:
+                continue
+            # Compact nested user/actor objects to just login + id
+            if k in _GH_USER_COMPACT_KEYS and isinstance(v, dict) and depth < 4:
+                login = v.get("login") or v.get("name")
+                uid = v.get("id")
+                out[k] = {"login": login, "id": uid} if login else None
+                continue
+            # Compact assignee/reviewer lists to just logins
+            if k in _GH_USER_LIST_KEYS and isinstance(v, list):
+                out[k] = [u.get("login") for u in v if isinstance(u, dict) and u.get("login")]
+                continue
+            # Compact labels to name+color only
+            if k == "labels" and isinstance(v, list):
+                out[k] = [{"name": lbl.get("name"), "color": lbl.get("color")}
+                          for lbl in v if isinstance(lbl, dict)]
+                continue
+            # Compact milestone to title+number+state
+            if k == "milestone" and isinstance(v, dict):
+                out[k] = {"number": v.get("number"), "title": v.get("title"), "state": v.get("state")}
+                continue
+            out[k] = _slim_github_obj(v, depth + 1)
+        return out
+    if isinstance(obj, list):
+        return [_slim_github_obj(item, depth) for item in obj]
+    return obj
+
+
 async def _github_api(method: str, endpoint: str, body: dict | None = None) -> str:
     pat = os.environ.get("GITHUB_PAT", "")
     if not pat:
@@ -471,19 +531,17 @@ async def _github_api(method: str, endpoint: str, body: dict | None = None) -> s
             data = resp.text
 
         if resp.status_code >= 400:
-            return json.dumps({
-                "status": resp.status_code,
-                "error": data,
-            })
+            err = _slim_github_obj(data) if isinstance(data, dict) else data
+            return json.dumps({"status": resp.status_code, "error": err})
 
         if isinstance(data, list):
-            truncated = data[:25]
-            result: dict = {"status": resp.status_code, "count": len(data), "items": truncated}
+            slimmed = [_slim_github_obj(item) for item in data[:25]]
+            result: dict = {"status": resp.status_code, "count": len(data), "items": slimmed}
             if len(data) > 25:
                 result["note"] = f"Showing first 25 of {len(data)} items"
             return json.dumps(result, default=str)
 
-        return json.dumps({"status": resp.status_code, "data": data}, default=str)
+        return json.dumps({"status": resp.status_code, "data": _slim_github_obj(data)}, default=str)
 
     except Exception as exc:
         return f"[github_api error: {exc}]"
