@@ -525,8 +525,9 @@ async def _send_email(to: str, subject: str, body: str, cc: str | None = None) -
     token = os.environ.get("GOOGLE_MAIL_TOKEN", "")
     if not token:
         return (
-            "[send_email: GOOGLE_MAIL_TOKEN not configured. "
-            "The Google Mail integration must be connected and the token refreshed.]"
+            "[send_email: GOOGLE_MAIL_TOKEN secret not configured. "
+            "An admin must add GOOGLE_MAIL_TOKEN as a Replit Secret using the current "
+            "Google Mail OAuth access token from the integrations panel.]"
         )
     import base64
     from email.mime.text import MIMEText
