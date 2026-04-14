@@ -284,8 +284,29 @@ async def health():
 async def ui_structure():
     from .storage import storage as _storage
     base_tabs = collect_ui_meta()
+
+    # Merge admin-customised ui_meta from system module DB records over the
+    # hardcoded base tabs.  Only non-empty overrides are applied, keyed by
+    # tab_id so mismatches are silently skipped.
+    sys_mods = await _storage.list_ws_modules()
+    sys_overrides: dict[str, dict] = {}
+    for mod in sys_mods:
+        if mod.get("status") != "system":
+            continue
+        db_meta = mod.get("ui_meta") or {}
+        if db_meta:
+            tid = db_meta.get("tab_id")
+            if tid:
+                sys_overrides[tid] = db_meta
+
+    merged_tabs = []
+    for tab in base_tabs:
+        tid = tab.get("tab_id")
+        override = sys_overrides.get(tid, {}) if tid else {}
+        merged_tabs.append({**tab, **override})
+
     ws_tabs = await _storage.get_active_ws_module_ui_metas()
-    all_tabs = base_tabs + ws_tabs
+    all_tabs = merged_tabs + ws_tabs
     all_tabs.sort(key=lambda t: t.get("order", 99))
     return {
         "tabs": all_tabs,

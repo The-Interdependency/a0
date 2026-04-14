@@ -209,10 +209,10 @@ function ModuleEditor({
           <Label htmlFor={`handler-${mod.id}`} className="text-xs">Handler Code (Python)</Label>
           <Textarea id={`handler-${mod.id}`} value={handlerCode}
             onChange={(e) => setHandlerCode(e.target.value)}
-            disabled={!writeable}
+            disabled={!writeable || isSystem}
             className="font-mono text-xs min-h-[200px] resize-y"
             spellCheck={false}
-            placeholder={isSystem && !isAdmin ? "System module — handler code is hardcoded." : "from fastapi import APIRouter\n\nrouter = APIRouter(prefix=\"/api/v1/custom/slug\")\n\n@router.get(\"/\")\nasync def hello():\n    return {\"ok\": True}"}
+            placeholder={isSystem ? "System module — live handler is hardcoded in Python source." : "from fastapi import APIRouter\n\nrouter = APIRouter(prefix=\"/api/v1/custom/slug\")\n\n@router.get(\"/\")\nasync def hello():\n    return {\"ok\": True}"}
             data-testid={`textarea-handler-${mod.id}`}
           />
         </div>
