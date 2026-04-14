@@ -30,7 +30,7 @@ PROVIDER_ENDPOINTS = {
 
 _OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 
-_MAX_TOOL_ROUNDS = 5
+_MAX_TOOL_ROUNDS = 10
 
 
 async def call_energy_provider(
@@ -70,7 +70,8 @@ async def call_energy_provider(
         )
 
     return await _call_openai_compat(
-        api_key, spec["url"], spec["model"], payload_messages, max_tokens, use_tools=use_tools
+        api_key, spec["url"], spec["model"], payload_messages, max_tokens,
+        use_tools=use_tools, vendor=provider_id,
     )
 
 
@@ -290,6 +291,7 @@ async def _call_openai_compat(
     messages: list[dict],
     max_tokens: int,
     use_tools: bool = True,
+    vendor: str = "",
 ) -> tuple[str, dict]:
     """
     Chat Completions format (Grok, Gemini).
@@ -311,6 +313,9 @@ async def _call_openai_compat(
         if use_tools:
             payload["tools"] = TOOL_SCHEMAS_CHAT
             payload["tool_choice"] = "auto"
+        # Grok (xAI) supports live web search natively via search_parameters
+        if vendor == "grok":
+            payload["search_parameters"] = {"mode": "auto"}
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
