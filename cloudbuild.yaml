@@ -1,43 +1,74 @@
-steps:
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - build
-      - -t
-      - us-central1-docker.pkg.dev/$PROJECT_ID/a0p/a0p:$COMMIT_SHA
-      - -t
-      - us-central1-docker.pkg.dev/$PROJECT_ID/a0p/a0p:latest
-      - .
+name: Build & Deploy to Cloud Run
 
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - push
-      - us-central1-docker.pkg.dev/$PROJECT_ID/a0p/a0p:$COMMIT_SHA
+on:
+  push:
+    branches:
+      - main
 
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - push
-      - us-central1-docker.pkg.dev/$PROJECT_ID/a0p/a0p:latest
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+  SERVICE: a0p
+  REGISTRY: us-central1-docker.pkg.dev
 
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - a0p
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/a0p/a0p:$COMMIT_SHA
-      - --region=us-central1
-      - --platform=managed
-      - --allow-unauthenticated
-      - --port=5000
-      - --min-instances=0
-      - --max-instances=10
-      - --memory=512Mi
-      - --cpu=1
-      - --set-secrets=DATABASE_URL=a0p-database-url:latest,SESSION_SECRET=a0p-session-secret:latest,XAI_API_KEY=a0p-xai-api-key:latest,STRIPE_SECRET_KEY=a0p-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=a0p-stripe-webhook-secret:latest
+jobs:
+  deploy:
+    name: Build, push, deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
 
-images:
-  - us-central1-docker.pkg.dev/$PROJECT_ID/a0p/a0p:$COMMIT_SHA
-  - us-central1-docker.pkg.dev/$PROJECT_ID/a0p/a0p:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-options:
-  logging: CLOUD_LOGGING_ONLY
+      - name: Validate required secrets
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          test -n "$GCP_PROJECT_ID" || { echo "Missing GCP_PROJECT_ID"; exit 1; }
+          test -n "$GCP_SA_KEY" || { echo "Missing GCP_SA_KEY"; exit 1; }
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.SERVICE }}:${{ github.sha }} \
+            --tag ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.SERVICE }}:latest \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.SERVICE }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.SERVICE }}:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --project=${{ env.PROJECT_ID }} \
+            --image=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.SERVICE }}:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=5000 \
+            --min-instances=0 \
+            --max-instances=10 \
+            --memory=512Mi \
+            --cpu=1 \
+            --set-secrets="DATABASE_URL=a0p-database-url:latest,SESSION_SECRET=a0p-session-secret:latest,XAI_API_KEY=a0p-xai-api-key:latest,STRIPE_SECRET_KEY=a0p-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=a0p-stripe-webhook-secret:latest"
