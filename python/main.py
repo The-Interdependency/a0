@@ -20,6 +20,7 @@ from .services.energy_registry import energy_registry
 _pcna: PCNAEngine | None = None
 _pcna_8: PCNAEngine | None = None
 _instances: dict[str, PCNAEngine] = {}
+_provider_pcna_cores: dict[str, PCNAEngine] = {}
 
 
 def get_pcna() -> PCNAEngine:
@@ -35,6 +36,25 @@ def get_pcna_8() -> PCNAEngine:
     if _pcna_8 is None:
         _pcna_8 = PCNAEngine(phases=8)
     return _pcna_8
+
+
+def get_provider_pcna(provider_id: str) -> PCNAEngine:
+    """Fork-on-first-use: each provider gets its own PCNAEngine with a scoped checkpoint key."""
+    global _provider_pcna_cores
+    if provider_id not in _provider_pcna_cores:
+        core = PCNAEngine(phases=7)
+        core._checkpoint_key = f"pcna_tensor_checkpoint_provider_{provider_id}"
+        _provider_pcna_cores[provider_id] = core
+    return _provider_pcna_cores[provider_id]
+
+
+async def _load_provider_pcna_checkpoints() -> None:
+    """Load persisted checkpoints for every known provider core."""
+    for slug in _PROVIDER_SEEDS:
+        provider_id = slug.removeprefix("provider::")
+        core = get_provider_pcna(provider_id)
+        await core.load_checkpoint()
+    print(f"[providers] {len(_PROVIDER_SEEDS)} provider PCNA cores loaded")
 
 
 _ZFAE_TOOL_SPECS = {
@@ -72,6 +92,10 @@ _ZFAE_TOOL_SPECS = {
     },
     "github_api": {
         "description": "Make an authenticated GitHub REST API call — read/write repos, issues, PRs, commits, branches, releases. Auth is automatic.",
+        "handler_type": "internal",
+    },
+    "git_exec": {
+        "description": "Run a git command in the project workspace — push, commit, add, status, log, diff, branch, stash. Use for pushing code to GitHub.",
         "handler_type": "internal",
     },
     "manage_approval_scope": {
@@ -135,6 +159,135 @@ async def _seed_system_shadow_modules() -> None:
             description=f"System module — hardcoded route ({tab_id})",
             ui_meta=meta,
         )
+
+
+_PROVIDER_SEEDS = {
+    "provider::openai": {
+        "name": "OpenAI",
+        "description": "OpenAI provider module — model assignments, tool config, and optimizer presets",
+        "route_config": {
+            "model_assignments": {"conduct": "gpt-4o", "perform": "gpt-4o", "practice": "gpt-4o-mini", "record": "gpt-4o-mini", "derive": "gpt-4o"},
+            "available_models": [
+                {"id": "gpt-4o", "context_window": 128000, "pricing": {"input_per_1m": 2.50, "output_per_1m": 10.00}, "capabilities": ["reasoning", "vision", "function_calling"]},
+                {"id": "gpt-4o-mini", "context_window": 128000, "pricing": {"input_per_1m": 0.15, "output_per_1m": 0.60}, "capabilities": ["vision", "function_calling"]},
+                {"id": "o1", "context_window": 200000, "pricing": {"input_per_1m": 15.00, "output_per_1m": 60.00}, "capabilities": ["deep_reasoning", "function_calling"]},
+                {"id": "o1-mini", "context_window": 128000, "pricing": {"input_per_1m": 3.00, "output_per_1m": 12.00}, "capabilities": ["reasoning"]},
+                {"id": "o3-mini", "context_window": 200000, "pricing": {"input_per_1m": 1.10, "output_per_1m": 4.40}, "capabilities": ["reasoning", "function_calling"]},
+            ],
+            "capabilities": {"native_search": True, "structured_output": True, "function_calling": True, "reasoning": True},
+            "presets": {
+                "speed": {"conduct": "gpt-4o-mini", "perform": "gpt-4o-mini", "practice": "gpt-4o-mini", "record": "gpt-4o-mini", "derive": "gpt-4o"},
+                "depth": {"conduct": "gpt-4o", "perform": "gpt-4o", "practice": "gpt-4o-mini", "record": "gpt-4o-mini", "derive": "o1"},
+                "price": {"conduct": "gpt-4o-mini", "perform": "gpt-4o-mini", "practice": "gpt-4o-mini", "record": "gpt-4o-mini", "derive": "gpt-4o-mini"},
+                "balance": {"conduct": "gpt-4o", "perform": "gpt-4o", "practice": "gpt-4o-mini", "record": "gpt-4o-mini", "derive": "gpt-4o"},
+                "creativity": {"conduct": "gpt-4o", "perform": "gpt-4o", "practice": "gpt-4o", "record": "gpt-4o-mini", "derive": "gpt-4o"},
+            },
+            "pricing_url": "https://openai.com/pricing",
+            "context_addendum": "",
+            "enabled_tools": [],
+        },
+    },
+    "provider::grok": {
+        "name": "Grok (xAI)",
+        "description": "Grok provider module — xAI model assignments, native search config, and optimizer presets",
+        "route_config": {
+            "model_assignments": {"conduct": "grok-4-1-fast-reasoning", "perform": "grok-4-1-fast-reasoning", "practice": "grok-4-1-fast-non-reasoning", "record": "grok-4-1-fast-non-reasoning", "derive": "grok-4.20-0309-reasoning"},
+            "sub_agent_model": "grok-4.20-multi-agent-0309",
+            "available_models": [
+                {"id": "grok-4-1-fast-non-reasoning", "context_window": 2000000, "pricing": {"input_per_1m": 0.20, "output_per_1m": 0.50, "cached_per_1m": 0.05}, "capabilities": ["vision", "function_calling", "native_search"]},
+                {"id": "grok-4-1-fast-reasoning", "context_window": 2000000, "pricing": {"input_per_1m": 0.20, "output_per_1m": 0.50, "cached_per_1m": 0.05}, "capabilities": ["reasoning", "vision", "function_calling", "native_search"]},
+                {"id": "grok-4.20-0309-non-reasoning", "context_window": 2000000, "pricing": {"input_per_1m": 2.00, "output_per_1m": 6.00, "cached_per_1m": 0.20}, "capabilities": ["vision", "function_calling", "native_search"]},
+                {"id": "grok-4.20-0309-reasoning", "context_window": 2000000, "pricing": {"input_per_1m": 2.00, "output_per_1m": 6.00, "cached_per_1m": 0.20}, "capabilities": ["reasoning", "vision", "function_calling", "native_search"]},
+                {"id": "grok-4.20-multi-agent-0309", "context_window": 2000000, "pricing": {"input_per_1m": 2.00, "output_per_1m": 6.00, "cached_per_1m": 0.20}, "capabilities": ["reasoning", "vision", "function_calling", "native_search", "multi_agent"]},
+            ],
+            "capabilities": {"native_search": True, "x_search": True, "structured_output": True, "function_calling": True, "reasoning": True, "multi_agent": True},
+            "presets": {
+                "speed": {"conduct": "grok-4-1-fast-reasoning", "perform": "grok-4-1-fast-reasoning", "practice": "grok-4-1-fast-non-reasoning", "record": "grok-4-1-fast-non-reasoning", "derive": "grok-4-1-fast-reasoning"},
+                "depth": {"conduct": "grok-4.20-0309-reasoning", "perform": "grok-4.20-0309-reasoning", "practice": "grok-4-1-fast-reasoning", "record": "grok-4-1-fast-non-reasoning", "derive": "grok-4.20-0309-reasoning"},
+                "price": {"conduct": "grok-4-1-fast-non-reasoning", "perform": "grok-4-1-fast-non-reasoning", "practice": "grok-4-1-fast-non-reasoning", "record": "grok-4-1-fast-non-reasoning", "derive": "grok-4-1-fast-reasoning"},
+                "balance": {"conduct": "grok-4-1-fast-reasoning", "perform": "grok-4-1-fast-reasoning", "practice": "grok-4-1-fast-non-reasoning", "record": "grok-4-1-fast-non-reasoning", "derive": "grok-4.20-0309-reasoning"},
+                "creativity": {"conduct": "grok-4.20-0309-reasoning", "perform": "grok-4.20-0309-reasoning", "practice": "grok-4-1-fast-reasoning", "record": "grok-4-1-fast-non-reasoning", "derive": "grok-4.20-0309-reasoning"},
+            },
+            "pricing_url": "https://x.ai/api",
+            "context_addendum": "",
+            "enabled_tools": [],
+        },
+    },
+    "provider::gemini": {
+        "name": "Gemini (Google)",
+        "description": "Gemini provider module — Google AI model assignments, grounding config, and optimizer presets",
+        "route_config": {
+            "model_assignments": {"conduct": "gemini-2.5-flash", "perform": "gemini-2.5-flash", "practice": "gemini-2.5-flash", "record": "gemini-2.0-flash-lite", "derive": "gemini-2.5-pro"},
+            "available_models": [
+                {"id": "gemini-2.0-flash-lite", "context_window": 1048576, "pricing": {"input_per_1m": 0.075, "output_per_1m": 0.30}, "capabilities": ["vision", "function_calling"]},
+                {"id": "gemini-2.5-flash", "context_window": 1048576, "pricing": {"input_per_1m": 0.15, "output_per_1m": 0.60}, "capabilities": ["reasoning", "vision", "function_calling", "grounding"]},
+                {"id": "gemini-2.5-pro", "context_window": 2097152, "pricing": {"input_per_1m": 1.25, "output_per_1m": 10.00}, "capabilities": ["deep_reasoning", "vision", "function_calling", "grounding"]},
+            ],
+            "capabilities": {"grounding": True, "structured_output": True, "function_calling": True, "reasoning": True},
+            "presets": {
+                "speed": {"conduct": "gemini-2.5-flash", "perform": "gemini-2.5-flash", "practice": "gemini-2.0-flash-lite", "record": "gemini-2.0-flash-lite", "derive": "gemini-2.5-flash"},
+                "depth": {"conduct": "gemini-2.5-pro", "perform": "gemini-2.5-pro", "practice": "gemini-2.5-flash", "record": "gemini-2.0-flash-lite", "derive": "gemini-2.5-pro"},
+                "price": {"conduct": "gemini-2.0-flash-lite", "perform": "gemini-2.0-flash-lite", "practice": "gemini-2.0-flash-lite", "record": "gemini-2.0-flash-lite", "derive": "gemini-2.5-flash"},
+                "balance": {"conduct": "gemini-2.5-flash", "perform": "gemini-2.5-flash", "practice": "gemini-2.5-flash", "record": "gemini-2.0-flash-lite", "derive": "gemini-2.5-pro"},
+                "creativity": {"conduct": "gemini-2.5-pro", "perform": "gemini-2.5-pro", "practice": "gemini-2.5-flash", "record": "gemini-2.5-flash", "derive": "gemini-2.5-pro"},
+            },
+            "pricing_url": "https://ai.google.dev/pricing",
+            "context_addendum": "",
+            "enabled_tools": [],
+        },
+    },
+    "provider::claude": {
+        "name": "Claude (Anthropic)",
+        "description": "Claude provider module — Anthropic model assignments, extended thinking config, and optimizer presets",
+        "route_config": {
+            "model_assignments": {"conduct": "claude-3-5-sonnet-20241022", "perform": "claude-3-5-sonnet-20241022", "practice": "claude-3-haiku-20240307", "record": "claude-3-haiku-20240307", "derive": "claude-3-5-sonnet-20241022"},
+            "available_models": [
+                {"id": "claude-3-haiku-20240307", "context_window": 200000, "pricing": {"input_per_1m": 0.25, "output_per_1m": 1.25}, "capabilities": ["vision", "function_calling"]},
+                {"id": "claude-3-5-sonnet-20241022", "context_window": 200000, "pricing": {"input_per_1m": 3.00, "output_per_1m": 15.00}, "capabilities": ["vision", "function_calling", "extended_thinking"]},
+                {"id": "claude-3-5-haiku-20241022", "context_window": 200000, "pricing": {"input_per_1m": 0.80, "output_per_1m": 4.00}, "capabilities": ["vision", "function_calling"]},
+                {"id": "claude-3-opus-20240229", "context_window": 200000, "pricing": {"input_per_1m": 15.00, "output_per_1m": 75.00}, "capabilities": ["vision", "function_calling", "extended_thinking"]},
+            ],
+            "capabilities": {"extended_thinking": True, "structured_output": True, "function_calling": True},
+            "presets": {
+                "speed": {"conduct": "claude-3-haiku-20240307", "perform": "claude-3-haiku-20240307", "practice": "claude-3-haiku-20240307", "record": "claude-3-haiku-20240307", "derive": "claude-3-5-sonnet-20241022"},
+                "depth": {"conduct": "claude-3-5-sonnet-20241022", "perform": "claude-3-5-sonnet-20241022", "practice": "claude-3-haiku-20240307", "record": "claude-3-haiku-20240307", "derive": "claude-3-opus-20240229"},
+                "price": {"conduct": "claude-3-haiku-20240307", "perform": "claude-3-haiku-20240307", "practice": "claude-3-haiku-20240307", "record": "claude-3-haiku-20240307", "derive": "claude-3-haiku-20240307"},
+                "balance": {"conduct": "claude-3-5-sonnet-20241022", "perform": "claude-3-5-sonnet-20241022", "practice": "claude-3-haiku-20240307", "record": "claude-3-haiku-20240307", "derive": "claude-3-5-sonnet-20241022"},
+                "creativity": {"conduct": "claude-3-5-sonnet-20241022", "perform": "claude-3-5-sonnet-20241022", "practice": "claude-3-5-sonnet-20241022", "record": "claude-3-haiku-20240307", "derive": "claude-3-opus-20240229"},
+            },
+            "pricing_url": "https://www.anthropic.com/pricing",
+            "context_addendum": "",
+            "enabled_tools": [],
+        },
+    },
+}
+
+
+async def _ensure_provider_seeds() -> None:
+    """Upsert provider seed WS modules — one per AI provider, status='system'.
+
+    On first boot: creates the full record with route_config.
+    On subsequent boots: skips if slug already exists (preserves any admin edits).
+    """
+    from .storage import storage as _storage
+    seeded = 0
+    for slug, seed in _PROVIDER_SEEDS.items():
+        existing = await _storage.get_ws_module_by_slug(slug)
+        if not existing:
+            await _storage.create_ws_module({
+                "slug": slug,
+                "name": seed["name"],
+                "description": seed["description"],
+                "owner_id": "system",
+                "status": "system",
+                "ui_meta": {"label": seed["name"], "icon": "cpu", "order": 99},
+                "route_config": seed["route_config"],
+            })
+            seeded += 1
+    if seeded:
+        print(f"[providers] Seeded {seeded} provider module(s)")
+    else:
+        print(f"[providers] {len(_PROVIDER_SEEDS)} provider seeds already present")
 
 
 @asynccontextmanager
@@ -215,6 +368,8 @@ async def lifespan(app: FastAPI):
     print("[ws_modules] table ensured")
     await _seed_system_shadow_modules()
     print("[ws_modules] system shadows seeded")
+    await _ensure_provider_seeds()
+    await _load_provider_pcna_checkpoints()
     _hot_count = await get_registry().load_all_active()
     if _hot_count:
         print(f"[module_registry] {_hot_count} hot-swap module(s) mounted")

@@ -15,11 +15,19 @@ from ..config.policy_loader import (
 )
 
 _MODEL_ENV_MAP = {
-    "root_orchestrator": "OPENAI_MODEL_ROOT",
-    "high_risk_gate": "OPENAI_MODEL_ROOT",
-    "worker": "OPENAI_MODEL_WORKER",
-    "classifier": "OPENAI_MODEL_CLASSIFIER",
-    "deep_pass": "OPENAI_MODEL_DEEP",
+    "conduct": "OPENAI_MODEL_CONDUCT",
+    "perform": "OPENAI_MODEL_CONDUCT",
+    "practice": "OPENAI_MODEL_PRACTICE",
+    "record": "OPENAI_MODEL_RECORD",
+    "derive": "OPENAI_MODEL_DERIVE",
+}
+
+# Backward-compat: if new env vars not set, fall back to old names
+_MODEL_ENV_FALLBACK = {
+    "OPENAI_MODEL_CONDUCT": "OPENAI_MODEL_ROOT",
+    "OPENAI_MODEL_PRACTICE": "OPENAI_MODEL_WORKER",
+    "OPENAI_MODEL_RECORD": "OPENAI_MODEL_CLASSIFIER",
+    "OPENAI_MODEL_DERIVE": "OPENAI_MODEL_DEEP",
 }
 
 _RULE_KEYWORDS: dict[str, list[str]] = {}
@@ -52,8 +60,12 @@ def resolve_role(task_text: str) -> str:
 
 
 def resolve_model(role: str) -> str:
-    env_key = _MODEL_ENV_MAP.get(role, "OPENAI_MODEL_ROOT")
-    return os.environ.get(env_key, "gpt-5.4")
+    env_key = _MODEL_ENV_MAP.get(role, "OPENAI_MODEL_CONDUCT")
+    val = os.environ.get(env_key, "")
+    if not val:
+        fallback_key = _MODEL_ENV_FALLBACK.get(env_key, "")
+        val = os.environ.get(fallback_key, "") if fallback_key else ""
+    return val or "gpt-4o"
 
 
 def resolve_role_config(role: str) -> dict:

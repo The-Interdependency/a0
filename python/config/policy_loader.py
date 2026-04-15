@@ -28,7 +28,7 @@ def get_routing_rules() -> list[dict]:
 
 
 def get_default_role() -> str:
-    return load_policy().get("routing", {}).get("default_role", "root_orchestrator")
+    return load_policy().get("routing", {}).get("default_role", "conduct")
 
 
 def get_approval_gate_actions() -> list[str]:

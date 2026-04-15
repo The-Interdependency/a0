@@ -1,5 +1,5 @@
 {
-  "version": "2026-04-06.a0.openai.policy.v1",
+  "version": "2026-04-15.a0.openai.policy.v2",
   "attribution": "GPT generated; context, prompt Erin Spencer",
   "hmmm": {
     "items": [
@@ -34,8 +34,8 @@
     "require_hmmm": true
   },
   "roles": {
-    "root_orchestrator": {
-      "model": "gpt-5.4",
+    "conduct": {
+      "model": "gpt-4o",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 4000,
@@ -67,8 +67,8 @@
         "repo analysis"
       ]
     },
-    "high_risk_gate": {
-      "model": "gpt-5.4",
+    "perform": {
+      "model": "gpt-4o",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 5000,
@@ -98,8 +98,8 @@
         "conflict resolution"
       ]
     },
-    "worker": {
-      "model": "gpt-5.4-mini",
+    "practice": {
+      "model": "gpt-4o-mini",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 2500,
@@ -127,8 +127,8 @@
         "extraction with light judgment"
       ]
     },
-    "classifier": {
-      "model": "gpt-5.4-nano",
+    "record": {
+      "model": "gpt-4o-mini",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 1200,
@@ -159,8 +159,8 @@
         "cheap triage"
       ]
     },
-    "deep_pass": {
-      "model": "gpt-5.4-pro",
+    "derive": {
+      "model": "gpt-4o",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 8000,
@@ -192,23 +192,23 @@
     }
   },
   "routing": {
-    "default_role": "root_orchestrator",
+    "default_role": "conduct",
     "rules": [
       {
         "match": "external_write OR publish OR send OR push OR spend_money",
-        "route_to": "high_risk_gate"
+        "route_to": "perform"
       },
       {
         "match": "batch OR repetitive OR extraction OR cleanup",
-        "route_to": "worker"
+        "route_to": "practice"
       },
       {
         "match": "classify OR rank OR label OR score OR triage",
-        "route_to": "classifier"
+        "route_to": "record"
       },
       {
         "match": "hard_debug OR architecture_dispute OR doctrine_reconciliation",
-        "route_to": "deep_pass"
+        "route_to": "derive"
       }
     ]
   },
@@ -283,11 +283,11 @@
           "role": {
             "type": "string",
             "enum": [
-              "root_orchestrator",
-              "high_risk_gate",
-              "worker",
-              "classifier",
-              "deep_pass"
+              "conduct",
+              "perform",
+              "practice",
+              "record",
+              "derive"
             ]
           },
           "reason": {

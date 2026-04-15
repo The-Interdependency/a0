@@ -3,6 +3,7 @@
 ZFAE Tool Executor — implements the actual functions behind each agent tool.
 Called by the inference loop when the LLM issues a tool_call.
 """
+import asyncio
 import json
 import os
 import urllib.parse
@@ -225,6 +226,36 @@ TOOL_SCHEMAS_CHAT = [
     {
         "type": "function",
         "function": {
+            "name": "git_exec",
+            "description": (
+                "Run a git command in the project workspace. "
+                "Use to push code to GitHub, commit changes, check status, view diffs, or manage branches. "
+                "Typical push flow: (1) git_exec ['add', '-A'], "
+                "(2) git_exec ['commit', '-m', 'message'], "
+                "(3) git_exec ['push', 'origin', 'main']. "
+                "Use 'status' first to see what changed. "
+                "Only safe subcommands are permitted: add, commit, push, pull, fetch, status, log, diff, branch, stash."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Git arguments after 'git'. First element must be an allowed subcommand. "
+                            "Examples: ['push', 'origin', 'main'], ['commit', '-m', 'fix: update'], "
+                            "['status'], ['log', '--oneline', '-10'], ['diff', '--stat']"
+                        ),
+                    }
+                },
+                "required": ["args"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "manage_approval_scope",
             "description": (
                 "Grant or revoke a pre-approved action scope for the current user, removing the need to "
@@ -339,6 +370,8 @@ async def execute_tool(name: str, arguments: dict) -> str:
                 endpoint=arguments.get("endpoint", "/user"),
                 body=arguments.get("body"),
             )
+        if name == "git_exec":
+            return await _git_exec(arguments.get("args", []))
         if name == "manage_approval_scope":
             return await _manage_approval_scope(
                 action=arguments.get("action", "list"),
@@ -670,6 +703,41 @@ async def _github_api(method: str, endpoint: str, body: dict | None = None) -> s
 
     except Exception as exc:
         return f"[github_api error: {exc}]"
+
+
+_GIT_ALLOWED = {"add", "commit", "push", "pull", "fetch", "status", "log", "diff", "branch", "stash"}
+_WORKSPACE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+async def _git_exec(args: list[str]) -> str:
+    if not args:
+        return "[git_exec: no args provided]"
+    subcmd = args[0].lower()
+    if subcmd not in _GIT_ALLOWED:
+        return (
+            f"[git_exec: '{subcmd}' not permitted. "
+            f"Allowed: {', '.join(sorted(_GIT_ALLOWED))}]"
+        )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=_WORKSPACE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        out = stdout.decode("utf-8", errors="replace").strip()
+        err = stderr.decode("utf-8", errors="replace").strip()
+        result: dict = {"returncode": proc.returncode}
+        if out:
+            result["stdout"] = out
+        if err:
+            result["stderr"] = err
+        return json.dumps(result)
+    except asyncio.TimeoutError:
+        return "[git_exec: timed out after 30s]"
+    except Exception as exc:
+        return f"[git_exec error: {exc}]"
 
 
 _approval_scope_user_cv: _cv.ContextVar[str | None] = _cv.ContextVar(
