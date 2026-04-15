@@ -25,7 +25,7 @@ export interface Conversation {
 
 export function ConversationList({
   conversations, archivedConvs, activeId, onSelect, onCreate,
-  onDelete, onArchive, isCreating, showArchived, onToggleArchived,
+  onDelete, onArchive, onArchiveAll, isCreating, showArchived, onToggleArchived,
 }: {
   conversations: Conversation[];
   archivedConvs: Conversation[];
@@ -34,6 +34,7 @@ export function ConversationList({
   onCreate: () => void;
   onDelete: (id: number) => void;
   onArchive: (id: number, archived: boolean) => void;
+  onArchiveAll?: () => void;
   isCreating: boolean;
   showArchived: boolean;
   onToggleArchived: () => void;
@@ -65,9 +66,16 @@ export function ConversationList({
     <div className="flex flex-col h-full border-r border-border bg-muted/30" data-testid="conversation-list">
       <div className="flex items-center justify-between px-3 py-3 border-b border-border">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Conversations</span>
-        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onCreate} disabled={isCreating} data-testid="btn-new-conversation">
-          {isCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-        </Button>
+        <div className="flex items-center gap-0.5">
+          {onArchiveAll && conversations.length > 0 && (
+            <Button size="icon" variant="ghost" className="h-6 w-6" title="Archive all" onClick={onArchiveAll} data-testid="btn-archive-all">
+              <Archive className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onCreate} disabled={isCreating} data-testid="btn-new-conversation">
+            {isCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
       </div>
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-0.5 p-2">

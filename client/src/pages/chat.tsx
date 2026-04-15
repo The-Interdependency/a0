@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Loader2, Bot, Zap, Target, AlertTriangle, ChevronDown, ChevronUp, X,
+  Plus, Loader2, Bot, Zap, Target, AlertTriangle, ChevronDown, ChevronUp, X, Archive,
 } from "lucide-react";
 import {
   type Message,
@@ -112,6 +112,21 @@ export default function ChatPage() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const archiveAll = useMutation({
+    mutationFn: async () => {
+      await Promise.all(conversations.map((c) =>
+        apiRequest("PATCH", `/api/v1/conversations/${c.id}/archive`, { archived: true })
+      ));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
+      qc.invalidateQueries({ queryKey: ["/api/v1/conversations", "archived"] });
+      setActiveConvId(null);
+      toast({ title: `Archived ${conversations.length} conversation${conversations.length !== 1 ? "s" : ""}` });
+    },
+    onError: (e: Error) => toast({ title: "Archive failed", description: e.message, variant: "destructive" }),
+  });
+
   const sendMessage = useMutation({
     mutationFn: async (content: string) => {
       if (!activeConvId) throw new Error("No conversation selected");
@@ -176,6 +191,7 @@ export default function ChatPage() {
             onSelect={selectConv} onCreate={() => createConv.mutate()}
             onDelete={(id) => deleteConv.mutate(id)}
             onArchive={(id, archived) => archiveConv.mutate({ id, archived })}
+            onArchiveAll={() => archiveAll.mutate()}
             isCreating={createConv.isPending} showArchived={showArchived}
             onToggleArchived={() => setShowArchived(!showArchived)}
           />
@@ -245,6 +261,12 @@ export default function ChatPage() {
                 {focusMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Target className="h-3 w-3" />}
                 Focus
               </Button>
+              {activeConvId && (
+                <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-muted-foreground ml-auto" onClick={() => archiveConv.mutate({ id: activeConvId, archived: true })} disabled={archiveConv.isPending} data-testid="btn-archive-current" title="Archive this conversation">
+                  {archiveConv.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
+                  Archive
+                </Button>
+              )}
             </div>
             <ChatInput onSend={(c) => sendMessage.mutate(c)} isSending={sendMessage.isPending} />
           </>
