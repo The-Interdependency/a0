@@ -37,7 +37,8 @@ a0p is a mobile-first autonomous AI agent platform. One agent `a0(zeta fun alpha
 - `python/pcna.py` — PCNA engine (53-node ring topology)
 - `python/logger.py` — JSONL append logger
 - `python/agents/zfae.py` — ZFAE agent definition, compose_name(), sub_agent_name()
-- `python/services/energy_registry.py` — LLM provider registry (Gemini, Claude, Grok)
+- `python/services/energy_registry.py` — LLM provider registry; per-role model resolution (env→seed→default)
+- `python/routes/energy.py` — Energy provider endpoints (seed CRUD, optimizer, model discovery, PCNA converge)
 - `python/services/heartbeat.py` — Background heartbeat service (30s tick)
 - `python/services/bandit.py` — Multi-Armed Bandit (UCB1) service
 - `python/services/edcm.py` — EDCM behavioral directives scoring
@@ -94,31 +95,36 @@ PostgreSQL via SQLAlchemy (Python) and Drizzle ORM (schema management).
 
 ### Energy Providers
 LLMs are energy sources, not agents. Managed by `energy_registry.py`:
-- **openai** — OpenAI GPT-4o (primary, with Responses API)
-- **grok** — xAI Grok models (2M-context, native search)
-- **gemini** — Google Gemini 2.5 Flash/Pro
-- **claude** — Anthropic Claude 3.x (Anthropic SDK)
+- **openai** — GPT-5.4 family (Responses API)
+- **grok** — xAI Grok 4.1 (OpenAI-compat at api.x.ai/v1)
+- **gemini** — Google Gemini 2.5 family
+- **claude** — Anthropic Claude (haiku/sonnet/opus)
 
-Each provider has a **provider seed WS module** (`provider::openai`, `provider::grok`, etc.) stored in `ws_modules` with `status=system` and full `route_config`:
-- `model_assignments` — role→model map (5 roles: conduct/perform/practice/record/derive)
-- `available_models` — list with pricing and capability metadata
-- `presets` — optimizer preset → role→model maps (speed/depth/price/balance/creativity)
-- `capabilities`, `pricing_url`, `context_addendum`, `enabled_tools`
+Each provider has a **system WS module seed** (`provider::{id}`) carrying `route_config` with:
+- `model_assignments` — role→model mapping (record/practice/conduct/perform/derive)
+- `available_models` — list with context window, pricing, capability flags
+- `presets` — optimizer preset map (speed/depth/price/balance/creativity)
+- `enabled_tools`, `capabilities`, `context_addendum`, `pricing_url`
 
-Model IDs are never hardcoded: `_resolve_provider_model(provider_id, role)` in `inference.py` checks env var → DB seed `model_assignments` → fallback default.
+Model resolution priority: env var (`XAI_MODEL_CONDUCT`) → seed `model_assignments` → hardcoded default.
 
-**Task roles** (renamed in Task #78):
-- `conduct` (was root_orchestrator) — primary orchestration
-- `perform` (was high_risk_gate) — high-risk/approval-gated tasks
-- `practice` (was worker) — standard work tasks
-- `record` (was classifier) — classification and tagging
-- `derive` (was deep_pass) — deep reasoning/analysis
+Each provider gets a **forked PCNA core** (`pcna_provider_{id}`) on first use, persisted separately.
+
+### Task Roles (renamed in Task #78)
+Policy roles for OpenAI routing (and provider-agnostic intent model):
+- `record` — structured output probe, no tools, JSON only (was: classifier)
+- `practice` — general executor, batch/repetitive work (was: worker)
+- `conduct` — default planner/synthesizer (was: root_orchestrator)
+- `perform` — deliberate review before external writes (was: high_risk_gate)
+- `derive` — deep reasoning, architecture, hard debugging (was: deep_pass)
+
+Env vars: `OPENAI_MODEL_CONDUCT`, `OPENAI_MODEL_PERFORM`, `OPENAI_MODEL_PRACTICE`, `OPENAI_MODEL_RECORD`, `OPENAI_MODEL_DERIVE`. Same pattern for `XAI_MODEL_*`, `GEMINI_MODEL_*`, `ANTHROPIC_MODEL_*`.
 
 **Energy routes** (`python/routes/energy.py`):
 - `GET /api/energy/providers` — list all provider seeds with PCNA stats
-- `PATCH /api/energy/providers/{id}/route_config` — partial update (merges model_assignments)
-- `POST /api/energy/optimize/{id}` — apply optimizer preset to model_assignments
-- `POST /api/energy/discover/{id}` — return available_models + last_checked
+- `PATCH /api/energy/providers/{id}/seed` — partial update (merges model_assignments)
+- `POST /api/energy/providers/{id}/optimize` — apply optimizer preset to model_assignments
+- `POST /api/energy/discover/{id}` — run live model discovery + pricing fetch
 - `POST /api/energy/converge/{id}` — merge provider PCNA core into main (80/20 blend)
 
 ### PCNA Engine

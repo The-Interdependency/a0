@@ -489,12 +489,12 @@ class DatabaseStorage(_CoreStorage):
                     metas.append(ui_meta)
             return metas
 
-    async def upsert_system_shadow(self, slug: str, name: str, description: str, ui_meta: Dict[str, Any]) -> None:
+    async def upsert_system_shadow(self, slug: str, name: str, description: str, ui_meta: Dict[str, Any], route_config: Dict[str, Any] | None = None) -> None:
         """Upsert a system shadow record for a hardcoded route module.
 
-        On first seed the full ui_meta is written. On subsequent startups only
-        ``name`` is refreshed so that any admin customisations to ui_meta
-        (label, icon, order, tier_gate) survive restarts.
+        On first seed the full ui_meta and route_config are written. On subsequent
+        startups only ``name`` is refreshed so that any admin customisations to
+        ui_meta and route_config survive restarts.
         """
         existing = await self.get_ws_module_by_slug(slug)
         if existing:
@@ -509,7 +509,7 @@ class DatabaseStorage(_CoreStorage):
                 "owner_id": "system",
                 "status": "system",
                 "ui_meta": ui_meta,
-                "route_config": {},
+                "route_config": route_config or {},
             })
 
 

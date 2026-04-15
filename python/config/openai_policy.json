@@ -35,7 +35,8 @@
   },
   "roles": {
     "conduct": {
-      "model": "gpt-4o",
+      "model_env": "OPENAI_MODEL_CONDUCT",
+      "model_default": "gpt-5.4",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 4000,
@@ -68,7 +69,8 @@
       ]
     },
     "perform": {
-      "model": "gpt-4o",
+      "model_env": "OPENAI_MODEL_PERFORM",
+      "model_default": "gpt-5.4",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 5000,
@@ -99,7 +101,8 @@
       ]
     },
     "practice": {
-      "model": "gpt-4o-mini",
+      "model_env": "OPENAI_MODEL_PRACTICE",
+      "model_default": "gpt-5.4-mini",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 2500,
@@ -128,7 +131,8 @@
       ]
     },
     "record": {
-      "model": "gpt-4o-mini",
+      "model_env": "OPENAI_MODEL_RECORD",
+      "model_default": "gpt-5.4-nano",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 1200,
@@ -160,7 +164,8 @@
       ]
     },
     "derive": {
-      "model": "gpt-4o",
+      "model_env": "OPENAI_MODEL_DERIVE",
+      "model_default": "gpt-5.4-pro",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 8000,
