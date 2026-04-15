@@ -1,4 +1,4 @@
-# 119:16
+# 127:16
 # DOC module: energy
 # DOC label: Energy Providers
 # DOC description: Provider seed management — model_assignments, optimizer presets, PCNA core converge, and model discovery for all AI providers.
@@ -12,12 +12,18 @@
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/energy", tags=["energy"])
 
 ROLES = ["conduct", "perform", "practice", "record", "derive"]
+
+
+def _require_admin(request: Request) -> None:
+    role = request.headers.get("x-user-role", "user")
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
 
 
 def _get_storage():
@@ -84,8 +90,9 @@ class RouteConfigPatch(BaseModel):
 
 
 @router.patch("/providers/{provider_id}/route_config")
-async def patch_route_config(provider_id: str, body: RouteConfigPatch) -> dict:
+async def patch_route_config(provider_id: str, body: RouteConfigPatch, request: Request) -> dict:
     """Partial-update route_config. model_assignments are merged, not replaced."""
+    _require_admin(request)
     mod = await _get_provider_module(provider_id)
     existing_rc: dict = dict(mod.get("route_config") or {})
 
@@ -105,8 +112,9 @@ class OptimizeBody(BaseModel):
 
 
 @router.post("/optimize/{provider_id}")
-async def apply_optimizer_preset(provider_id: str, body: OptimizeBody) -> dict:
+async def apply_optimizer_preset(provider_id: str, body: OptimizeBody, request: Request) -> dict:
     """Apply a named optimizer preset (speed/depth/price/balance/creativity) to model_assignments."""
+    _require_admin(request)
     mod = await _get_provider_module(provider_id)
     rc: dict = dict(mod.get("route_config") or {})
     presets: dict = rc.get("presets") or {}
@@ -128,8 +136,9 @@ async def apply_optimizer_preset(provider_id: str, body: OptimizeBody) -> dict:
 
 
 @router.post("/discover/{provider_id}")
-async def discover_models(provider_id: str) -> dict:
+async def discover_models(provider_id: str, request: Request) -> dict:
     """Return available_models from the provider seed (live pricing fetch is a future enhancement)."""
+    _require_admin(request)
     mod = await _get_provider_module(provider_id)
     rc: dict = dict(mod.get("route_config") or {})
     available = rc.get("available_models") or []
@@ -142,8 +151,9 @@ async def discover_models(provider_id: str) -> dict:
 
 
 @router.post("/converge/{provider_id}")
-async def converge_provider_pcna(provider_id: str) -> dict:
+async def converge_provider_pcna(provider_id: str, request: Request) -> dict:
     """Merge the provider PCNA core into main PCNA via weighted blend (80% main / 20% provider)."""
+    _require_admin(request)
     import numpy as np
 
     provider_core = _provider_pcna_core(provider_id)
@@ -170,4 +180,4 @@ async def converge_provider_pcna(provider_id: str) -> dict:
         "merged_rings": merged_rings,
         "main_coherence": round(main_core.last_coherence, 4),
     }
-# 119:16
+# 127:16
