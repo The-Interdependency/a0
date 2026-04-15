@@ -21,7 +21,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   derive: "Drv",
 };
 
-export const PRESETS = ["speed", "depth", "price", "balance", "creativity"] as const;
+export const PRESETS = ["speed", "depth", "price", "balance", "creativity", "coding"] as const;
 export type Preset = typeof PRESETS[number];
 
 export const PRESET_COLORS: Record<Preset, string> = {
@@ -30,6 +30,7 @@ export const PRESET_COLORS: Record<Preset, string> = {
   price: "text-green-500 border-green-500/40",
   balance: "text-orange-500 border-orange-500/40",
   creativity: "text-pink-500 border-pink-500/40",
+  coding: "text-cyan-500 border-cyan-500/40",
 };
 
 export interface EnergyAvailability {

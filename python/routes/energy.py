@@ -6,7 +6,7 @@
 # DOC endpoint: GET /api/energy/providers | List all provider seed modules with PCNA stats
 # DOC endpoint: GET /api/energy/providers/{provider_id} | Get one provider with full route_config + PCNA stats
 # DOC endpoint: PATCH /api/energy/providers/{provider_id}/route_config | Partial-update route_config (merges model_assignments)
-# DOC endpoint: POST /api/energy/optimize/{provider_id} | Apply optimizer preset to model_assignments
+# DOC endpoint: POST /api/energy/optimize/{provider_id} | Apply optimizer preset (speed/depth/price/balance/creativity/coding) to model_assignments
 # DOC endpoint: POST /api/energy/discover/{provider_id} | Refresh available_models (returns seed list + timestamp)
 # DOC endpoint: POST /api/energy/converge/{provider_id} | Merge provider PCNA core into main PCNA (0.8/0.2 blend)
 """
@@ -102,7 +102,7 @@ class PatchSeedBody(BaseModel):
 
 
 class OptimizeBody(BaseModel):
-    mode: str  # speed | depth | price | balance | creativity
+    preset: str  # speed | depth | price | balance | creativity | coding
 
 
 async def _get_seed_module(provider_id: str) -> dict | None:
@@ -208,28 +208,28 @@ async def patch_provider_seed(provider_id: str, body: PatchSeedBody, request: Re
 async def optimize_provider(provider_id: str, body: OptimizeBody, request: Request):
     """Apply an optimizer preset to the provider's model_assignments. Admin only."""
     await _require_admin(request)
-    valid_modes = {"speed", "depth", "price", "balance", "creativity"}
-    if body.mode not in valid_modes:
-        raise HTTPException(status_code=400, detail=f"Invalid mode. Choose from: {', '.join(valid_modes)}")
+    valid_presets = {"speed", "depth", "price", "balance", "creativity", "coding"}
+    if body.preset not in valid_presets:
+        raise HTTPException(status_code=400, detail=f"Invalid preset. Choose from: {', '.join(sorted(valid_presets))}")
 
-    # Check if the seed has a custom preset
+    # Seed custom presets take priority over the built-in registry fallback
     seed = await _get_seed_module(provider_id)
     if seed:
         custom_presets = (seed.get("route_config") or {}).get("presets", {})
-        if body.mode in custom_presets:
-            assignments = custom_presets[body.mode]
+        if body.preset in custom_presets:
+            assignments = custom_presets[body.preset]
         else:
             provider_presets = _PROVIDER_PRESETS.get(provider_id, {})
-            assignments = provider_presets.get(body.mode, {})
+            assignments = provider_presets.get(body.preset, {})
     else:
         provider_presets = _PROVIDER_PRESETS.get(provider_id, {})
-        assignments = provider_presets.get(body.mode, {})
+        assignments = provider_presets.get(body.preset, {})
 
     if not assignments:
-        raise HTTPException(status_code=400, detail=f"No preset '{body.mode}' found for provider '{provider_id}'")
+        raise HTTPException(status_code=400, detail=f"No preset '{body.preset}' found for provider '{provider_id}'")
 
-    new_config = await _update_seed_route_config(provider_id, {"model_assignments": assignments, "active_preset": body.mode})
-    return {"provider_id": provider_id, "mode": body.mode, "model_assignments": assignments, "route_config": new_config}
+    new_config = await _update_seed_route_config(provider_id, {"model_assignments": assignments, "active_preset": body.preset})
+    return {"provider_id": provider_id, "preset_applied": body.preset, "model_assignments": assignments, "route_config": new_config}
 
 
 async def run_discover_models(provider_id: str) -> dict:
