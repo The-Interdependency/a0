@@ -1,4 +1,4 @@
-# 140:4
+# 148:4
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -149,6 +149,7 @@ def collect_doc_meta() -> list[dict]:
         "billing.py", "contexts.py", "founders.py", "openai_api.py",
         "zfae_api.py", "approval_scopes.py", "ws_modules.py", "docs.py",
         "sigma_api.py", "editable_schema.py", "cli.py", "focus.py",
+        "energy.py",
     ]
     results: list[dict] = []
     for fname in route_files:
@@ -162,4 +163,4 @@ def collect_doc_meta() -> list[dict]:
             results.append(meta)
     results.sort(key=lambda d: d.get("label", ""))
     return results
-# 140:4
+# 148:4

@@ -1,4 +1,4 @@
-# 246:138
+# 265:209
 # NOTE: 424 lines — over the 400-line guideline. Split on next modification.
 import os
 import hashlib
@@ -576,4 +576,4 @@ async def _handle_subscription_deleted(sub: dict) -> None:
 
     if uid_rec:
         await sync_founder_registry(uid_rec["id"], "free", action="downgrade")
-# 246:138
+# 265:209
