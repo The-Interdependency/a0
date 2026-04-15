@@ -33,6 +33,28 @@ def _filter_tools_by_seed(seed_cfg: dict) -> list[dict]:
     return [t for t in TOOL_SCHEMAS_CHAT if t.get("function", {}).get("name", "") in names]
 
 
+def _to_responses_format(tools: list[dict]) -> list[dict]:
+    """Convert TOOL_SCHEMAS_CHAT format to OpenAI Responses API flat format.
+
+    Chat Completions format: {"type":"function","function":{"name":...,"description":...,"parameters":...}}
+    Responses API format:    {"type":"function","name":...,"description":...,"parameters":...}
+    Native tools (web_search_preview, etc.) are already in Responses format — passed through as-is.
+    """
+    out: list[dict] = []
+    for t in tools:
+        if "function" in t:
+            fn = t["function"]
+            out.append({
+                "type": "function",
+                "name": fn["name"],
+                "description": fn.get("description", ""),
+                "parameters": fn.get("parameters", {}),
+            })
+        else:
+            out.append(t)
+    return out
+
+
 async def call_energy_provider(
     provider_id: str,
     messages: list[dict],
@@ -193,7 +215,10 @@ async def _call_openai_routed(
         full_input.append({"role": "system", "content": system_prompt})
     full_input.extend(messages)
 
-    effective_tools = tool_schemas if tool_schemas is not None else list(TOOL_SCHEMAS_RESPONSES)
+    if tool_schemas is not None:
+        effective_tools = _to_responses_format(tool_schemas)
+    else:
+        effective_tools = list(TOOL_SCHEMAS_RESPONSES)
     content, usage = await _call_openai_responses(
         api_key=api_key, model=call_cfg["model"], input_messages=full_input,
         max_output_tokens=call_cfg["max_output_tokens"], temperature=call_cfg["temperature"],

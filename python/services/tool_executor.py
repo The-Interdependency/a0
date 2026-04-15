@@ -535,8 +535,19 @@ async def _sub_agent_spawn(task: str, provider: str | None = None) -> str:
         return "[sub_agent_spawn: task description required]"
     from ..main import get_pcna as _get
     from ..services.agent_lifecycle import spawn_sub_agent
+
+    resolved_provider = provider
+    if not resolved_provider:
+        try:
+            from ..services.energy_registry import energy_registry
+            grok_cfg = await energy_registry._load_seed_config("grok")
+            if grok_cfg.get("sub_agent_model") and os.environ.get("XAI_API_KEY"):
+                resolved_provider = "grok"
+        except Exception:
+            pass
+
     pcna = _get()
-    result = spawn_sub_agent(pcna, provider)
+    result = spawn_sub_agent(pcna, resolved_provider)
     result["task"] = task
     result["note"] = f"Use agent_id='{result['sub_agent_name']}' when calling sub_agent_merge"
     return json.dumps(result)

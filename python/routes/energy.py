@@ -98,6 +98,7 @@ class PatchSeedBody(BaseModel):
     enabled_tools: Optional[list] = None
     context_addendum: Optional[str] = None
     capabilities: Optional[dict] = None
+    presets: Optional[dict] = None
 
 
 class OptimizeBody(BaseModel):
@@ -193,6 +194,8 @@ async def patch_provider_seed(provider_id: str, body: PatchSeedBody, request: Re
         updates["context_addendum"] = body.context_addendum
     if body.capabilities is not None:
         updates["capabilities"] = body.capabilities
+    if body.presets is not None:
+        updates["presets"] = body.presets
 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
