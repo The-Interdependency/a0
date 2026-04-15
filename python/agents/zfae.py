@@ -13,7 +13,9 @@ ZFAE_AGENT_DEF = {
     "tools": [
         "pcna_infer", "pcna_reward", "memory_flush",
         "bandit_pull", "edcm_score", "web_search",
-        "sub_agent_spawn", "sub_agent_merge", "github_api",
+        "sub_agent_spawn", "sub_agent_merge",
+        "github_api", "git_exec",
+        "send_email", "manage_approval_scope",
     ],
     "is_persistent": True,
 }

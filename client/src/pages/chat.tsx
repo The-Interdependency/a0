@@ -249,6 +249,15 @@ export default function ChatPage() {
                         {subagentStatus.status === "done" && <Target className="h-3 w-3 text-green-500" />}
                         {subagentStatus.status === "error" && <AlertTriangle className="h-3 w-3 text-destructive" />}
                         <span className="font-medium capitalize">{subagentStatus.status}</span>
+                        {subagentStatus.status !== "running" && (
+                          <button
+                            className="text-primary hover:underline text-[10px]"
+                            onClick={() => { selectConv(subagentConvId); setShowSubagent(false); setSubagentConvId(null); }}
+                            data-testid="btn-view-subagent-conv"
+                          >
+                            View conversation
+                          </button>
+                        )}
                         <button className="ml-auto text-muted-foreground hover:text-foreground" onClick={() => setSubagentConvId(null)} data-testid="btn-close-subagent"><X className="h-3 w-3" /></button>
                       </div>
                       {subagentStatus.reply && <pre className="text-[10px] bg-muted rounded p-2 whitespace-pre-wrap max-h-32 overflow-auto" data-testid="subagent-reply">{subagentStatus.reply}</pre>}

@@ -141,6 +141,7 @@ async def list_agents():
             "slot": f"zeta{idx}",
             "status": "active",
             "is_persistent": False,
+            "tools": ZFAE_AGENT_DEF["tools"],
             "energy_provider": active_provider,
             "uptime_s": round(time.time() - sa_engine.created_at, 1),
         })
