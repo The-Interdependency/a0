@@ -22,7 +22,7 @@ from .sigma_api import router as sigma_router
 from .editable_schema import router as editable_schema_router
 from .cli import router as cli_router
 from .focus import router as focus_router
-from .energy import router as energy_router
+from .energy import router as energy_router, pcna_router as energy_pcna_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -50,6 +50,7 @@ ALL_ROUTERS = [
     cli_router,
     focus_router,
     energy_router,
+    energy_pcna_router,
 ]
 
 
@@ -76,6 +77,7 @@ def collect_ui_meta() -> list[dict]:
         "python.routes.sigma_api",
         "python.routes.editable_schema",
         "python.routes.cli",
+        "python.routes.energy",
     ]
     tabs = []
     for mod_name in modules:

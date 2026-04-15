@@ -14,6 +14,8 @@ from ..config.policy_loader import (
     get_safety_floor_actions,
 )
 
+# Env vars per role for OpenAI provider
+# perform reuses OPENAI_MODEL_CONDUCT as the high-stakes model (same tier)
 _MODEL_ENV_MAP = {
     "conduct": "OPENAI_MODEL_CONDUCT",
     "perform": "OPENAI_MODEL_CONDUCT",
@@ -30,6 +32,15 @@ _MODEL_ENV_FALLBACK = {
     "OPENAI_MODEL_DERIVE": "OPENAI_MODEL_DEEP",
 }
 
+# Legacy alias support (old role names still honored if policy cache has them)
+_LEGACY_ROLE_MAP = {
+    "root_orchestrator": "conduct",
+    "high_risk_gate": "perform",
+    "worker": "practice",
+    "classifier": "record",
+    "deep_pass": "derive",
+}
+
 _RULE_KEYWORDS: dict[str, list[str]] = {}
 
 
@@ -40,6 +51,8 @@ def _build_keyword_index() -> None:
     for rule in get_routing_rules():
         match_expr = rule.get("match", "")
         role = rule.get("route_to", "")
+        # normalize legacy role names
+        role = _LEGACY_ROLE_MAP.get(role, role)
         raw_tokens = [t.strip().lower() for t in re.split(r"\s+OR\s+", match_expr)]
         normalized: list[str] = []
         for tok in raw_tokens:
@@ -56,25 +69,61 @@ def resolve_role(task_text: str) -> str:
     for role, keywords in _RULE_KEYWORDS.items():
         if any(kw in lower for kw in keywords):
             return role
-    return get_default_role()
+    default = get_default_role()
+    return _LEGACY_ROLE_MAP.get(default, default)
 
 
-def resolve_model(role: str) -> str:
-    env_key = _MODEL_ENV_MAP.get(role, "OPENAI_MODEL_CONDUCT")
-    val = os.environ.get(env_key, "")
-    if not val:
-        fallback_key = _MODEL_ENV_FALLBACK.get(env_key, "")
-        val = os.environ.get(fallback_key, "") if fallback_key else ""
-    return val or "gpt-4o"
+def resolve_model(role: str, provider_id: str = "openai") -> str:
+    """
+    Resolve model for a given role + provider.
+    Priority: env var > old env var fallback > provider seed route_config > policy default > hardcoded fallback
+    """
+    # Normalize legacy role names
+    role = _LEGACY_ROLE_MAP.get(role, role)
+
+    if provider_id == "openai":
+        env_key = _MODEL_ENV_MAP.get(role, "OPENAI_MODEL_CONDUCT")
+        env_val = os.environ.get(env_key, "")
+        if not env_val:
+            fallback_key = _MODEL_ENV_FALLBACK.get(env_key, "")
+            env_val = os.environ.get(fallback_key, "") if fallback_key else ""
+        if env_val:
+            return env_val
+        # Fall through to seed / policy default
+        roles = get_roles()
+        role_cfg = roles.get(role, {})
+        model_default = role_cfg.get("model_default", "")
+        if model_default:
+            return model_default
+        return "gpt-5.4"
+
+    # For other providers, delegate to energy_registry seed resolution
+    try:
+        from .energy_registry import energy_registry
+        return energy_registry.resolve_model_for_role(provider_id, role)
+    except Exception:
+        return _provider_fallback_model(provider_id)
 
 
-def resolve_role_config(role: str) -> dict:
+def _provider_fallback_model(provider_id: str) -> str:
+    defaults = {
+        "grok": "grok-4-1-fast-non-reasoning",
+        "gemini": "gemini-2.5-flash",
+        "claude": "claude-3-5-haiku-20241022",
+    }
+    return defaults.get(provider_id, "gpt-5.4")
+
+
+def resolve_role_config(role: str, provider_id: str = "openai") -> dict:
     """Return call-level config (not part of structured route_decision schema)."""
+    role = _LEGACY_ROLE_MAP.get(role, role)
     roles = get_roles()
-    role_cfg = roles.get(role, roles.get(get_default_role(), {}))
+    default_role = get_default_role()
+    default_role = _LEGACY_ROLE_MAP.get(default_role, default_role)
+    role_cfg = roles.get(role, roles.get(default_role, {}))
     defaults = get_defaults()
     return {
-        "model": resolve_model(role),
+        "model": resolve_model(role, provider_id),
         "store": role_cfg.get("store", defaults.get("store", False)),
         "temperature": role_cfg.get("temperature", defaults.get("temperature", 1)),
         "max_output_tokens": role_cfg.get(
@@ -106,9 +155,9 @@ def make_route_decision(
     }
 
 
-def make_call_config(role: str) -> dict[str, Any]:
+def make_call_config(role: str, provider_id: str = "openai") -> dict[str, Any]:
     """Return the call-level parameters for a resolved role (not part of structured schema)."""
-    return resolve_role_config(role)
+    return resolve_role_config(role, provider_id)
 
 
 def _action_matched(action: str, lower: str, aliases: dict[str, list[str]]) -> bool:

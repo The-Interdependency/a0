@@ -38,6 +38,14 @@ DEFAULT_TASKS = [
         "weight": 0.6,
         "interval_seconds": 21600,
     },
+    {
+        "name": "model_discovery",
+        "description": "Refresh available models from all provider APIs, mark stale models",
+        "task_type": "model_discovery",
+        "enabled": True,
+        "weight": 0.4,
+        "interval_seconds": 86400,
+    },
 ]
 
 TICK_INTERVAL = 30
@@ -213,6 +221,9 @@ class HeartbeatService:
         if task_type == "conversation_review":
             return await self._run_conversation_review()
 
+        if task_type == "model_discovery":
+            return await self._run_model_discovery()
+
         return f"unknown_task_type: {task_type}"
 
     async def _run_conversation_review(self) -> str:
@@ -302,6 +313,21 @@ class HeartbeatService:
         })
 
         return f"conversation_review_ok: {len(messages)} msgs, seeds_written={seeds_written}"
+
+    async def _run_model_discovery(self) -> str:
+        """Run daily model discovery for all configured providers."""
+        from ..routes.energy import run_discover_models
+        results: list[str] = []
+        for pid in ("openai", "grok", "gemini", "claude"):
+            try:
+                result = await run_discover_models(pid)
+                found = result.get("discovered", 0)
+                stale = result.get("stale_count", 0)
+                errs = result.get("errors", [])
+                results.append(f"{pid}: found={found} stale={stale} errors={len(errs)}")
+            except Exception as exc:
+                results.append(f"{pid}: error={exc}")
+        return "model_discovery_ok: " + ", ".join(results)
 
 
 heartbeat_service = HeartbeatService()

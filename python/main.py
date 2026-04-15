@@ -15,7 +15,7 @@ from .routes import ALL_ROUTERS, collect_ui_meta
 from .services.heartbeat import heartbeat_service
 from .engine.module_registry import initialize_registry, get_registry
 from .agents.zfae import compose_name, ZFAE_AGENT_DEF
-from .services.energy_registry import energy_registry
+from .services.energy_registry import energy_registry, BUILTIN_PROVIDERS as _ENERGY_BUILTIN_PROVIDERS
 
 _pcna: PCNAEngine | None = None
 _pcna_8: PCNAEngine | None = None
@@ -38,23 +38,23 @@ def get_pcna_8() -> PCNAEngine:
     return _pcna_8
 
 
-def get_provider_pcna(provider_id: str) -> PCNAEngine:
-    """Fork-on-first-use: each provider gets its own PCNAEngine with a scoped checkpoint key."""
+def get_provider_pcna_cores() -> dict[str, PCNAEngine]:
+    return _provider_pcna_cores
+
+
+async def get_or_create_provider_pcna(provider_id: str) -> PCNAEngine:
+    """Get or fork a PCNA core for the given provider."""
     global _provider_pcna_cores
-    if provider_id not in _provider_pcna_cores:
-        core = PCNAEngine(phases=7)
-        core._checkpoint_key = f"pcna_tensor_checkpoint_provider_{provider_id}"
-        _provider_pcna_cores[provider_id] = core
-    return _provider_pcna_cores[provider_id]
-
-
-async def _load_provider_pcna_checkpoints() -> None:
-    """Load persisted checkpoints for every known provider core."""
-    for slug in _PROVIDER_SEEDS:
-        provider_id = slug.removeprefix("provider::")
-        core = get_provider_pcna(provider_id)
-        await core.load_checkpoint()
-    print(f"[providers] {len(_PROVIDER_SEEDS)} provider PCNA cores loaded")
+    if provider_id in _provider_pcna_cores:
+        return _provider_pcna_cores[provider_id]
+    from .engine import InstanceMerge
+    parent = get_pcna()
+    child, _ = InstanceMerge.fork(parent)
+    child._checkpoint_key = f"pcna_provider_{provider_id}"
+    await child.load_checkpoint()
+    _provider_pcna_cores[provider_id] = child
+    print(f"[pcna] provider core forked for '{provider_id}' — blueprint {child.blueprint_hash[:12]}...")
+    return child
 
 
 _ZFAE_TOOL_SPECS = {
@@ -138,6 +138,50 @@ async def _ensure_default_tools() -> None:
         print(f"[tools] Seeded {added} ZFAE tool(s)")
     else:
         print(f"[tools] {len(_ZFAE_TOOL_SPECS)} ZFAE tools already present")
+
+
+async def _seed_provider_modules() -> None:
+    """
+    Auto-create system WS modules for each provider (provider::openai, etc.)
+    if they don't already exist. Each carries a route_config with model_assignments,
+    available_models, enabled_tools, context_addendum, capabilities, presets, pricing_url.
+    """
+    from .storage import storage as _storage
+    from .services.energy_registry import (
+        _PROVIDER_DEFAULT_ASSIGNMENTS,
+        _PROVIDER_PRESETS,
+        _PROVIDER_AVAILABLE_MODELS,
+        _PROVIDER_PRICING_URLS,
+        _PROVIDER_CAPABILITIES,
+        _PROVIDER_ENABLED_TOOLS,
+        BUILTIN_PROVIDERS,
+    )
+    for provider_id, info in BUILTIN_PROVIDERS.items():
+        slug = f"provider::{provider_id}"
+        existing = await _storage.get_ws_module_by_slug(slug)
+        if existing:
+            continue
+        route_config = {
+            "model_assignments": _PROVIDER_DEFAULT_ASSIGNMENTS.get(provider_id, {}),
+            "available_models": _PROVIDER_AVAILABLE_MODELS.get(provider_id, []),
+            "enabled_tools": _PROVIDER_ENABLED_TOOLS.get(provider_id, []),
+            "context_addendum": "",
+            "capabilities": _PROVIDER_CAPABILITIES.get(provider_id, {}),
+            "presets": _PROVIDER_PRESETS.get(provider_id, {}),
+            "pricing_url": _PROVIDER_PRICING_URLS.get(provider_id, ""),
+            "prices_updated_at": None,
+            "active_preset": "balance",
+        }
+        await _storage.upsert_system_shadow(
+            slug=slug,
+            name=f"Provider: {info['label']}",
+            description=f"Provider seed module for {provider_id} — carries model_assignments, presets, and capability flags.",
+            ui_meta={"provider_id": provider_id, "vendor": info["vendor"]},
+            route_config=route_config,
+        )
+        print(f"[energy] provider seed created: {slug}")
+
+    print("[energy] provider seeds ensured")
 
 
 async def _seed_system_shadow_modules() -> None:
@@ -368,8 +412,12 @@ async def lifespan(app: FastAPI):
     print("[ws_modules] table ensured")
     await _seed_system_shadow_modules()
     print("[ws_modules] system shadows seeded")
-    await _ensure_provider_seeds()
-    await _load_provider_pcna_checkpoints()
+    await _seed_provider_modules()
+    # Pre-fork provider PCNA cores for all providers with available API keys
+    for _pid, _pinfo in _ENERGY_BUILTIN_PROVIDERS.items():
+        _env_key = _pinfo.get("env_key", "")
+        if _env_key and os.environ.get(_env_key):
+            await get_or_create_provider_pcna(_pid)
     _hot_count = await get_registry().load_all_active()
     if _hot_count:
         print(f"[module_registry] {_hot_count} hot-swap module(s) mounted")
