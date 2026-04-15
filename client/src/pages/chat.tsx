@@ -1,4 +1,4 @@
-// 310:0
+// 817:2
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -873,4 +873,4 @@ export default function ChatPage() {
     </div>
   );
 }
-// 310:0
+// 817:2

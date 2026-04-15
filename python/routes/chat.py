@@ -1,4 +1,4 @@
-# 338:15
+# 285:205
 import asyncio as _asyncio
 import json as _json
 import traceback
@@ -556,4 +556,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         tb = traceback.format_exc()
         print(f"[chat] send_message error: {exc}\n{tb}")
         raise HTTPException(status_code=500, detail=f"Chat error: {exc}")
-# 338:15
+# 285:205

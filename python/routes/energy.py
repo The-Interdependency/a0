@@ -1,16 +1,14 @@
-# 0:0
-"""
-Energy provider management API — T007/T008/T004 endpoints.
-
+# 119:16
 # DOC module: energy
 # DOC label: Energy Providers
+# DOC description: Provider seed management — model_assignments, optimizer presets, PCNA core converge, and model discovery for all AI providers.
+# DOC tier: admin
 # DOC endpoint: GET /api/energy/providers | List all provider seed modules with PCNA stats
 # DOC endpoint: GET /api/energy/providers/{provider_id} | Get one provider with full route_config + PCNA stats
 # DOC endpoint: PATCH /api/energy/providers/{provider_id}/route_config | Partial-update route_config (merges model_assignments)
 # DOC endpoint: POST /api/energy/optimize/{provider_id} | Apply optimizer preset to model_assignments
 # DOC endpoint: POST /api/energy/discover/{provider_id} | Refresh available_models (returns seed list + timestamp)
 # DOC endpoint: POST /api/energy/converge/{provider_id} | Merge provider PCNA core into main PCNA (0.8/0.2 blend)
-"""
 import time
 from typing import Any
 
@@ -172,3 +170,4 @@ async def converge_provider_pcna(provider_id: str) -> dict:
         "merged_rings": merged_rings,
         "main_coherence": round(main_core.last_coherence, 4),
     }
+# 119:16

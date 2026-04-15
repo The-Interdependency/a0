@@ -1,4 +1,4 @@
-# 540:12
+# 772:22
 """
 ZFAE Tool Executor — implements the actual functions behind each agent tool.
 Called by the inference loop when the LLM issues a tool_call.
@@ -862,4 +862,4 @@ async def _set_user_tier(user_id: str, tier: str) -> str:
         "email": updated["email"],
         "tier": updated["subscription_tier"],
     })
-# 540:12
+# 772:22
