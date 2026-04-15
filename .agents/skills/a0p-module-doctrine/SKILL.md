@@ -111,22 +111,7 @@ UI_META = {
 
 ---
 
-## 5. `DATA_SCHEMA` (optional, documents endpoint shapes)
-
-```python
-DATA_SCHEMA = {
-    "endpoints": [
-        {"method": "GET", "path": "/api/v1/my/path"},
-        {"method": "POST", "path": "/api/v1/my/path"},
-    ]
-}
-```
-
-Not required, but include it when the module has non-tab endpoints that should be machine-readable.
-
----
-
-## 6. Registration Checklist for New Route Modules
+## 5. Registration Checklist for New Route Modules
 
 Every new `python/routes/{name}.py` must be added to **four places** in `python/routes/__init__.py`:
 
@@ -172,7 +157,7 @@ editable_registry.register(EditableField(
 
 ---
 
-## 7. Hot-Swap Modules (WsModulesTab)
+## 6. Hot-Swap Modules (WsModulesTab)
 
 Handler code for a user-deployed hot-swap module must:
 - Define `router: APIRouter` at module level — the registry mounts this
@@ -183,7 +168,7 @@ Handler code for a user-deployed hot-swap module must:
 
 ---
 
-## 8. 400-Line Code Budget
+## 7. 400-Line Code Budget
 
 **Hard rule project-wide:** no file may exceed 400 code lines (N in the annotation).
 
@@ -193,7 +178,7 @@ Handler code for a user-deployed hot-swap module must:
 
 ---
 
-## 9. Annotation Script Reference
+## 8. Annotation Script Reference
 
 ```bash
 # Re-stamp all Python + TypeScript/TSX files in the project
@@ -205,6 +190,21 @@ python scripts/annotate.py
 ```
 
 Run this after every editing session that touches more than one file. CI does not block on it, but DocsTab shows stale ratios if you skip it.
+
+---
+
+## 9. `DATA_SCHEMA` (optional, documents endpoint shapes)
+
+```python
+DATA_SCHEMA = {
+    "endpoints": [
+        {"method": "GET", "path": "/api/v1/my/path"},
+        {"method": "POST", "path": "/api/v1/my/path"},
+    ]
+}
+```
+
+Not required, but include it when the module has non-tab endpoints that should be machine-readable.
 
 ---
 
