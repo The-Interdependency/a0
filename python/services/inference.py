@@ -14,19 +14,82 @@ PROVIDER_ENDPOINTS = {
     "grok": {
         "url": "https://api.x.ai/v1/chat/completions",
         "env_key": "XAI_API_KEY",
-        "model": "grok-3-latest",
     },
     "gemini": {
         "url": "https://generativelanguage.googleapis.com/v1beta/chat/completions",
         "env_key": "GEMINI_API_KEY",
-        "model": "gemini-2.5-pro-preview-05-06",
     },
     "claude": {
         "url": "https://api.anthropic.com/v1/messages",
         "env_key": "ANTHROPIC_API_KEY",
-        "model": "claude-3-5-sonnet-20241022",
     },
 }
+
+# Env var names per provider per role — checked first in model resolution
+_PROVIDER_MODEL_ENV = {
+    "grok": {
+        "conduct": "XAI_MODEL_CONDUCT",
+        "perform": "XAI_MODEL_CONDUCT",
+        "practice": "XAI_MODEL_PRACTICE",
+        "record": "XAI_MODEL_RECORD",
+        "derive": "XAI_MODEL_DERIVE",
+    },
+    "gemini": {
+        "conduct": "GEMINI_MODEL_CONDUCT",
+        "perform": "GEMINI_MODEL_CONDUCT",
+        "practice": "GEMINI_MODEL_PRACTICE",
+        "record": "GEMINI_MODEL_RECORD",
+        "derive": "GEMINI_MODEL_DERIVE",
+    },
+    "claude": {
+        "conduct": "ANTHROPIC_MODEL_CONDUCT",
+        "perform": "ANTHROPIC_MODEL_CONDUCT",
+        "practice": "ANTHROPIC_MODEL_PRACTICE",
+        "record": "ANTHROPIC_MODEL_RECORD",
+        "derive": "ANTHROPIC_MODEL_DERIVE",
+    },
+}
+
+# Fallback defaults when env vars are not set
+_PROVIDER_MODEL_DEFAULTS = {
+    "grok": {
+        "conduct": "grok-4-1-fast-reasoning",
+        "perform": "grok-4-1-fast-reasoning",
+        "practice": "grok-4-1-fast-non-reasoning",
+        "record": "grok-4-1-fast-non-reasoning",
+        "derive": "grok-4.20-0309-reasoning",
+        "_default": "grok-4-1-fast-reasoning",
+    },
+    "gemini": {
+        "conduct": "gemini-2.5-flash",
+        "perform": "gemini-2.5-flash",
+        "practice": "gemini-2.5-flash",
+        "record": "gemini-2.0-flash-lite",
+        "derive": "gemini-2.5-pro",
+        "_default": "gemini-2.5-flash",
+    },
+    "claude": {
+        "conduct": "claude-3-5-sonnet-20241022",
+        "perform": "claude-3-5-sonnet-20241022",
+        "practice": "claude-3-haiku-20240307",
+        "record": "claude-3-haiku-20240307",
+        "derive": "claude-3-5-sonnet-20241022",
+        "_default": "claude-3-5-sonnet-20241022",
+    },
+}
+
+
+def _resolve_provider_model(provider_id: str, role: str = "conduct") -> str:
+    """Return the model ID for a provider + role. Checks env var → fallback default."""
+    env_map = _PROVIDER_MODEL_ENV.get(provider_id, {})
+    env_key = env_map.get(role, "")
+    if env_key:
+        val = os.environ.get(env_key, "")
+        if val:
+            return val
+    defaults = _PROVIDER_MODEL_DEFAULTS.get(provider_id, {})
+    return defaults.get(role) or defaults.get("_default", "grok-4-1-fast-reasoning")
+
 
 _OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 
@@ -64,13 +127,18 @@ async def call_energy_provider(
         payload_messages.append({"role": "system", "content": system_prompt})
     payload_messages.extend(messages)
 
+    from .openai_router import resolve_role
+    task_text = " ".join(m.get("content", "") for m in messages if m.get("role") == "user")
+    role = resolve_role(task_text)
+    model = _resolve_provider_model(provider_id, role)
+
     if provider_id == "claude":
         return await _call_anthropic(
-            api_key, spec["model"], payload_messages, max_tokens, use_tools=use_tools
+            api_key, model, payload_messages, max_tokens, use_tools=use_tools
         )
 
     return await _call_openai_compat(
-        api_key, spec["url"], spec["model"], payload_messages, max_tokens,
+        api_key, spec["url"], model, payload_messages, max_tokens,
         use_tools=use_tools, vendor=provider_id,
     )
 
@@ -363,8 +431,13 @@ async def _call_anthropic(
     use_tools: bool = True,
 ) -> tuple[str, dict]:
     """
-    Anthropic Messages API with Claude tool use support.
+    Anthropic Messages API with Claude tool use — uses anthropic SDK.
     """
+    try:
+        import anthropic as _anthropic
+    except ImportError:
+        return "[claude: anthropic SDK not installed]", {}
+
     system_content = ""
     filtered: list[dict] = []
     for m in messages:
@@ -372,12 +445,6 @@ async def _call_anthropic(
             system_content = m["content"]
         else:
             filtered.append(m)
-
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-    }
 
     claude_tools = [
         {
@@ -388,57 +455,54 @@ async def _call_anthropic(
         for s in TOOL_SCHEMAS_CHAT
     ]
 
+    client = _anthropic.AsyncAnthropic(api_key=api_key)
     current_messages = list(filtered)
     accumulated_usage: dict = {}
 
     for _round in range(_MAX_TOOL_ROUNDS + 1):
-        payload: dict = {
+        kwargs: dict = {
             "model": model,
             "max_tokens": max_tokens,
             "messages": current_messages,
         }
         if system_content:
-            payload["system"] = system_content
-        if use_tools:
-            payload["tools"] = claude_tools
+            kwargs["system"] = system_content
+        if use_tools and claude_tools:
+            kwargs["tools"] = claude_tools
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    json=payload,
-                    headers=headers,
-                )
-                resp.raise_for_status()
-                data = resp.json()
+            response = await client.messages.create(**kwargs)
         except Exception as exc:
             return f"[energy provider error: {exc}]", accumulated_usage
 
-        for k, v in (data.get("usage") or {}).items():
-            accumulated_usage[k] = accumulated_usage.get(k, 0) + (v if isinstance(v, (int, float)) else 0)
+        usage = response.usage
+        if usage:
+            accumulated_usage["input_tokens"] = (
+                accumulated_usage.get("input_tokens", 0) + getattr(usage, "input_tokens", 0)
+            )
+            accumulated_usage["output_tokens"] = (
+                accumulated_usage.get("output_tokens", 0) + getattr(usage, "output_tokens", 0)
+            )
 
-        stop_reason = data.get("stop_reason", "end_turn")
-        content_blocks = data.get("content", [])
-
-        tool_use_blocks = [b for b in content_blocks if b.get("type") == "tool_use"]
+        tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
 
         if not tool_use_blocks or not use_tools or _round >= _MAX_TOOL_ROUNDS:
-            for block in content_blocks:
-                if block.get("type") == "text":
-                    return block["text"], accumulated_usage
+            for block in response.content:
+                if block.type == "text":
+                    return block.text, accumulated_usage
             return "[claude: no text in response]", accumulated_usage
 
-        current_messages.append({"role": "assistant", "content": content_blocks})
+        current_messages.append({
+            "role": "assistant",
+            "content": [b.model_dump() for b in response.content],
+        })
 
         tool_results = []
         for block in tool_use_blocks:
-            name = block.get("name", "")
-            tool_id = block.get("id", "")
-            args = block.get("input", {})
-            result = await execute_tool(name, args)
+            result = await execute_tool(block.name, block.input)
             tool_results.append({
                 "type": "tool_result",
-                "tool_use_id": tool_id,
+                "tool_use_id": block.id,
                 "content": result,
             })
 

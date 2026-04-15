@@ -22,6 +22,7 @@ from .sigma_api import router as sigma_router
 from .editable_schema import router as editable_schema_router
 from .cli import router as cli_router
 from .focus import router as focus_router
+from .energy import router as energy_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -48,6 +49,7 @@ ALL_ROUTERS = [
     editable_schema_router,
     cli_router,
     focus_router,
+    energy_router,
 ]
 
 
