@@ -61,6 +61,7 @@ Each declares `UI_META` (tab config for frontend) + `DATA_SCHEMA` (field specs).
 - `billing.py` — Stripe billing: status, plans, checkout, portal, webhook
 - `contexts.py` — Prompt contexts CRUD (admin-only write via ADMIN_USER_ID)
 - `founders.py` — Founders registry (53-slot lifetime tier)
+- `energy.py` — Energy provider management: list seeds, optimize presets, discover models, converge PCNA
 
 ### Frontend (`client/`)
 React + Vite + TypeScript, Tailwind CSS, shadcn/ui components. Fully metadata-driven:
@@ -93,13 +94,38 @@ PostgreSQL via SQLAlchemy (Python) and Drizzle ORM (schema management).
 
 ### Energy Providers
 LLMs are energy sources, not agents. Managed by `energy_registry.py`:
-- **grok** — xAI Grok-3 Mini (default)
-- **gemini** — Google Gemini 2.5 Flash
-- **claude** — Anthropic Claude
+- **openai** — OpenAI GPT-4o (primary, with Responses API)
+- **grok** — xAI Grok models (2M-context, native search)
+- **gemini** — Google Gemini 2.5 Flash/Pro
+- **claude** — Anthropic Claude 3.x (Anthropic SDK)
+
+Each provider has a **provider seed WS module** (`provider::openai`, `provider::grok`, etc.) stored in `ws_modules` with `status=system` and full `route_config`:
+- `model_assignments` — role→model map (5 roles: conduct/perform/practice/record/derive)
+- `available_models` — list with pricing and capability metadata
+- `presets` — optimizer preset → role→model maps (speed/depth/price/balance/creativity)
+- `capabilities`, `pricing_url`, `context_addendum`, `enabled_tools`
+
+Model IDs are never hardcoded: `_resolve_provider_model(provider_id, role)` in `inference.py` checks env var → DB seed `model_assignments` → fallback default.
+
+**Task roles** (renamed in Task #78):
+- `conduct` (was root_orchestrator) — primary orchestration
+- `perform` (was high_risk_gate) — high-risk/approval-gated tasks
+- `practice` (was worker) — standard work tasks
+- `record` (was classifier) — classification and tagging
+- `derive` (was deep_pass) — deep reasoning/analysis
+
+**Energy routes** (`python/routes/energy.py`):
+- `GET /api/energy/providers` — list all provider seeds with PCNA stats
+- `PATCH /api/energy/providers/{id}/route_config` — partial update (merges model_assignments)
+- `POST /api/energy/optimize/{id}` — apply optimizer preset to model_assignments
+- `POST /api/energy/discover/{id}` — return available_models + last_checked
+- `POST /api/energy/converge/{id}` — merge provider PCNA core into main (80/20 blend)
 
 ### PCNA Engine
-53-node circular topology with 4 rings: Phi, Psi, Omega, Guardian.
-Each ring has coherence tracking and propagation.
+53-node circular topology with rings: Phi (Φ), Psi (Ψ), Omega (Ω), Guardian, Memory-L, Memory-S.
+Each ring has coherence tracking, heptagram propagation, and checkpoint persistence.
+
+**Per-provider PCNA cores**: each provider gets its own `PCNAEngine` instance via `get_provider_pcna(provider_id)` in `main.py` (fork-on-first-use, scoped checkpoint key `pcna_tensor_checkpoint_provider_{id}`). The converge endpoint blends a provider core back into the main engine.
 
 ### Key Concepts
 - **UI_META + DATA_SCHEMA**: Every route module declares both; `collect_ui_meta()` aggregates; `/api/v1/ui/structure` serves; frontend has zero hardcoded tabs
