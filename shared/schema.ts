@@ -11,6 +11,11 @@ export const conversations = pgTable("conversations", {
   title: text("title").notNull().default("New Chat"),
   model: text("model").notNull().default("gemini"),
   userId: varchar("user_id"),
+  contextBoost: text("context_boost"),
+  parentConvId: integer("parent_conv_id"),
+  subagentStatus: varchar("subagent_status", { length: 20 }),
+  subagentError: text("subagent_error"),
+  archived: boolean("archived").notNull().default(false),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -453,4 +458,33 @@ export const adminEmails = pgTable("admin_emails", {
 export const insertAdminEmailSchema = createInsertSchema(adminEmails).omit({ id: true, addedAt: true });
 export type InsertAdminEmail = z.infer<typeof insertAdminEmailSchema>;
 export type AdminEmail = typeof adminEmails.$inferSelect;
+
+export const approvalScopes = pgTable("approval_scopes", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  scope: varchar("scope", { length: 100 }).notNull(),
+  grantedAt: timestamp("granted_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [uniqueIndex("uq_approval_scope_user_scope").on(t.userId, t.scope)]);
+
+export type ApprovalScope = typeof approvalScopes.$inferSelect;
+
+export const wsModules = pgTable("ws_modules", {
+  id: serial("id").primaryKey(),
+  slug: varchar("slug", { length: 120 }).notNull().unique("ws_modules_slug_key"),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  ownerId: varchar("owner_id").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("inactive"),
+  handlerCode: text("handler_code"),
+  uiMeta: jsonb("ui_meta").notNull().default({}),
+  routeConfig: jsonb("route_config").notNull().default({}),
+  errorLog: text("error_log"),
+  version: integer("version").notNull().default(1),
+  contentHash: varchar("content_hash", { length: 64 }),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
+  lastSwappedAt: timestamp("last_swapped_at"),
+});
+
+export type WsModule = typeof wsModules.$inferSelect;
 // 381:13
