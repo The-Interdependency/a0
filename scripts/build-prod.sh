@@ -2,4 +2,4 @@
 set -e
 npm install
 pip install -e . --quiet
-npm run db:push
+npm run build

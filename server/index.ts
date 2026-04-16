@@ -2,6 +2,7 @@
 import "./types.d.ts";
 import path from "path";
 import fs from "fs";
+import { spawn, type ChildProcess } from "child_process";
 import express from "express";
 import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import {
@@ -17,6 +18,27 @@ const PYTHON_URL = "http://localhost:8001";
 const VITE_URL = "http://localhost:5001";
 const IS_PROD = process.env.NODE_ENV === "production";
 const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "a0p-dev-internal-secret";
+
+function spawnPython(): ChildProcess {
+  const proc = spawn(
+    "uvicorn",
+    ["python.main:app", "--host", "0.0.0.0", "--port", "8001"],
+    { stdio: "inherit", env: { ...process.env } }
+  );
+  proc.on("error", (err) => console.error("[python] failed to start uvicorn:", err.message));
+  proc.on("exit", (code, signal) => {
+    if (code !== 0 && signal !== "SIGTERM") {
+      console.error(`[python] uvicorn exited (code=${code} signal=${signal}) — restarting in 3 s`);
+      setTimeout(spawnPython, 3_000);
+    }
+  });
+  console.log("[python] uvicorn started (pid=" + proc.pid + ")");
+  return proc;
+}
+
+if (IS_PROD) {
+  spawnPython();
+}
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
