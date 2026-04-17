@@ -204,7 +204,13 @@ export default function ChatPage() {
       {showSidebar && (
         <div className="fixed inset-0 z-50 flex md:hidden" data-testid="mobile-sidebar-overlay">
           <div className="w-72 h-full bg-background shadow-xl flex flex-col">{sidebar}</div>
-          <div className="flex-1 bg-black/40" onClick={() => setShowSidebar(false)} />
+          <button
+            type="button"
+            aria-label="Close sidebar"
+            className="flex-1 bg-black/40"
+            onClick={() => setShowSidebar(false)}
+            data-testid="btn-close-mobile-sidebar"
+          />
         </div>
       )}
 

@@ -14,8 +14,16 @@ function hasTemplateParams(endpoint: string): boolean {
 
 function SectionRenderer({ section }: { section: SectionDef }) {
   const isTemplated = hasTemplateParams(section.endpoint);
+  // Stable, unique key per section so different sections targeting the same
+  // endpoint don't collide. Explicit queryFn keeps the URL = section.endpoint
+  // (the default fetcher would otherwise concatenate the whole key as a URL).
   const { data, isLoading, error } = useQuery<unknown>({
-    queryKey: [section.endpoint],
+    queryKey: ["section-data", section.id, section.endpoint],
+    queryFn: async () => {
+      const res = await fetch(section.endpoint, { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()) || res.statusText}`);
+      return res.json();
+    },
     refetchInterval: section.refresh_ms ?? 30_000,
     enabled: !isTemplated,
   });
@@ -37,9 +45,10 @@ function SectionRenderer({ section }: { section: SectionDef }) {
   }
 
   if (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     return (
       <div className="text-xs text-destructive p-2" data-testid={`section-error-${section.id}`}>
-        {(error as Error).message}
+        {msg}
       </div>
     );
   }
@@ -84,7 +93,9 @@ export default function TabRenderer({ tab }: TabRendererProps) {
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await Promise.all(
-      tab.sections.map((s) => qc.invalidateQueries({ queryKey: [s.endpoint] }))
+      tab.sections.map((s) =>
+        qc.invalidateQueries({ queryKey: ["section-data", s.id, s.endpoint] })
+      )
     );
     setIsRefreshing(false);
   }, [tab.sections, qc]);

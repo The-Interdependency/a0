@@ -1,7 +1,11 @@
 # 355:27
 import os
 import json
-from typing import Optional
+import copy
+import random
+import asyncio
+import logging
+from typing import Optional, Callable, Awaitable, Any
 import httpx
 
 from .tool_executor import (
@@ -9,6 +13,92 @@ from .tool_executor import (
     TOOL_SCHEMAS_RESPONSES,
     execute_tool,
 )
+
+_log = logging.getLogger("a0p.inference")
+
+# Anthropic prompt caching minimum is 1024 tokens. We use a rough char-based
+# estimate (~4 chars/token) to skip cache_control when the prefix is too small.
+_ANTHROPIC_CACHE_MIN_CHARS = 4096
+
+# Retry policy: 2 retries (3 attempts total) with jittered exponential backoff
+# on 429 and 5xx. 4xx other than 429 fail fast.
+_RETRY_MAX_ATTEMPTS = 3
+_RETRY_BASE_SLEEP = 1.5
+
+
+def _sanitize_provider_error(provider: str, exc: BaseException) -> str:
+    """Return a single-line user-safe error summary; full detail goes to server log."""
+    _log.exception("[%s] provider call failed", provider)
+    if isinstance(exc, httpx.HTTPStatusError):
+        try:
+            code = exc.response.status_code
+        except Exception:
+            code = "?"
+        return f"[{provider} error: HTTP {code}]"
+    if isinstance(exc, httpx.TimeoutException):
+        return f"[{provider} error: request timed out]"
+    if isinstance(exc, httpx.HTTPError):
+        return f"[{provider} error: network error]"
+    # Generic — never include str(exc) which may carry env-var values, URLs, or keys.
+    return f"[{provider} error: {type(exc).__name__}]"
+
+
+async def _post_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    json_payload: dict,
+    headers: dict,
+) -> httpx.Response:
+    """POST with jittered exponential backoff on 429 and 5xx. 4xx other than 429 fail fast."""
+    last_exc: Optional[BaseException] = None
+    for attempt in range(_RETRY_MAX_ATTEMPTS):
+        try:
+            resp = await client.post(url, json=json_payload, headers=headers)
+            status = resp.status_code
+            if status == 429 or 500 <= status < 600:
+                last_exc = httpx.HTTPStatusError(
+                    f"retryable status {status}", request=resp.request, response=resp
+                )
+                if attempt < _RETRY_MAX_ATTEMPTS - 1:
+                    sleep_s = _RETRY_BASE_SLEEP * (2 ** attempt) + random.uniform(0, 0.5)
+                    await asyncio.sleep(sleep_s)
+                    continue
+                resp.raise_for_status()
+            resp.raise_for_status()
+            return resp
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            last_exc = exc
+            if attempt < _RETRY_MAX_ATTEMPTS - 1:
+                sleep_s = _RETRY_BASE_SLEEP * (2 ** attempt) + random.uniform(0, 0.5)
+                await asyncio.sleep(sleep_s)
+                continue
+            raise
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("retry loop exited without response")
+
+
+def _canonical_tool_calls(tool_calls: list[dict]) -> str:
+    """Produce a stable string fingerprint of a list of tool calls for repeat detection."""
+    norm = []
+    for tc in tool_calls:
+        if "function" in tc:
+            name = tc.get("function", {}).get("name", "")
+            args = tc.get("function", {}).get("arguments", "")
+        elif tc.get("type") == "function_call":
+            name = tc.get("name", "")
+            args = tc.get("arguments", "")
+        else:
+            name = tc.get("name", "")
+            args = tc.get("input", "") or tc.get("arguments", "")
+        try:
+            args_obj = json.loads(args) if isinstance(args, str) else args
+            args_str = json.dumps(args_obj, sort_keys=True, default=str)
+        except Exception:
+            args_str = str(args)
+        norm.append(f"{name}::{args_str}")
+    return "|".join(sorted(norm))
 
 PROVIDER_ENDPOINTS = {
     "grok": {
@@ -249,7 +339,8 @@ async def _call_openai_responses(
                 out.append({"role": "user", "content": [{"type": "input_text", "text": content}]})
         return out
 
-    openai_input = _fmt_messages(input_messages)
+    # Defensive deepcopy: caller's list is never mutated by our tool loop.
+    openai_input = _fmt_messages(copy.deepcopy(input_messages))
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -257,6 +348,7 @@ async def _call_openai_responses(
     }
 
     accumulated_usage: dict = {}
+    prev_call_fingerprint: Optional[str] = None
 
     for _round in range(_MAX_TOOL_ROUNDS + 1):
         payload: dict = {
@@ -274,17 +366,24 @@ async def _call_openai_responses(
 
         try:
             async with httpx.AsyncClient(timeout=90.0) as client:
-                resp = await client.post(_OPENAI_RESPONSES_URL, json=payload, headers=headers)
-                resp.raise_for_status()
+                resp = await _post_with_retry(client, _OPENAI_RESPONSES_URL, json_payload=payload, headers=headers)
                 data = resp.json()
         except Exception as exc:
-            return f"[openai responses error: {exc}]", accumulated_usage
+            return _sanitize_provider_error("openai", exc), accumulated_usage
 
         for k, v in data.get("usage", {}).items():
             accumulated_usage[k] = accumulated_usage.get(k, 0) + (v if isinstance(v, (int, float)) else 0)
 
         output_items = data.get("output", [])
         tool_calls = [item for item in output_items if item.get("type") == "function_call"]
+
+        # Repeat-tool break: if the LLM emitted the exact same set of calls
+        # as last round, it's looping. Stop and answer directly.
+        if tool_calls:
+            fp = _canonical_tool_calls(tool_calls)
+            if prev_call_fingerprint is not None and fp == prev_call_fingerprint:
+                return "[noticed repeat tool call — answering directly]", accumulated_usage
+            prev_call_fingerprint = fp
 
         if not tool_calls or not use_tools or _round >= _MAX_TOOL_ROUNDS:
             content = ""
@@ -340,8 +439,12 @@ async def _call_openai_compat(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    current_messages = list(messages)
+    # Defensive deepcopy: caller's list is never mutated by our tool loop.
+    current_messages = copy.deepcopy(messages)
     accumulated_usage: dict = {}
+    prev_call_fingerprint: Optional[str] = None
+    # Provider name for sanitized errors — derive from URL.
+    provider_name = "grok" if "x.ai" in url else ("gemini" if "googleapis" in url else "provider")
 
     for _round in range(_MAX_TOOL_ROUNDS + 1):
         payload: dict = {
@@ -357,11 +460,10 @@ async def _call_openai_compat(
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(url, json=payload, headers=headers)
-                resp.raise_for_status()
+                resp = await _post_with_retry(client, url, json_payload=payload, headers=headers)
                 data = resp.json()
         except Exception as exc:
-            return f"[energy provider error: {exc}]", accumulated_usage
+            return _sanitize_provider_error(provider_name, exc), accumulated_usage
 
         for k, v in data.get("usage", {}).items():
             accumulated_usage[k] = accumulated_usage.get(k, 0) + (v if isinstance(v, (int, float)) else 0)
@@ -370,6 +472,13 @@ async def _call_openai_compat(
         message = choice.get("message", {})
         finish_reason = choice.get("finish_reason", "stop")
         tool_calls = message.get("tool_calls") or []
+
+        # Repeat-tool break: detect and short-circuit identical call sets.
+        if tool_calls:
+            fp = _canonical_tool_calls(tool_calls)
+            if prev_call_fingerprint is not None and fp == prev_call_fingerprint:
+                return "[noticed repeat tool call — answering directly]", accumulated_usage
+            prev_call_fingerprint = fp
 
         if not tool_calls or not use_tools or _round >= _MAX_TOOL_ROUNDS:
             return message.get("content") or "[no content]", accumulated_usage
@@ -433,15 +542,21 @@ async def _call_anthropic(
         }
         for s in TOOL_SCHEMAS_CHAT
     ]
-    # Apply prompt caching to the tools list (cache_control on the last tool caches all of them).
-    if enable_caching and claude_tools:
+    # Anthropic prompt caching has a 1024-token minimum (~4096 chars). Below that
+    # the cache_control header just adds overhead, so we skip it.
+    tools_size_estimate = sum(
+        len(t.get("name", "")) + len(t.get("description", "")) + len(json.dumps(t.get("input_schema", {})))
+        for t in claude_tools
+    )
+    cache_tools = enable_caching and claude_tools and tools_size_estimate >= _ANTHROPIC_CACHE_MIN_CHARS
+    if cache_tools:
         claude_tools[-1] = {**claude_tools[-1], "cache_control": {"type": "ephemeral"}}
 
     # Build the system prompt as a structured block so we can attach cache_control.
     system_blocks: list[dict] = []
     if system_text:
         block: dict = {"type": "text", "text": system_text}
-        if enable_caching:
+        if enable_caching and len(system_text) >= _ANTHROPIC_CACHE_MIN_CHARS:
             block["cache_control"] = {"type": "ephemeral"}
         system_blocks.append(block)
 
@@ -449,8 +564,10 @@ async def _call_anthropic(
     # complexity — re-enable for the final answer turn only).
     thinking_budget = _effort_to_thinking_budget(reasoning_effort, max_tokens)
 
-    current_messages = list(filtered)
+    # Defensive deepcopy: caller's list is never mutated by our tool loop.
+    current_messages = copy.deepcopy(filtered)
     accumulated_usage: dict = {}
+    prev_call_fingerprint: Optional[str] = None
 
     for _round in range(_MAX_TOOL_ROUNDS + 1):
         payload: dict = {
@@ -471,11 +588,10 @@ async def _call_anthropic(
 
         try:
             async with httpx.AsyncClient(timeout=90.0) as client:
-                resp = await client.post(spec["url"], json=payload, headers=headers)
-                resp.raise_for_status()
+                resp = await _post_with_retry(client, spec["url"], json_payload=payload, headers=headers)
                 data = resp.json()
         except Exception as exc:
-            return f"[energy provider error: {exc}]", accumulated_usage
+            return _sanitize_provider_error("claude", exc), accumulated_usage
 
         for k, v in (data.get("usage") or {}).items():
             accumulated_usage[k] = accumulated_usage.get(k, 0) + (v if isinstance(v, (int, float)) else 0)
@@ -484,6 +600,13 @@ async def _call_anthropic(
         content_blocks = data.get("content", [])
 
         tool_use_blocks = [b for b in content_blocks if b.get("type") == "tool_use"]
+
+        # Repeat-tool break for Claude.
+        if tool_use_blocks:
+            fp = _canonical_tool_calls(tool_use_blocks)
+            if prev_call_fingerprint is not None and fp == prev_call_fingerprint:
+                return "[noticed repeat tool call — answering directly]", accumulated_usage
+            prev_call_fingerprint = fp
 
         if not tool_use_blocks or not use_tools or _round >= _MAX_TOOL_ROUNDS:
             for block in content_blocks:

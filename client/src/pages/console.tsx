@@ -1,6 +1,6 @@
 // 132:0
-import { useState, useEffect } from "react";
-import { Loader2, Pencil, PencilOff } from "lucide-react";
+import { useState, useEffect, type ComponentType } from "react";
+import { AlertTriangle, Loader2, Pencil, PencilOff } from "lucide-react";
 import { useUiStructure } from "@/hooks/use-ui-structure";
 import { useBillingStatus } from "@/hooks/use-billing-status";
 import { useSEO } from "@/hooks/use-seo";
@@ -16,6 +16,37 @@ import CliKeysTab from "@/components/CliKeysTab";
 import type { TabDef } from "@/hooks/use-ui-structure";
 
 const STORAGE_KEY = "a0p_active_tab";
+
+// Registry of tab_ids that require a custom React component.
+// Adding a new system tab whose UI cannot be expressed by sections+fields
+// MUST register its renderer here. The console will refuse to render a
+// silent generic placeholder for these ids.
+export const CUSTOM_TAB_RENDERERS: Record<string, ComponentType> = {
+  approval_scopes: ApprovalScopesTab,
+  ws_modules: WsModulesTab,
+  docs: DocsTab,
+  sigma: SigmaTab,
+  agents: AgentsTab,
+  cli_keys: CliKeysTab,
+};
+
+function MissingRendererError({ tabId }: { tabId: string }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-3 h-full p-8 text-center"
+      data-testid={`tab-missing-renderer-${tabId}`}
+      data-renderer="missing"
+    >
+      <AlertTriangle className="h-8 w-8 text-destructive" />
+      <p className="text-sm font-medium">Tab "{tabId}" has no renderer wired</p>
+      <p className="text-xs text-muted-foreground max-w-md">
+        This tab returned no schema-driven sections and is not registered in
+        CUSTOM_TAB_RENDERERS. Wire a component in client/src/pages/console.tsx
+        or add a sections array to its UI_META.
+      </p>
+    </div>
+  );
+}
 
 function usePersistedTab(tabs: TabDef[]) {
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -40,13 +71,29 @@ function usePersistedTab(tabs: TabDef[]) {
 }
 
 function renderTab(tab: TabDef) {
-  if (tab.tab_id === "approval_scopes") return <ApprovalScopesTab />;
-  if (tab.tab_id === "ws_modules") return <WsModulesTab />;
-  if (tab.tab_id === "docs") return <DocsTab />;
-  if (tab.tab_id === "sigma") return <SigmaTab />;
-  if (tab.tab_id === "agents") return <AgentsTab />;
-  if (tab.tab_id === "cli_keys") return <CliKeysTab />;
-  return <TabRenderer tab={tab} />;
+  const Custom = CUSTOM_TAB_RENDERERS[tab.tab_id];
+  if (Custom) {
+    return (
+      <div className="h-full" data-testid={`tab-content-${tab.tab_id}`} data-renderer="custom">
+        <Custom />
+      </div>
+    );
+  }
+  // No custom renderer. The tab MUST have schema-driven sections, otherwise
+  // we render an explicit error rather than a silent empty placeholder
+  // (this is the regression we are guarding against).
+  if (!tab.sections || tab.sections.length === 0) {
+    return (
+      <div className="h-full" data-testid={`tab-content-${tab.tab_id}`} data-renderer="missing">
+        <MissingRendererError tabId={tab.tab_id} />
+      </div>
+    );
+  }
+  return (
+    <div className="h-full" data-testid={`tab-content-${tab.tab_id}`} data-renderer="generic">
+      <TabRenderer tab={tab} />
+    </div>
+  );
 }
 
 export default function ConsolePage() {
@@ -115,7 +162,8 @@ export default function ConsolePage() {
           </div>
 
           <div className="md:hidden w-full flex flex-col">
-            <div className="overflow-x-auto border-b border-border px-2 py-1 flex gap-1 shrink-0" data-testid="console-mobile-tabs">
+            <div className="relative border-b border-border shrink-0">
+              <div className="overflow-x-auto px-2 py-1 flex gap-1" data-testid="console-mobile-tabs">
               {tabs.map((tab) => (
                 <button
                   key={tab.tab_id}
@@ -130,6 +178,12 @@ export default function ConsolePage() {
                   {tab.label}
                 </button>
               ))}
+              </div>
+              {/* fading right gradient: signals more tabs scroll off-screen */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute top-0 right-0 h-full w-6 bg-gradient-to-l from-background to-transparent"
+              />
             </div>
             <div className="flex-1 overflow-hidden">
               {currentTab && renderTab(currentTab)}

@@ -59,7 +59,7 @@ export default function TopNav() {
             <item.icon
               className={cn("w-5 h-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary))]")}
             />
-            <span className="text-[9px] font-medium leading-none">{item.label}</span>
+            <span className="text-[11px] font-medium leading-none">{item.label}</span>
           </Link>
         );
       })}
@@ -68,12 +68,12 @@ export default function TopNav() {
           className="flex items-center justify-center px-3 min-h-[44px] text-muted-foreground gap-2"
           data-testid="nav-agent-name"
         >
-          <span className="text-[9px] font-mono truncate max-w-[100px]">{data.agent}</span>
+          <span className="text-[11px] font-mono truncate max-w-[100px]">{data.agent}</span>
           {user && (
-            <Link href="/pricing">
+            <Link href="/pricing" aria-label={`Account tier: ${tierLabel} — open pricing page`}>
               <span
                 className={cn(
-                  "text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide cursor-pointer",
+                  "text-[11px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide cursor-pointer",
                   TIER_COLORS[tier] ?? TIER_COLORS.free
                 )}
                 data-testid="nav-tier-badge"

@@ -14,9 +14,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import TabShell from "@/components/TabShell";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import {
-  ProviderSeedCard,
-} from "@/components/ProviderSeedCard";
 
 interface AgentInstance {
   name: string;
@@ -249,6 +246,7 @@ function ProviderPanel({ provider, onSetActive, isSettingActive }: ProviderPanel
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/energy/providers"] });
+      qc.invalidateQueries({ queryKey: ["/api/v1/agents"] });
       toast({ title: "Optimizer applied", description: `${provider.id} set to ${optimizeMutation.variables}` });
     },
     onError: (e: Error) => toast({ title: "Optimize failed", description: e.message, variant: "destructive" }),
@@ -272,6 +270,8 @@ function ProviderPanel({ provider, onSetActive, isSettingActive }: ProviderPanel
       return res.json();
     },
     onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["/api/energy/providers"] });
+      qc.invalidateQueries({ queryKey: ["/api/v1/agents"] });
       toast({ title: "PCNA merged", description: `coherence: ${data.main_coherence}` });
     },
     onError: (e: Error) => toast({ title: "Converge failed", description: e.message, variant: "destructive" }),

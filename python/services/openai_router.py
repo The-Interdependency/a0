@@ -53,7 +53,13 @@ def resolve_role(task_text: str) -> str:
 
 def resolve_model(role: str) -> str:
     env_key = _MODEL_ENV_MAP.get(role, "OPENAI_MODEL_ROOT")
-    return os.environ.get(env_key, "gpt-5.4")
+    val = os.environ.get(env_key, "")
+    if not val:
+        raise ValueError(
+            f"OpenAI model env var '{env_key}' is not set for role '{role}'. "
+            f"Set it (e.g. in your environment secrets) before issuing OpenAI calls."
+        )
+    return val
 
 
 def resolve_role_config(role: str) -> dict:

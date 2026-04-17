@@ -70,7 +70,10 @@ React + Vite + TypeScript, Tailwind CSS, shadcn/ui components. Fully metadata-dr
 - `client/src/components/TabShell.tsx` — tab chrome: header, refresh, error boundary
 - `client/src/components/console-sidebar.tsx` — navigation from the tab tree
 - `client/src/components/icon-resolve.ts` — lucide icon resolver by name string
-- `client/src/pages/console.tsx` — renders tab tree from use-ui-structure, zero hardcoded tabs
+- `client/src/pages/console.tsx` — renders tab tree from use-ui-structure. `CUSTOM_TAB_RENDERERS` maps a `tab_id` to its custom React component; tabs with no custom renderer fall back to `TabRenderer` (schema-driven). Tabs with neither a custom renderer nor any sections render an explicit `MissingRendererError` instead of a silent empty placeholder. Each rendered tab is wrapped in `<div data-testid="tab-content-${tab_id}" data-renderer="custom|generic|missing">` so e2e tests can assert the right path was taken.
+- **Console-tab regression guards (Task #86):**
+  - `tests/e2e/console-tabs.spec.ts` — Playwright e2e test. Logs in, opens every console tab, asserts each renders with `data-renderer` of `custom` or `generic` (never `missing`), and asserts every id in `REQUIRED_CUSTOM_TAB_IDS` actually rendered as `custom`. Run with `npx playwright test`. Requires the dev server running on port 5000 and Chromium installed (`npx playwright install chromium`).
+  - `scripts/check-console-tabs.mjs` — fast static preflight: parses `CUSTOM_TAB_RENDERERS`, fetches `/api/v1/ui/structure`, fails if any API tab has no renderer and no sections. Run with `node scripts/check-console-tabs.mjs`.
 - `client/src/pages/chat.tsx` — chat shell with conversation list + message bubbles
 - `client/src/components/top-nav.tsx` — Agent/Console nav, agent name + tier badge, upgrade toast listener
 - `client/src/components/tabs/` — Legacy hardcoded tab components (unused, retained for reference)
