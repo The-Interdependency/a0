@@ -4,6 +4,7 @@ ZFAE Tool Executor — implements the actual functions behind each agent tool.
 Called by the inference loop when the LLM issues a tool_call.
 """
 import json
+import os
 import urllib.parse
 import contextvars as _cv
 import httpx
