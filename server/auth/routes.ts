@@ -3,6 +3,11 @@ import crypto from "crypto";
 import type { Express, Request, Response } from "express";
 import { authStorage } from "./storage";
 import { hashPassphrase, verifyPassphrase, validatePassphrase } from "./password";
+import { regenerateSession } from "./setup";
+
+function sha256Hex(input: string): string {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
 
 export function registerAuthRoutes(app: Express) {
   app.get("/api/auth/user", async (req: Request, res: Response) => {
@@ -38,6 +43,8 @@ export function registerAuthRoutes(app: Express) {
         return res.status(401).json({ message: "Invalid username or passphrase" });
       }
       await authStorage.updateLastLogin(user.id);
+      // Regenerate session to prevent session-fixation attacks across the auth boundary.
+      await regenerateSession(req);
       req.session.userId = user.id;
       req.session.userEmail = user.email ?? undefined;
       req.session.userRole = user.role;
@@ -86,6 +93,8 @@ export function registerAuthRoutes(app: Express) {
         }
       }
 
+      // Regenerate session before establishing the new authenticated identity.
+      await regenerateSession(req);
       req.session.userId = user.id;
       req.session.userEmail = user.email ?? undefined;
       req.session.userRole = user.role;
@@ -149,10 +158,13 @@ export function registerAuthRoutes(app: Express) {
       }
       const resetToken = crypto.randomBytes(32).toString("hex");
       const FIFTEEN_MIN = 15 * 60 * 1000;
-      req.session.resetToken = resetToken;
+      // Store only the hash of the reset token in the session — never plaintext.
+      // The plaintext is returned to the caller once and must be presented back.
+      req.session.resetTokenHash = sha256Hex(resetToken);
       req.session.resetTokenExpiry = Date.now() + FIFTEEN_MIN;
       req.session.resetVerifiedUserId = userId;
       delete req.session.pendingResetUserId;
+      delete req.session.resetToken;
       res.json({ resetToken });
     } catch {
       res.status(500).json({ message: "Internal server error" });
@@ -164,13 +176,23 @@ export function registerAuthRoutes(app: Express) {
     if (!resetToken || !newPassphrase) {
       return res.status(400).json({ message: "resetToken and newPassphrase are required" });
     }
-    const tokenValid =
-      req.session.resetToken &&
+    const storedHash = req.session.resetTokenHash;
+    const presentedHash = typeof resetToken === "string" ? sha256Hex(resetToken) : "";
+    let tokenValid = false;
+    if (
+      storedHash &&
       req.session.resetTokenExpiry &&
-      req.session.resetToken === resetToken &&
-      Date.now() <= req.session.resetTokenExpiry;
+      presentedHash.length === storedHash.length &&
+      Date.now() <= req.session.resetTokenExpiry
+    ) {
+      // Constant-time comparison of the two SHA-256 hashes.
+      tokenValid = crypto.timingSafeEqual(
+        Buffer.from(storedHash, "hex"),
+        Buffer.from(presentedHash, "hex"),
+      );
+    }
     if (!tokenValid || !req.session.resetVerifiedUserId) {
-      delete req.session.resetToken;
+      delete req.session.resetTokenHash;
       delete req.session.resetTokenExpiry;
       delete req.session.resetVerifiedUserId;
       return res.status(401).json({ message: "Invalid or expired reset token" });
@@ -186,9 +208,9 @@ export function registerAuthRoutes(app: Express) {
     try {
       const newHash = await hashPassphrase(newPassphrase);
       await authStorage.updatePassphrase(resetUserId, newHash);
-      delete req.session.resetToken;
-      delete req.session.resetTokenExpiry;
-      delete req.session.resetVerifiedUserId;
+      // Burn any existing session and start fresh — invalidates other tabs that
+      // may have been mid-flow with the prior credentials.
+      await regenerateSession(req);
       res.json({ ok: true });
     } catch {
       res.status(500).json({ message: "Internal server error" });

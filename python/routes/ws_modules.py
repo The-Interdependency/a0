@@ -83,10 +83,25 @@ async def _get_user_tier(user_id: str) -> tuple[str, bool]:
     return tier, is_admin
 
 
-async def _require_ws(request: Request) -> tuple[str, str, bool]:
-    """Require ws/pro/admin tier. Returns (user_id, tier, is_admin)."""
+async def _resolve_user_context(request: Request) -> tuple[str, str, bool]:
+    """Resolve (user_id, tier, is_admin) once per request and cache on request.state.
+
+    Subsequent calls within the same request reuse the cached tuple instead of
+    re-querying the users table on every protected write path.
+    """
+    cached = getattr(request.state, "user_ctx", None)
+    if cached is not None:
+        return cached
     uid = _require_uid(request)
     tier, is_admin = await _get_user_tier(uid)
+    ctx = (uid, tier, is_admin)
+    request.state.user_ctx = ctx
+    return ctx
+
+
+async def _require_ws(request: Request) -> tuple[str, str, bool]:
+    """Require ws/pro/admin tier. Returns (user_id, tier, is_admin)."""
+    uid, tier, is_admin = await _resolve_user_context(request)
     if tier not in _WS_TIERS and not is_admin:
         raise HTTPException(status_code=403, detail="ws, pro, or admin tier required")
     return uid, tier, is_admin

@@ -30,12 +30,19 @@ export async function setupAuth(app: Express) {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: IS_PROD,
         maxAge: sessionTtl,
-        sameSite: "lax",
+        sameSite: "strict",
       },
       store: sessionStore,
     })
   );
+}
+
+/** Promise-style wrapper around req.session.regenerate to use after auth events. */
+export function regenerateSession(req: import("express").Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((err) => (err ? reject(err) : resolve()));
+  });
 }
 // 34:0

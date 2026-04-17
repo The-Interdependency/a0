@@ -236,7 +236,24 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="A0P Python Backend", lifespan=lifespan)
 initialize_registry(app)
 
-_INTERNAL_SECRET = os.environ.get("INTERNAL_API_SECRET", "a0p-dev-internal-secret")
+_IS_PROD = os.environ.get("NODE_ENV") == "production" or os.environ.get("ENV") == "production"
+_INTERNAL_SECRET = os.environ.get("INTERNAL_API_SECRET")
+if not _INTERNAL_SECRET:
+    if _IS_PROD:
+        raise RuntimeError(
+            "[python] INTERNAL_API_SECRET env var is required in production. "
+            "Set it before starting the server."
+        )
+    print(
+        "[python] WARNING: INTERNAL_API_SECRET is unset — generating an ephemeral "
+        "per-process secret. Cross-process calls from the Express front will fail "
+        "until you set INTERNAL_API_SECRET (scripts/start-dev.sh sets it for dev)."
+    )
+    # No hardcoded default. scripts/start-dev.sh exports a shared random value
+    # before forking both processes; if it's still unset here we mint a per-process
+    # random so the secret is never a known constant.
+    import secrets as _secrets_mod
+    _INTERNAL_SECRET = "dev-" + _secrets_mod.token_hex(24)
 
 _OPEN_PATHS = {"/api/health", "/api/v1/guest/chat"}
 
@@ -246,9 +263,17 @@ class InternalAuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if any(path.startswith(p) for p in _OPEN_PATHS):
             return await call_next(request)
-        token = request.headers.get("x-a0p-internal", "")
+        token = request.headers.get("x-a0p-internal")
+        if not token:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Unauthorized: internal token missing"},
+            )
         if token != _INTERNAL_SECRET:
-            return JSONResponse(status_code=403, content={"error": "Forbidden"})
+            return JSONResponse(
+                status_code=403,
+                content={"error": "Forbidden: invalid internal token"},
+            )
         return await call_next(request)
 
 

@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+# Generate a per-run internal API secret if one isn't already set in the env.
+# Both Express and Python read INTERNAL_API_SECRET; sharing it via the parent
+# shell keeps the two sibling processes in sync without any hardcoded default.
+if [ -z "${INTERNAL_API_SECRET:-}" ]; then
+  export INTERNAL_API_SECRET="dev-$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 32)"
+  echo "[start-dev] generated ephemeral INTERNAL_API_SECRET for dev session"
+fi
+
 # Aggressively clear ports before starting — deployment leaves stale processes
 for _p in 5000 5001 5002 8001; do
   fuser -k ${_p}/tcp 2>/dev/null || true

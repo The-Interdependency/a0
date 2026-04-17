@@ -1,6 +1,6 @@
 # 87:9
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Any
 
 from ..storage import storage
@@ -49,13 +49,21 @@ DATA_SCHEMA = {
 
 router = APIRouter(prefix="/api/v1", tags=["tools"])
 
+# Whitelist of handler types that may be assigned to a custom tool via the API.
+# `handler_code` from API callers is treated as descriptive metadata only — it is
+# never executed. Real tool dispatch goes through the internal registry.
+_ALLOWED_HANDLER_TYPES = {"internal"}
+
 
 class CreateTool(BaseModel):
-    user_id: str = "default"
+    # Reject any unknown field — most importantly `user_id`, which callers must
+    # not be able to supply. Ownership is set from the authenticated session.
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     description: str
     handler_type: str
-    handler_code: str
+    handler_code: Optional[str] = None
     parameters_schema: Optional[Any] = None
     target_models: Optional[list[str]] = None
     enabled: bool = True
@@ -63,6 +71,10 @@ class CreateTool(BaseModel):
 
 
 class UpdateTool(BaseModel):
+    # Reject any unknown field, including `user_id`, so updates can never
+    # silently reassign ownership.
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = None
     description: Optional[str] = None
     handler_type: Optional[str] = None
@@ -72,14 +84,50 @@ class UpdateTool(BaseModel):
     enabled: Optional[bool] = None
 
 
+def _require_uid(request: Request) -> str:
+    uid = request.headers.get("x-user-id", "").strip()
+    if not uid:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return uid
+
+
+def _is_admin(request: Request) -> bool:
+    return (request.headers.get("x-user-role") or "").strip().lower() == "admin"
+
+
+def _check_handler_type(handler_type: str) -> None:
+    if handler_type not in _ALLOWED_HANDLER_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"handler_type must be one of: {sorted(_ALLOWED_HANDLER_TYPES)}",
+        )
+
+
+async def _require_owner_or_admin(request: Request, tool: dict) -> None:
+    uid = _require_uid(request)
+    if _is_admin(request):
+        return
+    if tool.get("user_id") != uid:
+        raise HTTPException(status_code=403, detail="Not allowed to modify this tool")
+
+
 @router.get("/tools")
 async def list_tools(user_id: Optional[str] = None):
     return await storage.get_custom_tools(user_id)
 
 
 @router.post("/tools")
-async def create_tool(body: CreateTool):
-    return await storage.create_custom_tool(body.model_dump())
+async def create_tool(body: CreateTool, request: Request):
+    uid = _require_uid(request)
+    _check_handler_type(body.handler_type)
+    data = body.model_dump()
+    # Owner is always the authenticated caller — never trust body-supplied user_id.
+    data["user_id"] = uid
+    # handler_code is metadata only; the tool dispatcher uses the internal registry.
+    # Persist an empty string when omitted to satisfy the NOT NULL column.
+    if data.get("handler_code") is None:
+        data["handler_code"] = ""
+    return await storage.create_custom_tool(data)
 
 
 @router.get("/tools/{tool_id}")
@@ -91,16 +139,28 @@ async def get_tool(tool_id: int):
 
 
 @router.patch("/tools/{tool_id}")
-async def update_tool(tool_id: int, body: UpdateTool):
+async def update_tool(tool_id: int, body: UpdateTool, request: Request):
+    tool = await storage.get_custom_tool(tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="tool not found")
+    await _require_owner_or_admin(request, tool)
     updates = body.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="no updates")
+    if "handler_type" in updates:
+        _check_handler_type(updates["handler_type"])
+    # Never let an update reassign ownership via the API.
+    updates.pop("user_id", None)
     await storage.update_custom_tool(tool_id, updates)
     return {"ok": True}
 
 
 @router.delete("/tools/{tool_id}")
-async def delete_tool(tool_id: int):
+async def delete_tool(tool_id: int, request: Request):
+    tool = await storage.get_custom_tool(tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="tool not found")
+    await _require_owner_or_admin(request, tool)
     await storage.delete_custom_tool(tool_id)
     return {"ok": True}
 

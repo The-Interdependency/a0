@@ -9,6 +9,7 @@ declare module "express-session" {
     pendingResetUserId?: string;
     resetVerifiedUserId?: string;
     resetToken?: string;
+    resetTokenHash?: string;
     resetTokenExpiry?: number;
   }
 }
