@@ -177,7 +177,8 @@ async def launch_subagent(body: SubagentBody, request: Request):
         "metadata": {"subagent": True},
     })
 
-    asyncio.create_task(_run_subagent(conv_id, body.task, body.model, uid))
+    from ..services.bg_tasks import spawn as _spawn_bg
+    _spawn_bg(_run_subagent(conv_id, body.task, body.model, uid), name=f"subagent-conv{conv_id}")
 
     return {
         "ok": True,

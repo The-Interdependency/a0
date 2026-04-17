@@ -1,7 +1,7 @@
 # 320:0
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-from sqlalchemy import select, update, delete, func, desc, asc
+from sqlalchemy import select, update, delete, func, desc, asc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_session
@@ -12,6 +12,17 @@ from ..models import (
 )
 
 
+# Allowed client-supplied fields for create operations. Internal columns
+# (id, created_at, updated_at, etc.) are set server-side only.
+_CONV_ALLOWED_FIELDS = {
+    "title", "model", "user_id", "context_boost",
+    "parent_conv_id", "subagent_status", "subagent_error", "archived",
+}
+_MSG_ALLOWED_FIELDS = {
+    "conversation_id", "role", "content", "model", "metadata",
+}
+
+
 def _row_to_dict(row) -> Optional[Dict[str, Any]]:
     if row is None:
         return None
@@ -20,13 +31,23 @@ def _row_to_dict(row) -> Optional[Dict[str, Any]]:
     return dict(row._mapping)
 
 
+def _filter_fields(data: Dict[str, Any], allowed: set) -> Dict[str, Any]:
+    return {k: v for k, v in data.items() if k in allowed}
+
+
 class _CoreStorage:
 
-    async def get_conversations(self) -> List[Dict[str, Any]]:
+    async def get_conversations(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List conversations, optionally scoped to a user.
+
+        When user_id is given, also returns legacy conversations with NULL
+        user_id (backward compat). Pass None for an admin-style unscoped view.
+        """
         async with get_session() as session:
-            result = await session.execute(
-                select(Conversation).order_by(desc(Conversation.updated_at))
-            )
+            q = select(Conversation).order_by(desc(Conversation.updated_at))
+            if user_id:
+                q = q.where(or_(Conversation.user_id == user_id, Conversation.user_id.is_(None)))
+            result = await session.execute(q)
             return [_row_to_dict(r) for r in result.scalars().all()]
 
     async def get_conversation(self, id: int) -> Optional[Dict[str, Any]]:
@@ -35,8 +56,9 @@ class _CoreStorage:
             return _row_to_dict(result.scalar_one_or_none())
 
     async def create_conversation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        safe = _filter_fields(data, _CONV_ALLOWED_FIELDS)
         async with get_session() as session:
-            conv = Conversation(**data)
+            conv = Conversation(**safe)
             session.add(conv)
             await session.flush()
             await session.refresh(conv)
@@ -82,8 +104,9 @@ class _CoreStorage:
             return [_row_to_dict(r) for r in result.scalars().all()]
 
     async def create_message(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        safe = _filter_fields(data, _MSG_ALLOWED_FIELDS)
         async with get_session() as session:
-            msg = Message(**data)
+            msg = Message(**safe)
             session.add(msg)
             await session.flush()
             await session.refresh(msg)

@@ -1,5 +1,6 @@
-# 29:0
+# 35:0
 import os
+import asyncio
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy import create_engine
@@ -34,7 +35,13 @@ async def get_session():
         try:
             yield session
             await session.commit()
+        except asyncio.CancelledError:
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+            raise
         except Exception:
             await session.rollback()
             raise
-# 29:0
+# 35:0

@@ -1,6 +1,6 @@
 // 381:13
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, integer, timestamp, jsonb, real, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, timestamp, jsonb, real, boolean, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -18,7 +18,9 @@ export const conversations = pgTable("conversations", {
   archived: boolean("archived").notNull().default(false),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
+}, (t) => [
+  index("idx_conversations_user_updated").on(t.userId, t.updatedAt.desc()),
+]);
 
 export const insertConversationSchema = createInsertSchema(conversations).omit({
   id: true,
@@ -448,6 +450,14 @@ export const byokKeys = pgTable("byok_keys", {
   keyHash: varchar("key_hash", { length: 256 }).notNull(),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 }, (t) => [uniqueIndex("uq_byok_user_provider").on(t.userId, t.provider)]);
+
+export const processedStripeEvents = pgTable("processed_stripe_events", {
+  eventId: varchar("event_id", { length: 255 }).primaryKey(),
+  eventType: varchar("event_type", { length: 120 }),
+  processedAt: timestamp("processed_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export type ProcessedStripeEvent = typeof processedStripeEvents.$inferSelect;
 
 export const adminEmails = pgTable("admin_emails", {
   id: serial("id").primaryKey(),

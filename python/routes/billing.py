@@ -335,6 +335,32 @@ async def customer_portal(body: PortalBody, request: Request):
     return {"url": session.url}
 
 
+async def _ensure_stripe_events_table() -> None:
+    """Lazily create the idempotency table for processed Stripe events."""
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS processed_stripe_events (
+                event_id VARCHAR(255) PRIMARY KEY,
+                event_type VARCHAR(120),
+                processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+
+async def _claim_stripe_event(event_id: str, event_type: str) -> bool:
+    """Insert event id; return True if newly claimed, False if already processed."""
+    async with engine.begin() as conn:
+        res = await conn.execute(
+            text(
+                "INSERT INTO processed_stripe_events (event_id, event_type) "
+                "VALUES (:eid, :etype) ON CONFLICT (event_id) DO NOTHING"
+            ),
+            {"eid": event_id, "etype": event_type},
+        )
+        # rowcount is 1 when inserted, 0 when it already existed.
+        return (res.rowcount or 0) == 1
+
+
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
@@ -352,8 +378,52 @@ async def stripe_webhook(request: Request):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    event_id = event.get("id") or ""
+    event_type = event.get("type") or ""
+    if event_id:
+        try:
+            await _ensure_stripe_events_table()
+            claimed = await _claim_stripe_event(event_id, event_type)
+        except Exception as exc:
+            # If the idempotency table is unavailable, log and proceed —
+            # better to risk a duplicate than reject a valid event.
+            print(f"[billing] idempotency table unavailable: {exc}")
+            claimed = True
+        if not claimed:
+            # Already processed — reply OK so Stripe stops retrying.
+            return {"received": True, "duplicate": True}
+
     await _dispatch_webhook(event)
     return {"received": True}
+
+
+# --- Internal endpoint: WS-tier promotion at registration/login ---
+class PromoteWsBody(BaseModel):
+    user_id: str
+    email: Optional[str] = None
+
+
+@router.post("/internal/promote-ws")
+async def internal_promote_ws(body: PromoteWsBody, request: Request):
+    """Trigger the WS-tier email-domain promotion check.
+
+    Intended to be called by the Express auth layer immediately after
+    successful login and registration. Gated by the internal API secret
+    so it is not externally callable.
+    """
+    secret = os.environ.get("INTERNAL_API_SECRET", "")
+    provided = request.headers.get("x-internal-secret", "")
+    if not secret or provided != secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    async with engine.connect() as conn:
+        row = await conn.execute(
+            text("SELECT subscription_tier FROM users WHERE id = :id"), {"id": body.user_id}
+        )
+        rec = row.mappings().first()
+    current_tier = (rec["subscription_tier"] if rec else "free") or "free"
+    new_tier = await _maybe_promote_ws(body.user_id, body.email, current_tier)
+    return {"user_id": body.user_id, "tier": new_tier, "promoted": new_tier != current_tier}
 
 
 async def _dispatch_webhook(event: dict) -> None:

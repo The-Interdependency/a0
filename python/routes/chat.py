@@ -1,4 +1,5 @@
 # 338:15
+import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -8,11 +9,30 @@ from ..storage import storage
 from ..services.stripe_service import get_tier_context_name
 from ..services.energy_registry import energy_registry
 from ..services.inference import call_energy_provider
+from ..services.bg_tasks import spawn as _spawn_bg
 from .contexts import get_context_value
 
-# In-memory pending gate store: conv_id → {gate_id, history, system_prompt, provider_id, uid}
+# In-memory pending gate store: conv_id → {gate_id, history, system_prompt, provider_id, uid, ts}
 # Used to replay a blocked action when the user grants a scope.
+# Entries are evicted after _PENDING_GATE_TTL_SECS to keep the map bounded.
 _pending_gates: dict[int, dict] = {}
+_PENDING_GATE_TTL_SECS = 15 * 60  # 15 min
+
+
+def _sweep_pending_gates() -> None:
+    """Evict pending-gate entries older than the TTL."""
+    if not _pending_gates:
+        return
+    now = time.monotonic()
+    stale = [cid for cid, e in _pending_gates.items() if now - e.get("ts", 0) > _PENDING_GATE_TTL_SECS]
+    for cid in stale:
+        _pending_gates.pop(cid, None)
+
+
+def _store_pending_gate(conv_id: int, entry: dict) -> None:
+    entry["ts"] = time.monotonic()
+    _pending_gates[conv_id] = entry
+    _sweep_pending_gates()
 
 # DOC module: chat
 # DOC label: Chat
@@ -74,7 +94,7 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 class CreateConversation(BaseModel):
     title: str = "New Chat"
     model: str = "gemini"
-    userId: Optional[str] = None
+    # Note: userId from body is now ignored — owner is always the authenticated caller.
 
 
 class UpdateConversation(BaseModel):
@@ -86,41 +106,67 @@ class SendMessage(BaseModel):
     model: Optional[str] = None
 
 
-@router.get("/conversations")
-async def list_conversations():
-    return await storage.get_conversations()
+def _caller_uid(request: Request) -> Optional[str]:
+    return request.headers.get("x-user-id") or None
 
 
-@router.post("/conversations")
-async def create_conversation(body: CreateConversation):
-    data = {"title": body.title, "model": body.model}
-    if body.userId:
-        data["user_id"] = body.userId
-    return await storage.create_conversation(data)
+async def _require_owned_conv(conv_id: int, uid: Optional[str]) -> dict:
+    """Fetch conversation; 404 if missing or not owned by caller.
 
-
-@router.get("/conversations/{conv_id}")
-async def get_conversation(conv_id: int):
+    Backward-compat: legacy conversations with NULL user_id remain accessible.
+    """
     conv = await storage.get_conversation(conv_id)
     if not conv:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    owner = conv.get("user_id")
+    if owner and uid and owner != uid:
+        # 404 (not 403) to avoid existence disclosure across users.
         raise HTTPException(status_code=404, detail="conversation not found")
     return conv
 
 
+@router.get("/conversations")
+async def list_conversations(request: Request):
+    uid = _caller_uid(request)
+    return await storage.get_conversations(user_id=uid)
+
+
+@router.post("/conversations")
+async def create_conversation(body: CreateConversation, request: Request):
+    uid = _caller_uid(request)
+    data: dict = {"title": body.title, "model": body.model}
+    if uid:
+        data["user_id"] = uid
+    return await storage.create_conversation(data)
+
+
+@router.get("/conversations/{conv_id}")
+async def get_conversation(conv_id: int, request: Request):
+    uid = _caller_uid(request)
+    return await _require_owned_conv(conv_id, uid)
+
+
 @router.patch("/conversations/{conv_id}")
-async def update_conversation(conv_id: int, body: UpdateConversation):
+async def update_conversation(conv_id: int, body: UpdateConversation, request: Request):
+    uid = _caller_uid(request)
+    await _require_owned_conv(conv_id, uid)
     await storage.update_conversation_title(conv_id, body.title)
     return {"ok": True}
 
 
 @router.delete("/conversations/{conv_id}")
-async def delete_conversation(conv_id: int):
+async def delete_conversation(conv_id: int, request: Request):
+    uid = _caller_uid(request)
+    await _require_owned_conv(conv_id, uid)
     await storage.delete_conversation(conv_id)
+    _pending_gates.pop(conv_id, None)
     return {"ok": True}
 
 
 @router.get("/conversations/{conv_id}/messages")
-async def list_messages(conv_id: int):
+async def list_messages(conv_id: int, request: Request):
+    uid = _caller_uid(request)
+    await _require_owned_conv(conv_id, uid)
     return await storage.get_messages(conv_id)
 
 
@@ -261,13 +307,13 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                     replay_result = {"content": replay_content, "usage": replay_usage}
                     reply += f"\n\nRetrying blocked action...\n\n{replay_content}"
                     if replay_usage.get("approval_state") == "pending":
-                        _pending_gates[conv_id] = {
+                        _store_pending_gate(conv_id, {
                             "gate_id": replay_usage.get("gate_id"),
                             "history": pending["history"],
                             "system_prompt": pending["system_prompt"],
                             "provider_id": pending["provider_id"],
                             "uid": uid,
-                        }
+                        })
                 else:
                     replay_result = None
 
@@ -365,13 +411,13 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             set_approval_scope_user_id(None)
 
         if usage.get("approval_state") == "pending":
-            _pending_gates[conv_id] = {
+            _store_pending_gate(conv_id, {
                 "gate_id": usage.get("gate_id"),
                 "history": history,
                 "system_prompt": system_prompt or None,
                 "provider_id": provider_id,
                 "uid": uid,
-            }
+            })
 
         assistant_msg = await storage.create_message({
             "conversation_id": conv_id,
@@ -381,14 +427,14 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             "metadata": {"tier": tier, "usage": usage},
         })
 
-        import asyncio as _asyncio
         from ..engine.zeta import _zeta_engine
-        _asyncio.create_task(
+        _spawn_bg(
             _zeta_engine.evaluate(
                 assistant_text=content,
                 provider=provider_id,
                 user_text=body.content,
-            )
+            ),
+            name=f"zeta-eval-conv{conv_id}",
         )
 
         return {
