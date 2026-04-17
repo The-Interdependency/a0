@@ -74,6 +74,10 @@ _ZFAE_TOOL_SPECS = {
         "description": "Make an authenticated GitHub REST API call — read/write repos, issues, PRs, commits, branches, releases. Auth is automatic.",
         "handler_type": "internal",
     },
+    "github_write_file": {
+        "description": "Create or update a single file in a GitHub repo in one call — handles base64 encoding and SHA lookup automatically. Defaults to The-Interdependency/a0.",
+        "handler_type": "internal",
+    },
     "manage_approval_scope": {
         "description": "Grant or revoke a pre-approved action scope for the current user — eliminates per-gate APPROVE prompts for that category.",
         "handler_type": "internal",

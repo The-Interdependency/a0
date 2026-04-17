@@ -14,19 +14,47 @@ PROVIDER_ENDPOINTS = {
     "grok": {
         "url": "https://api.x.ai/v1/chat/completions",
         "env_key": "XAI_API_KEY",
-        "model": "grok-3-latest",
+        "model": "grok-4-fast-reasoning",
+        "supports_reasoning_effort": True,
     },
     "gemini": {
         "url": "https://generativelanguage.googleapis.com/v1beta/chat/completions",
         "env_key": "GEMINI_API_KEY",
-        "model": "gemini-2.5-pro-preview-05-06",
+        "model": "gemini-2.5-flash",
+        "supports_reasoning_effort": False,
     },
     "claude": {
         "url": "https://api.anthropic.com/v1/messages",
         "env_key": "ANTHROPIC_API_KEY",
-        "model": "claude-3-5-sonnet-20241022",
+        "model": "claude-sonnet-4-5",
+        "supports_reasoning_effort": False,
+        "supports_thinking": True,
+        "supports_prompt_caching": True,
     },
 }
+
+# Anthropic API version (stable; new features arrive via anthropic-beta header).
+_ANTHROPIC_VERSION = "2023-06-01"
+
+
+def _gate_to_effort(effort: Optional[str]) -> str:
+    """Normalize a reasoning effort hint to the canonical scale used by Grok / GPT-5."""
+    if not effort:
+        return "low"
+    e = effort.lower()
+    if e in ("minimal", "low", "medium", "high"):
+        return e
+    return "low"
+
+
+def _effort_to_thinking_budget(effort: Optional[str], max_tokens: int) -> int:
+    """Map effort → Claude thinking budget tokens. Must be < max_tokens and >= 1024."""
+    e = _gate_to_effort(effort)
+    budget = {"minimal": 0, "low": 1024, "medium": 4096, "high": 16384}.get(e, 1024)
+    if budget == 0:
+        return 0
+    # budget must be strictly less than max_tokens, and at least 1024
+    return max(1024, min(budget, max(1024, max_tokens - 512)))
 
 _OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 
@@ -41,12 +69,18 @@ async def call_energy_provider(
     use_tools: bool = True,
     user_id: Optional[str] = None,
     skip_approval: bool = False,
+    reasoning_effort: Optional[str] = None,
 ) -> tuple[str, dict]:
     """
     Forward messages to the active energy provider with the system prompt prepended.
     Returns (content, usage_dict).
     user_id is threaded into the OpenAI path for approval-scope checking.
     skip_approval=True bypasses the approval gate (used for replay after explicit APPROVE).
+    reasoning_effort is mapped per-provider:
+      - OpenAI: passed via openai_router call_cfg (this param is ignored on the openai branch)
+      - Grok:   passed as reasoning_effort on grok-4 / grok-4-fast-reasoning
+      - Claude: mapped to thinking.budget_tokens (extended thinking)
+      - Gemini: not honored on the compat endpoint (no thinking_config support there)
     """
     if provider_id == "openai":
         return await _call_openai_routed(messages, system_prompt, use_tools=use_tools, user_id=user_id, skip_approval=skip_approval)
@@ -66,11 +100,16 @@ async def call_energy_provider(
 
     if provider_id == "claude":
         return await _call_anthropic(
-            api_key, spec["model"], payload_messages, max_tokens, use_tools=use_tools
+            api_key, spec["model"], payload_messages, max_tokens,
+            use_tools=use_tools,
+            reasoning_effort=reasoning_effort,
+            enable_caching=spec.get("supports_prompt_caching", False),
         )
 
     return await _call_openai_compat(
-        api_key, spec["url"], spec["model"], payload_messages, max_tokens, use_tools=use_tools
+        api_key, spec["url"], spec["model"], payload_messages, max_tokens,
+        use_tools=use_tools,
+        reasoning_effort=reasoning_effort if spec.get("supports_reasoning_effort") else None,
     )
 
 
@@ -290,10 +329,12 @@ async def _call_openai_compat(
     messages: list[dict],
     max_tokens: int,
     use_tools: bool = True,
+    reasoning_effort: Optional[str] = None,
 ) -> tuple[str, dict]:
     """
     Chat Completions format (Grok, Gemini).
     Runs tool-calling loop: execute tool_calls, inject tool results, re-call until done.
+    reasoning_effort is forwarded only when the caller has confirmed support (Grok).
     """
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -308,6 +349,8 @@ async def _call_openai_compat(
             "messages": current_messages,
             "max_tokens": max_tokens,
         }
+        if reasoning_effort:
+            payload["reasoning_effort"] = _gate_to_effort(reasoning_effort)
         if use_tools:
             payload["tools"] = TOOL_SCHEMAS_CHAT
             payload["tool_choice"] = "auto"
@@ -356,21 +399,29 @@ async def _call_anthropic(
     messages: list[dict],
     max_tokens: int,
     use_tools: bool = True,
+    reasoning_effort: Optional[str] = None,
+    enable_caching: bool = True,
 ) -> tuple[str, dict]:
     """
-    Anthropic Messages API with Claude tool use support.
+    Anthropic Messages API with Claude tool use, extended thinking, and prompt caching.
+
+    - reasoning_effort: when set, enables extended thinking with a budget mapped from effort.
+    - enable_caching: when True, marks the system prompt and tools list with cache_control,
+      cutting input cost ~80% on repeated turns. Requires the prefix to be >= 1024 tokens
+      to actually cache (Anthropic ignores cache_control on smaller prefixes silently).
     """
-    system_content = ""
+    spec = PROVIDER_ENDPOINTS["claude"]
+    system_text = ""
     filtered: list[dict] = []
     for m in messages:
         if m["role"] == "system":
-            system_content = m["content"]
+            system_text = m["content"]
         else:
             filtered.append(m)
 
     headers = {
         "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": _ANTHROPIC_VERSION,
         "Content-Type": "application/json",
     }
 
@@ -382,6 +433,21 @@ async def _call_anthropic(
         }
         for s in TOOL_SCHEMAS_CHAT
     ]
+    # Apply prompt caching to the tools list (cache_control on the last tool caches all of them).
+    if enable_caching and claude_tools:
+        claude_tools[-1] = {**claude_tools[-1], "cache_control": {"type": "ephemeral"}}
+
+    # Build the system prompt as a structured block so we can attach cache_control.
+    system_blocks: list[dict] = []
+    if system_text:
+        block: dict = {"type": "text", "text": system_text}
+        if enable_caching:
+            block["cache_control"] = {"type": "ephemeral"}
+        system_blocks.append(block)
+
+    # Extended thinking (skip for tool-use turns to avoid the "preserve thinking blocks"
+    # complexity — re-enable for the final answer turn only).
+    thinking_budget = _effort_to_thinking_budget(reasoning_effort, max_tokens)
 
     current_messages = list(filtered)
     accumulated_usage: dict = {}
@@ -392,18 +458,20 @@ async def _call_anthropic(
             "max_tokens": max_tokens,
             "messages": current_messages,
         }
-        if system_content:
-            payload["system"] = system_content
+        if system_blocks:
+            payload["system"] = system_blocks
         if use_tools:
             payload["tools"] = claude_tools
+        # Extended thinking is enabled on every round; the assistant turn we re-inject
+        # below preserves the model's thinking blocks intact (Anthropic requires this
+        # when continuing a thinking conversation).
+        if thinking_budget > 0:
+            payload["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
+            # thinking forces temperature=1 — don't set temperature alongside it.
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    json=payload,
-                    headers=headers,
-                )
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                resp = await client.post(spec["url"], json=payload, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
         except Exception as exc:
