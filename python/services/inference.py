@@ -462,10 +462,10 @@ async def _call_anthropic(
             payload["system"] = system_blocks
         if use_tools:
             payload["tools"] = claude_tools
-        # Only enable thinking on the final round (no pending tool calls expected).
-        # Thinking + multi-turn tool use requires preserving thinking blocks across turns,
-        # which adds fragility we skip for now.
-        if thinking_budget > 0 and _round == _MAX_TOOL_ROUNDS:
+        # Extended thinking is enabled on every round; the assistant turn we re-inject
+        # below preserves the model's thinking blocks intact (Anthropic requires this
+        # when continuing a thinking conversation).
+        if thinking_budget > 0:
             payload["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
             # thinking forces temperature=1 — don't set temperature alongside it.
 
