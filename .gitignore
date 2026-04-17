@@ -11,3 +11,8 @@ logs/sigma_checkpoint.npz
 logs/sigma_checkpoint_meta.json
 logs/sigma_checkpoint.npz
 logs/sigma_checkpoint_meta.json
+
+# Playwright e2e
+test-results/
+playwright-report/
+.playwright/
