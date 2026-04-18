@@ -11,10 +11,12 @@ BUILTIN_PROVIDERS = {
         "env_key": "OPENAI_API_KEY",
         "cost_per_1k_input": 0.00025,
         "cost_per_1k_output": 0.002,
+        "cache_read_per_1k_input": 0.000025,
         "max_tokens": 128000,
         "supports_streaming": False,
+        "supports_prompt_caching": True,
         "api_family": "responses",
-        "note": "gpt-5-mini default; escalate to gpt-5 via OPENAI_MODEL_ROOT env",
+        "note": "gpt-5-mini default; cached input 90% off (automatic on >=1024 token prefixes)",
     },
     "gemini": {
         "id": "gemini",
@@ -36,6 +38,7 @@ BUILTIN_PROVIDERS = {
         "cost_per_1k_input": 0.003,
         "cost_per_1k_output": 0.015,
         "cache_read_per_1k_input": 0.0003,
+        "cache_write_per_1k_input": 0.00375,
         "max_tokens": 64000,
         "supports_streaming": True,
         "supports_prompt_caching": True,
@@ -133,14 +136,59 @@ class EnergyRegistry:
             return f"{base_name} {{{label}}}"
         return base_name
 
-    def estimate_cost(self, provider_id: str, prompt_tokens: int, completion_tokens: int) -> float:
+    def estimate_cost(
+        self,
+        provider_id: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        cache_read_tokens: int = 0,
+        cache_write_tokens: int = 0,
+    ) -> float:
+        """Cost in USD. Cache-aware: read tokens billed at cache_read_per_1k_input,
+        write tokens at cache_write_per_1k_input, fresh input at full rate.
+        prompt_tokens should be the *uncached* fresh input tokens; cache_read
+        and cache_write are reported separately by the provider."""
         info = self._providers.get(provider_id)
         if not info:
             return 0.0
+        in_rate = info["cost_per_1k_input"]
+        out_rate = info["cost_per_1k_output"]
+        cache_read_rate = info.get("cache_read_per_1k_input", in_rate)
+        cache_write_rate = info.get("cache_write_per_1k_input", in_rate)
         return (
-            (prompt_tokens / 1000) * info["cost_per_1k_input"]
-            + (completion_tokens / 1000) * info["cost_per_1k_output"]
+            (prompt_tokens / 1000) * in_rate
+            + (cache_read_tokens / 1000) * cache_read_rate
+            + (cache_write_tokens / 1000) * cache_write_rate
+            + (completion_tokens / 1000) * out_rate
         )
+
+    @staticmethod
+    def cache_breakdown(usage: dict) -> dict:
+        """Normalize cache fields across providers into a single shape.
+        Returns: {fresh_input, cache_read, cache_write, output, hit_ratio}."""
+        # Anthropic: input_tokens (fresh), cache_read_input_tokens, cache_creation_input_tokens
+        # OpenAI Responses: input_tokens + input_tokens_details.cached_tokens
+        # OpenAI Chat: prompt_tokens + prompt_tokens_details.cached_tokens
+        cache_read = int(usage.get("cache_read_input_tokens") or 0)
+        cache_write = int(usage.get("cache_creation_input_tokens") or 0)
+        if not cache_read:
+            details = usage.get("input_tokens_details") or usage.get("prompt_tokens_details") or {}
+            cache_read = int(details.get("cached_tokens") or 0)
+        fresh_input = int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0)
+        # Anthropic reports input_tokens as fresh-only; OpenAI reports total (fresh+cached).
+        # Normalize to fresh-only by subtracting cached when total >= cached.
+        if fresh_input >= cache_read and "cache_read_input_tokens" not in usage:
+            fresh_input = fresh_input - cache_read
+        output = int(usage.get("output_tokens") or usage.get("completion_tokens") or 0)
+        total_input = fresh_input + cache_read + cache_write
+        hit_ratio = (cache_read / total_input) if total_input > 0 else 0.0
+        return {
+            "fresh_input": fresh_input,
+            "cache_read": cache_read,
+            "cache_write": cache_write,
+            "output": output,
+            "hit_ratio": round(hit_ratio, 3),
+        }
 
 
 energy_registry = EnergyRegistry()
