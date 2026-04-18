@@ -148,12 +148,17 @@ async def _require_owned_conv(conv_id: int, uid: Optional[str]) -> dict:
 
 
 @router.get("/conversations")
-async def list_conversations(request: Request):
+async def list_conversations(request: Request, agent_id: int | None = None):
+    """List conversations.
+
+    Defaults to a0-only (excludes any conversation pinned to a Forge agent).
+    Pass ?agent_id=<id> to fetch only conversations pinned to that agent —
+    used by the Forge tab's inline chat surface.
+    """
     uid = _caller_uid(request)
     if not uid:
-        # Never return a global list when caller identity is missing.
         raise HTTPException(status_code=401, detail="authentication required")
-    return await storage.get_conversations(user_id=uid)
+    return await storage.get_conversations(user_id=uid, agent_id=agent_id)
 
 
 @router.post("/conversations")
