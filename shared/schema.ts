@@ -363,6 +363,12 @@ function initAgentSeeds(): AgentSeed[] {
   }));
 }
 
+export interface AgentPersonality {
+  traits: string[];
+  alignment: string;
+  verbosity: number;
+}
+
 export const agentInstances = pgTable("agent_instances", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
@@ -377,6 +383,16 @@ export const agentInstances = pgTable("agent_instances", {
   lastTickAt: timestamp("last_tick_at"),
   isPersistent: boolean("is_persistent").notNull().default(false),
   banditArmId: integer("bandit_arm_id"),
+  archetype: text("archetype"),
+  modelId: text("model_id"),
+  provider: text("provider"),
+  enabledTools: jsonb("enabled_tools").$type<string[]>().default([]),
+  systemPrompt: text("system_prompt"),
+  personality: jsonb("personality").$type<AgentPersonality>(),
+  ownerId: text("owner_id"),
+  isTemplate: boolean("is_template").notNull().default(false),
+  parentId: integer("parent_id"),
+  mergedAt: timestamp("merged_at"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
