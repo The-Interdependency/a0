@@ -134,7 +134,8 @@ export function ProviderSeedCard({ seed, isActive, isExpanded, onToggleExpand, a
 
   const patchMutation = useMutation({
     mutationFn: async (patch: Record<string, unknown>) => {
-      const res = await apiRequest("PATCH", `/api/energy/providers/${pid}/route_config`, { patch });
+      // Backend expects flat fields matching PatchSeedBody at /providers/{id}/seed
+      const res = await apiRequest("PATCH", `/api/energy/providers/${pid}/seed`, patch);
       return res.json();
     },
     onSuccess: () => {
@@ -146,7 +147,7 @@ export function ProviderSeedCard({ seed, isActive, isExpanded, onToggleExpand, a
 
   const optimizeMutation = useMutation({
     mutationFn: async (preset: string) => {
-      const res = await apiRequest("POST", `/api/energy/optimize/${pid}`, { preset });
+      const res = await apiRequest("POST", `/api/energy/providers/${pid}/optimize`, { preset });
       return res.json();
     },
     onSuccess: (data) => {
@@ -170,7 +171,7 @@ export function ProviderSeedCard({ seed, isActive, isExpanded, onToggleExpand, a
 
   const convergeMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/energy/converge/${pid}`, {});
+      const res = await apiRequest("POST", `/api/pcna/converge/${pid}`, {});
       return res.json();
     },
     onSuccess: (data) => {

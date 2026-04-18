@@ -78,6 +78,20 @@ BUILTIN_PROVIDERS = {
 }
 
 
+_PROVIDER_DEFAULT_ASSIGNMENTS: dict[str, dict] = {}
+_PROVIDER_PRESETS: dict[str, dict] = {}
+_PROVIDER_AVAILABLE_MODELS: dict[str, list] = {}
+_PROVIDER_PRICING_URLS: dict[str, str] = {
+    "openai": "https://openai.com/api/pricing/",
+    "gemini": "https://ai.google.dev/pricing",
+    "gemini3": "https://ai.google.dev/pricing",
+    "claude": "https://www.anthropic.com/pricing",
+    "grok": "https://docs.x.ai/docs/models",
+}
+_PROVIDER_CAPABILITIES: dict[str, dict] = {}
+_PROVIDER_ENABLED_TOOLS: dict[str, list] = {}
+
+
 class EnergyRegistry:
 
     def __init__(self):

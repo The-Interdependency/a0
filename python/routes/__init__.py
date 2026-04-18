@@ -23,6 +23,7 @@ from .editable_schema import router as editable_schema_router
 from .cli import router as cli_router
 from .focus import router as focus_router
 from .forge import router as forge_router
+from .energy import router as energy_router, pcna_router as energy_pcna_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -50,6 +51,8 @@ ALL_ROUTERS = [
     cli_router,
     focus_router,
     forge_router,
+    energy_router,
+    energy_pcna_router,
 ]
 
 
