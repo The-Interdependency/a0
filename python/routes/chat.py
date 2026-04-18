@@ -309,7 +309,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         provider_id = energy_registry.get_active_provider() or model_id
 
         # Tier-gate restricted models (e.g. gemini3 = ws/admin only).
-        prov_meta = energy_registry.get(provider_id) or {}
+        prov_meta = energy_registry.get_provider(provider_id) or {}
         min_tier = prov_meta.get("min_tier")
         if min_tier:
             _ranks = {"free": 0, "supporter": 1, "ws": 2, "admin": 3}
