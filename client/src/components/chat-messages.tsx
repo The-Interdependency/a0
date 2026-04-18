@@ -258,7 +258,7 @@ export function MessageBubble({ message, onSend }: { message: Message; onSend: (
           <pre className="mt-2 text-[10px] bg-black/10 rounded p-2 overflow-x-auto whitespace-pre-wrap opacity-80" data-testid={`error-detail-${message.id}`}>{message.metadata.error_detail}</pre>
         )}
         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-          {message.model && <Badge variant="outline" className="text-[9px] h-4 px-1">{message.model}</Badge>}
+          {message.model && !isUser && <Badge variant="outline" className="text-[9px] h-4 px-1">{message.model}</Badge>}
           {tokCount !== null && !isUser && (
             <Badge variant="outline" className="text-[9px] h-4 px-1 text-muted-foreground" data-testid={`tokens-msg-${message.id}`}>{fmtTokens(tokCount)} tok</Badge>
           )}
