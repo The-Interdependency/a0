@@ -3,8 +3,13 @@
 ZFAE Tool Executor — implements the actual functions behind each agent tool.
 Called by the inference loop when the LLM issues a tool_call.
 """
+import base64
+import hashlib
+import hmac
 import json
 import os
+import secrets as _secrets
+import time as _time
 import urllib.parse
 import contextvars as _cv
 import httpx
@@ -284,6 +289,31 @@ TOOL_SCHEMAS_CHAT = [
     {
         "type": "function",
         "function": {
+            "name": "post_tweet",
+            "description": (
+                "Post a tweet to X (Twitter) using the configured OAuth 1.0a credentials. "
+                "Returns the new tweet's id and URL on success. "
+                "Text must be 1–280 characters. Optionally pass reply_to to reply to an existing tweet."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Tweet text, 1–280 characters.",
+                    },
+                    "reply_to": {
+                        "type": "string",
+                        "description": "Optional tweet id to reply to.",
+                    },
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "set_user_tier",
             "description": (
                 "Admin-only: set a user's subscription tier immediately, bypassing Stripe. "
@@ -377,6 +407,11 @@ async def execute_tool(name: str, arguments: dict) -> str:
             return await _set_user_tier(
                 user_id=arguments.get("user_id", ""),
                 tier=arguments.get("tier", ""),
+            )
+        if name == "post_tweet":
+            return await _post_tweet(
+                text=arguments.get("text", ""),
+                reply_to=arguments.get("reply_to"),
             )
         return f"[unknown tool: {name}]"
     except Exception as exc:
@@ -763,4 +798,94 @@ async def _set_user_tier(user_id: str, tier: str) -> str:
         "email": updated["email"],
         "tier": updated["subscription_tier"],
     })
-# 540:12
+
+
+def _oauth1_pct(s: str) -> str:
+    return urllib.parse.quote(str(s), safe="-._~")
+
+
+def _oauth1_header(method: str, url: str, consumer_key: str, consumer_secret: str,
+                   token: str, token_secret: str) -> str:
+    """Build an OAuth 1.0a HMAC-SHA1 Authorization header for a request with no
+    form-encoded body params (JSON body is not part of the signature base string)."""
+    oauth_params = {
+        "oauth_consumer_key": consumer_key,
+        "oauth_nonce": _secrets.token_hex(16),
+        "oauth_signature_method": "HMAC-SHA1",
+        "oauth_timestamp": str(int(_time.time())),
+        "oauth_token": token,
+        "oauth_version": "1.0",
+    }
+    parsed = urllib.parse.urlsplit(url)
+    base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    query_params = dict(urllib.parse.parse_qsl(parsed.query, keep_blank_values=True))
+    sig_params = {**query_params, **oauth_params}
+    sorted_pairs = sorted(
+        (_oauth1_pct(k), _oauth1_pct(v)) for k, v in sig_params.items()
+    )
+    param_string = "&".join(f"{k}={v}" for k, v in sorted_pairs)
+    base_string = "&".join([
+        method.upper(),
+        _oauth1_pct(base_url),
+        _oauth1_pct(param_string),
+    ])
+    signing_key = f"{_oauth1_pct(consumer_secret)}&{_oauth1_pct(token_secret)}"
+    digest = hmac.new(signing_key.encode(), base_string.encode(), hashlib.sha1).digest()
+    oauth_params["oauth_signature"] = base64.b64encode(digest).decode()
+    header = "OAuth " + ", ".join(
+        f'{_oauth1_pct(k)}="{_oauth1_pct(v)}"'
+        for k, v in sorted(oauth_params.items())
+    )
+    return header
+
+
+async def _post_tweet(text: str, reply_to: str | None = None) -> str:
+    text = (text or "").strip()
+    if not text:
+        return json.dumps({"ok": False, "error": "text is required"})
+    if len(text) > 280:
+        return json.dumps({"ok": False, "error": f"text too long ({len(text)}/280)"})
+
+    ck = os.environ.get("X_API_KEY")
+    cs = os.environ.get("X_API_SECRET")
+    tk = os.environ.get("X_ACCESS_TOKEN")
+    ts = os.environ.get("X_ACCESS_TOKEN_SECRET")
+    if not (ck and cs and tk and ts):
+        return json.dumps({
+            "ok": False,
+            "error": "missing X credentials — need X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET",
+        })
+
+    url = "https://api.x.com/2/tweets"
+    body: dict = {"text": text}
+    if reply_to:
+        body["reply"] = {"in_reply_to_tweet_id": str(reply_to)}
+
+    auth_header = _oauth1_header("POST", url, ck, cs, tk, ts)
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                url,
+                json=body,
+                headers={
+                    "Authorization": auth_header,
+                    "Content-Type": "application/json",
+                    "User-Agent": "a0p/2.0",
+                },
+            )
+        try:
+            data = resp.json()
+        except Exception:
+            data = {"raw": resp.text}
+        if resp.status_code >= 300:
+            return json.dumps({"ok": False, "status": resp.status_code, "error": data})
+        tweet_id = (data.get("data") or {}).get("id")
+        return json.dumps({
+            "ok": True,
+            "id": tweet_id,
+            "url": f"https://x.com/i/web/status/{tweet_id}" if tweet_id else None,
+            "text": (data.get("data") or {}).get("text", text),
+        })
+    except Exception as exc:
+        return json.dumps({"ok": False, "error": f"request failed: {exc}"})
+# 633:14

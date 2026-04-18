@@ -86,6 +86,10 @@ _ZFAE_TOOL_SPECS = {
         "description": "Set a user's subscription tier (admin-only). Params: user_id (string), tier (string — one of: free, ws, pro, admin, seeker, operator, patron, founder). Requires the calling session to have is_admin: true. Changes take effect immediately without a subscription change.",
         "handler_type": "internal",
     },
+    "post_tweet": {
+        "description": "Post a tweet to X (Twitter) using OAuth 1.0a credentials. Params: text (≤280 chars), reply_to (optional tweet id). Requires X_API_KEY/SECRET and X_ACCESS_TOKEN/SECRET env vars.",
+        "handler_type": "internal",
+    },
 }
 
 
