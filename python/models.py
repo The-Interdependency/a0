@@ -47,6 +47,12 @@ class Conversation(Base):
     title = Column(Text, nullable=False, server_default="New Chat")
     model = Column(Text, nullable=False, server_default="gemini")
     user_id = Column(String)
+    context_boost = Column(Text)
+    parent_conv_id = Column(Integer)
+    subagent_status = Column(String(20))
+    subagent_error = Column(Text)
+    archived = Column(Boolean, nullable=False, server_default=text("false"))
+    agent_id = Column(Integer)
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
