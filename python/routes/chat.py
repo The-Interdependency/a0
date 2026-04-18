@@ -394,7 +394,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 "role": "assistant",
                 "content": reply,
                 "model": replay_provider,
-                "metadata": {"tier": tier, "gate_approved": gate_id_to_approve, "usage": approved_usage},
+                "metadata": {"tier": tier, "gate_approved": gate_id_to_approve, "usage": approved_usage, "cache": energy_registry.cache_breakdown(approved_usage)},
             })
             return {
                 "user_message": user_msg,
@@ -445,7 +445,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             "role": "assistant",
             "content": content,
             "model": provider_id,
-            "metadata": {"tier": tier, "usage": usage},
+            "metadata": {"tier": tier, "usage": usage, "cache": energy_registry.cache_breakdown(usage)},
         })
 
         from ..engine.zeta import _zeta_engine
