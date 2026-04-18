@@ -89,6 +89,13 @@ class _CoreStorage:
         async with get_session() as session:
             await session.execute(delete(Conversation).where(Conversation.id == id))
 
+    async def set_conversation_archived(self, id: int, archived: bool) -> None:
+        async with get_session() as session:
+            await session.execute(
+                update(Conversation).where(Conversation.id == id)
+                .values(archived=archived, updated_at=datetime.utcnow())
+            )
+
     async def get_messages(self, conversation_id: int) -> List[Dict[str, Any]]:
         async with get_session() as session:
             result = await session.execute(
