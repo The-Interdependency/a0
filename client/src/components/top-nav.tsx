@@ -1,12 +1,15 @@
 // 84:0
 import { useLocation, Link } from "wouter";
-import { Zap, Shield } from "lucide-react";
+import { Zap, Shield, Palette, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiStructure } from "@/hooks/use-ui-structure";
 import { useBillingStatus } from "@/hooks/use-billing-status";
 import { useAuth } from "@/hooks/use-auth";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useSkin, SKINS, SKIN_LABELS, type Skin } from "@/hooks/use-skin";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
   { path: "/", icon: Zap, label: "Agent" },
@@ -26,6 +29,13 @@ export default function TopNav() {
   const { user } = useAuth();
   const { tier, tierLabel } = useBillingStatus();
   const { toast } = useToast();
+  const { skin, setSkin } = useSkin();
+
+  const SKIN_SWATCHES: Record<Skin, string[]> = {
+    tensor: ["#0A0A0F", "#4ADE80", "#E0F2FE"],
+    synthwave: ["#0B0A14", "#F472B6", "#67E8F9"],
+    copper: ["#0F0C09", "#F59E0B", "#FDE68A"],
+  };
 
   useEffect(() => {
     function handleUpgrade(_e: Event) {
@@ -63,6 +73,52 @@ export default function TopNav() {
           </Link>
         );
       })}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11 text-muted-foreground hover-elevate"
+            aria-label="Change skin"
+            data-testid="button-skin-selector"
+          >
+            <Palette className="w-5 h-5" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-56 p-2" data-testid="popover-skin-selector">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground px-2 pt-1 pb-2">
+            Skin
+          </div>
+          <div className="flex flex-col gap-1">
+            {SKINS.map((s) => {
+              const active = skin === s;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setSkin(s)}
+                  className={cn(
+                    "flex items-center gap-2 px-2 py-2 rounded-md text-sm hover-elevate text-left",
+                    active && "bg-accent/10 text-accent-foreground"
+                  )}
+                  data-testid={`button-skin-${s}`}
+                >
+                  <span className="flex gap-0.5">
+                    {SKIN_SWATCHES[s].map((c, i) => (
+                      <span
+                        key={i}
+                        className="w-3 h-5 rounded-sm border border-border"
+                        style={{ background: c }}
+                      />
+                    ))}
+                  </span>
+                  <span className="flex-1">{SKIN_LABELS[s]}</span>
+                  {active && <Check className="w-4 h-4 text-accent" />}
+                </button>
+              );
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
       {data?.agent && (
         <div
           className="flex items-center justify-center px-3 min-h-[44px] text-muted-foreground gap-2"
