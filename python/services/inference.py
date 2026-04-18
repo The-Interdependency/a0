@@ -552,13 +552,34 @@ async def _call_anthropic(
     if cache_tools:
         claude_tools[-1] = {**claude_tools[-1], "cache_control": {"type": "ephemeral"}}
 
-    # Build the system prompt as a structured block so we can attach cache_control.
+    # Build the system prompt as structured blocks with up to two cache breakpoints:
+    #   block 1: stable prefix (identity + base + tier + persona) → cache_control
+    #   block 2: volatile suffix (memory seeds, dynamic context)  → cache_control
+    # Anthropic allows up to 4 cache_control markers; this gives us a long-lived
+    # prefix cache that survives memory-seed edits, plus a shorter cache for
+    # the seeds themselves. The split marker is the literal "## Memory" header
+    # emitted by _build_system_prompt — kept loose-coupled so callers can still
+    # send a flat string and get single-block behavior.
     system_blocks: list[dict] = []
     if system_text:
-        block: dict = {"type": "text", "text": system_text}
-        if enable_caching and len(system_text) >= _ANTHROPIC_CACHE_MIN_CHARS:
-            block["cache_control"] = {"type": "ephemeral"}
-        system_blocks.append(block)
+        split_marker = "\n\n## Memory\n"
+        idx = system_text.find(split_marker) if enable_caching else -1
+        if idx > 0 and len(system_text[:idx]) >= _ANTHROPIC_CACHE_MIN_CHARS:
+            prefix = system_text[:idx]
+            suffix = system_text[idx + 2:]  # keep "## Memory\n..." in suffix
+            system_blocks.append({
+                "type": "text", "text": prefix,
+                "cache_control": {"type": "ephemeral"},
+            })
+            suffix_block: dict = {"type": "text", "text": suffix}
+            if len(suffix) >= _ANTHROPIC_CACHE_MIN_CHARS:
+                suffix_block["cache_control"] = {"type": "ephemeral"}
+            system_blocks.append(suffix_block)
+        else:
+            block: dict = {"type": "text", "text": system_text}
+            if enable_caching and len(system_text) >= _ANTHROPIC_CACHE_MIN_CHARS:
+                block["cache_control"] = {"type": "ephemeral"}
+            system_blocks.append(block)
 
     # Extended thinking (skip for tool-use turns to avoid the "preserve thinking blocks"
     # complexity — re-enable for the final answer turn only).

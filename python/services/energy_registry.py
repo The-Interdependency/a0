@@ -51,9 +51,12 @@ BUILTIN_PROVIDERS = {
         "env_key": "XAI_API_KEY",
         "cost_per_1k_input": 0.0002,
         "cost_per_1k_output": 0.0005,
+        "cache_read_per_1k_input": 0.00005,
         "max_tokens": 2000000,
         "supports_streaming": True,
         "supports_reasoning_effort": True,
+        "supports_prompt_caching": True,
+        "note": "Auto-cache on >=1024 token prefix; cached_tokens reported in prompt_tokens_details",
     },
 }
 
