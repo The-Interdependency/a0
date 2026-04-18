@@ -266,7 +266,7 @@ function ProviderPanel({ provider, onSetActive, isSettingActive }: ProviderPanel
 
   const convergeMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/energy/converge/${provider.id}`, {});
+      const res = await apiRequest("POST", `/api/pcna/converge/${provider.id}`, {});
       return res.json();
     },
     onSuccess: (data) => {
