@@ -77,7 +77,7 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
-/* DARK MODE — TIW brand palette */
+/* DARK MODE — baseline (Tensor skin defaults; theme classes can override) */
 .dark {
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
@@ -167,6 +167,106 @@
   --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --destructive-border: hsl(var(--destructive));
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+}
+
+/* ── SKIN: Synthwave Mesh — magenta + cyan on midnight violet ── */
+.dark.theme-synthwave {
+  --background: 248 22% 6%;
+  --foreground: 250 100% 95%;
+  --border: 248 20% 14%;
+  --input: 248 18% 18%;
+
+  --card: 248 28% 9%;
+  --card-foreground: 250 100% 95%;
+  --card-border: 248 20% 12%;
+  --popover: 248 28% 9%;
+  --popover-foreground: 250 100% 95%;
+  --popover-border: 248 20% 13%;
+
+  --sidebar: 248 25% 7%;
+  --sidebar-foreground: 250 100% 95%;
+  --sidebar-border: 248 20% 11%;
+  --sidebar-primary: 330 86% 70%;
+  --sidebar-primary-foreground: 248 30% 8%;
+  --sidebar-accent: 248 22% 12%;
+  --sidebar-accent-foreground: 250 100% 95%;
+  --sidebar-ring: 330 86% 70%;
+
+  --primary: 188 91% 69%;
+  --primary-foreground: 248 30% 8%;
+  --secondary: 230 94% 82%;
+  --secondary-foreground: 248 30% 8%;
+
+  --muted: 248 20% 12%;
+  --muted-foreground: 250 25% 70%;
+
+  --accent: 330 86% 70%;
+  --accent-foreground: 248 30% 8%;
+
+  --destructive: 350 90% 60%;
+  --destructive-foreground: 0 0% 98%;
+
+  --ring: 330 86% 70%;
+  --link: 188 91% 69%;
+
+  --btn-primary-bg: 270 60% 12%;
+  --btn-primary-text: 330 86% 70%;
+
+  --chart-1: 188 91% 69%;
+  --chart-2: 330 86% 70%;
+  --chart-3: 230 94% 82%;
+  --chart-4: 280 70% 72%;
+  --chart-5: 38 92% 65%;
+}
+
+/* ── SKIN: Copper Codex — amber/copper on warm walnut ── */
+.dark.theme-copper {
+  --background: 25 25% 5%;
+  --foreground: 36 50% 93%;
+  --border: 25 20% 14%;
+  --input: 25 18% 17%;
+
+  --card: 22 25% 8%;
+  --card-foreground: 36 50% 93%;
+  --card-border: 25 20% 12%;
+  --popover: 22 25% 8%;
+  --popover-foreground: 36 50% 93%;
+  --popover-border: 25 20% 13%;
+
+  --sidebar: 25 22% 6%;
+  --sidebar-foreground: 36 50% 93%;
+  --sidebar-border: 25 18% 11%;
+  --sidebar-primary: 38 92% 50%;
+  --sidebar-primary-foreground: 25 30% 8%;
+  --sidebar-accent: 25 22% 12%;
+  --sidebar-accent-foreground: 36 50% 93%;
+  --sidebar-ring: 38 92% 50%;
+
+  --primary: 48 96% 76%;
+  --primary-foreground: 25 30% 8%;
+  --secondary: 25 5% 64%;
+  --secondary-foreground: 25 30% 8%;
+
+  --muted: 25 18% 12%;
+  --muted-foreground: 30 20% 60%;
+
+  --accent: 38 92% 50%;
+  --accent-foreground: 25 30% 8%;
+
+  --destructive: 0 73% 50%;
+  --destructive-foreground: 0 0% 98%;
+
+  --ring: 38 92% 50%;
+  --link: 46 96% 64%;
+
+  --btn-primary-bg: 25 60% 8%;
+  --btn-primary-text: 38 92% 50%;
+
+  --chart-1: 38 92% 50%;
+  --chart-2: 48 96% 76%;
+  --chart-3: 15 80% 55%;
+  --chart-4: 88 40% 55%;
+  --chart-5: 25 5% 64%;
 }
 
 @layer base {
