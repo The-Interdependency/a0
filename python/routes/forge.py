@@ -225,10 +225,24 @@ async def list_tools() -> dict:
 
 
 @router.get("/models")
-async def list_models() -> dict:
-    """Self-updating: introspects energy_registry every call."""
+async def list_models(request: Request) -> dict:
+    """Self-updating: introspects energy_registry every call.
+
+    Returns user_tier alongside the models list so the UI can disable
+    entries whose `min_tier` exceeds the caller's tier without a second
+    round-trip.
+    """
     await energy_registry.load_from_db()
-    return {"models": energy_registry.list_providers()}
+    user_tier = "free"
+    uid = request.headers.get("x-user-id") or request.headers.get("X-User-Id")
+    if uid:
+        async with get_session() as session:
+            row = (await session.execute(sa_text(
+                "SELECT subscription_tier FROM users WHERE id = :id"
+            ), {"id": uid})).mappings().first()
+            if row:
+                user_tier = row["subscription_tier"]
+    return {"models": energy_registry.list_providers(), "user_tier": user_tier}
 
 
 @router.get("/agents")
@@ -343,6 +357,32 @@ async def delete_agent(agent_id: int, request: Request) -> dict:
             raise HTTPException(404, "Agent not found")
         await session.commit()
     return {"deleted": agent_id}
+
+
+@router.post("/agents/{agent_id}/start-chat")
+async def start_chat(agent_id: int, request: Request) -> dict:
+    """Create a new conversation pinned to this Forge agent.
+
+    Pinning means: every send_message in this conversation auto-injects the
+    agent's system_prompt as the persona slot and uses the agent's model_id
+    unless explicitly overridden.
+    """
+    uid = _user_id(request)
+    async with get_session() as session:
+        arow = (await session.execute(sa_text(
+            "SELECT id, name, model_id FROM agent_instances "
+            "WHERE id = :id AND owner_id = :uid AND is_template = false"
+        ), {"id": agent_id, "uid": uid})).mappings().first()
+        if not arow:
+            raise HTTPException(404, "Agent not found")
+    from ..storage import storage
+    conv = await storage.create_conversation({
+        "title": f"⚔ {arow['name']}",
+        "model": arow["model_id"] or "grok",
+        "user_id": uid,
+        "agent_id": agent_id,
+    })
+    return {"conversation": conv}
 
 
 @router.post("/duel")

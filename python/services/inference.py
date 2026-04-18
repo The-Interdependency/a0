@@ -528,14 +528,21 @@ async def _call_anthropic(
     enable_caching: bool = True,
 ) -> tuple[str, dict]:
     """
-    Anthropic Messages API with Claude tool use, extended thinking, and prompt caching.
+    Anthropic Messages API via the official `anthropic` SDK.
 
     - reasoning_effort: when set, enables extended thinking with a budget mapped from effort.
     - enable_caching: when True, marks the system prompt and tools list with cache_control,
       cutting input cost ~80% on repeated turns. Requires the prefix to be >= 1024 tokens
       to actually cache (Anthropic ignores cache_control on smaller prefixes silently).
+
+    Migrated from raw httpx to the SDK so we get typed responses, automatic
+    retries on 429/5xx (max_retries=2 default), and forward-compat with new
+    Anthropic features (computer use, files, beta headers) without rewriting
+    the request shape.
     """
-    spec = PROVIDER_ENDPOINTS["claude"]
+    from anthropic import AsyncAnthropic
+    client = AsyncAnthropic(api_key=api_key, max_retries=2, timeout=90.0)
+
     system_text = ""
     filtered: list[dict] = []
     for m in messages:
@@ -543,12 +550,6 @@ async def _call_anthropic(
             system_text = m["content"]
         else:
             filtered.append(m)
-
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": _ANTHROPIC_VERSION,
-        "Content-Type": "application/json",
-    }
 
     claude_tools = [
         {
@@ -607,34 +608,35 @@ async def _call_anthropic(
     prev_call_fingerprint: Optional[str] = None
 
     for _round in range(_MAX_TOOL_ROUNDS + 1):
-        payload: dict = {
+        kwargs: dict = {
             "model": model,
             "max_tokens": max_tokens,
             "messages": current_messages,
         }
         if system_blocks:
-            payload["system"] = system_blocks
+            kwargs["system"] = system_blocks
         if use_tools:
-            payload["tools"] = claude_tools
+            kwargs["tools"] = claude_tools
         # Extended thinking is enabled on every round; the assistant turn we re-inject
         # below preserves the model's thinking blocks intact (Anthropic requires this
         # when continuing a thinking conversation).
         if thinking_budget > 0:
-            payload["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
+            kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
             # thinking forces temperature=1 — don't set temperature alongside it.
 
         try:
-            async with httpx.AsyncClient(timeout=90.0) as client:
-                resp = await _post_with_retry(client, spec["url"], json_payload=payload, headers=headers)
-                data = resp.json()
+            msg = await client.messages.create(**kwargs)
         except Exception as exc:
             return _sanitize_provider_error("claude", exc), accumulated_usage
 
-        for k, v in (data.get("usage") or {}).items():
-            accumulated_usage[k] = accumulated_usage.get(k, 0) + (v if isinstance(v, (int, float)) else 0)
+        # SDK returns a typed Message — coerce to dict shape the existing loop expects.
+        usage_dict = msg.usage.model_dump() if msg.usage else {}
+        for k, v in usage_dict.items():
+            if isinstance(v, (int, float)):
+                accumulated_usage[k] = accumulated_usage.get(k, 0) + v
 
-        stop_reason = data.get("stop_reason", "end_turn")
-        content_blocks = data.get("content", [])
+        stop_reason = msg.stop_reason or "end_turn"
+        content_blocks = [b.model_dump() for b in (msg.content or [])]
 
         tool_use_blocks = [b for b in content_blocks if b.get("type") == "tool_use"]
 

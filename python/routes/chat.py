@@ -112,6 +112,7 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 class CreateConversation(BaseModel):
     title: str = "New Chat"
     model: str = "gemini"
+    agent_id: Optional[int] = None
     # Note: userId from body is now ignored — owner is always the authenticated caller.
 
 
@@ -122,6 +123,7 @@ class UpdateConversation(BaseModel):
 class SendMessage(BaseModel):
     content: str
     model: Optional[str] = None
+    agent_id: Optional[int] = None
 
 
 def _caller_uid(request: Request) -> Optional[str]:
@@ -270,7 +272,23 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 if rec:
                     tier = rec["subscription_tier"]
 
-        model_id = body.model or conv.get("model", "grok")
+        # Forge agent binding: per-message agent_id wins, else fall back to the
+        # conversation's pinned agent. Agent loaded once per send.
+        agent_persona: Optional[str] = None
+        agent_model_id: Optional[str] = None
+        effective_agent_id = body.agent_id or conv.get("agent_id")
+        if effective_agent_id and uid:
+            from sqlalchemy import text as _text2
+            async with engine.connect() as conn:
+                arow = (await conn.execute(_text2(
+                    "SELECT model_id, system_prompt FROM agent_instances "
+                    "WHERE id = :id AND owner_id = :uid AND is_template = false"
+                ), {"id": effective_agent_id, "uid": uid})).mappings().first()
+            if arow:
+                agent_persona = arow["system_prompt"]
+                agent_model_id = arow["model_id"]
+
+        model_id = body.model or agent_model_id or conv.get("model", "grok")
         provider_id = energy_registry.get_active_provider() or model_id
 
         # Tier-gate restricted models (e.g. gemini3 = ws/admin only).
@@ -428,7 +446,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 "conversation_id": conv_id,
             }
 
-        system_prompt = await _build_system_prompt(tier)
+        system_prompt = await _build_system_prompt(tier, agent_persona=agent_persona)
 
         user_msg = await storage.create_message({
             "conversation_id": conv_id,

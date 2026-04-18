@@ -17,6 +17,7 @@ from ..models import (
 _CONV_ALLOWED_FIELDS = {
     "title", "model", "user_id", "context_boost",
     "parent_conv_id", "subagent_status", "subagent_error", "archived",
+    "agent_id",
 }
 _MSG_ALLOWED_FIELDS = {
     "conversation_id", "role", "content", "model", "metadata",

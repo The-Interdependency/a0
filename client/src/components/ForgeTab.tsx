@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Hammer, Sparkles, Trash2, Loader2 } from "lucide-react";
+import { Hammer, Sparkles, Trash2, Loader2, MessageSquare } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,12 @@ type Archetype = {
 };
 
 type Tool = { name: string; description: string; category: string };
-type Model = { id: string; label: string; vendor: string; available: boolean; active: boolean };
+type Model = {
+  id: string; label: string; vendor: string;
+  available: boolean; active: boolean;
+  min_tier?: string;
+};
+const TIER_RANK: Record<string, number> = { free: 0, supporter: 1, ws: 2, admin: 3 };
 type Agent = {
   id: number;
   name: string;
@@ -59,7 +64,9 @@ export default function ForgeTab() {
 
   const tplQ = useQuery<{ templates: Archetype[] }>({ queryKey: ["/api/v1/forge/templates"] });
   const toolsQ = useQuery<{ tools: Tool[] }>({ queryKey: ["/api/v1/forge/tools"] });
-  const modelsQ = useQuery<{ models: Model[] }>({ queryKey: ["/api/v1/forge/models"] });
+  const modelsQ = useQuery<{ models: Model[]; user_tier: string }>({ queryKey: ["/api/v1/forge/models"] });
+  const userTierRank = TIER_RANK[modelsQ.data?.user_tier ?? "free"] ?? 0;
+  const isModelLocked = (m: Model) => !!m.min_tier && (TIER_RANK[m.min_tier] ?? 0) > userTierRank;
   const agentsQ = useQuery<{ agents: Agent[] }>({ queryKey: ["/api/v1/forge/agents"] });
 
   const pickArchetype = (a: Archetype) => {
@@ -99,6 +106,21 @@ export default function ForgeTab() {
   const removeAgent = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/v1/forge/agents/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/v1/forge/agents"] }),
+  });
+
+  const startChat = useMutation({
+    mutationFn: async (agentId: number) =>
+      apiRequest("POST", `/api/v1/forge/agents/${agentId}/start-chat`, {}),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
+      const conv = data?.conversation;
+      const title = conv?.title || "the agent";
+      toast({
+        title: "Conversation pinned",
+        description: `Switch to Chat to talk to ${title}.`,
+      });
+    },
+    onError: (e: Error) => toast({ title: "Could not start chat", description: e.message, variant: "destructive" }),
   });
 
   const toggleTool = (n: string) =>
@@ -165,11 +187,18 @@ export default function ForgeTab() {
                   <SelectValue placeholder="Use active model" />
                 </SelectTrigger>
                 <SelectContent>
-                  {modelsQ.data?.models.map(m => (
-                    <SelectItem key={m.id} value={m.id} disabled={!m.available}>
-                      {m.label} {!m.available && "(no key)"}
-                    </SelectItem>
-                  ))}
+                  {modelsQ.data?.models.map(m => {
+                    const locked = isModelLocked(m);
+                    const disabled = !m.available || locked;
+                    return (
+                      <SelectItem key={m.id} value={m.id} disabled={disabled}
+                        data-testid={`option-model-${m.id}`}>
+                        {m.label}
+                        {!m.available && " (no key)"}
+                        {locked && ` (${m.min_tier}+ only)`}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -265,10 +294,19 @@ export default function ForgeTab() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center justify-between">
                     <span data-testid={`text-agent-name-${a.id}`}>{a.name}</span>
-                    <Button size="icon" variant="ghost" onClick={() => removeAgent.mutate(a.id)}
-                      data-testid={`button-delete-agent-${a.id}`}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost"
+                        onClick={() => startChat.mutate(a.id)}
+                        disabled={startChat.isPending}
+                        data-testid={`button-chat-agent-${a.id}`}
+                        title="Start a conversation pinned to this agent">
+                        <MessageSquare className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => removeAgent.mutate(a.id)}
+                        data-testid={`button-delete-agent-${a.id}`}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-xs space-y-1">

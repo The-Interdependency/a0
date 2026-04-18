@@ -127,6 +127,8 @@ class EnergyRegistry:
                 "vendor": info["vendor"],
                 "available": available,
                 "active": pid == self._active,
+                "min_tier": info.get("min_tier"),
+                "supports_thinking": bool(info.get("supports_thinking")),
             })
         return result
 

@@ -16,6 +16,7 @@ export const conversations = pgTable("conversations", {
   subagentStatus: varchar("subagent_status", { length: 20 }),
   subagentError: text("subagent_error"),
   archived: boolean("archived").notNull().default(false),
+  agentId: integer("agent_id"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 }, (t) => [
