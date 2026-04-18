@@ -38,16 +38,29 @@ def _filter_fields(data: Dict[str, Any], allowed: set) -> Dict[str, Any]:
 
 class _CoreStorage:
 
-    async def get_conversations(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_conversations(
+        self,
+        user_id: Optional[str] = None,
+        agent_id: Optional[int] = None,
+        include_agent_pinned: bool = False,
+    ) -> List[Dict[str, Any]]:
         """List conversations strictly scoped to a single user.
 
-        Pass None only for explicit admin-style unscoped views. Legacy
-        NULL-owner rows are NOT returned to regular callers.
+        agent_id semantics:
+          - None + include_agent_pinned=False (default): only a0 conversations
+            (rows where agent_id IS NULL). This keeps the main Chat sidebar
+            from being polluted with Forge agent chats.
+          - int: only conversations pinned to that specific agent.
+          - None + include_agent_pinned=True: everything (admin / debug).
         """
         async with get_session() as session:
             q = select(Conversation).order_by(desc(Conversation.updated_at))
             if user_id is not None:
                 q = q.where(Conversation.user_id == user_id)
+            if agent_id is not None:
+                q = q.where(Conversation.agent_id == agent_id)
+            elif not include_agent_pinned:
+                q = q.where(Conversation.agent_id.is_(None))
             result = await session.execute(q)
             return [_row_to_dict(r) for r in result.scalars().all()]
 
