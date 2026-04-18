@@ -13,6 +13,7 @@ import DocsTab from "@/components/DocsTab";
 import SigmaTab from "@/components/SigmaTab";
 import AgentsTab from "@/components/AgentsTab";
 import CliKeysTab from "@/components/CliKeysTab";
+import ForgeTab from "@/components/ForgeTab";
 import type { TabDef } from "@/hooks/use-ui-structure";
 
 const STORAGE_KEY = "a0p_active_tab";
@@ -28,6 +29,7 @@ export const CUSTOM_TAB_RENDERERS: Record<string, ComponentType> = {
   sigma: SigmaTab,
   agents: AgentsTab,
   cli_keys: CliKeysTab,
+  forge: ForgeTab,
 };
 
 function MissingRendererError({ tabId }: { tabId: string }) {

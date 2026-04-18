@@ -380,7 +380,7 @@ export interface AgentStats {
 
 export const agentInstances = pgTable("agent_instances", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
+  name: text("name").notNull(),
   slot: text("slot").notNull().default("zfae"),
   directives: text("directives").notNull().default(""),
   tools: jsonb("tools").$type<string[]>().default([]),
@@ -410,6 +410,8 @@ export const agentInstances = pgTable("agent_instances", {
   draws: integer("draws").notNull().default(0),
   stats: jsonb("stats").$type<AgentStats>(),
   loadout: jsonb("loadout").$type<string[]>().default([]),
+  avatarUrl: text("avatar_url"),
+  backstory: text("backstory"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
