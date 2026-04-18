@@ -369,6 +369,15 @@ export interface AgentPersonality {
   verbosity: number;
 }
 
+export interface AgentStats {
+  reasoning: number;
+  speed: number;
+  resilience: number;
+  creativity: number;
+  memory: number;
+  charisma: number;
+}
+
 export const agentInstances = pgTable("agent_instances", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
@@ -393,8 +402,33 @@ export const agentInstances = pgTable("agent_instances", {
   isTemplate: boolean("is_template").notNull().default(false),
   parentId: integer("parent_id"),
   mergedAt: timestamp("merged_at"),
+  level: integer("level").notNull().default(1),
+  xp: integer("xp").notNull().default(0),
+  hp: integer("hp").notNull().default(100),
+  wins: integer("wins").notNull().default(0),
+  losses: integer("losses").notNull().default(0),
+  draws: integer("draws").notNull().default(0),
+  stats: jsonb("stats").$type<AgentStats>(),
+  loadout: jsonb("loadout").$type<string[]>().default([]),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
+
+export const agentMatches = pgTable("agent_matches", {
+  id: serial("id").primaryKey(),
+  attackerId: integer("attacker_id").notNull(),
+  defenderId: integer("defender_id").notNull(),
+  mode: text("mode").notNull().default("duel"),
+  rounds: jsonb("rounds").$type<Array<Record<string, unknown>>>().default([]),
+  winnerId: integer("winner_id"),
+  xpAwarded: jsonb("xp_awarded").$type<Record<string, number>>(),
+  status: text("status").notNull().default("pending"),
+  startedAt: timestamp("started_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  finishedAt: timestamp("finished_at"),
+});
+
+export const insertAgentMatchSchema = createInsertSchema(agentMatches).omit({ id: true, startedAt: true });
+export type AgentMatch = typeof agentMatches.$inferSelect;
+export type InsertAgentMatch = z.infer<typeof insertAgentMatchSchema>;
 
 export const insertAgentInstanceSchema = createInsertSchema(agentInstances).omit({ id: true, createdAt: true });
 export type AgentInstance = typeof agentInstances.$inferSelect;
