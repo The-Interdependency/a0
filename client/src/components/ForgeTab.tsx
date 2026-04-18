@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Hammer, Sparkles, Trash2, Loader2, MessageSquare } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import ForgeAgentChat from "./ForgeAgentChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -61,6 +62,7 @@ export default function ForgeTab() {
   const [alignment, setAlignment] = useState("neutral-good");
   const [verbosity, setVerbosity] = useState(5);
   const [traits, setTraits] = useState("");
+  const [openChatAgentId, setOpenChatAgentId] = useState<number | null>(null);
 
   const tplQ = useQuery<{ templates: Archetype[] }>({ queryKey: ["/api/v1/forge/templates"] });
   const toolsQ = useQuery<{ tools: Tool[] }>({ queryKey: ["/api/v1/forge/tools"] });
@@ -106,21 +108,6 @@ export default function ForgeTab() {
   const removeAgent = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/v1/forge/agents/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/v1/forge/agents"] }),
-  });
-
-  const startChat = useMutation({
-    mutationFn: async (agentId: number) =>
-      apiRequest("POST", `/api/v1/forge/agents/${agentId}/start-chat`, {}),
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
-      const conv = data?.conversation;
-      const title = conv?.title || "the agent";
-      toast({
-        title: "Conversation pinned",
-        description: `Switch to Chat to talk to ${title}.`,
-      });
-    },
-    onError: (e: Error) => toast({ title: "Could not start chat", description: e.message, variant: "destructive" }),
   });
 
   const toggleTool = (n: string) =>
@@ -295,11 +282,11 @@ export default function ForgeTab() {
                   <CardTitle className="text-base flex items-center justify-between">
                     <span data-testid={`text-agent-name-${a.id}`}>{a.name}</span>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost"
-                        onClick={() => startChat.mutate(a.id)}
-                        disabled={startChat.isPending}
+                      <Button size="icon"
+                        variant={openChatAgentId === a.id ? "default" : "ghost"}
+                        onClick={() => setOpenChatAgentId(prev => prev === a.id ? null : a.id)}
                         data-testid={`button-chat-agent-${a.id}`}
-                        title="Start a conversation pinned to this agent">
+                        title="Open inline chat with this agent">
                         <MessageSquare className="h-4 w-4" />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={() => removeAgent.mutate(a.id)}
@@ -322,6 +309,15 @@ export default function ForgeTab() {
                     <p className="text-muted-foreground">{a.personality.alignment} · v{a.personality.verbosity}</p>
                   )}
                 </CardContent>
+                {openChatAgentId === a.id && (
+                  <CardContent className="pt-0">
+                    <ForgeAgentChat
+                      agentId={a.id}
+                      agentName={a.name}
+                      onClose={() => setOpenChatAgentId(null)}
+                    />
+                  </CardContent>
+                )}
               </Card>
             ))}
           </div>
