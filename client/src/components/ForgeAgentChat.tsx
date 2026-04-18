@@ -84,7 +84,13 @@ export default function ForgeAgentChat({ agentId, agentName, onClose }: Props) {
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/v1/conversations/${id}`),
     onSuccess: (_d, id) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/conversations", { agent_id: agentId }] });
-      if (id === activeConvId) selectConv(null);
+      // Pick the next available conversation synchronously to avoid the
+      // null→first flicker the auto-select effect would otherwise cause
+      // while the invalidated list refetches.
+      if (id === activeConvId) {
+        const remaining = (convsQ.data || []).filter((c) => c.id !== id);
+        selectConv(remaining[0]?.id ?? null);
+      }
     },
   });
 

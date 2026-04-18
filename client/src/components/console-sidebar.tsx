@@ -61,7 +61,7 @@ export default function ConsoleSidebar({
                 {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
                 <span className="truncate">{tab.label}</span>
                 <span className="ml-auto text-[10px] opacity-50">
-                  {tab.sections?.length ?? 0}
+                  {Array.isArray(tab.sections) ? tab.sections.length : 0}
                 </span>
               </button>
             );
