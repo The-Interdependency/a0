@@ -106,8 +106,16 @@ export default function ForgeTab() {
   });
 
   const removeAgent = useMutation({
-    mutationFn: async (id: number) => apiRequest("DELETE", `/api/v1/forge/agents/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/v1/forge/agents"] }),
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/v1/forge/agents/${id}`);
+      return id;
+    },
+    onSuccess: (id) => {
+      try { localStorage.removeItem(`a0p_forge_active_conv_${id}`); } catch {}
+      if (openChatAgentId === id) setOpenChatAgentId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/forge/agents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
+    },
   });
 
   const toggleTool = (n: string) =>

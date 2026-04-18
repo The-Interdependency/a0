@@ -193,6 +193,18 @@ async def delete_conversation(conv_id: int, request: Request):
     return {"ok": True}
 
 
+class ArchiveConversation(BaseModel):
+    archived: bool
+
+
+@router.patch("/conversations/{conv_id}/archive")
+async def archive_conversation(conv_id: int, body: ArchiveConversation, request: Request):
+    uid = _caller_uid(request)
+    await _require_owned_conv(conv_id, uid)
+    await storage.set_conversation_archived(conv_id, body.archived)
+    return {"ok": True, "archived": body.archived}
+
+
 @router.get("/conversations/{conv_id}/messages")
 async def list_messages(conv_id: int, request: Request):
     uid = _caller_uid(request)
