@@ -149,3 +149,26 @@ Character-sheet style agent creation. `python/routes/forge.py` + `client/src/com
 
 ### RPG/Combat — STUBBED (DB only)
 `agent_instances` columns: `level`, `xp`, `hp`, `wins`, `losses`, `draws`, `stats` (jsonb), `loadout` (jsonb), `avatar_url`, `backstory`. New table `agent_matches` (attackerId, defenderId, mode, rounds, winnerId, xpAwarded, status). `POST /api/v1/forge/duel` returns 501. Combat logic + leveling deferred; DB shape locked so it won't be retrofitted badly.
+
+## Prompt Caching Strategy (multi-agent friendly)
+System prompts are composed in **stable→volatile** order so cache prefixes stay long across turns and across forge agents:
+
+```
+1. a0_identity      ← global, immutable
+2. system_base      ← global, edited rarely
+3. tier_context     ← stable per tier
+4. agent_persona    ← stable per Forge agent
+5. ## Memory seeds  ← volatile (user edits)
+```
+
+Anthropic gets **two cache breakpoints**: one after the persona, one at the end. Memory seed edits invalidate only the seed segment, not the whole prefix. OpenAI/Grok cache automatically on stable prefixes ≥1024 tokens — same ordering benefits them. Gemini caching is API-explicit (not yet wired).
+
+Pricing in `energy_registry`:
+| provider | cache read | cache write |
+|---|---|---|
+| openai (gpt-5-mini) | 10% input | n/a (auto) |
+| claude sonnet 4.5 | 10% input | 125% input |
+| grok 4 fast | 25% input | n/a (auto) |
+| gemini 2.5 flash | not wired | requires cachedContents API |
+
+`energy_registry.cache_breakdown(usage)` normalizes the four shapes (Anthropic explicit, OpenAI Responses, OpenAI Chat, xAI Chat) into `{fresh_input, cache_read, cache_write, output, hit_ratio}` for the UI.
