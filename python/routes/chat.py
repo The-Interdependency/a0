@@ -273,6 +273,17 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         model_id = body.model or conv.get("model", "grok")
         provider_id = energy_registry.get_active_provider() or model_id
 
+        # Tier-gate restricted models (e.g. gemini3 = ws/admin only).
+        prov_meta = energy_registry.get(provider_id) or {}
+        min_tier = prov_meta.get("min_tier")
+        if min_tier:
+            _ranks = {"free": 0, "supporter": 1, "ws": 2, "admin": 3}
+            if _ranks.get(tier, 0) < _ranks.get(min_tier, 0):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Model '{provider_id}' requires tier '{min_tier}' or higher (current: {tier})",
+                )
+
         scope_to_grant = _parse_approve_scope(body.content)
         if scope_to_grant and uid:
             from ..config.policy_loader import get_scope_categories, get_safety_floor_actions

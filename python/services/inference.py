@@ -113,6 +113,13 @@ PROVIDER_ENDPOINTS = {
         "model": "gemini-2.5-flash",
         "supports_reasoning_effort": False,
     },
+    "gemini3": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/chat/completions",
+        "env_key": "GEMINI_API_KEY",
+        "model": "gemini-3-pro-preview",
+        "supports_reasoning_effort": False,
+        "min_tier": "ws",
+    },
     "claude": {
         "url": "https://api.anthropic.com/v1/messages",
         "env_key": "ANTHROPIC_API_KEY",
