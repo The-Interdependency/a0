@@ -22,6 +22,7 @@ from .sigma_api import router as sigma_router
 from .editable_schema import router as editable_schema_router
 from .cli import router as cli_router
 from .focus import router as focus_router
+from .forge import router as forge_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -48,6 +49,7 @@ ALL_ROUTERS = [
     editable_schema_router,
     cli_router,
     focus_router,
+    forge_router,
 ]
 
 
@@ -73,6 +75,7 @@ def collect_ui_meta() -> list[dict]:
         "python.routes.sigma_api",
         "python.routes.editable_schema",
         "python.routes.cli",
+        "python.routes.forge",
     ]
     tabs = []
     for mod_name in modules:
@@ -145,7 +148,7 @@ def collect_doc_meta() -> list[dict]:
         "system.py", "tools.py", "heartbeat_api.py", "pcna_api.py",
         "billing.py", "contexts.py", "openai_api.py",
         "zfae_api.py", "approval_scopes.py", "ws_modules.py", "docs.py",
-        "sigma_api.py", "editable_schema.py", "cli.py",
+        "sigma_api.py", "editable_schema.py", "cli.py", "forge.py",
     ]
     results: list[dict] = []
     for fname in route_files:

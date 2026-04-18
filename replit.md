@@ -137,3 +137,15 @@ The authoritative reference for all module conventions (file annotation, naming,
 - Express handles auth/session/guest; Python handles all other API logic
 - All API paths go through Express (`/api/*`) — never call Python (port 8001) directly from the frontend
 - SQL column names in dynamic UPDATE queries must use an explicit allowlist
+
+## The Forge (Apr 2026)
+Character-sheet style agent creation. `python/routes/forge.py` + `client/src/components/ForgeTab.tsx`.
+
+- 8 archetypes (Sage, Trickster, Paladin, Druid, Engineer, Diplomat, Hacker, Captain) with personality (D&D alignment, traits, verbosity 1–10), stats (D20 6-stat block: reasoning/speed/resilience/creativity/memory/charisma), and suggested tools.
+- Self-updating registries: `GET /api/v1/forge/tools` introspects `TOOL_SCHEMAS_CHAT`; `GET /api/v1/forge/models` introspects `energy_registry`. No hand-maintained catalog.
+- Per-user agent namespace: `agent_instances.name` no longer globally unique; collisions guarded per `(owner_id, name)` returning 409.
+- Auth: `_user_id()` returns 401 if `x-user-id` missing — Express proxy trusts only authenticated users.
+- Validation: `model_id` must exist in registry; tools must exist in `TOOL_SCHEMAS_CHAT`; both return 400 on bad input.
+
+### RPG/Combat — STUBBED (DB only)
+`agent_instances` columns: `level`, `xp`, `hp`, `wins`, `losses`, `draws`, `stats` (jsonb), `loadout` (jsonb), `avatar_url`, `backstory`. New table `agent_matches` (attackerId, defenderId, mode, rounds, winnerId, xpAwarded, status). `POST /api/v1/forge/duel` returns 501. Combat logic + leveling deferred; DB shape locked so it won't be retrofitted badly.
