@@ -134,12 +134,14 @@ export default function CliKeysTab() {
         <p className="text-sm font-semibold">Setup (Termux / any shell)</p>
         <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
 {`# Install
-curl -fsSL https://your-app.replit.app/a0 -o ~/.local/bin/a0
+mkdir -p ~/.local/bin
+curl -fsSL ${window.location.origin}/a0 -o ~/.local/bin/a0
 chmod +x ~/.local/bin/a0
+export PATH="$HOME/.local/bin:$PATH"
 
-# Configure
+# Configure (paste your key from above)
 export A0_KEY="a0k_..."
-export A0_HOST="https://your-app.replit.app"
+export A0_HOST="${window.location.origin}"
 
 # One-shot
 a0 "what tier am I?"
@@ -150,7 +152,7 @@ a0`}
         <Button
           size="sm"
           variant="outline"
-          onClick={() => copy(`curl -fsSL ${window.location.origin}/a0 -o ~/.local/bin/a0 && chmod +x ~/.local/bin/a0`)}
+          onClick={() => copy(`mkdir -p ~/.local/bin && curl -fsSL ${window.location.origin}/a0 -o ~/.local/bin/a0 && chmod +x ~/.local/bin/a0`)}
           data-testid="button-copy-install"
         >
           <Copy className="h-4 w-4 mr-1" /> Copy install command

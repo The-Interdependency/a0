@@ -85,6 +85,18 @@ async function waitForPython(maxWaitMs = 120_000): Promise<void> {
   registerGuestChatRoute(app);
   await seedAdminUser();
 
+  // Serve the a0 CLI script as plain text so users can `curl -fsSL <host>/a0 -o ~/.local/bin/a0`.
+  app.get("/a0", (_req, res) => {
+    const cliPath = path.resolve(process.cwd(), "scripts", "a0-cli.sh");
+    if (!fs.existsSync(cliPath)) {
+      res.status(404).type("text/plain").send("# a0 CLI script missing");
+      return;
+    }
+    res.setHeader("Content-Type", "text/x-shellscript; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.sendFile(cliPath);
+  });
+
   app.use("/api/v1/guest", (_req, res) => {
     res.status(404).json({ error: "Not found" });
   });
