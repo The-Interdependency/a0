@@ -17,13 +17,17 @@ from .tool_executor import (
 _log = logging.getLogger("a0p.inference")
 
 
-# Doctrine prefix — interdependent_way.md (symlinked to spec.md) is prepended to
+# Doctrine prefix — the canonical text of The Interdependent Way (sourced from
+# https://interdependentway.org/canon/the_interdependent_way.md) is prepended to
 # every system prompt as the first stable block so prompt caches across all four
 # providers (Anthropic ephemeral, OpenAI auto, Gemini implicit, Grok auto) latch
 # onto the same byte-identical prefix on first call and bill subsequent calls at
 # cache-read rates (≈90% off for OpenAI/Anthropic/Grok, ≈75% off for Gemini).
+# NOTE: no fallback to spec.md — spec.md is the a0p platform spec, NOT doctrine.
+# If interdependent_way.md is missing the right behavior is to skip the prefix
+# entirely rather than silently substitute the wrong document.
 _DOCTRINE_CACHE: dict[str, str | float] = {"text": "", "mtime": 0.0}
-_DOCTRINE_PATHS = ("interdependent_way.md", "spec.md")
+_DOCTRINE_PATHS = ("interdependent_way.md",)
 
 
 def _load_doctrine() -> str:
