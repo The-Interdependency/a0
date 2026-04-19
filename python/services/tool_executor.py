@@ -361,8 +361,99 @@ TOOL_SCHEMAS_RESPONSES_ZFAE = [
 TOOL_SCHEMAS_RESPONSES = OPENAI_NATIVE_TOOLS + TOOL_SCHEMAS_RESPONSES_ZFAE
 
 
+# Hierarchical tool-result handling.
+#   Threshold below = pass through unchanged (most calls land here).
+#   Threshold above = route raw output through the agent's derive-role model
+#   (a.k.a. summarizer) so the calling model receives a distilled extract
+#   instead of either (a) a flat 8K head-truncation that drops most of the
+#   payload, or (b) a 100KB blob that blows the next turn's context window.
+#   The summarizer is the active energy provider by default; per-agent
+#   provider can be plumbed via _caller_provider contextvar (see Forge).
+_TOOL_RESULT_PASS_TOKENS = 8000     # ~32 KB — under this, no summarization
+_TOOL_RESULT_HARD_CAP_TOKENS = 64000  # over this, pre-truncate before summarizing
+_caller_provider: _cv.ContextVar[str | None] = _cv.ContextVar(
+    "caller_provider", default=None
+)
+
+
+def set_caller_provider(provider_id: str | None) -> None:
+    """Inference call sites set this so the summarizer routes through the
+    same provider currently handling the conversation. Safe to leave unset."""
+    _caller_provider.set(provider_id)
+
+
+def _flat_truncate(name: str, raw: str) -> str:
+    cap_chars = _TOOL_RESULT_PASS_TOKENS * 4
+    head = raw[: cap_chars - 256]
+    return (
+        f"{head}\n\n[output truncated: ~{len(raw) // 4} tokens → "
+        f"~{_TOOL_RESULT_PASS_TOKENS}; tool={name}]"
+    )
+
+
+async def _maybe_summarize(name: str, arguments: dict, raw: str) -> str:
+    """Pass small results through; distill large ones via the derive model."""
+    if not isinstance(raw, str):
+        raw = str(raw)
+    if len(raw) <= _TOOL_RESULT_PASS_TOKENS * 4:
+        return raw
+
+    # Pick the summarizer provider. Caller-set wins; otherwise the active
+    # provider self-summarizes. We avoid hardcoding a vendor so the choice
+    # follows the same energy-registry routing as everything else.
+    provider = _caller_provider.get()
+    if not provider:
+        try:
+            from .energy_registry import energy_registry
+            provider = energy_registry.get_active_provider()
+        except Exception:
+            provider = None
+    if not provider:
+        return _flat_truncate(name, raw)
+
+    # Pre-truncate before paying to summarize: anything past hard cap is
+    # almost certainly noise and would just waste summarizer tokens.
+    head = raw[: _TOOL_RESULT_HARD_CAP_TOKENS * 4]
+    args_preview = json.dumps(arguments)[:500] if arguments else "{}"
+    target_tokens = _TOOL_RESULT_PASS_TOKENS // 2  # leave headroom for caller
+    prompt = (
+        "You are distilling a tool-call result for an agent that will use it "
+        "to continue a conversation. Preserve URLs, IDs, numbers, names, and "
+        "decision-relevant facts verbatim. Drop boilerplate, navigation, "
+        "decoration, and repeated content. Do not add commentary. "
+        f"Return at most ~{target_tokens} tokens.\n\n"
+        f"Tool: {name}\nArgs: {args_preview}\n\n---\n\n{head}"
+    )
+    try:
+        from .inference import call_energy_provider
+        text, _usage = await call_energy_provider(
+            provider,
+            messages=[{"role": "user", "content": prompt}],
+            system_prompt=None,
+            max_tokens=target_tokens,
+            use_tools=False,  # summarizer must NOT recursively call tools
+        )
+        if not text or not text.strip():
+            return _flat_truncate(name, raw)
+        return (
+            f"[summarized via {provider}: "
+            f"{len(raw) // 1024} KB → ~{len(text) // 1024} KB]\n\n{text}"
+        )
+    except Exception as exc:
+        # Never let the summarizer break the tool loop — fall back to flat.
+        return _flat_truncate(name, raw)
+
+
 async def execute_tool(name: str, arguments: dict) -> str:
-    """Dispatch a tool call and return the result as a plain string."""
+    """Dispatch a tool call and return the result as a plain string.
+    Oversized results are summarized through the active provider's derive
+    pathway before being handed back to the calling model."""
+    raw = await _execute_tool_inner(name, arguments)
+    return await _maybe_summarize(name, arguments or {}, raw)
+
+
+async def _execute_tool_inner(name: str, arguments: dict) -> str:
+    """Raw dispatch — returns the tool's unfiltered output."""
     try:
         if name == "web_search":
             return await _web_search(arguments.get("query", ""))
