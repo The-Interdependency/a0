@@ -8,7 +8,7 @@ from ..database import get_session
 from ..models import (
     Conversation, Message, AutomationTask, CommandHistory,
     A0pEvent, HeartbeatLog, CostMetric, EdcmSnapshot,
-    BanditArm, CustomTool,
+    BanditArm, CustomTool, ToolResult,
 )
 
 
@@ -320,6 +320,41 @@ class _CoreStorage:
             "byModel": by_model, "byStage": by_stage,
             "byConversation": by_conv, "dailyUsage": daily,
         }
+
+    async def save_tool_result(
+        self,
+        call_id: str,
+        tool_name: str,
+        arguments: Optional[dict],
+        raw_result: str,
+    ) -> None:
+        """Persist a raw tool-call output so an agent can drill back into it
+        later via tool_result_fetch. No-op if call_id collides — the row
+        already exists, which is fine (idempotent on the UUID-style call_id)."""
+        async with get_session() as session:
+            existing = await session.execute(
+                select(ToolResult.id).where(ToolResult.call_id == call_id)
+            )
+            if existing.scalar_one_or_none() is not None:
+                return
+            rec = ToolResult(
+                call_id=call_id,
+                tool_name=tool_name,
+                arguments=arguments or {},
+                raw_result=raw_result,
+                result_size_bytes=len(raw_result.encode("utf-8")),
+            )
+            session.add(rec)
+            await session.flush()
+
+    async def get_tool_result(self, call_id: str) -> Optional[Dict[str, Any]]:
+        """Look up a previously persisted tool-call output by its call_id."""
+        async with get_session() as session:
+            result = await session.execute(
+                select(ToolResult).where(ToolResult.call_id == call_id)
+            )
+            row = result.scalar_one_or_none()
+            return _row_to_dict(row) if row else None
 
     async def add_edcm_snapshot(self, snap: Dict[str, Any]) -> Dict[str, Any]:
         async with get_session() as session:

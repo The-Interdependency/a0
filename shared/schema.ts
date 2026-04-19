@@ -550,4 +550,21 @@ export const wsModules = pgTable("ws_modules", {
 });
 
 export type WsModule = typeof wsModules.$inferSelect;
+
+// Persistent store for raw tool-call results so an agent can drill back into
+// detail that the distiller dropped. The distillation header surfaces the
+// call_id; the agent re-fetches via the tool_result_fetch tool.
+export const toolResults = pgTable("tool_results", {
+  id: serial("id").primaryKey(),
+  callId: varchar("call_id", { length: 64 }).notNull().unique("tool_results_call_id_key"),
+  toolName: text("tool_name").notNull(),
+  arguments: jsonb("arguments"),
+  rawResult: text("raw_result").notNull(),
+  resultSizeBytes: integer("result_size_bytes").notNull().default(0),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_tool_results_created_at").on(t.createdAt)]);
+
+export const insertToolResultSchema = createInsertSchema(toolResults).omit({ id: true, createdAt: true });
+export type ToolResult = typeof toolResults.$inferSelect;
+export type InsertToolResult = z.infer<typeof insertToolResultSchema>;
 // 381:13
