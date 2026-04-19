@@ -400,27 +400,70 @@ def _flat_truncate(name: str, raw: str) -> str:
 #     locator, category} tuples, NOT prose. Refuses to invent citations.
 # Adding a new domain = drop a SKILL.md; trigger heuristic below picks it up.
 _DISTILLER_SKILLS = {
-    "medicine": ".agents/skills/distill-medicine/SKILL.md",
-    "general":  ".agents/skills/distill-general/SKILL.md",
+    "medicine":     ".agents/skills/distill-medicine/SKILL.md",
+    "law":          ".agents/skills/distill-law/SKILL.md",
+    "engineering":  ".agents/skills/distill-engineering/SKILL.md",
+    "construction": ".agents/skills/distill-construction/SKILL.md",
+    "general":      ".agents/skills/distill-general/SKILL.md",
 }
 
-_MEDICINE_TRIGGERS = (
-    " mg", " mcg", " mg/", " mcg/", " mEq", " IU ",
-    "dose", "dosage", "dosing", "patient", "diagnos",
-    "icd-", "pubmed", "pmid", "doi:",
-    "contraindication", "indication", "prescrib", "clinical",
-    "tablet", "capsule", "injection", "infusion", "po q", "iv q",
-    "fda", "uspstf", "nice guideline", "who guideline",
-)
+# Per-domain trigger words. Lowercase comparison. A domain wins if it scores
+# the most hits AND clears the minimum threshold; otherwise falls to general.
+# The threshold prevents single-mention false positives (one drug mention in
+# a news article shouldn't flip the entire piece into hard-medical mode).
+_DOMAIN_TRIGGERS: dict[str, tuple[str, ...]] = {
+    "medicine": (
+        " mg", " mcg", " mg/", " mcg/", " mEq", " IU ",
+        "dose", "dosage", "dosing", "patient", "diagnos",
+        "icd-", "pubmed", "pmid", "doi:",
+        "contraindication", "indication", "prescrib", "clinical",
+        "tablet", "capsule", "injection", "infusion", "po q", "iv q",
+        "fda", "uspstf", "nice guideline", "who guideline",
+    ),
+    "law": (
+        " v. ", " v ", "u.s.c.", "usc §", "cfr", "c.f.r.", " § ",
+        "plaintiff", "defendant", "petitioner", "respondent",
+        "court held", "the court", "holding", "dicta",
+        "statute", "regulation", "subsection", "amendment",
+        "case law", "appellate", "circuit court", "supreme court",
+        "jurisdiction", "venue", "cause of action", "remedy",
+        "restatement", "reporter",
+    ),
+    "engineering": (
+        "astm ", "iso ", "ieee ", "asme ", "iec ", "ansi ",
+        "tolerance", "datasheet", "torque", " psi", " mpa",
+        " n·m", " nm)", "tensile", "yield strength", "young's modulus",
+        "test method", "load rating", "fatigue", "ductile",
+        "specification", "spec sheet", "rev.", "edition",
+        "± ", "+/-", "kpa", "ksi", "ftlb",
+    ),
+    "construction": (
+        " irc ", " ibc ", " ifc ", "iecc", " nec ", "nfpa",
+        "building code", "code section", "egress",
+        "fire-rated", "fire rating", "load-bearing", "load bearing",
+        "rebar", "framing", "stud", "joist", "truss", "header",
+        "footing", "foundation", "occupancy", "setback",
+        "icc-es", "ul listing", "rough-in", "inspection",
+        "live load", "dead load", "snow load", "wind load",
+    ),
+}
+
+_DOMAIN_TRIGGER_MIN = 3
 
 
 def _pick_distiller(raw: str) -> str:
     """Return the domain key for the appropriate distiller skill.
-    Heuristic: count domain trigger matches in the head of the content.
-    A match count >= 3 selects the hard-domain distiller; otherwise general."""
+    Heuristic: score each hard-domain trigger list against the content head;
+    pick the highest scorer if it clears the minimum threshold; else general.
+    Ties resolve to the first domain in dict insertion order."""
     head_lower = raw[:8000].lower()
-    if sum(1 for t in _MEDICINE_TRIGGERS if t.lower() in head_lower) >= 3:
-        return "medicine"
+    scores = {
+        domain: sum(1 for t in triggers if t.lower() in head_lower)
+        for domain, triggers in _DOMAIN_TRIGGERS.items()
+    }
+    best_domain, best_score = max(scores.items(), key=lambda kv: kv[1])
+    if best_score >= _DOMAIN_TRIGGER_MIN:
+        return best_domain
     return "general"
 
 
