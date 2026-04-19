@@ -1,6 +1,8 @@
 ---
 name: distill-construction
 description: Congruency-citation distillation for construction content — building codes (IRC, IBC, IFC, IECC, NEC), structural requirements, inspection criteria. Preserves verbatim code sections, dimensions, and load values. Use when content contains building code sections, construction specifications, or inspection requirements.
+hard_domain: true
+triggers: [" irc ", " ibc ", " ifc ", "iecc", " nec ", "nfpa", "building code", "code section", "egress", "fire-rated", "fire rating", "load-bearing", "load bearing", "rebar", "framing", "stud", "joist", "truss", "header", "footing", "foundation", "occupancy", "setback", "icc-es", "ul listing", "rough-in", "inspection", "live load", "dead load", "snow load", "wind load"]
 ---
 
 # Construction Content Distiller

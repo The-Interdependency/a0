@@ -1,6 +1,8 @@
 ---
 name: distill-general
 description: Similarity distillation for general prose — articles, web pages, conversation, mixed content. Preserves meaning and key facts via paraphrase. Use as fallback when content does not match a hard-domain distiller.
+hard_domain: false
+triggers: []
 ---
 
 # General Content Distiller

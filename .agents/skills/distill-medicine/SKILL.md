@@ -1,6 +1,8 @@
 ---
 name: distill-medicine
 description: Congruency-citation distillation for medical content — drug names, dosages, diagnoses, clinical guidelines. Preserves verbatim values and requires source citations. Use when content contains pharmaceutical, clinical, diagnostic, or regulatory medical material.
+hard_domain: true
+triggers: [" mg", " mcg", " mg/", " mcg/", " mEq", " IU ", "dose", "dosage", "dosing", "patient", "diagnos", "icd-", "pubmed", "pmid", "doi:", "contraindication", "indication", "prescrib", "clinical", "tablet", "capsule", "injection", "infusion", "po q", "iv q", "fda", "uspstf", "nice guideline", "who guideline"]
 ---
 
 # Medical Content Distiller

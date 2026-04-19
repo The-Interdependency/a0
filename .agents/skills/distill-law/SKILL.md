@@ -1,6 +1,8 @@
 ---
 name: distill-law
 description: Congruency-citation distillation for legal content — statutes, case law, regulations, contracts. Preserves verbatim clauses, holdings, and citations. Use when content contains statutory text, case opinions, regulatory rules, or contractual language.
+hard_domain: true
+triggers: [" v. ", " v ", "u.s.c.", "usc §", "cfr", "c.f.r.", " § ", "plaintiff", "defendant", "petitioner", "respondent", "court held", "the court", "holding", "dicta", "statute", "regulation", "subsection", "amendment", "case law", "appellate", "circuit court", "supreme court", "jurisdiction", "venue", "cause of action", "remedy", "restatement", "reporter"]
 ---
 
 # Legal Content Distiller
