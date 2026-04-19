@@ -384,4 +384,22 @@ class WsModule(Base):
     last_swapped_at = Column(DateTime)
     created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+
+
+class ToolResult(Base):
+    """Persistent store of raw tool-call outputs.
+
+    Distillation compresses large tool results before they go back to the
+    calling model. This table preserves the full original so an agent can
+    later call tool_result_fetch(call_id, chunk=N) to drill back in without
+    paying for a re-execution of the original tool.
+    """
+    __tablename__ = "tool_results"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    call_id = Column(String(64), nullable=False, unique=True)
+    tool_name = Column(Text, nullable=False)
+    arguments = Column(JSONB)
+    raw_result = Column(Text, nullable=False)
+    result_size_bytes = Column(Integer, nullable=False, server_default="0")
+    created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 # 313:8

@@ -18,6 +18,40 @@ TOOL_SCHEMAS_CHAT = [
     {
         "type": "function",
         "function": {
+            "name": "tool_result_fetch",
+            "description": (
+                "Retrieve detail from a previous tool call's raw result that was "
+                "lost to distillation. Use when a distilled tool result references "
+                "a call_id (in the [distilled via ... call_id=...] header) and you "
+                "need to inspect the original payload. Returns one chunk at a time "
+                "with a header indicating total chunks. Do NOT use to re-fetch "
+                "fresh data — the result is whatever was captured at original call time."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "call_id": {
+                        "type": "string",
+                        "description": "The call_id from a distillation header (e.g. 'call-a3f81b9c').",
+                    },
+                    "chunk": {
+                        "type": "integer",
+                        "description": "Zero-indexed chunk number to retrieve. Default 0.",
+                        "default": 0,
+                    },
+                    "chunk_size": {
+                        "type": "integer",
+                        "description": "Bytes per chunk. Default 8000 (~2K tokens). Max 32000.",
+                        "default": 8000,
+                    },
+                },
+                "required": ["call_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "web_search",
             "description": (
                 "Search the web for current information, news, or facts not in training data. "
@@ -555,9 +589,13 @@ def _filter_valid_claims(items: list) -> list:
     return out
 
 
-async def _maybe_summarize(name: str, arguments: dict, raw: str) -> str:
+async def _maybe_summarize(
+    name: str, arguments: dict, raw: str, call_id: str | None = None
+) -> str:
     """Pass small results through; distill large ones via a domain-specific
-    skill. Soft domains paraphrase; hard domains return verbatim+citation tuples."""
+    skill. Soft domains paraphrase; hard domains return verbatim+citation tuples.
+    When call_id is provided, the distillation header surfaces it so the
+    calling agent can drill back into the raw via tool_result_fetch."""
     if not isinstance(raw, str):
         raw = str(raw)
     if len(raw) <= _TOOL_RESULT_PASS_TOKENS * 4:
@@ -634,15 +672,17 @@ async def _maybe_summarize(name: str, arguments: dict, raw: str) -> str:
                 if not valid:
                     return _flat_truncate(name, raw)
             text = json.dumps(valid, ensure_ascii=False)
+            cid_part = f" call_id={call_id}" if call_id else ""
             return (
                 f"[distilled via {provider} · {domain} skill (hard, "
                 f"{len(valid)} claims): {len(raw) // 1024} KB → "
-                f"~{len(text) // 1024} KB]\n\n{text}"
+                f"~{len(text) // 1024} KB{cid_part}]\n\n{text}"
             )
 
+        cid_part = f" call_id={call_id}" if call_id else ""
         return (
             f"[distilled via {provider} · {domain} skill: "
-            f"{len(raw) // 1024} KB → ~{len(text) // 1024} KB]\n\n{text}"
+            f"{len(raw) // 1024} KB → ~{len(text) // 1024} KB{cid_part}]\n\n{text}"
         )
     except Exception:
         # Never let the distiller break the tool loop — fall back to flat.
@@ -651,15 +691,41 @@ async def _maybe_summarize(name: str, arguments: dict, raw: str) -> str:
 
 async def execute_tool(name: str, arguments: dict) -> str:
     """Dispatch a tool call and return the result as a plain string.
-    Oversized results are summarized through the active provider's derive
-    pathway before being handed back to the calling model."""
+    Oversized results are persisted (so the agent can drill back via
+    tool_result_fetch) and then distilled before being handed back to the
+    calling model. tool_result_fetch itself is never persisted — it would
+    create infinite recursion."""
     raw = await _execute_tool_inner(name, arguments)
-    return await _maybe_summarize(name, arguments or {}, raw)
+
+    # Generate a short, traceable call_id and persist the raw result if it
+    # would actually be distilled. Skip persistence for the fetch tool itself
+    # (it just reads from the same table) and for results small enough to
+    # pass through verbatim (no detail is lost — nothing to drill back into).
+    call_id: str | None = None
+    if name != "tool_result_fetch" and isinstance(raw, str) and len(raw) > _TOOL_RESULT_PASS_TOKENS * 4:
+        import uuid
+        call_id = f"call-{uuid.uuid4().hex[:12]}"
+        try:
+            from ..storage import storage
+            await storage.save_tool_result(call_id, name, arguments or {}, raw)
+        except Exception as exc:
+            # Persistence failure must not break the tool loop — log and
+            # continue without a call_id (drill-back won't be available).
+            print(f"[tool_results] persist failed for {name} call_id={call_id}: {exc}")
+            call_id = None
+
+    return await _maybe_summarize(name, arguments or {}, raw, call_id)
 
 
 async def _execute_tool_inner(name: str, arguments: dict) -> str:
     """Raw dispatch — returns the tool's unfiltered output."""
     try:
+        if name == "tool_result_fetch":
+            return await _tool_result_fetch(
+                call_id=arguments.get("call_id", ""),
+                chunk=int(arguments.get("chunk", 0) or 0),
+                chunk_size=int(arguments.get("chunk_size", 8000) or 8000),
+            )
         if name == "web_search":
             return await _web_search(arguments.get("query", ""))
         if name == "pcna_infer":
@@ -712,6 +778,38 @@ async def _execute_tool_inner(name: str, arguments: dict) -> str:
         return f"[unknown tool: {name}]"
     except Exception as exc:
         return f"[tool error — {name}: {exc}]"
+
+
+async def _tool_result_fetch(call_id: str, chunk: int = 0, chunk_size: int = 8000) -> str:
+    """Read one chunk of a previously persisted tool result. Surfaces the
+    chunk count so the agent can decide whether to fetch more.
+
+    Bounds: chunk_size is clamped to [1024, 32000]; chunk to [0, n_chunks-1].
+    Returns a header line followed by the raw chunk bytes (decoded as UTF-8
+    with replacement so we never raise on imperfect text)."""
+    if not call_id:
+        return "[tool_result_fetch: missing call_id]"
+    chunk_size = max(1024, min(32000, int(chunk_size)))
+    try:
+        from ..storage import storage
+        row = await storage.get_tool_result(call_id)
+    except Exception as exc:
+        return f"[tool_result_fetch: storage error — {exc}]"
+    if not row:
+        return f"[tool_result_fetch: no result found for call_id={call_id}]"
+    raw = row.get("raw_result") or ""
+    total_bytes = len(raw.encode("utf-8"))
+    n_chunks = max(1, (len(raw) + chunk_size - 1) // chunk_size)
+    chunk = max(0, min(n_chunks - 1, int(chunk)))
+    start = chunk * chunk_size
+    end = start + chunk_size
+    body = raw[start:end]
+    tool_name = row.get("tool_name", "?")
+    return (
+        f"[tool_result_fetch · {tool_name} · call_id={call_id} · "
+        f"chunk {chunk + 1}/{n_chunks} · {total_bytes // 1024} KB total]\n\n"
+        f"{body}"
+    )
 
 
 async def _web_search(query: str) -> str:
