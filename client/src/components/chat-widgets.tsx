@@ -6,8 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Send, Trash2, Loader2, ChevronDown, ChevronUp, Zap, X,
-  Archive, ArchiveRestore,
+  Plus, Send, Trash2, Loader2, ChevronDown, ChevronUp, ChevronRight, Zap, X,
+  Archive, ArchiveRestore, CornerDownRight, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { fmtTokens } from "@/components/chat-messages";
@@ -21,6 +21,8 @@ export interface Conversation {
   total_tokens: number;
   created_at: string;
   updated_at: string;
+  parent_conv_id?: number | null;
+  subagent_status?: string | null;
 }
 
 export function ConversationList({
@@ -39,28 +41,103 @@ export function ConversationList({
   showArchived: boolean;
   onToggleArchived: () => void;
 }) {
-  const ConvItem = ({ c }: { c: Conversation }) => (
-    <div
-      className={cn("group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-xs transition-colors", c.id === activeId ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted")}
-      onClick={() => onSelect(c.id)}
-      data-testid={`conversation-${c.id}`}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="truncate">{c.title || `Conv #${c.id}`}</div>
-        {c.total_tokens > 0 && (
-          <div className="text-[9px] text-muted-foreground/60 mt-0.5" data-testid={`tokens-conv-${c.id}`}>{fmtTokens(c.total_tokens)} tok</div>
-        )}
-      </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 shrink-0 ml-1">
-        <Button size="icon" variant="ghost" className="h-5 w-5" title={c.archived ? "Unarchive" : "Archive"} onClick={(e) => { e.stopPropagation(); onArchive(c.id, !c.archived); }} data-testid={`archive-conversation-${c.id}`}>
-          {c.archived ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
-        </Button>
-        <Button size="icon" variant="ghost" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} data-testid={`delete-conversation-${c.id}`}>
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </div>
-    </div>
-  );
+  // Build parent → children map. Top-level rows are conversations whose
+  // parent_conv_id is null OR whose parent isn't in the visible set
+  // (orphans surface at the root rather than vanishing).
+  const idSet = new Set(conversations.map((c) => c.id));
+  const childrenByParent = new Map<number, Conversation[]>();
+  const roots: Conversation[] = [];
+  for (const c of conversations) {
+    const p = c.parent_conv_id;
+    if (p && idSet.has(p)) {
+      const arr = childrenByParent.get(p) ?? [];
+      arr.push(c);
+      childrenByParent.set(p, arr);
+    } else {
+      roots.push(c);
+    }
+  }
+
+  // Sub-agent branches default to expanded so the user can see the full
+  // tree on first load. Manual collapse persists per session via state.
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const toggleCollapse = (id: number) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const StatusDot = ({ status }: { status?: string | null }) => {
+    if (!status || status === "done") return <CheckCircle2 className="h-2.5 w-2.5 text-green-500 shrink-0" />;
+    if (status === "running") return <Loader2 className="h-2.5 w-2.5 animate-spin text-primary shrink-0" />;
+    if (status === "error") return <AlertTriangle className="h-2.5 w-2.5 text-destructive shrink-0" />;
+    return null;
+  };
+
+  const ConvItem = ({ c, depth = 0 }: { c: Conversation; depth?: number }) => {
+    // Hard guard against pathological parent-chain cycles in the DB. Real
+    // sub-agent trees are at most a few levels; anything beyond this is
+    // almost certainly bad data and would otherwise blow the stack.
+    if (depth > 10) return null;
+    const kids = childrenByParent.get(c.id) ?? [];
+    const hasKids = kids.length > 0;
+    const isCollapsed = collapsed.has(c.id);
+    const isSubagent = c.parent_conv_id != null;
+
+    return (
+      <>
+        <div
+          className={cn(
+            "group flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer text-xs transition-colors",
+            c.id === activeId ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted",
+          )}
+          style={{ paddingLeft: `${8 + depth * 12}px` }}
+          onClick={() => onSelect(c.id)}
+          data-testid={`conversation-${c.id}`}
+        >
+          {hasKids ? (
+            <button
+              className="shrink-0 -ml-1 p-0.5 rounded hover:bg-muted-foreground/10"
+              onClick={(e) => { e.stopPropagation(); toggleCollapse(c.id); }}
+              data-testid={`btn-toggle-children-${c.id}`}
+              aria-label={isCollapsed ? "Expand sub-agents" : "Collapse sub-agents"}
+            >
+              {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+          ) : isSubagent ? (
+            <CornerDownRight className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+          ) : (
+            <span className="w-3 shrink-0" />
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1">
+              {isSubagent && <StatusDot status={c.subagent_status} />}
+              <span className="truncate">{c.title || `Conv #${c.id}`}</span>
+              {hasKids && (
+                <span className="text-[9px] text-muted-foreground/60 shrink-0" data-testid={`badge-subagent-count-${c.id}`}>
+                  ({kids.length})
+                </span>
+              )}
+            </div>
+            {c.total_tokens > 0 && (
+              <div className="text-[9px] text-muted-foreground/60 mt-0.5" data-testid={`tokens-conv-${c.id}`}>{fmtTokens(c.total_tokens)} tok</div>
+            )}
+          </div>
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 shrink-0 ml-1">
+            <Button size="icon" variant="ghost" className="h-5 w-5" title={c.archived ? "Unarchive" : "Archive"} onClick={(e) => { e.stopPropagation(); onArchive(c.id, !c.archived); }} data-testid={`archive-conversation-${c.id}`}>
+              {c.archived ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
+            </Button>
+            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} data-testid={`delete-conversation-${c.id}`}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+        {hasKids && !isCollapsed && kids.map((k) => <ConvItem key={k.id} c={k} depth={depth + 1} />)}
+      </>
+    );
+  };
 
   return (
     <div className="flex flex-col h-full border-r border-border bg-muted/30" data-testid="conversation-list">
@@ -79,7 +156,7 @@ export function ConversationList({
       </div>
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-0.5 p-2">
-          {conversations.map((c) => <ConvItem key={c.id} c={c} />)}
+          {roots.map((c) => <ConvItem key={c.id} c={c} />)}
           {conversations.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-4">No conversations</p>
           )}

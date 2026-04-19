@@ -54,18 +54,41 @@ export default function ChatPage() {
     refetchInterval: showArchived ? 30_000 : false,
   });
 
+  const clearActiveConv = () => {
+    localStorage.removeItem(CONV_KEY);
+    setActiveConvId(null);
+  };
+
   const { data: messages = [], isLoading: msgsLoading } = useQuery<Message[]>({
     queryKey: ["/api/v1/conversations", activeConvId, "messages"],
     enabled: !!activeConvId,
     refetchInterval: 5_000,
+    retry: false,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/v1/conversations/${activeConvId}/messages`);
+      if (res.status === 404) {
+        // Stale localStorage id — drop it and let auto-select pick a fresh one.
+        clearActiveConv();
+        return [];
+      }
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
   });
 
   useEffect(() => {
-    if (conversations.length > 0 && !conversations.find((c) => c.id === activeConvId)) {
-      const found = archivedConvs.find((c) => c.id === activeConvId);
-      if (!found) selectConv(conversations[0].id);
-    }
-  }, [conversations, activeConvId]);
+    // Only run validation once the conversations list has actually loaded.
+    if (convsLoading || !activeConvId) return;
+    const inActive = conversations.some((c) => c.id === activeConvId);
+    if (inActive) return;
+    const inArchived = archivedConvs.some((c) => c.id === activeConvId);
+    if (inArchived) return;
+    // Active id refers to a conversation we can't see — clear it. If there
+    // are other conversations, jump to the most recent; otherwise leave
+    // empty (user will land on the "Start a conversation" card).
+    if (conversations.length > 0) selectConv(conversations[0].id);
+    else clearActiveConv();
+  }, [conversations, archivedConvs, activeConvId, convsLoading]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
