@@ -16,6 +16,48 @@ from .tool_executor import (
 
 _log = logging.getLogger("a0p.inference")
 
+
+# Doctrine prefix — interdependent_way.md (symlinked to spec.md) is prepended to
+# every system prompt as the first stable block so prompt caches across all four
+# providers (Anthropic ephemeral, OpenAI auto, Gemini implicit, Grok auto) latch
+# onto the same byte-identical prefix on first call and bill subsequent calls at
+# cache-read rates (≈90% off for OpenAI/Anthropic/Grok, ≈75% off for Gemini).
+_DOCTRINE_CACHE: dict[str, str | float] = {"text": "", "mtime": 0.0}
+_DOCTRINE_PATHS = ("interdependent_way.md", "spec.md")
+
+
+def _load_doctrine() -> str:
+    """Read the canonical doctrine file (memoized; reloads on mtime change)."""
+    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    for rel in _DOCTRINE_PATHS:
+        path = os.path.join(base, rel)
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            continue
+        if _DOCTRINE_CACHE["mtime"] == mtime and _DOCTRINE_CACHE["text"]:
+            return _DOCTRINE_CACHE["text"]  # type: ignore[return-value]
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        _DOCTRINE_CACHE["text"] = text
+        _DOCTRINE_CACHE["mtime"] = mtime
+        return text
+    return ""
+
+
+def _prepend_doctrine(system_prompt: Optional[str]) -> Optional[str]:
+    """Prepend the doctrine as the first cacheable block of any system prompt."""
+    doctrine = _load_doctrine()
+    if not doctrine:
+        return system_prompt
+    if not system_prompt:
+        return doctrine
+    return f"{doctrine}\n\n---\n\n{system_prompt}"
+
+
 # Anthropic prompt caching minimum is 1024 tokens. We use a rough char-based
 # estimate (~4 chars/token) to skip cache_control when the prefix is too small.
 _ANTHROPIC_CACHE_MIN_CHARS = 4096
@@ -179,6 +221,8 @@ async def call_energy_provider(
       - Claude: mapped to thinking.budget_tokens (extended thinking)
       - Gemini: not honored on the compat endpoint (no thinking_config support there)
     """
+    system_prompt = _prepend_doctrine(system_prompt)
+
     if provider_id == "openai":
         return await _call_openai_routed(messages, system_prompt, use_tools=use_tools, user_id=user_id, skip_approval=skip_approval)
 
