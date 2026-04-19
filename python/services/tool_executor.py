@@ -376,10 +376,24 @@ _caller_provider: _cv.ContextVar[str | None] = _cv.ContextVar(
 )
 
 
-def set_caller_provider(provider_id: str | None) -> None:
+def set_caller_provider(provider_id: str | None):
     """Inference call sites set this so the summarizer routes through the
-    same provider currently handling the conversation. Safe to leave unset."""
-    _caller_provider.set(provider_id)
+    same provider currently handling the conversation. Returns the Token —
+    pass to reset_caller_provider() in a finally block to avoid leaking the
+    value into a sibling provider call within the same asyncio task."""
+    return _caller_provider.set(provider_id)
+
+
+def reset_caller_provider(token) -> None:
+    """Reset the caller_provider contextvar to its prior value. Pair with
+    set_caller_provider in a try/finally so per-call provider context never
+    leaks across composed agent invocations within one task."""
+    try:
+        _caller_provider.reset(token)
+    except (LookupError, ValueError, TypeError):
+        # Token from a different context, or wrong type — silently ignore;
+        # the value will naturally fall out of scope when the parent task ends.
+        pass
 
 
 def _flat_truncate(name: str, raw: str) -> str:

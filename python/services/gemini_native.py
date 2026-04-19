@@ -20,7 +20,7 @@ from typing import Any, Optional
 from google import genai
 from google.genai import types as gtypes
 
-from .tool_executor import TOOL_SCHEMAS_CHAT, execute_tool
+from .tool_executor import TOOL_SCHEMAS_CHAT, execute_tool, set_caller_provider
 
 _MAX_TOOL_ROUNDS = 5
 
@@ -168,6 +168,10 @@ async def call_gemini_native(
     branch where possible (prompt_tokens, completion_tokens) plus native
     extras (cached_content_token_count, thoughts_token_count).
     """
+    # Pin distiller to whichever Gemini variant we are — gemini3 for the
+    # thinking-capable preview, plain gemini otherwise. Keeps tool-result
+    # summarization on the same model class as the calling conversation.
+    set_caller_provider("gemini3" if supports_thinking else "gemini")
     client = _client(api_key)
     sys_text, rest = _split_system(messages)
     contents = _messages_to_contents(rest)

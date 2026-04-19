@@ -12,6 +12,7 @@ from .tool_executor import (
     TOOL_SCHEMAS_CHAT,
     TOOL_SCHEMAS_RESPONSES,
     execute_tool,
+    set_caller_provider,
 )
 
 _log = logging.getLogger("a0p.inference")
@@ -389,6 +390,9 @@ async def _call_openai_responses(
     Call the OpenAI Responses API (/v1/responses) with optional tool calling.
     Runs up to _MAX_TOOL_ROUNDS tool-call/result loops before returning final text.
     """
+    # Pin the tool-result distiller to the same provider handling this call so
+    # large tool results self-distill instead of crossing vendors mid-loop.
+    set_caller_provider("openai")
 
     def _fmt_messages(msgs: list[dict]) -> list[dict]:
         out: list[dict] = []
@@ -509,6 +513,8 @@ async def _call_openai_compat(
     prev_call_fingerprint: Optional[str] = None
     # Provider name for sanitized errors — derive from URL.
     provider_name = "grok" if "x.ai" in url else ("gemini" if "googleapis" in url else "provider")
+    # Pin distiller to this provider so tool-result summarization self-routes.
+    set_caller_provider(provider_name)
 
     for _round in range(_MAX_TOOL_ROUNDS + 1):
         payload: dict = {
@@ -588,6 +594,8 @@ async def _call_anthropic(
     Anthropic features (computer use, files, beta headers) without rewriting
     the request shape.
     """
+    # Pin distiller to claude so large tool results stay in-vendor.
+    set_caller_provider("claude")
     from anthropic import AsyncAnthropic
     client = AsyncAnthropic(api_key=api_key, max_retries=2, timeout=90.0)
 
