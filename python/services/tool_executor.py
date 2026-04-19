@@ -399,89 +399,146 @@ def _flat_truncate(name: str, raw: str) -> str:
 #     e.g. "medicine" — output is structured JSON of {claim, verbatim, source,
 #     locator, category} tuples, NOT prose. Refuses to invent citations.
 # Adding a new domain = drop a SKILL.md; trigger heuristic below picks it up.
-_DISTILLER_SKILLS = {
-    "medicine":     ".agents/skills/distill-medicine/SKILL.md",
-    "law":          ".agents/skills/distill-law/SKILL.md",
-    "engineering":  ".agents/skills/distill-engineering/SKILL.md",
-    "construction": ".agents/skills/distill-construction/SKILL.md",
-    "general":      ".agents/skills/distill-general/SKILL.md",
-}
-
-# Per-domain trigger words. Lowercase comparison. A domain wins if it scores
-# the most hits AND clears the minimum threshold; otherwise falls to general.
-# The threshold prevents single-mention false positives (one drug mention in
-# a news article shouldn't flip the entire piece into hard-medical mode).
-_DOMAIN_TRIGGERS: dict[str, tuple[str, ...]] = {
-    "medicine": (
-        " mg", " mcg", " mg/", " mcg/", " mEq", " IU ",
-        "dose", "dosage", "dosing", "patient", "diagnos",
-        "icd-", "pubmed", "pmid", "doi:",
-        "contraindication", "indication", "prescrib", "clinical",
-        "tablet", "capsule", "injection", "infusion", "po q", "iv q",
-        "fda", "uspstf", "nice guideline", "who guideline",
-    ),
-    "law": (
-        " v. ", " v ", "u.s.c.", "usc §", "cfr", "c.f.r.", " § ",
-        "plaintiff", "defendant", "petitioner", "respondent",
-        "court held", "the court", "holding", "dicta",
-        "statute", "regulation", "subsection", "amendment",
-        "case law", "appellate", "circuit court", "supreme court",
-        "jurisdiction", "venue", "cause of action", "remedy",
-        "restatement", "reporter",
-    ),
-    "engineering": (
-        "astm ", "iso ", "ieee ", "asme ", "iec ", "ansi ",
-        "tolerance", "datasheet", "torque", " psi", " mpa",
-        " n·m", " nm)", "tensile", "yield strength", "young's modulus",
-        "test method", "load rating", "fatigue", "ductile",
-        "specification", "spec sheet", "rev.", "edition",
-        "± ", "+/-", "kpa", "ksi", "ftlb",
-    ),
-    "construction": (
-        " irc ", " ibc ", " ifc ", "iecc", " nec ", "nfpa",
-        "building code", "code section", "egress",
-        "fire-rated", "fire rating", "load-bearing", "load bearing",
-        "rebar", "framing", "stud", "joist", "truss", "header",
-        "footing", "foundation", "occupancy", "setback",
-        "icc-es", "ul listing", "rough-in", "inspection",
-        "live load", "dead load", "snow load", "wind load",
-    ),
-}
-
+# Distiller skill discovery — every directory matching .agents/skills/distill-*/
+# is treated as a distiller. Each SKILL.md carries its own frontmatter:
+#   name, description, hard_domain (bool), triggers (inline list)
+# Adding a new domain = drop a folder. No Python edits required.
+_DISTILLER_DIR_GLOB = ".agents/skills/distill-*/SKILL.md"
+_DISTILLER_FALLBACK = "general"
 _DOMAIN_TRIGGER_MIN = 3
+_SPEC_CACHE: dict = {"specs": {}, "fingerprint": ""}
+
+
+def _parse_frontmatter(text: str) -> tuple[dict, str]:
+    """Minimal YAML-frontmatter parser. Supports scalar, bool, inline list.
+    Returns (frontmatter_dict, body_text). No external dep."""
+    if not text.startswith("---\n"):
+        return {}, text.strip()
+    end = text.find("\n---\n", 4)
+    if end == -1:
+        return {}, text.strip()
+    fm_text = text[4:end]
+    body = text[end + 5:].strip()
+    fm: dict = {}
+    for line in fm_text.split("\n"):
+        if ":" not in line or line.lstrip().startswith("#"):
+            continue
+        k, _, v = line.partition(":")
+        k = k.strip()
+        v = v.strip()
+        if v.lower() in ("true", "false"):
+            fm[k] = (v.lower() == "true")
+            continue
+        if v.startswith("[") and v.endswith("]"):
+            inner = v[1:-1]
+            items: list[str] = []
+            buf = ""
+            in_q = False
+            for ch in inner:
+                if ch == '"':
+                    in_q = not in_q
+                    continue
+                if ch == "," and not in_q:
+                    if buf.strip():
+                        items.append(buf.strip().strip('"'))
+                    buf = ""
+                else:
+                    buf += ch
+            if buf.strip():
+                items.append(buf.strip().strip('"'))
+            fm[k] = items
+            continue
+        if v.startswith('"') and v.endswith('"'):
+            v = v[1:-1]
+        fm[k] = v
+    return fm, body
+
+
+def _project_root() -> str:
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _discover_distiller_specs() -> dict[str, dict]:
+    """Scan .agents/skills/distill-*/SKILL.md, return {domain: spec}.
+    Memoized; re-parses if any SKILL.md mtime changes."""
+    import glob
+    base = _project_root()
+    pattern = os.path.join(base, _DISTILLER_DIR_GLOB)
+    files = sorted(glob.glob(pattern))
+    fingerprint = "|".join(f"{p}:{os.path.getmtime(p)}" for p in files)
+    if fingerprint and fingerprint == _SPEC_CACHE.get("fingerprint"):
+        return _SPEC_CACHE["specs"]
+    specs: dict[str, dict] = {}
+    for path in files:
+        domain = os.path.basename(os.path.dirname(path)).removeprefix("distill-")
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                fm, body = _parse_frontmatter(fh.read())
+        except OSError:
+            continue
+        specs[domain] = {
+            "prompt": body,
+            "triggers": tuple(t.lower() for t in (fm.get("triggers") or [])),
+            "hard_domain": bool(fm.get("hard_domain", False)),
+        }
+    _SPEC_CACHE["specs"] = specs
+    _SPEC_CACHE["fingerprint"] = fingerprint
+    return specs
 
 
 def _pick_distiller(raw: str) -> str:
-    """Return the domain key for the appropriate distiller skill.
-    Heuristic: score each hard-domain trigger list against the content head;
-    pick the highest scorer if it clears the minimum threshold; else general.
-    Ties resolve to the first domain in dict insertion order."""
+    """Score each domain's triggers against the content head; pick the highest
+    scorer if it clears the minimum threshold; else fall back to general."""
+    specs = _discover_distiller_specs()
     head_lower = raw[:8000].lower()
     scores = {
-        domain: sum(1 for t in triggers if t.lower() in head_lower)
-        for domain, triggers in _DOMAIN_TRIGGERS.items()
+        domain: sum(1 for t in spec["triggers"] if t in head_lower)
+        for domain, spec in specs.items() if spec["triggers"]
     }
-    best_domain, best_score = max(scores.items(), key=lambda kv: kv[1])
-    if best_score >= _DOMAIN_TRIGGER_MIN:
-        return best_domain
-    return "general"
+    if scores:
+        best_domain, best_score = max(scores.items(), key=lambda kv: kv[1])
+        if best_score >= _DOMAIN_TRIGGER_MIN:
+            return best_domain
+    return _DISTILLER_FALLBACK
 
 
-def _load_skill_prompt(domain: str) -> str:
-    """Read the SKILL.md body for a distiller domain, stripping YAML frontmatter."""
-    path = _DISTILLER_SKILLS.get(domain) or _DISTILLER_SKILLS["general"]
-    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    full = os.path.join(base, path)
+def _get_distiller_spec(domain: str) -> dict:
+    specs = _discover_distiller_specs()
+    return specs.get(domain) or specs.get(_DISTILLER_FALLBACK) or {}
+
+
+def _try_parse_json_array(text: str) -> list | None:
+    """Tolerant JSON-array parser. Strips ```json fences and surrounding prose."""
+    if not text:
+        return None
+    s = text.strip()
+    if s.startswith("```"):
+        # Strip opening fence (``` or ```json) and closing fence
+        s = s.split("\n", 1)[1] if "\n" in s else s
+        if s.endswith("```"):
+            s = s.rsplit("```", 1)[0]
+        s = s.strip()
+    # Find the first [ and last ] in case the model wrapped JSON in prose
+    lb, rb = s.find("["), s.rfind("]")
+    if lb != -1 and rb != -1 and rb > lb:
+        s = s[lb:rb + 1]
     try:
-        with open(full, "r", encoding="utf-8") as fh:
-            text = fh.read()
-    except OSError:
-        return ""
-    if text.startswith("---\n"):
-        end = text.find("\n---\n", 4)
-        if end != -1:
-            text = text[end + 5:]
-    return text.strip()
+        parsed = json.loads(s)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, list) else None
+
+
+def _filter_valid_claims(items: list) -> list:
+    """Keep only items shaped like {claim, verbatim, source, ...}."""
+    out = []
+    for it in items:
+        if (isinstance(it, dict)
+                and isinstance(it.get("claim"), str) and it["claim"].strip()
+                and isinstance(it.get("verbatim"), str) and it["verbatim"].strip()
+                and isinstance(it.get("source"), str) and it["source"].strip()):
+            out.append(it)
+    return out
 
 
 async def _maybe_summarize(name: str, arguments: dict, raw: str) -> str:
@@ -505,11 +562,12 @@ async def _maybe_summarize(name: str, arguments: dict, raw: str) -> str:
     if not provider:
         return _flat_truncate(name, raw)
 
-    # Pick the domain skill from the content. Then load the SKILL.md as
-    # the system prompt — the skill encodes what to preserve vs drop, and
-    # for hard domains it enforces structured JSON output with citations.
+    # Resolve the domain spec from the content. The spec carries the system
+    # prompt (skill body) and a hard_domain flag that gates JSON validation.
     domain = _pick_distiller(raw)
-    skill_prompt = _load_skill_prompt(domain)
+    spec = _get_distiller_spec(domain)
+    skill_prompt = spec.get("prompt") or ""
+    is_hard = bool(spec.get("hard_domain"))
     if not skill_prompt:
         return _flat_truncate(name, raw)
 
@@ -531,6 +589,43 @@ async def _maybe_summarize(name: str, arguments: dict, raw: str) -> str:
         )
         if not text or not text.strip():
             return _flat_truncate(name, raw)
+
+        # Hard-domain validation: parse as JSON array of {claim, verbatim,
+        # source} tuples. On failure, retry ONCE with a corrective prompt;
+        # if that also fails, fall back to flat-truncate so downstream
+        # JSON.parse() never blows up on malformed distiller output.
+        if is_hard:
+            parsed = _try_parse_json_array(text)
+            valid = _filter_valid_claims(parsed) if parsed is not None else []
+            if not valid:
+                retry_msg = (
+                    "Your previous response was not a valid JSON array of claim "
+                    "objects. Return ONLY a JSON array. Each item must have "
+                    "non-empty 'claim', 'verbatim', and 'source' fields. No "
+                    "prose, no markdown fences. Same content rules apply."
+                )
+                text2, _ = await call_energy_provider(
+                    provider,
+                    messages=[
+                        {"role": "user", "content": user_msg},
+                        {"role": "assistant", "content": text},
+                        {"role": "user", "content": retry_msg},
+                    ],
+                    system_prompt=skill_prompt,
+                    max_tokens=target_tokens,
+                    use_tools=False,
+                )
+                parsed2 = _try_parse_json_array(text2 or "")
+                valid = _filter_valid_claims(parsed2) if parsed2 is not None else []
+                if not valid:
+                    return _flat_truncate(name, raw)
+            text = json.dumps(valid, ensure_ascii=False)
+            return (
+                f"[distilled via {provider} · {domain} skill (hard, "
+                f"{len(valid)} claims): {len(raw) // 1024} KB → "
+                f"~{len(text) // 1024} KB]\n\n{text}"
+            )
+
         return (
             f"[distilled via {provider} · {domain} skill: "
             f"{len(raw) // 1024} KB → ~{len(text) // 1024} KB]\n\n{text}"

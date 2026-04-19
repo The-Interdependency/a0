@@ -1,6 +1,8 @@
 ---
 name: distill-engineering
 description: Congruency-citation distillation for engineering content — material specs, tolerances, test methods, standards (ASTM, ISO, IEEE, ASME). Preserves verbatim numerical values, units, and standard references. Use when content contains engineering specifications, datasheets, or standards documents.
+hard_domain: true
+triggers: ["astm ", "iso ", "ieee ", "asme ", "iec ", "ansi ", "tolerance", "datasheet", "torque", " psi", " mpa", " n·m", " nm)", "tensile", "yield strength", "young's modulus", "test method", "load rating", "fatigue", "ductile", "specification", "spec sheet", "rev.", "edition", "± ", "+/-", "kpa", "ksi", "ftlb"]
 ---
 
 # Engineering Content Distiller
