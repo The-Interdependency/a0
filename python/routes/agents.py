@@ -154,7 +154,7 @@ async def list_energy_providers():
 
 @router.post("/agents/energy-providers/active")
 async def set_active_provider(body: SetProviderRequest):
-    if not energy_registry.set_active_provider(body.provider_id):
+    if not await energy_registry.set_active_provider_persistent(body.provider_id):
         raise HTTPException(status_code=400, detail="unknown provider")
     return {"active": body.provider_id, "agent_name": compose_name(body.provider_id)}
 

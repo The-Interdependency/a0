@@ -105,27 +105,20 @@ class EnergyRegistry:
         try:
             from ..database import get_session
             async with get_session() as session:
-                result = await session.execute(
-                    sa_text("SELECT key, model_id, api_identifier, vendor, is_default "
-                            "FROM model_registry WHERE enabled = true")
-                )
-                rows = result.fetchall()
-                for row in rows:
-                    pid = row[0]
-                    if pid not in self._providers:
-                        self._providers[pid] = {
-                            "id": pid,
-                            "label": row[1],
-                            "model": row[2],
-                            "vendor": row[3],
-                            "env_key": "",
-                            "cost_per_1k_input": 0.0,
-                            "cost_per_1k_output": 0.0,
-                            "max_tokens": 8192,
-                            "supports_streaming": True,
-                        }
-                    if row[4]:
-                        self._active = pid
+                # Settings table holds the persisted active-provider choice.
+                # Created on first boot so we never depend on a phantom schema.
+                await session.execute(sa_text(
+                    "CREATE TABLE IF NOT EXISTS a0p_settings ("
+                    "  key text PRIMARY KEY,"
+                    "  value text NOT NULL,"
+                    "  updated_at timestamptz NOT NULL DEFAULT NOW()"
+                    ")"
+                ))
+                row = (await session.execute(
+                    sa_text("SELECT value FROM a0p_settings WHERE key = 'active_provider'")
+                )).first()
+                if row and row[0] in self._providers:
+                    self._active = row[0]
             self._db_loaded = True
         except Exception:
             self._db_loaded = True
@@ -163,6 +156,28 @@ class EnergyRegistry:
         if provider_id not in self._providers:
             return False
         self._active = provider_id
+        return True
+
+    async def set_active_provider_persistent(self, provider_id: str) -> bool:
+        """Set the active provider in memory AND persist it to model_registry so
+        the choice survives uvicorn restarts. Falls back to in-memory-only on DB
+        error so a transient outage never breaks switching."""
+        if not self.set_active_provider(provider_id):
+            return False
+        try:
+            from ..database import get_session
+            async with get_session() as session:
+                await session.execute(
+                    sa_text(
+                        "INSERT INTO a0p_settings (key, value) "
+                        "VALUES ('active_provider', :pid) "
+                        "ON CONFLICT (key) DO UPDATE "
+                        "SET value = EXCLUDED.value, updated_at = NOW()"
+                    ),
+                    {"pid": provider_id},
+                )
+        except Exception:
+            pass
         return True
 
     def compose_agent_name(self, base_name: str = "a0(zeta fun alpha echo)") -> str:
