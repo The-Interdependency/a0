@@ -24,6 +24,7 @@ from .cli import router as cli_router
 from .focus import router as focus_router
 from .forge import router as forge_router
 from .energy import router as energy_router, pcna_router as energy_pcna_router
+from .liminals import router as liminals_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -53,6 +54,7 @@ ALL_ROUTERS = [
     forge_router,
     energy_router,
     energy_pcna_router,
+    liminals_router,
 ]
 
 
@@ -79,6 +81,7 @@ def collect_ui_meta() -> list[dict]:
         "python.routes.editable_schema",
         "python.routes.cli",
         "python.routes.forge",
+        "python.routes.liminals",
     ]
     tabs = []
     for mod_name in modules:
