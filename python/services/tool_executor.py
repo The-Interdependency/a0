@@ -391,15 +391,66 @@ def _flat_truncate(name: str, raw: str) -> str:
     )
 
 
+# Distiller skill registry. Each entry maps a domain key to a SKILL.md file
+# whose body becomes the system_prompt for the distillation call. Domains split
+# along two axes:
+#   - SOFT (similarity distillation): paraphrase ok; e.g. "general"
+#   - HARD (congruency-citation distillation): verbatim + provenance required;
+#     e.g. "medicine" — output is structured JSON of {claim, verbatim, source,
+#     locator, category} tuples, NOT prose. Refuses to invent citations.
+# Adding a new domain = drop a SKILL.md; trigger heuristic below picks it up.
+_DISTILLER_SKILLS = {
+    "medicine": ".agents/skills/distill-medicine/SKILL.md",
+    "general":  ".agents/skills/distill-general/SKILL.md",
+}
+
+_MEDICINE_TRIGGERS = (
+    " mg", " mcg", " mg/", " mcg/", " mEq", " IU ",
+    "dose", "dosage", "dosing", "patient", "diagnos",
+    "icd-", "pubmed", "pmid", "doi:",
+    "contraindication", "indication", "prescrib", "clinical",
+    "tablet", "capsule", "injection", "infusion", "po q", "iv q",
+    "fda", "uspstf", "nice guideline", "who guideline",
+)
+
+
+def _pick_distiller(raw: str) -> str:
+    """Return the domain key for the appropriate distiller skill.
+    Heuristic: count domain trigger matches in the head of the content.
+    A match count >= 3 selects the hard-domain distiller; otherwise general."""
+    head_lower = raw[:8000].lower()
+    if sum(1 for t in _MEDICINE_TRIGGERS if t.lower() in head_lower) >= 3:
+        return "medicine"
+    return "general"
+
+
+def _load_skill_prompt(domain: str) -> str:
+    """Read the SKILL.md body for a distiller domain, stripping YAML frontmatter."""
+    path = _DISTILLER_SKILLS.get(domain) or _DISTILLER_SKILLS["general"]
+    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    full = os.path.join(base, path)
+    try:
+        with open(full, "r", encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return ""
+    if text.startswith("---\n"):
+        end = text.find("\n---\n", 4)
+        if end != -1:
+            text = text[end + 5:]
+    return text.strip()
+
+
 async def _maybe_summarize(name: str, arguments: dict, raw: str) -> str:
-    """Pass small results through; distill large ones via the derive model."""
+    """Pass small results through; distill large ones via a domain-specific
+    skill. Soft domains paraphrase; hard domains return verbatim+citation tuples."""
     if not isinstance(raw, str):
         raw = str(raw)
     if len(raw) <= _TOOL_RESULT_PASS_TOKENS * 4:
         return raw
 
-    # Pick the summarizer provider. Caller-set wins; otherwise the active
-    # provider self-summarizes. We avoid hardcoding a vendor so the choice
+    # Pick the distiller provider. Caller-set wins; otherwise the active
+    # provider self-distills. We avoid hardcoding a vendor so the choice
     # follows the same energy-registry routing as everything else.
     provider = _caller_provider.get()
     if not provider:
@@ -411,36 +462,38 @@ async def _maybe_summarize(name: str, arguments: dict, raw: str) -> str:
     if not provider:
         return _flat_truncate(name, raw)
 
-    # Pre-truncate before paying to summarize: anything past hard cap is
-    # almost certainly noise and would just waste summarizer tokens.
+    # Pick the domain skill from the content. Then load the SKILL.md as
+    # the system prompt — the skill encodes what to preserve vs drop, and
+    # for hard domains it enforces structured JSON output with citations.
+    domain = _pick_distiller(raw)
+    skill_prompt = _load_skill_prompt(domain)
+    if not skill_prompt:
+        return _flat_truncate(name, raw)
+
+    # Pre-truncate before paying to distill: anything past hard cap is
+    # almost certainly noise and would just waste tokens.
     head = raw[: _TOOL_RESULT_HARD_CAP_TOKENS * 4]
     args_preview = json.dumps(arguments)[:500] if arguments else "{}"
     target_tokens = _TOOL_RESULT_PASS_TOKENS // 2  # leave headroom for caller
-    prompt = (
-        "You are distilling a tool-call result for an agent that will use it "
-        "to continue a conversation. Preserve URLs, IDs, numbers, names, and "
-        "decision-relevant facts verbatim. Drop boilerplate, navigation, "
-        "decoration, and repeated content. Do not add commentary. "
-        f"Return at most ~{target_tokens} tokens.\n\n"
-        f"Tool: {name}\nArgs: {args_preview}\n\n---\n\n{head}"
-    )
+    user_msg = f"Tool: {name}\nArgs: {args_preview}\n\n---\n\n{head}"
+
     try:
         from .inference import call_energy_provider
         text, _usage = await call_energy_provider(
             provider,
-            messages=[{"role": "user", "content": prompt}],
-            system_prompt=None,
+            messages=[{"role": "user", "content": user_msg}],
+            system_prompt=skill_prompt,
             max_tokens=target_tokens,
-            use_tools=False,  # summarizer must NOT recursively call tools
+            use_tools=False,  # distiller must NOT recursively call tools
         )
         if not text or not text.strip():
             return _flat_truncate(name, raw)
         return (
-            f"[summarized via {provider}: "
+            f"[distilled via {provider} · {domain} skill: "
             f"{len(raw) // 1024} KB → ~{len(text) // 1024} KB]\n\n{text}"
         )
-    except Exception as exc:
-        # Never let the summarizer break the tool loop — fall back to flat.
+    except Exception:
+        # Never let the distiller break the tool loop — fall back to flat.
         return _flat_truncate(name, raw)
 
 
