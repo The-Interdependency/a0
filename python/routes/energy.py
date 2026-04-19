@@ -22,9 +22,10 @@ Endpoints:
 """
 
 import time
+import re
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
-from typing import Optional, Any
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, Any, Literal
 from sqlalchemy import text as sa_text
 
 from ..services.energy_registry import (
@@ -92,17 +93,116 @@ async def _require_admin(request: Request) -> None:
     raise HTTPException(status_code=403, detail="Admin only")
 
 
+# Validation constants — single source of truth for both Pydantic and the
+# legacy in-handler checks. Tightening these tightens the admin API surface.
+VALID_ROLES = {"record", "practice", "conduct", "perform", "derive"}
+VALID_PRESETS = {"speed", "depth", "price", "balance", "creativity", "coding"}
+_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9._\-:/]{1,128}$")
+_TOOL_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+
+
+def _validate_role_map(value: dict, field: str) -> dict:
+    """Shared validator: dict whose keys are roles and values are
+    {derive: <model_id>, ...}-shaped dicts of small string entries."""
+    if not isinstance(value, dict):
+        raise ValueError(f"{field} must be an object")
+    bad_roles = set(value.keys()) - VALID_ROLES
+    if bad_roles:
+        raise ValueError(
+            f"{field}: invalid role(s) {sorted(bad_roles)}; allowed: {sorted(VALID_ROLES)}"
+        )
+    for role, entry in value.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"{field}.{role} must be an object")
+        if len(entry) > 16:
+            raise ValueError(f"{field}.{role} has too many keys (max 16)")
+        for k, v in entry.items():
+            if not isinstance(k, str) or not _MODEL_ID_RE.match(k):
+                raise ValueError(f"{field}.{role}: bad key '{k}'")
+            if v is None:
+                continue
+            if not isinstance(v, (str, int, float, bool)):
+                raise ValueError(f"{field}.{role}.{k} must be scalar (str/int/float/bool)")
+            if isinstance(v, str) and len(v) > 256:
+                raise ValueError(f"{field}.{role}.{k} string too long (max 256)")
+    return value
+
+
 class PatchSeedBody(BaseModel):
+    """Strict admin patch body. Unknown top-level fields are rejected so a
+    typo never silently overwrites the wrong slot in route_config."""
+    model_config = {"extra": "forbid"}
+
     model_assignments: Optional[dict] = None
-    available_models: Optional[list] = None
-    enabled_tools: Optional[list] = None
-    context_addendum: Optional[str] = None
+    available_models: Optional[list] = Field(default=None, max_length=200)
+    enabled_tools: Optional[list[str]] = Field(default=None, max_length=64)
+    context_addendum: Optional[str] = Field(default=None, max_length=50_000)
     capabilities: Optional[dict] = None
     presets: Optional[dict] = None
 
+    @field_validator("model_assignments")
+    @classmethod
+    def _check_assignments(cls, v):
+        return _validate_role_map(v, "model_assignments") if v is not None else v
+
+    @field_validator("available_models")
+    @classmethod
+    def _check_available_models(cls, v):
+        if v is None:
+            return v
+        for i, m in enumerate(v):
+            if not isinstance(m, dict):
+                raise ValueError(f"available_models[{i}] must be an object")
+            mid = m.get("id")
+            if not isinstance(mid, str) or not _MODEL_ID_RE.match(mid):
+                raise ValueError(f"available_models[{i}].id missing or malformed")
+            if len(m) > 32:
+                raise ValueError(f"available_models[{i}] has too many keys (max 32)")
+        return v
+
+    @field_validator("enabled_tools")
+    @classmethod
+    def _check_tools(cls, v):
+        if v is None:
+            return v
+        for i, t in enumerate(v):
+            if not isinstance(t, str) or not _TOOL_NAME_RE.match(t):
+                raise ValueError(f"enabled_tools[{i}]='{t}' not a valid tool slug")
+        if len(set(v)) != len(v):
+            raise ValueError("enabled_tools contains duplicates")
+        return v
+
+    @field_validator("capabilities")
+    @classmethod
+    def _check_capabilities(cls, v):
+        if v is None:
+            return v
+        if len(v) > 64:
+            raise ValueError("capabilities has too many keys (max 64)")
+        for k, val in v.items():
+            if not isinstance(k, str) or len(k) > 64:
+                raise ValueError(f"capabilities key '{k}' invalid")
+            if not isinstance(val, (bool, str, int, float)) and val is not None:
+                raise ValueError(f"capabilities.{k} must be scalar")
+        return v
+
+    @field_validator("presets")
+    @classmethod
+    def _check_presets(cls, v):
+        if v is None:
+            return v
+        bad = set(v.keys()) - VALID_PRESETS
+        if bad:
+            raise ValueError(
+                f"presets: invalid preset(s) {sorted(bad)}; allowed: {sorted(VALID_PRESETS)}"
+            )
+        for name, assignments in v.items():
+            _validate_role_map(assignments, f"presets.{name}")
+        return v
+
 
 class OptimizeBody(BaseModel):
-    preset: str  # speed | depth | price | balance | creativity | coding
+    preset: Literal["speed", "depth", "price", "balance", "creativity", "coding"]
 
 
 async def _get_seed_module(provider_id: str) -> dict | None:
