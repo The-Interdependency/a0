@@ -73,11 +73,12 @@ File naming convention: `{name}.py` = self-contained module; `{name}_api.py` = t
 
 ### Key Python Services
 
-- `python/services/inference.py` — Orchestrates LLM calls (Grok-3 Mini default, Claude, Gemini); injects tier-specific `prompt_context`
+- `python/services/inference.py` — Orchestrates LLM calls across registered energy providers; injects tier-specific `prompt_context`
 - `python/services/heartbeat.py` — 30-second tick: audit snapshots, memory checkpoints, PCNA propagation, sub-agent cleanup
 - `python/services/tool_executor.py` — Tool invocation with approval gates
 - `python/engine/pcna.py` — Six-ring PCNA inference pipeline (Phi/Psi/Omega/Guardian/Memory-L/Memory-S); six steps: Project → Inject → Propagate → PTCA-seed → PTCA-circle → Coherence
-- `python/services/edcm.py` — Behavioral directive scoring (CM, DA, DRIFT, DVG, INT, TBF) that guides LLM selection
+- `python/services/edcm.py` — Behavioral directive scoring (CM, DA, DRIFT, DVG, INT, TBF); fires corrective actions (coherence_lock, drift_correction, divergence_dampen, etc.)
+- `python/engine/sigma.py` — SigmaCore: encodes the workspace filesystem as a prime-ring tensor; companion to the Psi ring; has its own console tab (`SigmaTab`)
 
 ### Database
 
@@ -113,7 +114,7 @@ Required in production (dev has safe fallbacks except where noted):
 SESSION_SECRET          # Express session encryption (no fallback in prod)
 INTERNAL_API_SECRET     # Express→Python shared secret (random per-process in dev — use start-dev.sh)
 DATABASE_URL            # PostgreSQL connection string
-XAI_API_KEY             # Grok-3 Mini (primary LLM)
+XAI_API_KEY             # Grok 4 Fast (reasoning) — one of the registered energy providers
 STRIPE_SECRET_KEY       # Stripe billing
 STRIPE_WEBHOOK_SECRET   # Stripe webhook validation
 ADMIN_USER_ID           # User ID allowed to write prompt contexts
