@@ -13,6 +13,7 @@ from .tool_executor import (
     TOOL_SCHEMAS_RESPONSES,
     execute_tool,
     set_caller_provider,
+    get_a0_skill_manifest,
 )
 
 _log = logging.getLogger("a0p.inference")
@@ -54,13 +55,21 @@ def _load_doctrine() -> str:
 
 
 def _prepend_doctrine(system_prompt: Optional[str]) -> Optional[str]:
-    """Prepend the doctrine as the first cacheable block of any system prompt."""
+    """Prepend the doctrine + a0 skill manifest as the first cacheable blocks
+    of any system prompt. Both blocks are byte-stable across calls (manifest
+    is alphabetically sorted) so prompt caches latch onto the same prefix
+    until either a doctrine edit or a SKILL.md edit invalidates it."""
     doctrine = _load_doctrine()
-    if not doctrine:
+    try:
+        manifest = get_a0_skill_manifest()
+    except Exception:
+        manifest = ""
+    parts = [p for p in (doctrine, manifest, system_prompt) if p]
+    if not parts:
         return system_prompt
-    if not system_prompt:
-        return doctrine
-    return f"{doctrine}\n\n---\n\n{system_prompt}"
+    if len(parts) == 1:
+        return parts[0]
+    return "\n\n---\n\n".join(parts)
 
 
 # Anthropic prompt caching minimum is 1024 tokens. We use a rough char-based
