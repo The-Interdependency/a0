@@ -23,6 +23,14 @@ export interface UsageData {
   [key: string]: unknown;
 }
 
+export interface MessageAttachment {
+  id: number;
+  storage_url: string;
+  mime_type: string;
+  width?: number | null;
+  height?: number | null;
+}
+
 export interface Message {
   id: number;
   conversation_id: number;
@@ -30,6 +38,7 @@ export interface Message {
   content: string;
   model: string | null;
   created_at: string;
+  attachments?: MessageAttachment[];
   metadata?: {
     error?: boolean;
     error_detail?: string;
@@ -249,6 +258,27 @@ export function MessageBubble({ message, onSend }: { message: Message; onSend: (
                 {showDetail ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               </button>
             )}
+          </div>
+        )}
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-1.5" data-testid={`attachments-msg-${message.id}`}>
+            {message.attachments.map((a) => (
+              <a
+                key={a.id}
+                href={a.storage_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-md overflow-hidden border border-border max-w-[240px] hover-elevate"
+                data-testid={`attachment-${a.id}`}
+              >
+                <img
+                  src={a.storage_url}
+                  alt="attachment"
+                  className="block max-h-40 w-auto object-contain bg-muted"
+                  loading="lazy"
+                />
+              </a>
+            ))}
           </div>
         )}
         <div className={cn("prose prose-sm max-w-none dark:prose-invert", isUser && "text-primary-foreground")}>

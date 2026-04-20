@@ -402,4 +402,37 @@ class ToolResult(Base):
     raw_result = Column(Text, nullable=False)
     result_size_bytes = Column(Integer, nullable=False, server_default="0")
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+
+class MessageAttachment(Base):
+    """Image (or other media) attached to a chat message. Files live under
+    uploads/; storage_url is a relative path that Express serves directly."""
+    __tablename__ = "message_attachments"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    message_id = Column(Integer)
+    owner_user_id = Column(String)
+    kind = Column(Text, nullable=False, server_default="image")
+    mime_type = Column(Text, nullable=False)
+    storage_url = Column(Text, nullable=False)
+    width = Column(Integer)
+    height = Column(Integer)
+    bytes = Column(Integer)
+    created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+
+class GeneratedImage(Base):
+    """Output of the image_generate tool. Local file under uploads/."""
+    __tablename__ = "generated_images"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    owner_user_id = Column(Text)
+    prompt = Column(Text, nullable=False)
+    model = Column(Text, nullable=False)
+    aspect_ratio = Column(Text, nullable=False, server_default="1:1")
+    storage_url = Column(Text, nullable=False)
+    bytes = Column(Integer, nullable=False, server_default="0")
+    created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    public = Column(Boolean, nullable=False, server_default=text("false"))
+    featured = Column(Boolean, nullable=False, server_default=text("false"))
+    tags = Column(JSONB, server_default=text("'[]'::jsonb"))
+    skill_origin = Column(Text)
 # 313:8

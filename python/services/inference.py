@@ -76,6 +76,101 @@ def _prepend_doctrine(system_prompt: Optional[str]) -> Optional[str]:
 # estimate (~4 chars/token) to skip cache_control when the prefix is too small.
 _ANTHROPIC_CACHE_MIN_CHARS = 4096
 
+
+def _resolve_attachment_path(storage_url: str) -> Optional[str]:
+    """Map a storage_url like '/uploads/foo.png' to an absolute local path."""
+    if not storage_url:
+        return None
+    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    rel = storage_url.lstrip("/")
+    abs_path = os.path.join(base, rel)
+    return abs_path if os.path.isfile(abs_path) else None
+
+
+def _read_attachment_b64(storage_url: str) -> Optional[tuple[str, str]]:
+    """Return (mime_type, base64_data) for a local file referenced by storage_url, or None."""
+    import base64, mimetypes
+    p = _resolve_attachment_path(storage_url)
+    if not p:
+        return None
+    mime, _ = mimetypes.guess_type(p)
+    if not mime:
+        mime = "image/png"
+    try:
+        with open(p, "rb") as fh:
+            data = base64.b64encode(fh.read()).decode("ascii")
+    except OSError:
+        return None
+    return (mime, data)
+
+
+def _build_provider_messages(messages: list[dict], provider_id: str) -> list[dict]:
+    """Convert a list of {role, content, attachments?} messages into the
+    multimodal shape required by the target provider.
+
+    `attachments` items are dicts with at least `storage_url` and `mime_type`.
+    Only user-role messages carry attachments today; assistant/tool turns are
+    passed through unchanged. Vision content is appended to the user turn so
+    the doctrine system-prompt prefix remains byte-identical and cacheable.
+    """
+    out: list[dict] = []
+    for m in messages:
+        atts = m.get("attachments") or []
+        # Strip attachments key from passthrough copy regardless.
+        base = {k: v for k, v in m.items() if k != "attachments"}
+        if not atts or m.get("role") != "user":
+            out.append(base)
+            continue
+        text = base.get("content") if isinstance(base.get("content"), str) else ""
+
+        if provider_id in ("openai", "grok", "grok-fast", "grok-code"):
+            parts: list[dict] = []
+            if text:
+                parts.append({"type": "text", "text": text})
+            for a in atts:
+                pair = _read_attachment_b64(a.get("storage_url", ""))
+                if not pair:
+                    continue
+                mime, data = pair
+                parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{data}"},
+                })
+            out.append({**base, "content": parts})
+            continue
+
+        if provider_id == "claude":
+            parts = []
+            if text:
+                parts.append({"type": "text", "text": text})
+            for a in atts:
+                pair = _read_attachment_b64(a.get("storage_url", ""))
+                if not pair:
+                    continue
+                mime, data = pair
+                parts.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": mime, "data": data},
+                })
+            out.append({**base, "content": parts})
+            continue
+
+        if provider_id in ("gemini", "gemini3"):
+            # Native Gemini path expects Part.from_bytes; preserve attachments
+            # so gemini_native._messages_to_contents can build inline_data parts.
+            inline = []
+            for a in atts:
+                pair = _read_attachment_b64(a.get("storage_url", ""))
+                if not pair:
+                    continue
+                mime, data = pair
+                inline.append({"mime_type": mime, "data_b64": data})
+            out.append({**base, "attachments": inline})
+            continue
+
+        out.append(base)
+    return out
+
 # Retry policy: 2 retries (3 attempts total) with jittered exponential backoff
 # on 429 and 5xx. 4xx other than 429 fail fast.
 _RETRY_MAX_ATTEMPTS = 3
@@ -236,6 +331,7 @@ async def call_energy_provider(
       - Gemini: not honored on the compat endpoint (no thinking_config support there)
     """
     system_prompt = _prepend_doctrine(system_prompt)
+    messages = _build_provider_messages(messages, provider_id)
 
     if provider_id == "openai":
         return await _call_openai_routed(messages, system_prompt, use_tools=use_tools, user_id=user_id, skip_approval=skip_approval)

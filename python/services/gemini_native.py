@@ -127,10 +127,22 @@ def _messages_to_contents(messages: list[dict]) -> list[gtypes.Content]:
 
         if role in ("user", "assistant") and isinstance(content, str):
             g_role = "model" if role == "assistant" else "user"
-            contents.append(gtypes.Content(
-                role=g_role,
-                parts=[gtypes.Part.from_text(text=content)],
-            ))
+            parts: list[gtypes.Part] = []
+            if content:
+                parts.append(gtypes.Part.from_text(text=content))
+            # Inline image (or other media) attachments — prepared upstream by
+            # inference._build_provider_messages as {mime_type, data_b64}.
+            for a in (m.get("attachments") or []):
+                import base64 as _b64
+                try:
+                    raw = _b64.b64decode(a.get("data_b64", ""))
+                except Exception:
+                    continue
+                parts.append(gtypes.Part.from_bytes(
+                    data=raw, mime_type=a.get("mime_type", "image/png"),
+                ))
+            if parts:
+                contents.append(gtypes.Content(role=g_role, parts=parts))
 
     return contents
 
