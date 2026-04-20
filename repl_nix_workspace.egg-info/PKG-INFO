@@ -15,6 +15,7 @@ Requires-Dist: psycopg2-binary>=2.9.11
 Requires-Dist: pydantic>=2.12.5
 Requires-Dist: pyjwt[crypto]>=2.10.1
 Requires-Dist: python-multipart>=0.0.22
+Requires-Dist: replit-object-storage>=1.0.2
 Requires-Dist: sqlalchemy>=2.0.48
 Requires-Dist: stripe>=15.0.1
 Requires-Dist: uvicorn[standard]>=0.42.0

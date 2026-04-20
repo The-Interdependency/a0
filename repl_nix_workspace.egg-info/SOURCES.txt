@@ -10,3 +10,7 @@ repl_nix_workspace.egg-info/SOURCES.txt
 repl_nix_workspace.egg-info/dependency_links.txt
 repl_nix_workspace.egg-info/requires.txt
 repl_nix_workspace.egg-info/top_level.txt
+tests/test_live_server.py
+tests/test_route_imports.py
+tests/test_skills.py
+tests/test_tools_registry.py

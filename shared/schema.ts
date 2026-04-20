@@ -1,4 +1,4 @@
-// 512:16
+// 535:18
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, serial, integer, timestamp, jsonb, real, boolean, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -603,4 +603,31 @@ export const generatedImages = pgTable("generated_images", {
 export const insertGeneratedImageSchema = createInsertSchema(generatedImages).omit({ id: true, createdAt: true });
 export type GeneratedImage = typeof generatedImages.$inferSelect;
 export type InsertGeneratedImage = z.infer<typeof insertGeneratedImageSchema>;
-// 512:16
+
+// Unified archive of a0-produced artifacts (and backfilled generated_images).
+// Distinct from message_attachments which holds human-uploaded inputs.
+export const artifacts = pgTable("artifacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  kind: varchar("kind").notNull(),
+  toolName: varchar("tool_name"),
+  agentRunId: varchar("agent_run_id"),
+  storagePath: text("storage_path").notNull(),
+  filename: varchar("filename").notNull(),
+  mime: varchar("mime").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  sha256: varchar("sha256").notNull(),
+  provenance: jsonb("provenance"),
+  public: boolean("public").notNull().default(false),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
+}, (t) => [
+  index("idx_artifacts_created_at").on(t.createdAt.desc()),
+  index("idx_artifacts_kind").on(t.kind),
+  index("idx_artifacts_tool_name").on(t.toolName),
+  index("idx_artifacts_sha256").on(t.sha256),
+  index("idx_artifacts_public_kind_created").on(t.public, t.kind, t.createdAt.desc()),
+]);
+
+export const insertArtifactSchema = createInsertSchema(artifacts).omit({ id: true, createdAt: true });
+export type Artifact = typeof artifacts.$inferSelect;
+export type InsertArtifact = z.infer<typeof insertArtifactSchema>;
+// 535:18

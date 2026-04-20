@@ -1,4 +1,4 @@
-# 73:13
+# 103:31
 """Tool registry — self-declaring per-tool modules.
 
 Discovery is filesystem-based: every `*.py` sibling that exports both a
@@ -127,9 +127,26 @@ def tool_schemas_chat() -> list[dict]:
 
 
 async def dispatch(name: str, **kwargs) -> Any:
-    """Resolve a tool by name and await its handler. Raises KeyError if unknown."""
+    """Resolve a tool by name and await its handler. Raises KeyError if unknown.
+
+    If the tool's SCHEMA declares a top-level "produces" key, the handler's
+    return value is auto-archived through python.services.artifacts and the
+    user-visible result is replaced with a compact {artifacts: [...], count}
+    summary. The handler must return either:
+      * dict with keys {data: bytes, filename, mime, provenance} (single), or
+      * list[dict] of the above (multi-artifact tools).
+    Anything else raises — no silent passthrough, per the no-silent-fallback
+    doctrine. Tools without "produces" pass through unchanged.
+    """
     reg = registry()
     if name not in reg:
         raise KeyError(name)
-    return await reg[name].handle(**kwargs)
-# 73:13
+    spec = reg[name]
+    result = await spec.handle(**kwargs)
+    produces = spec.schema.get("produces")
+    if not produces:
+        return result
+    from . import _archive_wrap
+    return await _archive_wrap.wrap(result, tool_name=name, produces=produces,
+                                    agent_run_id=kwargs.get("_agent_run_id"))
+# 103:31

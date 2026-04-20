@@ -1,6 +1,5 @@
-# 103:3
-"""image_generate — Google Imagen image generation, persisted under uploads/."""
-import json
+# 90:4
+"""image_generate — Google Imagen image generation, archived through artifacts."""
 import os
 
 SCHEMA = {
@@ -9,8 +8,8 @@ SCHEMA = {
         "name": "image_generate",
         "description": (
             "Generate a new image from a text prompt using Google Imagen. "
-            "Returns {id, storage_url, prompt, aspect_ratio} pointing at a "
-            "PNG saved under uploads/ that you can reference back in your reply. "
+            "The PNG is auto-archived through the artifacts module; you'll "
+            "receive {artifacts: [{id, url, kind, ...}], count: 1}. "
             "Use for infographics, illustrations, diagrams, or any visual the "
             "user requested. Fails explicitly on provider error — no silent fallbacks."
         ),
@@ -40,17 +39,19 @@ SCHEMA = {
     "enabled": True,
     "category": "media",
     "cost_hint": "high",
-    "side_effects": ["filesystem", "network", "billing"],
-    "version": 1,
+    "side_effects": ["network", "billing"],
+    "version": 2,
+    # Auto-archive into the artifacts table via dispatcher wrapper.
+    "produces": {"kind": "image", "mime_pattern": "image/*"},
 }
 
 _IMAGE_MODEL = "imagen-3.0-generate-002"
 _VALID_RATIOS = {"1:1", "16:9", "9:16", "4:3", "3:4"}
 
 
-async def handle(prompt: str = "", aspect_ratio: str = "1:1", style_hint: str | None = None, **_) -> str:
-    """Fails explicitly (raises) on provider error per a0 doctrine — the model
-    needs to see the failure rather than receive a silent fallback."""
+async def handle(prompt: str = "", aspect_ratio: str = "1:1", style_hint: str | None = None, **_) -> dict:
+    """Returns {data, filename, mime, provenance} — the dispatcher's archive
+    wrapper picks this up via SCHEMA["produces"] and persists to Object Storage."""
     prompt = (prompt or "").strip()
     if not prompt:
         raise ValueError("image_generate: prompt is required")
@@ -88,32 +89,17 @@ async def handle(prompt: str = "", aspect_ratio: str = "1:1", style_hint: str | 
 
     import asyncio as _asyncio
     img_bytes = await _asyncio.to_thread(_gen)
-
-    import uuid
-    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    uploads_dir = os.path.join(base, "uploads")
-    os.makedirs(uploads_dir, exist_ok=True)
-    fname = f"img-{uuid.uuid4().hex[:16]}.png"
-    abs_path = os.path.join(uploads_dir, fname)
-    with open(abs_path, "wb") as fh:
-        fh.write(img_bytes)
-    storage_url = f"/uploads/{fname}"
-
-    from ...storage import storage as _storage
-    from ..tool_executor import get_approval_scope_user_id
-    uid = get_approval_scope_user_id()
-    row = await _storage.create_generated_image({
-        "owner_user_id": uid,
-        "prompt": prompt,
-        "model": _IMAGE_MODEL,
-        "aspect_ratio": aspect_ratio,
-        "storage_url": storage_url,
-        "bytes": len(img_bytes),
-    })
-    return json.dumps({
-        "id": row.get("id"),
-        "storage_url": storage_url,
-        "prompt": prompt,
-        "aspect_ratio": aspect_ratio,
-    })
-# 103:3
+    import uuid as _uuid
+    filename = f"imagen3_{_uuid.uuid4().hex[:16]}.png"
+    return {
+        "data": img_bytes,
+        "filename": filename,
+        "mime": "image/png",
+        "provenance": {
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "style_hint": style_hint,
+            "model": "imagen-3",
+        },
+    }
+# 90:4

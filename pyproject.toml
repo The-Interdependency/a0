@@ -23,6 +23,7 @@ dependencies = [
     "pydantic>=2.12.5",
     "pyjwt[crypto]>=2.10.1",
     "python-multipart>=0.0.22",
+    "replit-object-storage>=1.0.2",
     "sqlalchemy>=2.0.48",
     "stripe>=15.0.1",
     "uvicorn[standard]>=0.42.0",

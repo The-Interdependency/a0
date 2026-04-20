@@ -1,6 +1,6 @@
-// 138:0
+// 139:0
 import { useLocation, Link } from "wouter";
-import { Zap, Shield, Palette, Check } from "lucide-react";
+import { Zap, Shield, Palette, Check, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiStructure } from "@/hooks/use-ui-structure";
 import { useBillingStatus } from "@/hooks/use-billing-status";
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 const NAV_ITEMS = [
   { path: "/", icon: Zap, label: "Agent" },
   { path: "/console", icon: Shield, label: "Console" },
+  { path: "/archive", icon: Archive, label: "Archive" },
 ];
 
 const TIER_COLORS: Record<string, string> = {
@@ -143,4 +144,4 @@ export default function TopNav() {
     </nav>
   );
 }
-// 138:0
+// 139:0

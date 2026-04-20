@@ -61,7 +61,7 @@ args = "bash scripts/start-dev.sh"
 waitForPort = 5000
 
 [agent]
-integrations = ["javascript_database:1.0.0", "javascript_xai:1.0.0", "javascript_gemini_ai_integrations:2.0.0", "google-mail:1.0.0", "google-drive:1.0.0", "javascript_log_in_with_replit:2.0.0", "stripe:2.0.0", "github:1.0.0"]
+integrations = ["javascript_database:1.0.0", "javascript_xai:1.0.0", "javascript_gemini_ai_integrations:2.0.0", "google-mail:1.0.0", "google-drive:1.0.0", "javascript_log_in_with_replit:2.0.0", "stripe:2.0.0", "github:1.0.0", "javascript_object_storage:2.0.0"]
 
 [userenv]
 
