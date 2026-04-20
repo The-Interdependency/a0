@@ -70,6 +70,8 @@ The registry is generated from the scanner output. There is **no `ALL_TOOLS = [.
 
 This is why the pattern needs the 400-line cap (see `a0p-module-doctrine` §Hard Rules) — once you have it, no module ever grows large enough to need to be split, because each one is one tool / one route / one skill / one distiller.
 
+**The 400-line cap counts N only.** N is non-blank, non-comment code lines. Comments, docstrings, `# DOC` blocks, and the `# N:M` annotations themselves are M and do not count toward the cap. A 700-line file with `# 380:320` is compliant; a 410-line file with `# 410:0` is not. Document liberally; just keep the executable surface bounded.
+
 ---
 
 ## Existing examples in this codebase
@@ -99,12 +101,46 @@ SCHEMA = {
     "enabled": True,                    # File-level enable; runtime DB overlay can flip
     "category": "media",                # For UI grouping in tools tab
     "cost_hint": "high",                # "free" | "low" | "medium" | "high"
-    "side_effects": ["filesystem"],     # ["filesystem", "network", "billing", "external_account"]
+    "side_effects": ["filesystem"],     # see § Side-effect taxonomy below
     "version": 1,                       # Bump on breaking schema changes
+
+    "recommended_skills": [             # Skill slugs the model should load before/while using this tool.
+        "github-solution-finder",       # Names match a0-skill discovery (.agents/skills/a0-<name>/SKILL.md)
+    ],                                  # Surfaced to the model via the tool description tail.
 }
 ```
 
 The scanner exposes a typed view (e.g. `class ToolSpec`) that other systems consume — never reach into raw SCHEMA dicts from outside the registry module.
+
+### `recommended_skills` — wiring tools to skills
+
+A tool that performs a complex action almost always has a skill that documents how to do it well. Declare the skill name(s) in `recommended_skills` and the registry layer appends a one-line hint to the tool's description shown to the model:
+
+> *Best used with skill(s): github-solution-finder. Call `skill_load(name)` to fetch the body before executing.*
+
+This closes the loop between the two registries — the model sees the connection without you having to re-document it inside every prompt. When the model picks the tool, it already knows which skill to consult; when it loads the skill, the body teaches it how to use the tool well.
+
+Examples of expected pairings:
+- `image_generate` → `infographic-builder` (when the goal is structured information design, not just a picture)
+- `web_search` → `deep-research` (when the goal is multi-source synthesis, not a quick lookup)
+- `github_api` → `github-solution-finder` (when looking for libraries, not a known repo)
+- `port_scan` / `http_fuzz` / `web_recon` → a future `pentest-recon` skill that codifies safe scope, rate limits, evidence collection
+- `exploit_run` → a future `pentest-exploitation` skill with the rules-of-engagement template and report format
+
+### Side-effect taxonomy
+
+`side_effects` is a list. Use these tags so downstream gating (approval scopes, tier limits, audit log severity) can reason about a tool without reading its code:
+
+- `filesystem` — reads or writes local files
+- `network` — outbound HTTP / sockets to non-attacker-controlled targets (search, public APIs, your own GCP)
+- `billing` — costs money per call (image gen, paid LLM, paid API)
+- `external_account` — touches an account whose credentials we hold (Stripe writes, GitHub push, Gmail send)
+- `mutating_db` — writes to our own Postgres
+- `irreversible` — cannot be safely retried or rolled back
+- `security_passive` — pen-testing recon that does not generate traffic to the target (cert lookups, public DNS, leaked-credential search)
+- `security_active` — pen-testing traffic *to* a target system (port scan, fuzzer, exploit run, brute force). **Always set `approval_scope` for these.** The scope name should encode the target class so the user knows what they're approving (e.g. `pentest_active_scoped_targets`).
+
+A pen-testing tool with `side_effects: ["security_active", "network"]` and `approval_scope: "pentest_active_scoped_targets"` makes the gating obvious to every downstream system without anyone having to special-case offensive tooling.
 
 ---
 
