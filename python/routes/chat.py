@@ -124,6 +124,7 @@ class SendMessage(BaseModel):
     content: str
     model: Optional[str] = None
     agent_id: Optional[int] = None
+    attachment_ids: list[int] = []
 
 
 def _caller_uid(request: Request) -> Optional[str]:
@@ -209,7 +210,13 @@ async def archive_conversation(conv_id: int, body: ArchiveConversation, request:
 async def list_messages(conv_id: int, request: Request):
     uid = _caller_uid(request)
     await _require_owned_conv(conv_id, uid)
-    return await storage.get_messages(conv_id)
+    msgs = await storage.get_messages(conv_id)
+    if msgs:
+        ids = [m["id"] for m in msgs]
+        att_map = await storage.get_attachments_for_messages(ids)
+        for m in msgs:
+            m["attachments"] = att_map.get(m["id"], [])
+    return msgs
 
 
 async def _build_system_prompt(tier: str, agent_persona: str | None = None) -> str:
@@ -473,12 +480,24 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             "metadata": {"tier": tier},
         })
 
+        if body.attachment_ids:
+            await storage.attach_to_message(body.attachment_ids, user_msg["id"], uid)
+
         prior_msgs = await storage.get_messages(conv_id)
-        history = [
-            {"role": m["role"], "content": m["content"]}
-            for m in prior_msgs
-            if m["role"] in ("user", "assistant")
-        ]
+        msg_ids = [m["id"] for m in prior_msgs if m["role"] in ("user", "assistant")]
+        att_map = await storage.get_attachments_for_messages(msg_ids) if msg_ids else {}
+        history: list[dict] = []
+        for m in prior_msgs:
+            if m["role"] not in ("user", "assistant"):
+                continue
+            entry: dict = {"role": m["role"], "content": m["content"]}
+            atts = att_map.get(m["id"], [])
+            if atts:
+                entry["attachments"] = [
+                    {"storage_url": a.get("storage_url"), "mime_type": a.get("mime_type")}
+                    for a in atts
+                ]
+            history.append(entry)
 
         from ..services.tool_executor import set_approval_scope_user_id
         set_approval_scope_user_id(uid or None)

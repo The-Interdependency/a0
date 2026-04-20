@@ -5,6 +5,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { spawn, type ChildProcess } from "child_process";
 import express from "express";
+import multer from "multer";
 import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import {
   setupAuth,
@@ -12,6 +13,7 @@ import {
   registerGuestChatRoute,
   seedAdminUser,
 } from "./auth";
+import { registerAttachmentRoutes } from "./attachments";
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "5000", 10);
@@ -83,7 +85,18 @@ async function waitForPython(maxWaitMs = 120_000): Promise<void> {
   await setupAuth(app);
   registerAuthRoutes(app);
   registerGuestChatRoute(app);
+  registerAttachmentRoutes(app);
   await seedAdminUser();
+
+  // Serve uploaded files (images attached to chat messages, generated images).
+  // Authed gate: any session-authenticated user may read; the path is opaque
+  // (uuid-based) so unauthenticated guessing is infeasible but we still gate.
+  const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
+  if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  app.use("/uploads", (req, res, next) => {
+    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    next();
+  }, express.static(UPLOADS_DIR, { maxAge: "1h" }));
 
   // Serve the a0 CLI script as plain text so users can `curl -fsSL <host>/a0 -o ~/.local/bin/a0`.
   app.get("/a0", (_req, res) => {

@@ -151,9 +151,13 @@ export default function ChatPage() {
   });
 
   const sendMessage = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async (payload: { content: string; attachment_ids?: number[] }) => {
       if (!activeConvId) throw new Error("No conversation selected");
-      const res = await apiRequest("POST", `/api/v1/conversations/${activeConvId}/messages`, { role: "user", content });
+      const res = await apiRequest("POST", `/api/v1/conversations/${activeConvId}/messages`, {
+        role: "user",
+        content: payload.content,
+        attachment_ids: payload.attachment_ids ?? [],
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -312,7 +316,7 @@ export default function ChatPage() {
                 <div className="flex items-center justify-center h-full text-muted-foreground" data-testid="no-messages"><p className="text-sm">No messages yet</p></div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {messages.map((m) => <MessageBubble key={m.id} message={m} onSend={(c) => sendMessage.mutate(c)} />)}
+                  {messages.map((m) => <MessageBubble key={m.id} message={m} onSend={(c) => sendMessage.mutate({ content: c })} />)}
                 </div>
               )}
             </div>

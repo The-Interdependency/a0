@@ -567,4 +567,40 @@ export const toolResults = pgTable("tool_results", {
 export const insertToolResultSchema = createInsertSchema(toolResults).omit({ id: true, createdAt: true });
 export type ToolResult = typeof toolResults.$inferSelect;
 export type InsertToolResult = z.infer<typeof insertToolResultSchema>;
+
+export const messageAttachments = pgTable("message_attachments", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").references(() => messages.id, { onDelete: "cascade" }),
+  ownerUserId: varchar("owner_user_id"),
+  kind: text("kind").notNull().default("image"),
+  mimeType: text("mime_type").notNull(),
+  storageUrl: text("storage_url").notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  bytes: integer("bytes"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [index("idx_message_attachments_message").on(t.messageId)]);
+
+export const insertMessageAttachmentSchema = createInsertSchema(messageAttachments).omit({ id: true, createdAt: true });
+export type MessageAttachment = typeof messageAttachments.$inferSelect;
+export type InsertMessageAttachment = z.infer<typeof insertMessageAttachmentSchema>;
+
+export const generatedImages = pgTable("generated_images", {
+  id: serial("id").primaryKey(),
+  ownerUserId: text("owner_user_id"),
+  prompt: text("prompt").notNull(),
+  model: text("model").notNull(),
+  aspectRatio: text("aspect_ratio").notNull().default("1:1"),
+  storageUrl: text("storage_url").notNull(),
+  bytes: integer("bytes").notNull().default(0),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  public: boolean("public").notNull().default(false),
+  featured: boolean("featured").notNull().default(false),
+  tags: jsonb("tags").$type<string[]>().default([]),
+  skillOrigin: text("skill_origin"),
+});
+
+export const insertGeneratedImageSchema = createInsertSchema(generatedImages).omit({ id: true, createdAt: true });
+export type GeneratedImage = typeof generatedImages.$inferSelect;
+export type InsertGeneratedImage = z.infer<typeof insertGeneratedImageSchema>;
 // 381:13

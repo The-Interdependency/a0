@@ -8,7 +8,7 @@ from ..database import get_session
 from ..models import (
     Conversation, Message, AutomationTask, CommandHistory,
     A0pEvent, HeartbeatLog, CostMetric, EdcmSnapshot,
-    BanditArm, CustomTool, ToolResult,
+    BanditArm, CustomTool, ToolResult, MessageAttachment, GeneratedImage,
 )
 
 
@@ -132,6 +132,59 @@ class _CoreStorage:
             await session.flush()
             await session.refresh(msg)
             return _row_to_dict(msg)
+
+    async def create_message_attachment(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        async with get_session() as session:
+            row = MessageAttachment(**data)
+            session.add(row)
+            await session.flush()
+            await session.refresh(row)
+            return _row_to_dict(row)
+
+    async def get_attachment(self, att_id: int) -> Optional[Dict[str, Any]]:
+        async with get_session() as session:
+            r = await session.execute(select(MessageAttachment).where(MessageAttachment.id == att_id))
+            return _row_to_dict(r.scalar_one_or_none())
+
+    async def get_attachments_for_messages(self, message_ids: List[int]) -> Dict[int, List[Dict[str, Any]]]:
+        if not message_ids:
+            return {}
+        async with get_session() as session:
+            r = await session.execute(
+                select(MessageAttachment).where(MessageAttachment.message_id.in_(message_ids))
+                .order_by(asc(MessageAttachment.id))
+            )
+            out: Dict[int, List[Dict[str, Any]]] = {}
+            for row in r.scalars().all():
+                d = _row_to_dict(row)
+                out.setdefault(d["message_id"], []).append(d)
+            return out
+
+    async def attach_to_message(self, attachment_ids: List[int], message_id: int, owner_user_id: Optional[str]) -> int:
+        """Link previously-uploaded, owner-matching, currently-unattached
+        attachments to the given message. Returns the count of rows linked."""
+        if not attachment_ids:
+            return 0
+        async with get_session() as session:
+            stmt = (
+                update(MessageAttachment)
+                .where(
+                    MessageAttachment.id.in_(attachment_ids),
+                    MessageAttachment.message_id.is_(None),
+                    MessageAttachment.owner_user_id == owner_user_id,
+                )
+                .values(message_id=message_id)
+            )
+            res = await session.execute(stmt)
+            return int(res.rowcount or 0)
+
+    async def create_generated_image(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        async with get_session() as session:
+            row = GeneratedImage(**data)
+            session.add(row)
+            await session.flush()
+            await session.refresh(row)
+            return _row_to_dict(row)
 
     async def get_automation_tasks(self) -> List[Dict[str, Any]]:
         async with get_session() as session:

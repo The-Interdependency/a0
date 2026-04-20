@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Send, Trash2, Loader2, ChevronDown, ChevronUp, ChevronRight, Zap, X,
+  Plus, Trash2, Loader2, ChevronDown, ChevronUp, ChevronRight, Zap, X,
   Archive, ArchiveRestore, CornerDownRight, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -231,36 +231,5 @@ export function ContextBoostPanel({ convId }: { convId: number }) {
   );
 }
 
-export function ChatInput({ onSend, isSending }: { onSend: (content: string) => void; isSending: boolean }) {
-  const [input, setInput] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const handleSubmit = () => {
-    const trimmed = input.trim();
-    if (!trimmed || isSending) return;
-    onSend(trimmed);
-    setInput("");
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSubmit(); }
-  };
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
-  }, [input]);
-
-  return (
-    <div className="flex gap-2 items-end px-4 py-3 border-t border-border" data-testid="chat-input-area">
-      <Textarea ref={textareaRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Message a0... (Ctrl+Enter to send)" className="resize-none min-h-[40px] max-h-[120px] text-sm" rows={1} data-testid="chat-input" />
-      <Button size="icon" onClick={handleSubmit} disabled={!input.trim() || isSending} className="shrink-0 h-10 w-10" data-testid="btn-send">
-        {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-      </Button>
-    </div>
-  );
-}
+export { ChatInput } from "./chat-input";
 // 165:0
