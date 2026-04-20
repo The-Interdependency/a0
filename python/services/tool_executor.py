@@ -52,6 +52,54 @@ TOOL_SCHEMAS_CHAT = [
     {
         "type": "function",
         "function": {
+            "name": "skill_recommend",
+            "description": (
+                "Score the available a0 skills against a query and return the "
+                "top matches (name + description + score). Use when you suspect "
+                "a skill exists for the user's task but you're not sure which. "
+                "Does NOT load skill bodies — call skill_load with a name to read."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "What the user wants to do (free text).",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results to return. Default 5, max 20.",
+                        "default": 5,
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "skill_load",
+            "description": (
+                "Return the full SKILL.md body for a named a0 skill. Use after "
+                "skill_recommend or when you already know which skill applies. "
+                "Bodies contain the full procedure, examples, and anti-patterns."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Skill name as listed in the prefix manifest (e.g. 'deep-research').",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "web_search",
             "description": (
                 "Search the web for current information, news, or facts not in training data. "
@@ -456,6 +504,13 @@ _DISTILLER_FALLBACK = "general"
 _DOMAIN_TRIGGER_MIN = 3
 _SPEC_CACHE: dict = {"specs": {}, "fingerprint": ""}
 
+# Generic a0 skill registry — same .agents/skills/ root, a0-* prefix. These
+# are not distillers; they are recipes / procedures the model can recommend
+# to itself via skill_recommend or load via skill_load. The manifest (name +
+# description) is injected into the cached prefix; bodies load on demand.
+_A0_SKILL_DIR_GLOB = ".agents/skills/a0-*/SKILL.md"
+_A0_SKILL_CACHE: dict = {"specs": {}, "fingerprint": ""}
+
 
 def _parse_frontmatter(text: str) -> tuple[dict, str]:
     """Minimal YAML-frontmatter parser. Supports scalar, bool, inline list.
@@ -553,6 +608,80 @@ def _pick_distiller(raw: str) -> str:
 def _get_distiller_spec(domain: str) -> dict:
     specs = _discover_distiller_specs()
     return specs.get(domain) or specs.get(_DISTILLER_FALLBACK) or {}
+
+
+def _discover_a0_skills() -> dict[str, dict]:
+    """Scan .agents/skills/a0-*/SKILL.md, return {name: spec}. Memoized.
+    Spec carries: description, triggers, body. The body is the full SKILL.md
+    text (without frontmatter) for skill_load; the manifest (name+description)
+    is what gets cached into the inference prefix."""
+    import glob
+    base = _project_root()
+    pattern = os.path.join(base, _A0_SKILL_DIR_GLOB)
+    files = sorted(glob.glob(pattern))
+    fingerprint = "|".join(f"{p}:{os.path.getmtime(p)}" for p in files)
+    if fingerprint and fingerprint == _A0_SKILL_CACHE.get("fingerprint"):
+        return _A0_SKILL_CACHE["specs"]
+    specs: dict[str, dict] = {}
+    for path in files:
+        slug = os.path.basename(os.path.dirname(path)).removeprefix("a0-")
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                fm, body = _parse_frontmatter(fh.read())
+        except OSError:
+            continue
+        name = (fm.get("name") or slug).strip()
+        specs[name] = {
+            "slug": slug,
+            "description": (fm.get("description") or "").strip(),
+            "triggers": tuple(t.lower() for t in (fm.get("triggers") or [])),
+            "body": body,
+        }
+    _A0_SKILL_CACHE["specs"] = specs
+    _A0_SKILL_CACHE["fingerprint"] = fingerprint
+    return specs
+
+
+def get_a0_skill_manifest() -> str:
+    """Return a compact, byte-stable bullet list of available a0 skills for
+    prefix injection. Bodies are NOT included — only name + description.
+    Stable order (alphabetical by name) so prompt-cache hits remain valid
+    across calls until a SKILL.md actually changes."""
+    specs = _discover_a0_skills()
+    if not specs:
+        return ""
+    lines = ["## Available skills (load full body via skill_load)"]
+    for name in sorted(specs.keys()):
+        desc = specs[name].get("description") or "(no description)"
+        lines.append(f"- **{name}** — {desc}")
+    return "\n".join(lines)
+
+
+def get_a0_skill_body(name: str) -> str | None:
+    """Return the SKILL.md body for the named a0 skill, or None."""
+    specs = _discover_a0_skills()
+    spec = specs.get(name)
+    return spec.get("body") if spec else None
+
+
+def _score_skill_match(query: str, name: str, spec: dict) -> int:
+    """Cheap keyword-overlap score for skill_recommend. Triggers count double."""
+    q = query.lower()
+    if not q.strip():
+        return 0
+    score = 0
+    if name.lower() in q or any(part in q for part in name.lower().split("-") if len(part) > 2):
+        score += 3
+    desc = (spec.get("description") or "").lower()
+    for word in q.split():
+        if len(word) < 3:
+            continue
+        if word in desc:
+            score += 1
+        for trig in spec.get("triggers", ()):
+            if word in trig:
+                score += 2
+    return score
 
 
 def _try_parse_json_array(text: str) -> list | None:
@@ -726,6 +855,13 @@ async def _execute_tool_inner(name: str, arguments: dict) -> str:
                 chunk=int(arguments.get("chunk", 0) or 0),
                 chunk_size=int(arguments.get("chunk_size", 8000) or 8000),
             )
+        if name == "skill_recommend":
+            return _skill_recommend(
+                query=arguments.get("query", ""),
+                limit=int(arguments.get("limit", 5) or 5),
+            )
+        if name == "skill_load":
+            return _skill_load(arguments.get("name", ""))
         if name == "web_search":
             return await _web_search(arguments.get("query", ""))
         if name == "pcna_infer":
@@ -810,6 +946,44 @@ async def _tool_result_fetch(call_id: str, chunk: int = 0, chunk_size: int = 800
         f"chunk {chunk + 1}/{n_chunks} · {total_bytes // 1024} KB total]\n\n"
         f"{body}"
     )
+
+
+def _skill_recommend(query: str, limit: int = 5) -> str:
+    """Rank a0 skills against a free-text query. Returns a compact list."""
+    if not query.strip():
+        return "[skill_recommend: empty query]"
+    limit = max(1, min(20, int(limit)))
+    specs = _discover_a0_skills()
+    if not specs:
+        return "[skill_recommend: no a0 skills installed]"
+    scored = [
+        (name, _score_skill_match(query, name, spec), spec)
+        for name, spec in specs.items()
+    ]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    top = [(n, s, spec) for n, s, spec in scored if s > 0][:limit]
+    if not top:
+        return f"[skill_recommend: no skill matched query: {query!r}]"
+    lines = [f"[skill_recommend · {len(top)} match(es) for: {query!r}]"]
+    for name, score, spec in top:
+        desc = spec.get("description") or ""
+        lines.append(f"- {name} (score={score}) — {desc}")
+    lines.append("\nLoad a body via skill_load(name=...).")
+    return "\n".join(lines)
+
+
+def _skill_load(name: str) -> str:
+    """Return the full SKILL.md body for the named a0 skill."""
+    if not name.strip():
+        return "[skill_load: missing name]"
+    body = get_a0_skill_body(name.strip())
+    if body is None:
+        available = sorted(_discover_a0_skills().keys())
+        return (
+            f"[skill_load: no skill named {name!r}]\n"
+            f"Available: {', '.join(available) if available else '(none installed)'}"
+        )
+    return f"[skill_load · {name}]\n\n{body}"
 
 
 async def _web_search(query: str) -> str:
