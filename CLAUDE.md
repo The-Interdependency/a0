@@ -76,7 +76,7 @@ File naming convention: `{name}.py` = self-contained module; `{name}_api.py` = t
 - `python/services/inference.py` — Orchestrates LLM calls (Grok-3 Mini default, Claude, Gemini); injects tier-specific `prompt_context`
 - `python/services/heartbeat.py` — 30-second tick: audit snapshots, memory checkpoints, PCNA propagation, sub-agent cleanup
 - `python/services/tool_executor.py` — Tool invocation with approval gates
-- `python/pcna.py` / `python/engine.py` — 53-node PCNA ring engine (7 phases, core agent coherence system)
+- `python/engine/pcna.py` — Six-ring PCNA inference pipeline (Phi/Psi/Omega/Guardian/Memory-L/Memory-S); six steps: Project → Inject → Propagate → PTCA-seed → PTCA-circle → Coherence
 - `python/services/edcm.py` — Behavioral directive scoring (CM, DA, DRIFT, DVG, INT, TBF) that guides LLM selection
 
 ### Database
