@@ -1,4 +1,4 @@
-# 169:97
+# 177:132
 import os
 import time
 from contextlib import asynccontextmanager
@@ -343,4 +343,4 @@ if IS_PROD and os.path.isdir(STATIC_DIR):
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
         return FileResponse(os.path.join(STATIC_DIR, "index.html"))
-# 169:97
+# 177:132

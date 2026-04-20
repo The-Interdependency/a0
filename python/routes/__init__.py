@@ -1,4 +1,4 @@
-# 140:4
+# 153:4
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -168,4 +168,4 @@ def collect_doc_meta() -> list[dict]:
             results.append(meta)
     results.sort(key=lambda d: d.get("label", ""))
     return results
-# 140:4
+# 153:4

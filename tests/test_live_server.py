@@ -1,4 +1,4 @@
-# 44:9
+# 35:7
 # DOC module: tests.test_live_server
 # DOC label: Live-server HTTP smoke
 # DOC description: Hits the running Express+FastAPI stack on localhost:5000
@@ -52,4 +52,4 @@ def test_internal_header_required_on_python_direct_call():
     except Exception:
         pytest.skip("python backend not reachable on 8001 in this environment")
     assert r.status_code in (401, 403), f"expected reject, got {r.status_code}"
-# 44:9
+# 35:7

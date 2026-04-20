@@ -1,4 +1,4 @@
-# 23:3
+# 41:1
 """pcna_infer — run a signal through the PCNA tensor engine."""
 import json
 
@@ -44,4 +44,4 @@ async def handle(signal: float = 0.5, **_) -> str:
         "phi_coherence": result.get("step6_coherence", {}).get("phi", round(pcna.phi.ring_coherence, 4)),
         "infer_count": pcna.infer_count,
     })
-# 23:3
+# 41:1

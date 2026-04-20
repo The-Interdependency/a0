@@ -1,4 +1,4 @@
-# 18:1
+# 36:1
 """sub_agent_merge — merge a sub-agent's ring state back into primary PCNA."""
 import json
 
@@ -39,4 +39,4 @@ async def handle(agent_id: str = "", **_) -> str:
         "status": "merged",
         "note": "Ring state consolidated into primary PCNA",
     })
-# 18:1
+# 36:1

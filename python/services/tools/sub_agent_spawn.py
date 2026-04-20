@@ -1,4 +1,4 @@
-# 18:1
+# 37:1
 """sub_agent_spawn — fork a ZFAE sub-agent for a parallel task."""
 import json
 import uuid
@@ -40,4 +40,4 @@ async def handle(task: str = "", **_) -> str:
         "status": "spawned",
         "note": "Sub-agent forked PCNA — call sub_agent_merge with this ID when complete",
     })
-# 18:1
+# 37:1

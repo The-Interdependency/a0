@@ -1,4 +1,4 @@
-# 5:0
+# 2:4
 from fastapi import APIRouter
 
 # DOC module: founders
@@ -7,4 +7,4 @@ from fastapi import APIRouter
 # DOC tier: admin
 
 router = APIRouter(prefix="/api/v1/founders", tags=["founders"])
-# 5:0
+# 2:4

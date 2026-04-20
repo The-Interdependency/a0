@@ -1,4 +1,4 @@
-// 308:0
+// 309:1
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown, ChevronRight, Cpu, Loader2, RefreshCw, ArrowDownUp,
@@ -333,4 +333,4 @@ export function ProviderSeedCard({ seed, isActive, isExpanded, onToggleExpand, a
     </Card>
   );
 }
-// 308:0
+// 309:1

@@ -1,4 +1,4 @@
-# 18:1
+# 28:1
 """memory_flush — persist active memory seeds to checkpoint."""
 import json
 
@@ -31,4 +31,4 @@ async def handle(**_) -> str:
         "checkpoint_key": pcna._checkpoint_key,
         "infer_count": pcna.infer_count,
     })
-# 18:1
+# 28:1

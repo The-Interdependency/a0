@@ -1,4 +1,4 @@
-# 50:6
+# 72:1
 """web_search — DuckDuckGo instant-answer lookup."""
 import urllib.parse
 import httpx
@@ -75,4 +75,4 @@ async def handle(query: str = "", **_) -> str:
         return f"Query: {query}\n" + "\n".join(parts)
     except Exception as exc:
         return f"[web_search error: {exc}]"
-# 50:6
+# 72:1

@@ -1,4 +1,4 @@
-# 355:27
+# 624:108
 import os
 import json
 import copy
@@ -835,4 +835,4 @@ async def _call_anthropic(
 
 def _fallback_response(provider_id: str) -> str:
     return f"[{provider_id} API key not configured — energy provider unavailable]"
-# 355:27
+# 624:108

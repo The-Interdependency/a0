@@ -1,4 +1,4 @@
-# 76:5
+# 95:1
 """manage_approval_scope — grant/revoke pre-approved action scopes."""
 import json
 
@@ -106,4 +106,4 @@ async def handle(action: str = "list", scope: str | None = None, **_) -> str:
         return json.dumps({"ok": removed, "scope": scope, "revoked": removed})
 
     return f"[manage_approval_scope: unknown action '{action}']"
-# 76:5
+# 95:1

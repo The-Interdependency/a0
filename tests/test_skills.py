@@ -1,4 +1,4 @@
-# 56:8
+# 43:5
 # DOC module: tests.test_skills
 # DOC label: Skill subsystem
 # DOC description: Smoke tests for the a0-native skill loader, manifest
@@ -66,4 +66,4 @@ def test_skill_tools_registered_in_chat_schema():
     names = {t["function"]["name"] for t in TOOL_SCHEMAS_CHAT if "function" in t}
     assert "skill_recommend" in names
     assert "skill_load" in names
-# 56:8
+# 43:5

@@ -1,4 +1,4 @@
-# 17:1
+# 26:1
 """bandit_pull — query EDCM bandit router for recommended energy provider."""
 import json
 
@@ -29,4 +29,4 @@ async def handle(**_) -> str:
         "recommended_provider": provider,
         "note": "Bandit router defers to coherence-weighted active provider",
     })
-# 17:1
+# 26:1

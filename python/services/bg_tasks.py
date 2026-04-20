@@ -1,4 +1,4 @@
-# 60:0
+# 36:14
 """Managed background task registry.
 
 Wraps `asyncio.create_task` so that:
@@ -60,4 +60,4 @@ async def cancel_all(timeout: float = 5.0) -> None:
 
 def active_count() -> int:
     return len(_tasks)
-# 60:0
+# 36:14

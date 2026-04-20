@@ -1,4 +1,4 @@
-// 381:13
+// 512:16
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, serial, integer, timestamp, jsonb, real, boolean, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -603,4 +603,4 @@ export const generatedImages = pgTable("generated_images", {
 export const insertGeneratedImageSchema = createInsertSchema(generatedImages).omit({ id: true, createdAt: true });
 export type GeneratedImage = typeof generatedImages.$inferSelect;
 export type InsertGeneratedImage = z.infer<typeof insertGeneratedImageSchema>;
-// 381:13
+// 512:16

@@ -1,4 +1,4 @@
-# 33:13
+# 65:1
 """tool_result_fetch — read a chunk of a previously persisted tool result."""
 
 SCHEMA = {
@@ -68,4 +68,4 @@ async def handle(call_id: str = "", chunk: int = 0, chunk_size: int = 8000, **_)
         f"chunk {chunk + 1}/{n_chunks} · {total_bytes // 1024} KB total]\n\n"
         f"{body}"
     )
-# 33:13
+# 65:1

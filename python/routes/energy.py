@@ -1,4 +1,4 @@
-# 127:16
+# 368:64
 # DOC module: energy
 # DOC label: Energy Providers
 # DOC description: Provider seed management — model_assignments, optimizer presets, PCNA core converge, and model discovery for all AI providers.
@@ -487,4 +487,4 @@ async def converge_provider_pcna(provider_id: str, request: Request):
     provider_core._checkpoint_key = f"pcna_provider_{provider_id}"
     await provider_core.save_checkpoint()
     return {"provider_id": provider_id, "converge_result": result}
-# 0:0
+# 368:64

@@ -1,4 +1,4 @@
-# 10:0
+# 7:4
 """
 Billing helpers: subscription tier extraction from Stripe webhook data.
 """
@@ -14,4 +14,4 @@ def get_subscription_tier_from_items(items: list) -> Optional[str]:
 
 def is_supporter_subscription(metadata: dict) -> bool:
     return metadata.get("product_key") == "supporter"
-# 10:0
+# 7:4

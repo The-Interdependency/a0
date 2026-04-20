@@ -1,4 +1,4 @@
-// 5:0
+// 10:0
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
@@ -12,4 +12,4 @@ const initial = saved && VALID_SKINS.includes(saved) ? saved : "tensor";
 document.documentElement.classList.add(`theme-${initial}`);
 
 createRoot(document.getElementById("root")!).render(<App />);
-// 5:0
+// 10:0

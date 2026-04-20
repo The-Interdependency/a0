@@ -1,4 +1,4 @@
-# 211:17
+# 212:17
 # DOC module: focus
 # DOC label: Focus & Sub-agents
 # DOC description: Model focus management and sub-agent delegation. Provides context boost injection per conversation, focus regain directives, sub-agent background task launch, and error log retrieval for model calls.
@@ -278,4 +278,4 @@ async def subagent_status(conv_id: int, request: Request):
         result["error"] = conv.get("subagent_error")
 
     return result
-# 211:17
+# 212:17

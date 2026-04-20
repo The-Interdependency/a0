@@ -1,4 +1,4 @@
-# 12:5
+# 7:4
 # DOC module: tests
 # DOC label: Test fixtures
 # DOC description: Shared pytest fixtures and path setup so test modules can
@@ -12,4 +12,4 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 os.environ.setdefault("INTERNAL_API_SECRET", "test-secret")
-# 12:5
+# 7:4

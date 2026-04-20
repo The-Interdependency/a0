@@ -1,4 +1,4 @@
-# 70:6
+# 126:1
 """github_write_file — single-file commit helper around the GitHub Contents API."""
 import base64 as _b64
 import json
@@ -135,4 +135,4 @@ async def handle(
             "file_sha": content_meta.get("sha"),
         })
     return json.dumps({"ok": False, "stage": "write", "response": write})
-# 70:6
+# 126:1

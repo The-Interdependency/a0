@@ -1,4 +1,4 @@
-# 24:1
+# 33:1
 """edcm_score — return current EDCM ring coherence."""
 import json
 
@@ -36,4 +36,4 @@ async def handle(**_) -> str:
         "infer_count": pcna.infer_count,
         "reward_count": pcna.reward_count,
     })
-# 24:1
+# 33:1

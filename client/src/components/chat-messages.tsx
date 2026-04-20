@@ -1,4 +1,4 @@
-// 253:0
+// 282:0
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -297,4 +297,4 @@ export function MessageBubble({ message, onSend }: { message: Message; onSend: (
     </div>
   );
 }
-// 253:0
+// 282:0
