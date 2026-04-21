@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Send, Paperclip, X, Network } from "lucide-react";
+import { Loader2, Send, Paperclip, X, Network, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -15,8 +15,26 @@ export interface PendingAttachment {
   storage_url: string;
   mime_type: string;
   name?: string;
-  preview?: string;
+  preview?: string;       // object URL for image previews; absent for documents
+  kind?: "image" | "document";
+  bytes?: number;
 }
+
+const MAX_BYTES = 25 * 1024 * 1024;
+// Keep in sync with server/attachments.ts. Browsers honor the union of MIME
+// types and extensions, so we cover both for code/text files which often
+// arrive with empty or octet-stream mime types.
+const ACCEPT_ATTR = [
+  "image/*",
+  "application/pdf",
+  "text/plain", "text/markdown", "text/csv", "text/html",
+  "application/json", "application/xml", "application/yaml", "text/yaml",
+  "application/zip",
+  ".md", ".csv", ".tsv", ".json", ".yaml", ".yml", ".xml",
+  ".py", ".js", ".ts", ".tsx", ".jsx",
+  ".go", ".rs", ".java", ".c", ".cc", ".cpp", ".h",
+  ".sh", ".sql", ".log", ".toml", ".ini", ".env",
+].join(",");
 
 export interface ChatSendOpts {
   orchestration_mode?: string;
@@ -93,12 +111,8 @@ export function ChatInput({
   };
 
   const uploadOne = useCallback(async (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      toast({ title: "Unsupported file", description: file.type || "unknown", variant: "destructive" });
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: "File too large", description: "Max 10 MB", variant: "destructive" });
+    if (file.size > MAX_BYTES) {
+      toast({ title: "File too large", description: "Max 25 MB", variant: "destructive" });
       return;
     }
     const fd = new FormData();
@@ -111,10 +125,12 @@ export function ChatInput({
         throw new Error(msg);
       }
       const data = await res.json();
-      const preview = URL.createObjectURL(file);
+      const isImage = (data.kind === "image") || (file.type || "").startsWith("image/");
+      const preview = isImage ? URL.createObjectURL(file) : undefined;
       setAttachments((prev) => [...prev, {
         id: data.id, storage_url: data.storage_url,
-        mime_type: data.mime_type ?? file.type, name: file.name, preview,
+        mime_type: data.mime_type ?? file.type, name: file.name,
+        preview, kind: isImage ? "image" : "document", bytes: file.size,
       }]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "upload failed";
@@ -241,35 +257,53 @@ export function ChatInput({
       </div>
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2" data-testid="chat-attachments-tray">
-          {attachments.map((a) => (
-            <div
-              key={a.id}
-              className="relative h-16 w-16 rounded-md overflow-hidden border border-border bg-muted"
-              data-testid={`chip-attachment-${a.id}`}
-            >
-              {a.preview ? (
-                <img src={a.preview} alt={a.name ?? "attachment"} className="h-full w-full object-cover" />
-              ) : (
-                <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">img</div>
-              )}
-              <button
-                type="button"
-                aria-label="Remove attachment"
-                onClick={() => removeAttachment(a.id)}
-                className="absolute top-0.5 right-0.5 rounded-full bg-background/80 p-0.5 text-foreground hover-elevate"
-                data-testid={`btn-remove-attachment-${a.id}`}
+          {attachments.map((a) => {
+            const isImage = a.kind === "image" || !!a.preview;
+            return (
+              <div
+                key={a.id}
+                className={
+                  isImage
+                    ? "relative h-16 w-16 rounded-md overflow-hidden border border-border bg-muted"
+                    : "relative flex items-center gap-2 pl-2 pr-7 py-1.5 rounded-md border border-border bg-muted max-w-[200px]"
+                }
+                data-testid={`chip-attachment-${a.id}`}
               >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
+                {isImage ? (
+                  a.preview ? (
+                    <img src={a.preview} alt={a.name ?? "attachment"} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">img</div>
+                  )
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-xs truncate" title={a.name}>{a.name ?? "file"}</span>
+                  </>
+                )}
+                <button
+                  type="button"
+                  aria-label="Remove attachment"
+                  onClick={() => removeAttachment(a.id)}
+                  className={
+                    isImage
+                      ? "absolute top-0.5 right-0.5 rounded-full bg-background/80 p-0.5 text-foreground hover-elevate"
+                      : "absolute top-1/2 -translate-y-1/2 right-1 rounded-full bg-background/80 p-0.5 text-foreground hover-elevate"
+                  }
+                  data-testid={`btn-remove-attachment-${a.id}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
       <div className="flex gap-2 items-end">
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept={ACCEPT_ATTR}
           multiple
           className="hidden"
           onChange={(e) => {
@@ -284,7 +318,8 @@ export function ChatInput({
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading || isSending}
           className="shrink-0"
-          aria-label="Attach image"
+          aria-label="Attach file"
+          title="Attach image or document"
           data-testid="btn-attach"
         >
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}

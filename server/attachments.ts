@@ -10,9 +10,32 @@ import { messageAttachments } from "@shared/schema";
 const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const ALLOWED_MIME = new Set([
+const IMAGE_MIME = new Set([
   "image/png", "image/jpeg", "image/webp", "image/gif",
 ]);
+const DOC_MIME = new Set([
+  "application/pdf",
+  "text/plain", "text/markdown", "text/csv",
+  "text/html", "text/x-python", "text/javascript", "text/typescript",
+  "application/json", "application/xml", "application/yaml", "text/yaml",
+  "application/zip",
+]);
+// Some browsers send "" or "application/octet-stream" for code files.
+// Fall back to extension whitelist for those.
+const DOC_EXT = new Set([
+  ".pdf", ".txt", ".md", ".csv", ".tsv", ".json", ".yaml", ".yml",
+  ".xml", ".html", ".htm", ".py", ".js", ".ts", ".tsx", ".jsx",
+  ".go", ".rs", ".java", ".c", ".cc", ".cpp", ".h", ".sh", ".sql",
+  ".log", ".toml", ".ini", ".env",
+]);
+
+function classifyKind(mimetype: string, originalName: string): "image" | "document" | null {
+  if (IMAGE_MIME.has(mimetype)) return "image";
+  if (DOC_MIME.has(mimetype)) return "document";
+  const ext = path.extname(originalName || "").toLowerCase();
+  if (DOC_EXT.has(ext)) return "document";
+  return null;
+}
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
@@ -24,12 +47,14 @@ const storage = multer.diskStorage({
   },
 });
 
+// 25MB ceiling covers PDFs and reasonable document sizes; multer caps the
+// stream so an oversized upload fails fast instead of filling the disk.
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, cb) => {
-    if (!ALLOWED_MIME.has(file.mimetype)) {
-      return cb(new Error(`unsupported mime_type: ${file.mimetype}`));
+    if (classifyKind(file.mimetype, file.originalname || "") === null) {
+      return cb(new Error(`unsupported file type: ${file.mimetype || "unknown"} (${file.originalname || ""})`));
     }
     cb(null, true);
   },
@@ -49,15 +74,23 @@ export function registerAttachmentRoutes(app: Express) {
       const file = (req as Request & { file?: Express.Multer.File }).file;
       if (!file) return res.status(400).json({ error: "no file" });
       try {
+        const kind = classifyKind(file.mimetype, file.originalname || "") ?? "document";
         const storageUrl = `/uploads/${file.filename}`;
         const [row] = await db.insert(messageAttachments).values({
           ownerUserId: userId,
-          kind: "image",
+          kind,
           mimeType: file.mimetype,
           storageUrl,
           bytes: file.size,
         }).returning();
-        res.json({ id: row.id, storage_url: storageUrl, mime_type: file.mimetype, bytes: file.size });
+        res.json({
+          id: row.id,
+          storage_url: storageUrl,
+          mime_type: file.mimetype,
+          bytes: file.size,
+          name: file.originalname,
+          kind,
+        });
       } catch (e) {
         try { fs.unlinkSync(file.path); } catch {}
         const msg = e instanceof Error ? e.message : "db insert failed";
