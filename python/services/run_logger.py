@@ -61,6 +61,11 @@ class RunLogger:
             "ts_epoch": time.time(),
         }
         _QUEUE.append(row)
+        try:
+            from ..routes.runs import publish_log as _pub
+            _pub(rid, row)
+        except Exception:
+            pass
         if len(_QUEUE) >= _FLUSH_BATCH_SIZE:
             try:
                 loop = asyncio.get_running_loop()

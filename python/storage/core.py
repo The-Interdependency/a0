@@ -21,6 +21,7 @@ _CONV_ALLOWED_FIELDS = {
 }
 _MSG_ALLOWED_FIELDS = {
     "conversation_id", "role", "content", "model", "metadata",
+    "orchestration_mode", "cut_mode", "parent_run_id",
 }
 
 

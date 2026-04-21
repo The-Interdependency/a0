@@ -262,6 +262,14 @@ async def lifespan(app: FastAPI):
             "CREATE INDEX IF NOT EXISTS idx_agent_logs_event_ts ON agent_logs(event, ts DESC)",
         ):
             await _sess.execute(_sa_text(_idx))
+    async with get_session() as _sess:
+        for _ddl in (
+            "ALTER TABLE messages ADD COLUMN IF NOT EXISTS orchestration_mode VARCHAR(32) DEFAULT 'single'",
+            "ALTER TABLE messages ADD COLUMN IF NOT EXISTS cut_mode VARCHAR(8) DEFAULT 'soft'",
+            "ALTER TABLE messages ADD COLUMN IF NOT EXISTS parent_run_id VARCHAR",
+        ):
+            await _sess.execute(_sa_text(_ddl))
+    print("[messages] orchestration columns ensured")
     print("[agent_runs/agent_logs/settings] tables ensured")
     await _seed_system_shadow_modules()
     print("[ws_modules] system shadows seeded")

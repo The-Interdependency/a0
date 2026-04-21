@@ -102,8 +102,13 @@ _TOOL_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
 def _validate_role_map(value: dict, field: str) -> dict:
-    """Shared validator: dict whose keys are roles and values are
-    {derive: <model_id>, ...}-shaped dicts of small string entries."""
+    """Shared validator: dict mapping role -> model_id string.
+
+    On-disk shape (see ws_modules.route_config.model_assignments) is flat:
+    {"conduct": "gemini-2.5-flash", "perform": "...", ...}. The frontend
+    ProviderSeedCard sends partial maps in the same shape when the user
+    picks a model from a role dropdown or applies an optimizer preset.
+    """
     if not isinstance(value, dict):
         raise ValueError(f"{field} must be an object")
     bad_roles = set(value.keys()) - VALID_ROLES
@@ -111,20 +116,13 @@ def _validate_role_map(value: dict, field: str) -> dict:
         raise ValueError(
             f"{field}: invalid role(s) {sorted(bad_roles)}; allowed: {sorted(VALID_ROLES)}"
         )
-    for role, entry in value.items():
-        if not isinstance(entry, dict):
-            raise ValueError(f"{field}.{role} must be an object")
-        if len(entry) > 16:
-            raise ValueError(f"{field}.{role} has too many keys (max 16)")
-        for k, v in entry.items():
-            if not isinstance(k, str) or not _MODEL_ID_RE.match(k):
-                raise ValueError(f"{field}.{role}: bad key '{k}'")
-            if v is None:
-                continue
-            if not isinstance(v, (str, int, float, bool)):
-                raise ValueError(f"{field}.{role}.{k} must be scalar (str/int/float/bool)")
-            if isinstance(v, str) and len(v) > 256:
-                raise ValueError(f"{field}.{role}.{k} string too long (max 256)")
+    for role, model_id in value.items():
+        if model_id is None or model_id == "":
+            continue
+        if not isinstance(model_id, str):
+            raise ValueError(f"{field}.{role} must be a model id string")
+        if not _MODEL_ID_RE.match(model_id):
+            raise ValueError(f"{field}.{role}: invalid model id '{model_id}'")
     return value
 
 
@@ -235,13 +233,18 @@ async def _update_seed_route_config(provider_id: str, updates: dict) -> dict:
         if not row:
             raise HTTPException(status_code=404, detail=f"Provider seed '{provider_id}' not found")
         existing = dict(row["route_config"] or {})
-        existing.update(updates)
+        for key, val in updates.items():
+            if key == "model_assignments" and isinstance(val, dict) and isinstance(existing.get(key), dict):
+                merged = dict(existing[key])
+                merged.update(val)
+                existing[key] = merged
+            else:
+                existing[key] = val
         import json as _json
         await session.execute(
             sa_text("UPDATE ws_modules SET route_config = CAST(:cfg AS jsonb), updated_at = NOW() WHERE id = :id"),
             {"cfg": _json.dumps(existing), "id": row["id"]}
         )
-    energy_registry.invalidate_seed_cache(provider_id)
     return existing
 
 

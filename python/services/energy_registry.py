@@ -289,6 +289,9 @@ async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30
         )
 
 
+_HUB_CACHE: dict = {"hub": None}
+
+
 def build_hub():
     """Return a MultiModelHub bound to our provider call function.
 
@@ -296,6 +299,40 @@ def build_hub():
     """
     from aimmh_lib import MultiModelHub
     return MultiModelHub(_aimmh_call_fn)
+
+
+def get_multi_model_hub():
+    """Cached singleton MultiModelHub. Built on first access from BUILTIN_PROVIDERS.
+
+    The hub is intentionally process-global because aimmh's CallFn is stateless
+    — every call resolves the active provider list per orchestration_mode.
+    Raises RuntimeError naming the missing dependency if aimmh_lib is absent.
+    """
+    if _HUB_CACHE["hub"] is not None:
+        return _HUB_CACHE["hub"]
+    try:
+        from aimmh_lib import MultiModelHub  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError(
+            "aimmh_lib is not installed. Run: uv add aimmh-lib. "
+            f"underlying ImportError: {exc!s}"
+        ) from exc
+    _HUB_CACHE["hub"] = build_hub()
+    return _HUB_CACHE["hub"]
+
+
+def build_model_instances() -> dict:
+    """Construct one aimmh ModelInstance per BUILTIN_PROVIDERS entry that has
+    an active env key. Returns {provider_id: ModelInstance}. Useful for
+    callers that want stateful per-provider conversation history."""
+    from aimmh_lib import ModelInstance
+    out: dict = {}
+    for pid, info in BUILTIN_PROVIDERS.items():
+        env_key = info.get("env_key", "")
+        if env_key and not os.environ.get(env_key):
+            continue
+        out[pid] = ModelInstance(_aimmh_call_fn, pid)
+    return out
 
 
 def resolve_providers(providers: list[str] | None) -> list[str]:

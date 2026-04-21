@@ -125,6 +125,9 @@ class SendMessage(BaseModel):
     model: Optional[str] = None
     agent_id: Optional[int] = None
     attachment_ids: list[int] = []
+    orchestration_mode: Optional[str] = None  # single|fan_out|council|daisy_chain|...
+    cut_mode: Optional[str] = None  # off|soft|hard
+    providers: Optional[list[str]] = None  # used when mode != single
 
 
 def _caller_uid(request: Request) -> Optional[str]:
@@ -500,16 +503,59 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             history.append(entry)
 
         from ..services.tool_executor import set_approval_scope_user_id
+        from ..services.run_context import (
+            current_orchestration_mode, current_cut_mode, current_user_tier,
+        )
+        # Resolve orchestration knobs: per-message override → user pref → defaults.
+        eff_mode = (body.orchestration_mode or "single").strip() or "single"
+        eff_cut = (body.cut_mode or "soft").strip() or "soft"
+        if uid and (body.orchestration_mode is None or body.cut_mode is None):
+            from sqlalchemy import text as _ptxt
+            async with engine.connect() as _c:
+                _r = (await _c.execute(_ptxt(
+                    "SELECT key, value FROM settings WHERE user_id = :u "
+                    "AND key IN ('orchestration_mode', 'cut_mode')"
+                ), {"u": uid})).mappings().all()
+            for _row in _r:
+                _v = _row["value"]
+                if isinstance(_v, dict):
+                    _v = _v.get("v") or _v.get("value")
+                if _row["key"] == "orchestration_mode" and body.orchestration_mode is None and _v:
+                    eff_mode = str(_v)
+                if _row["key"] == "cut_mode" and body.cut_mode is None and _v:
+                    eff_cut = str(_v)
+        eff_providers = body.providers or [provider_id]
+
         set_approval_scope_user_id(uid or None)
+        _t_om = current_orchestration_mode.set(eff_mode)
+        _t_cm = current_cut_mode.set(eff_cut)
+        _t_ut = current_user_tier.set(tier)
         try:
-            content, usage = await call_energy_provider(
-                provider_id=provider_id,
-                messages=history,
-                system_prompt=system_prompt or None,
-                user_id=uid or None,
-            )
+            if eff_mode == "single":
+                content, usage = await call_energy_provider(
+                    provider_id=provider_id,
+                    messages=history,
+                    system_prompt=system_prompt or None,
+                    user_id=uid or None,
+                )
+                usage = dict(usage or {})
+                usage.setdefault("orchestration_mode", "single")
+                usage.setdefault("providers", [provider_id])
+            else:
+                from ..services.inference_modes import run_inference_with_mode
+                content, usage = await run_inference_with_mode(
+                    messages=history,
+                    orchestration_mode=eff_mode,
+                    providers=eff_providers,
+                    cut_mode=eff_cut,
+                    user_id=uid or None,
+                    system_prompt=system_prompt or None,
+                )
         finally:
             set_approval_scope_user_id(None)
+            current_orchestration_mode.reset(_t_om)
+            current_cut_mode.reset(_t_cm)
+            current_user_tier.reset(_t_ut)
 
         if usage.get("approval_state") == "pending":
             _store_pending_gate(conv_id, {
@@ -526,6 +572,8 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             "content": content,
             "model": provider_id,
             "metadata": {"tier": tier, "usage": usage, "cache": energy_registry.cache_breakdown(usage)},
+            "orchestration_mode": eff_mode,
+            "cut_mode": eff_cut,
         })
 
         from ..engine.zeta import _zeta_engine

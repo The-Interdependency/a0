@@ -39,6 +39,9 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   model: text("model"),
   metadata: jsonb("metadata"),
+  orchestrationMode: varchar("orchestration_mode", { length: 32 }).default("single"),
+  cutMode: varchar("cut_mode", { length: 8 }).default("soft"),
+  parentRunId: varchar("parent_run_id"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

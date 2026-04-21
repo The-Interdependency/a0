@@ -26,6 +26,8 @@ from .forge import router as forge_router
 from .energy import router as energy_router, pcna_router as energy_pcna_router
 from .liminals import router as liminals_router
 from .artifacts import router as artifacts_router
+from .runs import router as runs_router
+from .preferences import router as preferences_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -57,6 +59,8 @@ ALL_ROUTERS = [
     energy_pcna_router,
     liminals_router,
     artifacts_router,
+    runs_router,
+    preferences_router,
 ]
 
 
