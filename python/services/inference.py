@@ -104,6 +104,90 @@ def _read_attachment_b64(storage_url: str) -> Optional[tuple[str, str]]:
     return (mime, data)
 
 
+# Per-document character cap. ~100K chars ≈ ~25K tokens, well under any
+# provider's input window. Exceeding it returns the head of the doc with an
+# explicit truncation marker so the model sees that the tail was elided
+# (NO silent fallback policy — never lie to the model about its inputs).
+_DOC_TEXT_CAP = 100_000
+
+
+def _extract_pdf_text(abs_path: str) -> str:
+    """Extract text from a PDF using pypdf. Per-page errors are swallowed
+    to one page, never to the whole doc; the rest still comes through."""
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return "[pdf extraction unavailable: pypdf not installed]"
+    try:
+        reader = PdfReader(abs_path)
+    except Exception as e:
+        return f"[pdf open failed: {type(e).__name__}: {e}]"
+    pages: list[str] = []
+    total = len(reader.pages)
+    for i, page in enumerate(reader.pages):
+        try:
+            txt = page.extract_text() or ""
+        except Exception as e:
+            txt = f"[page {i + 1} extract failed: {type(e).__name__}]"
+        pages.append(f"--- page {i + 1}/{total} ---\n{txt}")
+        # Early stop once we're well past the cap — no point parsing 500 more pages.
+        if sum(len(p) for p in pages) > _DOC_TEXT_CAP * 1.2:
+            pages.append(f"[truncated: stopped at page {i + 1} of {total}]")
+            break
+    return "\n\n".join(pages)
+
+
+def _extract_text_file(abs_path: str) -> str:
+    """Read a UTF-8 (or latin-1 fallback) text/code file."""
+    try:
+        with open(abs_path, "rb") as fh:
+            raw = fh.read()
+    except OSError as e:
+        return f"[read failed: {type(e).__name__}: {e}]"
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        # latin-1 always succeeds; better to show garbled bytes than fail silently.
+        return raw.decode("latin-1", errors="replace")
+
+
+def _extract_document_text(storage_url: str, mime_type: str, name: str = "") -> str:
+    """Return the textual contents of a document attachment, capped and labeled.
+
+    Caller is `_build_provider_messages` — we always return SOMETHING the
+    model can read, including an explicit error string when extraction
+    fails, so prompts never silently omit attachments the user uploaded.
+    """
+    p = _resolve_attachment_path(storage_url)
+    if not p:
+        return f"[attachment not found on disk: {storage_url}]"
+    label = name or os.path.basename(p)
+    mt = (mime_type or "").lower()
+    if mt == "application/pdf" or p.lower().endswith(".pdf"):
+        body = _extract_pdf_text(p)
+    else:
+        # Everything else in our DOC_MIME / DOC_EXT whitelist (server/attachments.ts)
+        # is plain-text-ish: code files, markdown, csv, json, yaml, xml, html, logs.
+        body = _extract_text_file(p)
+    if len(body) > _DOC_TEXT_CAP:
+        body = body[:_DOC_TEXT_CAP] + f"\n\n[truncated: showing first {_DOC_TEXT_CAP} chars of {len(body)}]"
+    header = f"[attachment: {label} ({mt or 'unknown mime'})]"
+    return f"{header}\n{body}"
+
+
+def _att_kind(att: dict) -> str:
+    """Best-effort kind classification. Trusts `kind` if the upload route
+    set it (server/attachments.ts does); otherwise falls back to mime sniff
+    so older rows or callers without kind still get routed correctly."""
+    k = (att.get("kind") or "").lower()
+    if k in ("image", "document"):
+        return k
+    mt = (att.get("mime_type") or "").lower()
+    if mt.startswith("image/"):
+        return "image"
+    return "document"
+
+
 def _build_provider_messages(messages: list[dict], provider_id: str) -> list[dict]:
     """Convert a list of {role, content, attachments?} messages into the
     multimodal shape required by the target provider.
@@ -123,11 +207,30 @@ def _build_provider_messages(messages: list[dict], provider_id: str) -> list[dic
             continue
         text = base.get("content") if isinstance(base.get("content"), str) else ""
 
+        # Split images vs documents. Documents get extracted server-side and
+        # spliced into the user turn as text — works on every provider, no
+        # vision capability required. Images stay on the multimodal path.
+        images = [a for a in atts if _att_kind(a) == "image"]
+        docs = [a for a in atts if _att_kind(a) == "document"]
+        doc_blocks = [
+            _extract_document_text(
+                a.get("storage_url", ""),
+                a.get("mime_type", ""),
+                a.get("name") or a.get("filename") or "",
+            )
+            for a in docs
+        ]
+        # Compose the text with doc bodies appended. Docs are bracketed by
+        # their own [attachment: ...] header inside _extract_document_text.
+        composed_text = text
+        if doc_blocks:
+            composed_text = (text + "\n\n" if text else "") + "\n\n".join(doc_blocks)
+
         if provider_id in ("openai", "grok", "grok-fast", "grok-code"):
             parts: list[dict] = []
-            if text:
-                parts.append({"type": "text", "text": text})
-            for a in atts:
+            if composed_text:
+                parts.append({"type": "text", "text": composed_text})
+            for a in images:
                 pair = _read_attachment_b64(a.get("storage_url", ""))
                 if not pair:
                     continue
@@ -136,14 +239,14 @@ def _build_provider_messages(messages: list[dict], provider_id: str) -> list[dic
                     "type": "image_url",
                     "image_url": {"url": f"data:{mime};base64,{data}"},
                 })
-            out.append({**base, "content": parts})
+            out.append({**base, "content": parts if parts else composed_text})
             continue
 
         if provider_id == "claude":
             parts = []
-            if text:
-                parts.append({"type": "text", "text": text})
-            for a in atts:
+            if composed_text:
+                parts.append({"type": "text", "text": composed_text})
+            for a in images:
                 pair = _read_attachment_b64(a.get("storage_url", ""))
                 if not pair:
                     continue
@@ -152,23 +255,25 @@ def _build_provider_messages(messages: list[dict], provider_id: str) -> list[dic
                     "type": "image",
                     "source": {"type": "base64", "media_type": mime, "data": data},
                 })
-            out.append({**base, "content": parts})
+            out.append({**base, "content": parts if parts else composed_text})
             continue
 
         if provider_id in ("gemini", "gemini3"):
-            # Native Gemini path expects Part.from_bytes; preserve attachments
-            # so gemini_native._messages_to_contents can build inline_data parts.
+            # Native Gemini path expects Part.from_bytes; preserve image
+            # attachments so gemini_native._messages_to_contents can build
+            # inline_data parts. Doc text is folded into content above.
             inline = []
-            for a in atts:
+            for a in images:
                 pair = _read_attachment_b64(a.get("storage_url", ""))
                 if not pair:
                     continue
                 mime, data = pair
                 inline.append({"mime_type": mime, "data_b64": data})
-            out.append({**base, "attachments": inline})
+            out.append({**base, "content": composed_text, "attachments": inline})
             continue
 
-        out.append(base)
+        # Unknown provider: at least pass the composed text so docs aren't lost.
+        out.append({**base, "content": composed_text})
     return out
 
 # Retry policy: 2 retries (3 attempts total) with jittered exponential backoff
