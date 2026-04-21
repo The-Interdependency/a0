@@ -152,7 +152,11 @@ async def _require_owned_conv(conv_id: int, uid: Optional[str]) -> dict:
 
 
 @router.get("/conversations")
-async def list_conversations(request: Request, agent_id: int | None = None):
+async def list_conversations(
+    request: Request,
+    agent_id: int | None = None,
+    archived: bool | None = None,
+):
     """List conversations.
 
     Defaults to a0-only (excludes any conversation pinned to a Forge agent).
@@ -162,7 +166,14 @@ async def list_conversations(request: Request, agent_id: int | None = None):
     uid = _caller_uid(request)
     if not uid:
         raise HTTPException(status_code=401, detail="authentication required")
-    return await storage.get_conversations(user_id=uid, agent_id=agent_id)
+    # archived defaults to False so the main sidebar list never includes
+    # archived chats. The "Archived" toggle in the UI passes ?archived=true
+    # to fetch the other half. Pass ?archived= explicitly (omit value) to
+    # opt out of the filter and get everything.
+    archived_filter: bool | None = False if archived is None else archived
+    return await storage.get_conversations(
+        user_id=uid, agent_id=agent_id, archived=archived_filter,
+    )
 
 
 @router.post("/conversations")

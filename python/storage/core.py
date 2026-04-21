@@ -47,6 +47,7 @@ class _CoreStorage:
         user_id: Optional[str] = None,
         agent_id: Optional[int] = None,
         include_agent_pinned: bool = False,
+        archived: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         """List conversations strictly scoped to a single user.
 
@@ -56,6 +57,12 @@ class _CoreStorage:
             from being polluted with Forge agent chats.
           - int: only conversations pinned to that specific agent.
           - None + include_agent_pinned=True: everything (admin / debug).
+
+        archived semantics:
+          - None: no filter (legacy callers / admin paths).
+          - False: only active (archived = false). Default for the chat sidebar's
+            main list so archived chats don't bleed into history.
+          - True: only archived rows. Used by the sidebar's "Archived" section.
         """
         async with get_session() as session:
             q = select(Conversation).order_by(desc(Conversation.updated_at))
@@ -65,6 +72,8 @@ class _CoreStorage:
                 q = q.where(Conversation.agent_id == agent_id)
             elif not include_agent_pinned:
                 q = q.where(Conversation.agent_id.is_(None))
+            if archived is not None:
+                q = q.where(Conversation.archived.is_(archived))
             result = await session.execute(q)
             return [_row_to_dict(r) for r in result.scalars().all()]
 
