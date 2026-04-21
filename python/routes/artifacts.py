@@ -63,9 +63,11 @@ def _serialize(row: dict) -> dict:
 
 @router.get("")
 async def list_artifacts(
+    req: Request,
     kind: Optional[str] = None,
     tool: Optional[str] = None,
     range_: Optional[str] = Query(None, alias="range"),
+    public: Optional[bool] = None,
     limit: int = 50,
     offset: int = 0,
 ):
@@ -74,8 +76,18 @@ async def list_artifacts(
     since: _dt.datetime | None = None
     if range_ and range_ in _RANGE_MAP:
         since = _dt.datetime.utcnow() - _dt.timedelta(days=_RANGE_MAP[range_])
+
+    # Auth gate: unauthenticated callers can only browse the public gallery.
+    # Force `public=True` for them regardless of what they passed in the
+    # query string. Authenticated callers can request public=true/false/None.
+    # Owner-scoping is a separate concern tracked as a follow-up.
+    uid = (req.headers.get("x-user-id") or "").strip()
+    if not uid:
+        public = True
+
     rows = await _A.list_artifacts(
-        kind=kind, tool_name=tool, since=since, limit=limit, offset=offset,
+        kind=kind, tool_name=tool, since=since, public=public,
+        limit=limit, offset=offset,
     )
     return {"items": [_serialize(r) for r in rows], "limit": limit, "offset": offset}
 

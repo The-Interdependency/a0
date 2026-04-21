@@ -16,6 +16,7 @@ import PricingPage from "@/pages/pricing";
 import AdminContextsPage from "@/pages/admin-contexts";
 import ArchivePage from "@/pages/archive";
 import FleetPage from "@/pages/fleet";
+import GalleryPage from "@/pages/gallery";
 import TopNav from "@/components/top-nav";
 import HmmmDoctrine from "@/components/hmmm-doctrine";
 
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/pricing" component={PricingPage} />
       <Route path="/admin/contexts" component={AdminContextsPage} />
       <Route path="/archive" component={ArchivePage} />
+      <Route path="/gallery" component={GalleryPage} />
       <Route path="/fleet" component={FleetPage} />
       <Route component={ChatPage} />
     </Switch>
@@ -62,7 +64,8 @@ function AppShell() {
     location === "/login" ||
     location === "/register" ||
     location === "/reset" ||
-    location === "/pricing";
+    location === "/pricing" ||
+    location === "/gallery";
 
   if (isPublicPage) {
     return (

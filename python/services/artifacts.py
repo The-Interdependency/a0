@@ -226,6 +226,7 @@ async def list_artifacts(
     kind: str | None = None,
     tool_name: str | None = None,
     since: _dt.datetime | None = None,
+    public: bool | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict]:
@@ -240,6 +241,12 @@ async def list_artifacts(
     if since:
         where.append("created_at >= :since")
         params["since"] = since
+    if public is not None:
+        # Explicit None vs True/False — gallery passes True to show only
+        # opt-in showcase items; archive omits it to see everything the
+        # caller owns. Never default to True silently.
+        where.append("public = :public")
+        params["public"] = public
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
     sql = (
         "SELECT id, kind, tool_name, agent_run_id, storage_path, filename, "
