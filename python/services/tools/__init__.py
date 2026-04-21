@@ -129,20 +129,51 @@ def tool_schemas_chat() -> list[dict]:
 async def dispatch(name: str, **kwargs) -> Any:
     """Resolve a tool by name and await its handler. Raises KeyError if unknown.
 
-    If the tool's SCHEMA declares a top-level "produces" key, the handler's
-    return value is auto-archived through python.services.artifacts and the
-    user-visible result is replaced with a compact {artifacts: [...], count}
-    summary. The handler must return either:
-      * dict with keys {data: bytes, filename, mime, provenance} (single), or
-      * list[dict] of the above (multi-artifact tools).
-    Anything else raises — no silent passthrough, per the no-silent-fallback
-    doctrine. Tools without "produces" pass through unchanged.
+    Emits structured tool_call / tool_result events via the run logger so
+    every per-recursion-level invocation is attributable to its agent_run.
+    Auto-archives "produces" return shapes the same way as before.
     """
     reg = registry()
     if name not in reg:
         raise KeyError(name)
     spec = reg[name]
-    result = await spec.handle(**kwargs)
+    try:
+        from ..run_logger import get_run_logger as _get_run_logger
+        _logger = _get_run_logger()
+    except Exception:
+        _logger = None
+    if _logger is not None:
+        _safe_args = {k: v for k, v in kwargs.items() if not k.startswith("_")}
+        try:
+            _logger.emit("tool_call", {"tool": name, "args_keys": list(_safe_args.keys())})
+        except Exception:
+            pass
+    try:
+        result = await spec.handle(**kwargs)
+    except Exception as exc:
+        if _logger is not None:
+            try:
+                _logger.emit(
+                    "tool_result",
+                    {"tool": name, "ok": False, "error": type(exc).__name__,
+                     "message": str(exc)[:500]},
+                    level="ERROR",
+                )
+            except Exception:
+                pass
+        raise
+    if _logger is not None:
+        try:
+            _summary: dict[str, Any] = {"tool": name, "ok": True}
+            if isinstance(result, str):
+                _summary["bytes"] = len(result)
+            elif isinstance(result, dict):
+                for k in ("usage", "tokens", "cost_usd"):
+                    if k in result:
+                        _summary[k] = result[k]
+            _logger.emit("tool_result", _summary)
+        except Exception:
+            pass
     produces = spec.schema.get("produces")
     if not produces:
         return result

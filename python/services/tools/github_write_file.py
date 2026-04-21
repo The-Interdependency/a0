@@ -61,13 +61,13 @@ SCHEMA = {
             "required": ["path", "content", "message"],
         },
     },
-    "tier": "free",
-    "approval_scope": "github_write",
+    "tier": "admin",
+    "approval_scope": "code_self_modify",
     "enabled": True,
     "category": "integration",
     "cost_hint": "low",
-    "side_effects": ["network", "external_account"],
-    "version": 1,
+    "side_effects": ["external_account", "irreversible"],
+    "version": 2,
 }
 
 

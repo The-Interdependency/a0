@@ -11,9 +11,11 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "aimmh-lib>=1.1.0",
     "aiofiles>=25.1.0",
     "alembic>=1.18.4",
     "asyncpg>=0.31.0",
+    "edcmbone>=0.1.0",
     "fastapi>=0.135.1",
     "google-genai>=1.73.1",
     "httpx>=0.28.1",

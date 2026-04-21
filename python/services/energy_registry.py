@@ -243,4 +243,73 @@ class EnergyRegistry:
 
 
 energy_registry = EnergyRegistry()
+
+
+# --- aimmh-lib bridge -------------------------------------------------------
+#
+# aimmh-lib's MultiModelHub accepts a single CallFn (async (model_id, messages,
+# system_context, max_history) -> ModelResult) and orchestrates fan_out /
+# council / daisy_chain / room_all / room_synthesized over it.
+#
+# Our CallFn delegates to call_energy_provider so all providers, doctrine
+# prefix, retry, attachments, and approval gating keep working unchanged.
+# Each provider id in BUILTIN_PROVIDERS maps 1:1 to a ModelInstance bound by
+# build_hub().
+import time as _time
+
+
+async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30):
+    """Bridge aimmh-lib's CallFn signature into call_energy_provider.
+
+    aimmh-lib passes a list of {role, content} messages and an optional
+    system_context. We forward them through call_energy_provider which
+    handles doctrine-prefix injection, attachments, and tool gating.
+    """
+    from aimmh_lib import ModelResult
+    from .inference import call_energy_provider as _cep
+    t0 = _time.perf_counter()
+    try:
+        content, _usage = await _cep(
+            provider_id=model_id,
+            messages=list(messages or []),
+            system_prompt=system_context,
+            use_tools=False,
+        )
+        return ModelResult(
+            model=model_id,
+            content=content or "",
+            response_time_ms=int((_time.perf_counter() - t0) * 1000),
+        )
+    except Exception as exc:
+        return ModelResult(
+            model=model_id,
+            content="",
+            response_time_ms=int((_time.perf_counter() - t0) * 1000),
+            error=str(exc)[:500],
+        )
+
+
+def build_hub():
+    """Return a MultiModelHub bound to our provider call function.
+
+    Lazy import so test harnesses without aimmh-lib still load this module.
+    """
+    from aimmh_lib import MultiModelHub
+    return MultiModelHub(_aimmh_call_fn)
+
+
+def resolve_providers(providers: list[str] | None) -> list[str]:
+    """Resolve ['active'] / [] / None into a concrete list of provider ids."""
+    if not providers or providers == ["active"]:
+        active = energy_registry.get_active_provider()
+        return [active] if active else []
+    out: list[str] = []
+    for p in providers:
+        if p == "active":
+            a = energy_registry.get_active_provider()
+            if a and a not in out:
+                out.append(a)
+        elif p in BUILTIN_PROVIDERS and p not in out:
+            out.append(p)
+    return out
 # 211:16

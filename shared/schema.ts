@@ -630,4 +630,60 @@ export const artifacts = pgTable("artifacts", {
 export const insertArtifactSchema = createInsertSchema(artifacts).omit({ id: true, createdAt: true });
 export type Artifact = typeof artifacts.$inferSelect;
 export type InsertArtifact = z.infer<typeof insertArtifactSchema>;
+
+// ---- Agent runs / per-recursion-level structured logging ----
+// agent_runs and agent_logs back the Fleet view and the spawn-cap enforcement.
+// Both use varchar UUID primary keys (gen_random_uuid()) — no serial id, no FK
+// hops needed when archiving log streams to artifacts.
+export const agentRuns = pgTable("agent_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  parentRunId: varchar("parent_run_id"),
+  rootRunId: varchar("root_run_id"),
+  depth: integer("depth").notNull().default(0),
+  status: varchar("status", { length: 16 }).notNull().default("running"),
+  orchestrationMode: varchar("orchestration_mode", { length: 32 }).notNull().default("single"),
+  cutMode: varchar("cut_mode", { length: 8 }).notNull().default("soft"),
+  providers: jsonb("providers").$type<string[]>().default([]),
+  spawnedByTool: varchar("spawned_by_tool"),
+  taskSummary: text("task_summary"),
+  startedAt: timestamp("started_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  endedAt: timestamp("ended_at"),
+  totalTokens: integer("total_tokens").notNull().default(0),
+  totalCostUsd: real("total_cost_usd").notNull().default(0),
+}, (t) => [
+  index("idx_agent_runs_parent").on(t.parentRunId),
+  index("idx_agent_runs_root_started").on(t.rootRunId, t.startedAt),
+  index("idx_agent_runs_status_started").on(t.status, t.startedAt.desc()),
+]);
+
+export type AgentRun = typeof agentRuns.$inferSelect;
+
+export const agentLogs = pgTable("agent_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  runId: varchar("run_id").notNull(),
+  parentRunId: varchar("parent_run_id"),
+  depth: integer("depth").notNull().default(0),
+  level: varchar("level", { length: 8 }).notNull().default("INFO"),
+  event: varchar("event", { length: 32 }).notNull(),
+  payload: jsonb("payload"),
+  ts: timestamp("ts").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [
+  index("idx_agent_logs_run_ts").on(t.runId, t.ts),
+  index("idx_agent_logs_parent_depth_ts").on(t.parentRunId, t.depth, t.ts),
+  index("idx_agent_logs_event_ts").on(t.event, t.ts.desc()),
+]);
+
+export type AgentLog = typeof agentLogs.$inferSelect;
+
+// Generic key/value settings table — scoped by user_id ("" for global). Used
+// by spawn_caps_by_tier (global) and default_cut_mode (per user).
+export const settings = pgTable("settings", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().default(""),
+  key: varchar("key", { length: 100 }).notNull(),
+  value: jsonb("value"),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [uniqueIndex("uq_settings_user_key").on(t.userId, t.key)]);
+
+export type Setting = typeof settings.$inferSelect;
 // 535:18

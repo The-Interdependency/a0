@@ -1,6 +1,7 @@
-# 33:1
-"""edcm_score — return current EDCM ring coherence."""
+# N:M
+"""edcm_score — return current EDCM ring coherence (edcmbone-backed)."""
 import json
+from ..edcm import EDCMBONE_VERSION
 
 SCHEMA = {
     "type": "function",
@@ -8,7 +9,9 @@ SCHEMA = {
         "name": "edcm_score",
         "description": (
             "Return the current EDCM (Energy Directional Coherence Metric) score "
-            "and ring state for all three PCNA rings."
+            "and ring state for all three PCNA rings. "
+            f"Math is delegated to edcmbone v{EDCMBONE_VERSION} "
+            "(bone-token density, repetition ratio, novelty, fixation/loop risks)."
         ),
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
@@ -18,7 +21,7 @@ SCHEMA = {
     "category": "pcna",
     "cost_hint": "free",
     "side_effects": [],
-    "version": 1,
+    "version": 2,
 }
 
 
@@ -35,5 +38,6 @@ async def handle(**_) -> str:
         ),
         "infer_count": pcna.infer_count,
         "reward_count": pcna.reward_count,
+        "edcmbone_version": EDCMBONE_VERSION,
     })
-# 33:1
+# N:M

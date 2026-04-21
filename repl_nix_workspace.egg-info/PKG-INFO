@@ -3,9 +3,11 @@ Name: repl-nix-workspace
 Version: 0.1.0
 Summary: Add your description here
 Requires-Python: >=3.12
+Requires-Dist: aimmh-lib>=1.1.0
 Requires-Dist: aiofiles>=25.1.0
 Requires-Dist: alembic>=1.18.4
 Requires-Dist: asyncpg>=0.31.0
+Requires-Dist: edcmbone>=0.1.0
 Requires-Dist: fastapi>=0.135.1
 Requires-Dist: google-genai>=1.73.1
 Requires-Dist: httpx>=0.28.1

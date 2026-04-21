@@ -7,6 +7,15 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "aimmh-lib"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/40/ffdee0403bedfd18302ee0e42699de1c42177518a59c71b3f0283e3bd584/aimmh_lib-1.1.0.tar.gz", hash = "sha256:2549a7c47603d1fae09f8576a0262c14564ff1161d1fcf5a135c7447a0cee10f", size = 14831, upload-time = "2026-04-21T05:51:46.947Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/ae/faa2055448e66d7526ad955785195585cec0d5b44baca9e908f40ab4d66a/aimmh_lib-1.1.0-py3-none-any.whl", hash = "sha256:098746177dbaaa986e19eabc26f9345f405058e154e63a59a928f9a145f64232", size = 13441, upload-time = "2026-04-21T05:51:45.761Z" },
+]
+
+[[package]]
 name = "aiofiles"
 version = "25.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -320,6 +329,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed", size = 60722, upload-time = "2023-12-24T09:54:32.31Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277, upload-time = "2023-12-24T09:54:30.421Z" },
+]
+
+[[package]]
+name = "edcmbone"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/96/c9fd666b2b16d7d9700cb602e9ae2b6270a7fcb9579877f1b79ad3a7d8ab/edcmbone-0.1.0.tar.gz", hash = "sha256:50618676d16f4184b322156a1ba8736c2608f3694e9a83e21b90e55680092403", size = 35539, upload-time = "2026-04-21T05:59:43.681Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/5b/ef6411566934a60a7228cee7fc9576470fac87cab3f1fad9dbfb7ec4967a/edcmbone-0.1.0-py3-none-any.whl", hash = "sha256:93ff52f86f75c2b6b4c39418a7827d70920155c30c9916b26879591c64d7c650", size = 41699, upload-time = "2026-04-21T05:59:41.917Z" },
 ]
 
 [[package]]
@@ -1065,9 +1083,11 @@ name = "repl-nix-workspace"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aimmh-lib" },
     { name = "aiofiles" },
     { name = "alembic" },
     { name = "asyncpg" },
+    { name = "edcmbone" },
     { name = "fastapi" },
     { name = "google-genai" },
     { name = "httpx" },
@@ -1091,9 +1111,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aimmh-lib", specifier = ">=1.1.0" },
     { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "alembic", specifier = ">=1.18.4" },
     { name = "asyncpg", specifier = ">=0.31.0" },
+    { name = "edcmbone", specifier = ">=0.1.0" },
     { name = "fastapi", specifier = ">=0.135.1" },
     { name = "google-genai", specifier = ">=1.73.1" },
     { name = "httpx", specifier = ">=0.28.1" },

@@ -210,6 +210,59 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE ws_modules ADD COLUMN IF NOT EXISTS last_swapped_at TIMESTAMP"
         ))
     print("[ws_modules] table ensured")
+    async with get_session() as _sess:
+        # agent_runs / agent_logs / settings — backbone for per-recursion-level
+        # structured logging, cut-mode + cap enforcement, fleet view.
+        await _sess.execute(_sa_text("""
+            CREATE TABLE IF NOT EXISTS agent_runs (
+                id VARCHAR PRIMARY KEY,
+                parent_run_id VARCHAR,
+                root_run_id VARCHAR,
+                depth INTEGER NOT NULL DEFAULT 0,
+                status VARCHAR(20) NOT NULL DEFAULT 'running',
+                orchestration_mode VARCHAR(40) NOT NULL DEFAULT 'single',
+                cut_mode VARCHAR(10) NOT NULL DEFAULT 'soft',
+                providers JSONB NOT NULL DEFAULT '[]'::jsonb,
+                spawned_by_tool VARCHAR(80),
+                task_summary TEXT,
+                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                ended_at TIMESTAMP,
+                total_tokens INTEGER NOT NULL DEFAULT 0,
+                total_cost_usd NUMERIC(12,6) NOT NULL DEFAULT 0
+            )
+        """))
+        await _sess.execute(_sa_text("""
+            CREATE TABLE IF NOT EXISTS agent_logs (
+                id VARCHAR PRIMARY KEY,
+                run_id VARCHAR NOT NULL,
+                depth INTEGER NOT NULL DEFAULT 0,
+                parent_run_id VARCHAR,
+                level VARCHAR(8) NOT NULL DEFAULT 'INFO',
+                event VARCHAR(40) NOT NULL,
+                payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        await _sess.execute(_sa_text("""
+            CREATE TABLE IF NOT EXISTS settings (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL DEFAULT '',
+                key VARCHAR(120) NOT NULL,
+                value JSONB NOT NULL DEFAULT '{}'::jsonb,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_settings_user_key UNIQUE (user_id, key)
+            )
+        """))
+        for _idx in (
+            "CREATE INDEX IF NOT EXISTS idx_agent_runs_parent ON agent_runs(parent_run_id)",
+            "CREATE INDEX IF NOT EXISTS idx_agent_runs_root_started ON agent_runs(root_run_id, started_at)",
+            "CREATE INDEX IF NOT EXISTS idx_agent_runs_status_started ON agent_runs(status, started_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_agent_logs_run_ts ON agent_logs(run_id, ts)",
+            "CREATE INDEX IF NOT EXISTS idx_agent_logs_parent_depth_ts ON agent_logs(parent_run_id, depth, ts)",
+            "CREATE INDEX IF NOT EXISTS idx_agent_logs_event_ts ON agent_logs(event, ts DESC)",
+        ):
+            await _sess.execute(_sa_text(_idx))
+    print("[agent_runs/agent_logs/settings] tables ensured")
     await _seed_system_shadow_modules()
     print("[ws_modules] system shadows seeded")
     _hot_count = await get_registry().load_all_active()
