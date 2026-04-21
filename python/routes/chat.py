@@ -330,14 +330,24 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         provider_id = energy_registry.get_active_provider() or model_id
 
         # Tier-gate restricted models (e.g. gemini3 = ws/admin only).
-        prov_meta = energy_registry.get_provider(provider_id) or {}
-        min_tier = prov_meta.get("min_tier")
-        if min_tier:
-            _ranks = {"free": 0, "supporter": 1, "ws": 2, "admin": 3}
-            if _ranks.get(tier, 0) < _ranks.get(min_tier, 0):
+        # Gate the *resolved* provider list — never raw body.providers — so
+        # aliases like "active" can't smuggle a ws-only model past the gate
+        # by being inert at request time and resolving to gemini3 at exec
+        # time. resolve_providers() is the same path inference uses.
+        from ..services.energy_registry import resolve_providers as _resolve
+        _ranks = {"free": 0, "supporter": 1, "ws": 2, "admin": 3}
+        _mode_for_gate = (body.orchestration_mode or "single").strip() or "single"
+        if _mode_for_gate != "single" and body.providers:
+            providers_to_gate = _resolve(body.providers) or [provider_id]
+        else:
+            providers_to_gate = [provider_id]
+        for _pid in providers_to_gate:
+            _meta = energy_registry.get_provider(_pid) or {}
+            _mt = _meta.get("min_tier")
+            if _mt and _ranks.get(tier, 0) < _ranks.get(_mt, 0):
                 raise HTTPException(
                     status_code=403,
-                    detail=f"Model '{provider_id}' requires tier '{min_tier}' or higher (current: {tier})",
+                    detail=f"Model '{_pid}' requires tier '{_mt}' or higher (current: {tier})",
                 )
 
         scope_to_grant = _parse_approve_scope(body.content)

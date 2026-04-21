@@ -320,13 +320,15 @@ import time as _time
 async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30):
     """Bridge aimmh-lib's CallFn signature into call_energy_provider.
 
-    aimmh-lib passes a list of {role, content} messages and an optional
-    system_context. We forward them through call_energy_provider which
-    handles doctrine-prefix injection, attachments, and tool gating.
+    Per aimmh-lib's CallFn contract (conversations.py L13/L39):
+        async (model_id: str, messages: list[dict]) -> str
+    The library wraps the returned string in a ModelResult itself, including
+    routing strings starting with ``[ERROR]`` to ModelResult.error. So we
+    MUST return a plain string here — returning a ModelResult would cause
+    aimmh's downstream `content.startswith("[ERROR]")` check to crash with
+    `'ModelResult' object has no attribute 'startswith'`.
     """
-    from aimmh_lib import ModelResult
     from .inference import call_energy_provider as _cep
-    t0 = _time.perf_counter()
     try:
         content, _usage = await _cep(
             provider_id=model_id,
@@ -334,18 +336,10 @@ async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30
             system_prompt=system_context,
             use_tools=False,
         )
-        return ModelResult(
-            model=model_id,
-            content=content or "",
-            response_time_ms=int((_time.perf_counter() - t0) * 1000),
-        )
+        return content or ""
     except Exception as exc:
-        return ModelResult(
-            model=model_id,
-            content="",
-            response_time_ms=int((_time.perf_counter() - t0) * 1000),
-            error=str(exc)[:500],
-        )
+        # aimmh interprets a "[ERROR] ..." prefix as an error result.
+        return f"[ERROR] {exc}"[:500]
 
 
 _HUB_CACHE: dict = {"hub": None}

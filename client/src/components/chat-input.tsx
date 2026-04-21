@@ -3,12 +3,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Send, Paperclip, X, Network, FileText } from "lucide-react";
+import { Loader2, Send, Paperclip, X, FileText, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 
 export interface PendingAttachment {
   id: number;
@@ -203,57 +200,113 @@ export function ChatInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const activeProviderId =
+    availability.find((a) => a.active)?.id || availableProviders[0]?.id;
+
   return (
     <div className="px-4 py-3 border-t border-border" data-testid="chat-input-area">
-      <div className="flex items-center gap-2 mb-2 flex-wrap text-xs">
-        <button
-          type="button"
-          onClick={() => setShowOrch((v) => !v)}
-          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground hover-elevate"
-          data-testid="btn-toggle-orchestration"
+      <div className="mb-2 flex flex-col gap-1.5">
+        <div
+          role="tablist"
+          aria-label="Orchestration mode"
+          className="flex items-center gap-0.5 rounded-md border border-border bg-muted/40 p-0.5 text-[10px] uppercase tracking-wider w-fit"
+          data-testid="tabs-orchestration-mode"
         >
-          <Network className="h-3 w-3" /> {currentMode.label}
-          {currentMode.multi && selectedProviders.length > 0 && (
-            <span className="ml-1 text-primary">×{selectedProviders.length}</span>
-          )}
-        </button>
-        {showOrch && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <Select value={mode} onValueChange={setMode}>
-              <SelectTrigger className="h-6 text-[10px] w-[110px]" data-testid="select-orchestration-mode">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODES.map((m) => (
-                  <SelectItem key={m.id} value={m.id} className="text-xs">{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {currentMode.multi && availableProviders.map((p) => {
-              const on = selectedProviders.includes(p.id);
-              return (
+          {MODES.map((m) => {
+            const selected = m.id === mode;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setMode(m.id)}
+                className={
+                  "px-2 py-0.5 rounded-sm transition-colors hover-elevate " +
+                  (selected
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground")
+                }
+                data-testid={`tab-mode-${m.id}`}
+              >
+                {m.label}
+                {m.multi && selected && selectedProviders.length > 0 && (
+                  <span className="ml-1 text-primary normal-case">
+                    ×{selectedProviders.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap text-[10px]">
+          {currentMode.multi ? (
+            <>
+              <span className="text-muted-foreground">providers:</span>
+              {availableProviders.length === 0 && (
+                <span className="text-muted-foreground italic">
+                  none available
+                </span>
+              )}
+              {availableProviders.map((p) => {
+                const on = selectedProviders.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => toggleProvider(p.id)}
+                    aria-pressed={on}
+                    className={
+                      "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 hover-elevate " +
+                      (on
+                        ? "bg-primary/15 border-primary text-primary"
+                        : "border-border text-muted-foreground")
+                    }
+                    data-testid={`chip-provider-${p.id}`}
+                    title={on ? `Click to exclude ${p.id}` : `Click to include ${p.id}`}
+                  >
+                    {on && <Check className="h-2.5 w-2.5" />}
+                    {p.id}
+                  </button>
+                );
+              })}
+              {availableProviders.length > 0 && (
                 <button
-                  key={p.id}
                   type="button"
-                  onClick={() => toggleProvider(p.id)}
-                  className={`rounded-full border px-2 py-0.5 text-[10px] hover-elevate ${on ? "bg-primary/15 border-primary text-primary" : "border-border text-muted-foreground"}`}
-                  data-testid={`chip-provider-${p.id}`}
+                  onClick={() =>
+                    setSelectedProviders(
+                      selectedProviders.length === availableProviders.length
+                        ? []
+                        : availableProviders.map((a) => a.id),
+                    )
+                  }
+                  className="text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  data-testid="btn-toggle-all-providers"
                 >
-                  {p.id}
+                  {selectedProviders.length === availableProviders.length
+                    ? "none"
+                    : "all"}
                 </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => savePrefs.mutate()}
-              disabled={savePrefs.isPending}
-              className="text-[10px] text-muted-foreground hover:text-primary underline underline-offset-2"
-              data-testid="btn-save-orchestration-default"
-            >
-              {savePrefs.isPending ? "saving…" : "save as default"}
-            </button>
-          </div>
-        )}
+              )}
+            </>
+          ) : (
+            <span className="text-muted-foreground">
+              provider:{" "}
+              <span className="text-foreground">
+                {activeProviderId ?? "—"}
+              </span>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => savePrefs.mutate()}
+            disabled={savePrefs.isPending}
+            className="ml-auto text-muted-foreground hover:text-primary underline underline-offset-2"
+            data-testid="btn-save-orchestration-default"
+          >
+            {savePrefs.isPending ? "saving…" : "save as default"}
+          </button>
+        </div>
       </div>
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2" data-testid="chat-attachments-tray">
