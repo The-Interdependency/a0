@@ -79,7 +79,66 @@ BUILTIN_PROVIDERS = {
 
 
 _PROVIDER_DEFAULT_ASSIGNMENTS: dict[str, dict] = {}
-_PROVIDER_PRESETS: dict[str, dict] = {}
+
+# Per-provider optimizer presets. The optimize endpoint maps
+# {speed,depth,price,balance,creativity,coding} → a {role: model_id} dict
+# that gets merged into route_config.model_assignments. Roles are the five
+# pipeline slots validated in routes/energy.py: record, practice, conduct,
+# perform, derive.
+#
+# Model IDs below are the documented current names for each provider's
+# API as of 2026-04. If a provider only offers one realistic model in this
+# stack (e.g. gemini3), every preset just pins all roles to it so the
+# button still does something coherent (sets active_preset, normalizes the
+# assignments) instead of 400-ing.
+def _preset(record, practice, conduct, perform, derive):
+    return {
+        "record": record, "practice": practice, "conduct": conduct,
+        "perform": perform, "derive": derive,
+    }
+
+
+_PROVIDER_PRESETS: dict[str, dict] = {
+    "openai": {
+        "speed":      _preset("gpt-5-nano", "gpt-5-nano", "gpt-5-mini", "gpt-5-mini", "gpt-5-nano"),
+        "price":      _preset("gpt-5-nano", "gpt-5-nano", "gpt-5-nano", "gpt-5-mini", "gpt-5-nano"),
+        "balance":    _preset("gpt-5-nano", "gpt-5-mini", "gpt-5-mini", "gpt-5-mini", "gpt-5-mini"),
+        "depth":      _preset("gpt-5-mini", "gpt-5",       "gpt-5",       "gpt-5",       "gpt-5"),
+        "coding":     _preset("gpt-5-nano", "gpt-5-mini", "gpt-5",       "gpt-5",       "gpt-5-mini"),
+        "creativity": _preset("gpt-5-mini", "gpt-5",       "gpt-5",       "gpt-5",       "gpt-5-mini"),
+    },
+    "gemini": {
+        "speed":      _preset("gemini-2.5-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash",     "gemini-2.5-flash",     "gemini-2.5-flash-lite"),
+        "price":      _preset("gemini-2.5-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash-lite","gemini-2.5-flash",     "gemini-2.5-flash-lite"),
+        "balance":    _preset("gemini-2.5-flash-lite", "gemini-2.5-flash",      "gemini-2.5-flash",     "gemini-2.5-flash",     "gemini-2.5-flash"),
+        "depth":      _preset("gemini-2.5-flash",      "gemini-2.5-pro",        "gemini-2.5-pro",       "gemini-2.5-pro",       "gemini-2.5-pro"),
+        "coding":     _preset("gemini-2.5-flash-lite", "gemini-2.5-flash",      "gemini-2.5-pro",       "gemini-2.5-pro",       "gemini-2.5-flash"),
+        "creativity": _preset("gemini-2.5-flash",      "gemini-2.5-pro",        "gemini-2.5-pro",       "gemini-2.5-pro",       "gemini-2.5-flash"),
+    },
+    "gemini3": {
+        # Single-model provider — every preset pins all roles, but
+        # active_preset still flips so the UI reflects the choice.
+        p: _preset("gemini-3-pro-preview", "gemini-3-pro-preview", "gemini-3-pro-preview", "gemini-3-pro-preview", "gemini-3-pro-preview")
+        for p in ("speed", "price", "balance", "depth", "coding", "creativity")
+    },
+    "claude": {
+        "speed":      _preset("claude-haiku-4-5",  "claude-haiku-4-5",  "claude-sonnet-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"),
+        "price":      _preset("claude-haiku-4-5",  "claude-haiku-4-5",  "claude-haiku-4-5",  "claude-sonnet-4-5", "claude-haiku-4-5"),
+        "balance":    _preset("claude-haiku-4-5",  "claude-sonnet-4-5", "claude-sonnet-4-5", "claude-sonnet-4-5", "claude-sonnet-4-5"),
+        "depth":      _preset("claude-sonnet-4-5", "claude-opus-4-1",   "claude-opus-4-1",   "claude-opus-4-1",   "claude-opus-4-1"),
+        "coding":     _preset("claude-haiku-4-5",  "claude-sonnet-4-5", "claude-sonnet-4-5", "claude-sonnet-4-5", "claude-sonnet-4-5"),
+        "creativity": _preset("claude-sonnet-4-5", "claude-opus-4-1",   "claude-opus-4-1",   "claude-opus-4-1",   "claude-sonnet-4-5"),
+    },
+    "grok": {
+        "speed":      _preset("grok-4-fast-non-reasoning", "grok-4-fast-non-reasoning", "grok-4-fast-reasoning",     "grok-4-fast-reasoning", "grok-4-fast-non-reasoning"),
+        "price":      _preset("grok-4-fast-non-reasoning", "grok-4-fast-non-reasoning", "grok-4-fast-non-reasoning", "grok-4-fast-reasoning", "grok-4-fast-non-reasoning"),
+        "balance":    _preset("grok-4-fast-non-reasoning", "grok-4-fast-reasoning",     "grok-4-fast-reasoning",     "grok-4-fast-reasoning", "grok-4-fast-reasoning"),
+        "depth":      _preset("grok-4-fast-reasoning",     "grok-4",                    "grok-4",                    "grok-4",                "grok-4"),
+        "coding":     _preset("grok-4-fast-non-reasoning", "grok-code-fast-1",          "grok-code-fast-1",          "grok-code-fast-1",      "grok-4-fast-reasoning"),
+        "creativity": _preset("grok-4-fast-reasoning",     "grok-4",                    "grok-4",                    "grok-4",                "grok-4-fast-reasoning"),
+    },
+}
+
 _PROVIDER_AVAILABLE_MODELS: dict[str, list] = {}
 _PROVIDER_PRICING_URLS: dict[str, str] = {
     "openai": "https://openai.com/api/pricing/",

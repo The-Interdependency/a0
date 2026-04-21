@@ -221,9 +221,18 @@ async def _get_seed_module(provider_id: str) -> dict | None:
 
 
 async def _update_seed_route_config(provider_id: str, updates: dict) -> dict:
-    """Merge updates into the seed's route_config and persist."""
+    """Merge updates into the seed's route_config and persist.
+
+    If the seed row doesn't exist yet (which is the case for any provider
+    that hasn't been hand-edited in the admin UI), we INSERT one so the
+    optimizer / patch endpoints don't 404 on first use. Only providers
+    that exist in BUILTIN_PROVIDERS are auto-created — anything else is
+    still rejected so we don't silently invent rows for typos.
+    """
     from ..database import get_session
+    from ..services.energy_registry import BUILTIN_PROVIDERS
     slug = f"provider::{provider_id}"
+    import json as _json
     async with get_session() as session:
         result = await session.execute(
             sa_text("SELECT id, route_config FROM ws_modules WHERE slug = :slug"),
@@ -231,7 +240,23 @@ async def _update_seed_route_config(provider_id: str, updates: dict) -> dict:
         )
         row = result.mappings().first()
         if not row:
-            raise HTTPException(status_code=404, detail=f"Provider seed '{provider_id}' not found")
+            if provider_id not in BUILTIN_PROVIDERS:
+                raise HTTPException(status_code=404, detail=f"Provider seed '{provider_id}' not found")
+            existing: dict = {}
+            for key, val in updates.items():
+                existing[key] = val
+            info = BUILTIN_PROVIDERS[provider_id]
+            # owner_id is NOT NULL on ws_modules; existing seed rows use
+            # the literal 'system' sentinel — match that so this insert
+            # behaves like a normal seed row, not an orphan.
+            await session.execute(
+                sa_text(
+                    "INSERT INTO ws_modules (slug, name, owner_id, route_config, status) "
+                    "VALUES (:slug, :name, 'system', CAST(:cfg AS jsonb), 'active')"
+                ),
+                {"slug": slug, "name": info.get("label", provider_id), "cfg": _json.dumps(existing)},
+            )
+            return existing
         existing = dict(row["route_config"] or {})
         for key, val in updates.items():
             if key == "model_assignments" and isinstance(val, dict) and isinstance(existing.get(key), dict):
@@ -240,7 +265,6 @@ async def _update_seed_route_config(provider_id: str, updates: dict) -> dict:
                 existing[key] = merged
             else:
                 existing[key] = val
-        import json as _json
         await session.execute(
             sa_text("UPDATE ws_modules SET route_config = CAST(:cfg AS jsonb), updated_at = NOW() WHERE id = :id"),
             {"cfg": _json.dumps(existing), "id": row["id"]}
