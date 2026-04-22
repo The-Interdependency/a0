@@ -1,0 +1,20 @@
+title: The Interdependency
+description: Way Seer Erin's digital support and repo showcase
+theme: minima
+url: https://interdependentway.org
+baseurl: ""
+exclude:
+  - CNAME
+  - .gitignore
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle
+  - vendor/cache
+  - vendor/gems
+  - vendor/ruby
+  - /vendor
+  - .git
+  - .github
+  - README.md
+  - LICENSE
