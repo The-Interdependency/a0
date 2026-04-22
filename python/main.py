@@ -263,6 +263,84 @@ async def lifespan(app: FastAPI):
         ):
             await _sess.execute(_sa_text(_idx))
     async with get_session() as _sess:
+        # Fleet benchmarking: persistent contestants + runs.
+        await _sess.execute(_sa_text("""
+            CREATE TABLE IF NOT EXISTS fleet_benchmarks (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                name TEXT NOT NULL,
+                prompt TEXT NOT NULL DEFAULT '',
+                mode VARCHAR(20) NOT NULL DEFAULT 'one_shot',
+                judge_enabled BOOLEAN NOT NULL DEFAULT false,
+                judge_model VARCHAR(80),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        await _sess.execute(_sa_text("""
+            CREATE TABLE IF NOT EXISTS fleet_contestants (
+                id SERIAL PRIMARY KEY,
+                benchmark_id INTEGER NOT NULL REFERENCES fleet_benchmarks(id) ON DELETE CASCADE,
+                slot INTEGER NOT NULL,
+                label TEXT NOT NULL DEFAULT '',
+                provider_id VARCHAR(80) NOT NULL,
+                model_id VARCHAR(120) NOT NULL DEFAULT '',
+                agent_id INTEGER,
+                orchestration_mode VARCHAR(40) NOT NULL DEFAULT 'single',
+                providers JSONB NOT NULL DEFAULT '[]'::jsonb,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_fleet_contestants_slot UNIQUE (benchmark_id, slot)
+            )
+        """))
+        await _sess.execute(_sa_text("""
+            CREATE TABLE IF NOT EXISTS fleet_benchmark_runs (
+                id VARCHAR PRIMARY KEY,
+                benchmark_id INTEGER NOT NULL REFERENCES fleet_benchmarks(id) ON DELETE CASCADE,
+                user_id VARCHAR NOT NULL,
+                prompt_snapshot TEXT NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'running',
+                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                finished_at TIMESTAMP
+            )
+        """))
+        await _sess.execute(_sa_text("""
+            CREATE TABLE IF NOT EXISTS fleet_contestant_runs (
+                id VARCHAR PRIMARY KEY,
+                run_id VARCHAR NOT NULL REFERENCES fleet_benchmark_runs(id) ON DELETE CASCADE,
+                contestant_id INTEGER NOT NULL,
+                slot INTEGER NOT NULL,
+                conversation_id INTEGER,
+                status VARCHAR(20) NOT NULL DEFAULT 'running',
+                content TEXT NOT NULL DEFAULT '',
+                error TEXT,
+                latency_ms INTEGER NOT NULL DEFAULT 0,
+                prompt_tokens INTEGER NOT NULL DEFAULT 0,
+                completion_tokens INTEGER NOT NULL DEFAULT 0,
+                cost_usd NUMERIC(12,6) NOT NULL DEFAULT 0,
+                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                finished_at TIMESTAMP
+            )
+        """))
+        await _sess.execute(_sa_text("""
+            CREATE TABLE IF NOT EXISTS fleet_judgments (
+                id SERIAL PRIMARY KEY,
+                run_id VARCHAR NOT NULL REFERENCES fleet_benchmark_runs(id) ON DELETE CASCADE,
+                judge_model VARCHAR(120) NOT NULL,
+                scores JSONB NOT NULL DEFAULT '{}'::jsonb,
+                winner_contestant_id INTEGER,
+                rationale TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        for _idx in (
+            "CREATE INDEX IF NOT EXISTS idx_fleet_benchmarks_user ON fleet_benchmarks(user_id, updated_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_fleet_contestants_bench ON fleet_contestants(benchmark_id, slot)",
+            "CREATE INDEX IF NOT EXISTS idx_fleet_runs_bench ON fleet_benchmark_runs(benchmark_id, started_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_fleet_contestant_runs_run ON fleet_contestant_runs(run_id, slot)",
+        ):
+            await _sess.execute(_sa_text(_idx))
+    print("[fleet_benchmarks] tables ensured")
+    async with get_session() as _sess:
         for _ddl in (
             "ALTER TABLE messages ADD COLUMN IF NOT EXISTS orchestration_mode VARCHAR(32) DEFAULT 'single'",
             "ALTER TABLE messages ADD COLUMN IF NOT EXISTS cut_mode VARCHAR(8) DEFAULT 'soft'",
