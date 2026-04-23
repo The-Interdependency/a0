@@ -46,6 +46,80 @@ def _tier_ok(user_tier: str, min_tier: Optional[str]) -> bool:
     return _TIER_ORDER.get(user_tier, 0) >= _TIER_ORDER.get(min_tier, 0)
 
 
+def _resolve_static(model_id: str) -> Optional[tuple[str, dict]]:
+    """Static resolution against BUILTIN_PROVIDERS + _PROVIDER_PRESETS.
+
+    Synchronous, no DB. Used as the fast path; the async resolver falls
+    back to persisted route_config when this misses.
+    """
+    if model_id in BUILTIN_PROVIDERS:
+        return model_id, BUILTIN_PROVIDERS[model_id]
+    for pid, spec in BUILTIN_PROVIDERS.items():
+        if spec.get("model") == model_id:
+            return pid, spec
+        presets = _PROVIDER_PRESETS.get(pid, {})
+        for role_map in presets.values():
+            if isinstance(role_map, dict) and model_id in role_map.values():
+                return pid, spec
+    return None
+
+
+async def resolve_model_id(model_id: str) -> tuple[str, dict]:
+    """Resolve a model_id (or legacy provider_id) to (provider_id, spec).
+
+    Search order:
+      1. Exact provider_id match (legacy callers that picked from
+         /api/v1/forge/models which returned one row per provider)
+      2. Match against each provider's primary `model` field
+      3. Match against any model surfaced by the provider's optimizer
+         presets (_PROVIDER_PRESETS role maps)
+      4. Match against any model persisted in route_config —
+         model_assignments (the active assignments) or available_models
+         (auto-discovered from the provider's list-models endpoint)
+
+    Raises ValueError on no match — no silent fallback to a default
+    provider, since silently routing "claude-foo" to gpt would burn
+    user trust harder than failing loudly.
+    """
+    hit = _resolve_static(model_id)
+    if hit:
+        return hit
+    # Fall back to persisted route_config so any model surfaced by
+    # /api/v1/models is callable.
+    async with get_session() as session:
+        rows = (await session.execute(sa_text(
+            "SELECT slug, route_config FROM ws_modules WHERE slug LIKE 'provider_%'"
+        ))).mappings().all()
+    for row in rows:
+        pid = row["slug"].removeprefix("provider_")
+        if pid not in BUILTIN_PROVIDERS:
+            continue
+        cfg = row["route_config"] if isinstance(row["route_config"], dict) else {}
+        assignments = cfg.get("model_assignments") or {}
+        if model_id in assignments.values():
+            return pid, BUILTIN_PROVIDERS[pid]
+        for m in cfg.get("available_models") or []:
+            if isinstance(m, dict) and m.get("id") == model_id:
+                return pid, BUILTIN_PROVIDERS[pid]
+    raise ValueError(f"Unknown model_id: {model_id!r}")
+
+
+async def is_provider_enabled(provider_id: str) -> bool:
+    """Honor the user-facing kill switch in route_config.enabled.
+
+    Defaults to True when no row exists yet (provider seeds may not have
+    been written). Mirrors the chat.py enforcement.
+    """
+    async with get_session() as session:
+        row = (await session.execute(sa_text(
+            "SELECT route_config FROM ws_modules WHERE slug = :slug"
+        ), {"slug": f"provider_{provider_id}"})).mappings().first()
+    if not row:
+        return True
+    cfg = row["route_config"] if isinstance(row["route_config"], dict) else {}
+    return cfg.get("enabled", True)
+
+
 async def _user_tier(user_id: Optional[str]) -> str:
     if not user_id:
         return "free"

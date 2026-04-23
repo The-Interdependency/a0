@@ -197,35 +197,18 @@ def _validate_tools(tools: list[str]) -> list[str]:
 
 
 def _validate_model(model_id: str) -> dict:
-    """Resolve `model_id` to its provider info.
+    """Resolve `model_id` to its provider spec via the catalog resolver.
 
-    Accepts either a provider id (`"openai"`, `"gemini"` — legacy callers
-    that picked from /api/v1/forge/models which returned one row per
-    provider) OR a real model name (`"gpt-5-mini"`, `"gemini-2.5-pro"`)
-    surfaced by the new /api/v1/models catalog.
-
-    For real model names we search across BUILTIN_PROVIDERS for a match on
-    the provider's primary model, its preset role assignments, or its
-    persisted available_models / model_assignments. Returns the matched
-    provider's info dict (same shape as get_provider). Raises 400 if the
-    id resolves to nothing.
+    Delegates to model_catalog.resolve_model_id so the search rules
+    (provider id, primary model, preset role maps) live in one place.
+    Raises 400 instead of letting ValueError propagate.
     """
-    info = energy_registry.get_provider(model_id)
-    if info:
-        return info
-    # Search providers for a model match.
-    from ..services.energy_registry import (
-        BUILTIN_PROVIDERS,
-        _PROVIDER_PRESETS,
-    )
-    for pid, spec in BUILTIN_PROVIDERS.items():
-        if spec.get("model") == model_id:
-            return spec
-        presets = _PROVIDER_PRESETS.get(pid, {})
-        for role_map in presets.values():
-            if isinstance(role_map, dict) and model_id in role_map.values():
-                return spec
-    raise HTTPException(400, f"Unknown model: {model_id}")
+    from ..services.model_catalog import resolve_model_id
+    try:
+        _pid, spec = resolve_model_id(model_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return spec
 
 
 @router.get("/templates")
