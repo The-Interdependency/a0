@@ -17,6 +17,7 @@ import AdminContextsPage from "@/pages/admin-contexts";
 import ArchivePage from "@/pages/archive";
 import FleetPage from "@/pages/fleet";
 import GalleryPage from "@/pages/gallery";
+import TranscriptsPage from "@/pages/transcripts";
 import TopNav from "@/components/top-nav";
 import HmmmDoctrine from "@/components/hmmm-doctrine";
 
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/archive" component={ArchivePage} />
       <Route path="/gallery" component={GalleryPage} />
       <Route path="/fleet" component={FleetPage} />
+      <Route path="/transcripts" component={TranscriptsPage} />
       <Route component={ChatPage} />
     </Switch>
   );
