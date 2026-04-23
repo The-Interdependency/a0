@@ -76,7 +76,29 @@ export function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
+function looksLikeHtmlPage(s: string): boolean {
+  const head = s.trimStart().slice(0, 200).toLowerCase();
+  return head.startsWith("<!doctype") || head.startsWith("<html") ||
+    /<head\b[\s\S]*?<\/head>/i.test(s.slice(0, 2000));
+}
+
 export function MarkdownContent({ content, isUser }: { content: string; isUser: boolean }) {
+  if (!isUser && looksLikeHtmlPage(content)) {
+    return (
+      <div className="rounded border border-destructive/40 bg-destructive/10 p-2 text-[11px] space-y-1" data-testid="html-error-shield">
+        <div className="font-semibold text-destructive uppercase tracking-wide text-[10px]">
+          Server returned an HTML page, not a model response
+        </div>
+        <div className="opacity-80">
+          The request was likely served by an edge / 404 handler instead of the API.
+          Showing the first 240 chars verbatim so you can identify the source:
+        </div>
+        <pre className="whitespace-pre-wrap break-all text-[10px] opacity-70 max-h-24 overflow-auto bg-black/20 rounded p-1">
+          {content.trim().slice(0, 240)}
+        </pre>
+      </div>
+    );
+  }
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
