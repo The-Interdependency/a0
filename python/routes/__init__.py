@@ -29,6 +29,7 @@ from .artifacts import router as artifacts_router
 from .runs import router as runs_router
 from .preferences import router as preferences_router
 from .fleet import router as fleet_router
+from .transcripts import router as transcripts_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -63,6 +64,7 @@ ALL_ROUTERS = [
     runs_router,
     preferences_router,
     fleet_router,
+    transcripts_router,
 ]
 
 
