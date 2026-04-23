@@ -387,6 +387,14 @@ PROVIDER_ENDPOINTS = {
         "env_key": "XAI_API_KEY",
         "model": "grok-4-fast-reasoning",
         "supports_reasoning_effort": True,
+        # xAI's hosted retrieval (web_search + x_search) lives on the Responses
+        # API at /v1/responses. The legacy `search_parameters` field on Chat
+        # Completions is gone (HTTP 410). When this flag is on we route to the
+        # Responses path; trade-off is our custom function tools (skill_*) are
+        # not invoked on that branch — only hosted retrieval runs.
+        # See https://docs.x.ai/docs/guides/tools/overview.
+        "supports_live_search": True,
+        "responses_url": "https://api.x.ai/v1/responses",
     },
     "gemini": {
         "url": "https://generativelanguage.googleapis.com/v1beta/chat/completions",
@@ -494,6 +502,12 @@ async def call_energy_provider(
             use_tools=use_tools,
             reasoning_effort=reasoning_effort,
             supports_thinking=provider_id == "gemini3",
+        )
+
+    if provider_id == "grok" and spec.get("supports_live_search") and spec.get("responses_url"):
+        return await _call_grok_responses_with_search(
+            api_key, spec["responses_url"], spec["model"], payload_messages, max_tokens,
+            reasoning_effort=reasoning_effort if spec.get("supports_reasoning_effort") else None,
         )
 
     return await _call_openai_compat(
@@ -751,6 +765,8 @@ async def _call_openai_compat(
     # Pin distiller to this provider so tool-result summarization self-routes.
     set_caller_provider(provider_name)
 
+    chat_tools = TOOL_SCHEMAS_CHAT if use_tools else []
+
     for _round in range(_MAX_TOOL_ROUNDS + 1):
         payload: dict = {
             "model": model,
@@ -760,7 +776,7 @@ async def _call_openai_compat(
         if reasoning_effort:
             payload["reasoning_effort"] = _gate_to_effort(reasoning_effort)
         if use_tools:
-            payload["tools"] = TOOL_SCHEMAS_CHAT
+            payload["tools"] = chat_tools
             payload["tool_choice"] = "auto"
 
         try:
@@ -786,7 +802,8 @@ async def _call_openai_compat(
             prev_call_fingerprint = fp
 
         if not tool_calls or not use_tools or _round >= _MAX_TOOL_ROUNDS:
-            return message.get("content") or "[no content]", accumulated_usage
+            content = message.get("content") or "[no content]"
+            return content, accumulated_usage
 
         current_messages.append(message)
 
@@ -805,6 +822,84 @@ async def _call_openai_compat(
             })
 
     return "[tool loop exhausted]", accumulated_usage
+
+
+async def _call_grok_responses_with_search(
+    api_key: str,
+    url: str,
+    model: str,
+    messages: list[dict],
+    max_tokens: int,
+    reasoning_effort: Optional[str] = None,
+) -> tuple[str, dict]:
+    """
+    Grok via the Responses API with hosted retrieval (web_search + x_search).
+
+    The legacy `search_parameters` field on Chat Completions returns HTTP 410.
+    xAI's current way to do native retrieval is the Agent Tools API at
+    /v1/responses with `tools=[{type:"web_search"},{type:"x_search"}]`.
+    Citations come back as `url_citation` annotations on message content items.
+
+    Trade-off: this path does not run our custom function tools (skill_*).
+    Live-search Grok is a "search-then-answer" surface; mixed retrieval +
+    skill loading would require parsing function_call output items here.
+    """
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    set_caller_provider("grok")
+    accumulated_usage: dict = {}
+
+    payload: dict = {
+        "model": model,
+        "input": messages,
+        "max_output_tokens": max_tokens,
+        "tools": [{"type": "web_search"}, {"type": "x_search"}],
+    }
+    if reasoning_effort:
+        payload["reasoning"] = {"effort": _gate_to_effort(reasoning_effort)}
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await _post_with_retry(client, url, json_payload=payload, headers=headers)
+            data = resp.json()
+    except Exception as exc:
+        return _sanitize_provider_error("grok", exc), accumulated_usage
+
+    # Roll up token counts.
+    for k, v in (data.get("usage") or {}).items():
+        if isinstance(v, (int, float)):
+            accumulated_usage[k] = accumulated_usage.get(k, 0) + v
+
+    # Walk the output array to find the assistant message + collect citations.
+    text_parts: list[str] = []
+    citation_urls: list[str] = []
+    seen_urls: set[str] = set()
+    for item in data.get("output") or []:
+        if item.get("type") != "message":
+            continue
+        for c in item.get("content") or []:
+            if c.get("type") == "output_text":
+                if c.get("text"):
+                    text_parts.append(c["text"])
+                for ann in c.get("annotations") or []:
+                    if ann.get("type") == "url_citation":
+                        u = ann.get("url")
+                        if u and u not in seen_urls:
+                            seen_urls.add(u)
+                            citation_urls.append(u)
+
+    content = "\n".join(text_parts).strip() or "[no content]"
+
+    if citation_urls:
+        accumulated_usage["live_search_sources"] = (
+            accumulated_usage.get("live_search_sources", 0) + len(citation_urls)
+        )
+        bullets = "\n".join(f"- {u}" for u in citation_urls[:10])
+        content = f"{content}\n\n---\n**Sources:**\n{bullets}"
+
+    return content, accumulated_usage
 
 
 async def _call_anthropic(
