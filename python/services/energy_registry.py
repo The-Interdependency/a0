@@ -1,4 +1,4 @@
-# 251:35
+# 395:105
 import contextvars
 import os
 from typing import Optional
@@ -374,30 +374,51 @@ async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30
     aimmh's downstream `content.startswith("[ERROR]")` check to crash with
     `'ModelResult' object has no attribute 'startswith'`.
 
-    Side effect: when _per_call_usage_cv has been initialized by the caller,
-    records this call's usage in state["by_key"][(model_id, call_idx)] where
-    call_idx is a per-model counter assigned at call START. usage=None on
-    the error path or when the provider returned no usage dict so the UI
-    hides badges instead of lying about a failed call.
+    Side effects:
+      * When _per_call_usage_cv has been initialized by the caller, records
+        this call's usage in state["by_key"][(model_id, call_idx)] where
+        call_idx is a per-model counter assigned at call START. usage=None
+        on the error path or when the provider returned no usage dict so
+        the UI hides badges instead of lying about a failed call.
+      * Publishes `call_start`, `call_progress`, `call_complete`, and
+        `call_error` events to the orch_progress bus, keyed by
+        (model, call_idx). No-op when no subscriber is registered.
     """
     from .inference import call_energy_provider as _cep
+    from . import orch_progress as _op
     state = _per_call_usage_cv.get()
-    # Reserve the per-model index BEFORE awaiting so concurrent calls within
-    # a round (e.g. fan_out) get distinct call_idx values even though they
-    # complete out of order. Reads/writes around `counters` happen between
-    # awaits, so they're atomic under cooperative concurrency.
+    # Reserve the per-model index BEFORE awaiting so concurrent fan_out calls
+    # get distinct call_idx values regardless of completion order.
     call_idx = None
     if state is not None:
         call_idx = state["counters"].get(model_id, 0)
         state["counters"][model_id] = call_idx + 1
+    started_at = _time.perf_counter()
+    _op.publish("call_start", {
+        "model": model_id,
+        "call_idx": call_idx if call_idx is not None else 0,
+    })
+    # Always attach the callback — the chat POST and the EventSource
+    # subscription race, and gating here would disable live ticking on
+    # the very flow this targets. publish() is cheap when no one listens.
+    _ckey = (model_id, call_idx if call_idx is not None else 0)
+    def _on_progress(cum_chars: int, cum_tokens_est: int) -> None:
+        _op.publish("call_progress", {
+            "model": _ckey[0],
+            "call_idx": _ckey[1],
+            "output_chars": cum_chars,
+            "output_tokens_est": cum_tokens_est,
+        })
     try:
         content, usage = await _cep(
             provider_id=model_id,
             messages=list(messages or []),
             system_prompt=system_context,
             use_tools=False,
+            progress_callback=_on_progress,
         )
         out = content or ""
+        elapsed_ms = int((_time.perf_counter() - started_at) * 1000)
         if state is not None:
             state["by_key"][(model_id, call_idx)] = {
                 "model_id": model_id,
@@ -405,10 +426,48 @@ async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30
                 "content": out,
                 "usage": dict(usage) if usage else None,
             }
+        # Settled per-voice values so the card flips from "↑…" to real numbers.
+        ev_payload: dict = {
+            "model": model_id,
+            "call_idx": call_idx if call_idx is not None else 0,
+            "elapsed_ms": elapsed_ms,
+            "content_len": len(out),
+        }
+        if usage:
+            try:
+                cb = energy_registry.cache_breakdown(usage)
+                cost = energy_registry.estimate_cost(
+                    model_id,
+                    cb.get("fresh_input", 0),
+                    cb.get("output", 0),
+                    cb.get("cache_read", 0),
+                    cb.get("cache_write", 0),
+                )
+                ev_payload["usage"] = {
+                    "input_tokens": cb.get("fresh_input", 0),
+                    "output_tokens": cb.get("output", 0),
+                    "cache_read_input_tokens": cb.get("cache_read", 0),
+                    "cache_creation_input_tokens": cb.get("cache_write", 0),
+                    "total_tokens": (
+                        cb.get("fresh_input", 0)
+                        + cb.get("cache_read", 0)
+                        + cb.get("cache_write", 0)
+                        + cb.get("output", 0)
+                    ),
+                }
+                ev_payload["cost_usd"] = round(float(cost), 6)
+            except Exception:
+                ev_payload["usage"] = None
+                ev_payload["cost_usd"] = None
+        else:
+            ev_payload["usage"] = None
+            ev_payload["cost_usd"] = None
+        _op.publish("call_complete", ev_payload)
         return out
     except Exception as exc:
         # aimmh interprets a "[ERROR] ..." prefix as an error result.
         out = f"[ERROR] {exc}"[:500]
+        elapsed_ms = int((_time.perf_counter() - started_at) * 1000)
         if state is not None:
             state["by_key"][(model_id, call_idx)] = {
                 "model_id": model_id,
@@ -416,6 +475,12 @@ async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30
                 "content": out,
                 "usage": None,
             }
+        _op.publish("call_error", {
+            "model": model_id,
+            "call_idx": call_idx if call_idx is not None else 0,
+            "elapsed_ms": elapsed_ms,
+            "error": str(exc)[:200],
+        })
         return out
 
 
@@ -479,4 +544,4 @@ def resolve_providers(providers: list[str] | None) -> list[str]:
         elif p in BUILTIN_PROVIDERS and p not in out:
             out.append(p)
     return out
-# 251:35
+# 395:105

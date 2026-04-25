@@ -1,4 +1,4 @@
-# 433:46
+# 601:130
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -163,6 +163,9 @@ class SendMessage(BaseModel):
     orchestration_mode: Optional[str] = None  # single|fan_out|council|daisy_chain|...
     cut_mode: Optional[str] = None  # off|soft|hard
     providers: Optional[list[str]] = None  # used when mode != single
+    # Client UUID per send; multi-model path publishes lifecycle events to
+    # /api/v1/orchestration/{client_run_id}/stream for live token meters.
+    client_run_id: Optional[str] = None
 
 
 def _caller_uid(request: Request) -> Optional[str]:
@@ -657,6 +660,12 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         from ..services.run_context import (
             current_orchestration_mode, current_cut_mode, current_user_tier,
         )
+        from ..services.orch_progress import (
+            current_client_run_id,
+            publish as _publish_progress,
+            register_owner as _register_owner,
+            unregister_owner as _unregister_owner,
+        )
         # Resolve orchestration knobs: per-message override → user pref → defaults.
         eff_mode = (body.orchestration_mode or "single").strip() or "single"
         eff_cut = (body.cut_mode or "soft").strip() or "soft"
@@ -681,6 +690,18 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         _t_om = current_orchestration_mode.set(eff_mode)
         _t_cm = current_cut_mode.set(eff_cut)
         _t_ut = current_user_tier.set(tier)
+        # Bind the run id to the orch_progress ContextVar for downstream emitters.
+        _t_cri = current_client_run_id.set(body.client_run_id or None)
+        # Register ownership before any publish so the SSE endpoint can
+        # gate subscribers. On replay/hijack conflict, strip the id so
+        # nothing publishes under it; the chat POST completes normally.
+        if body.client_run_id:
+            try:
+                _register_owner(body.client_run_id, uid or None)
+            except ValueError:
+                body.client_run_id = None
+                current_client_run_id.reset(_t_cri)
+                _t_cri = current_client_run_id.set(None)
         try:
             if eff_mode == "single":
                 # ALWAYS build the executor from the gated model_id, never
@@ -723,10 +744,23 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                     system_prompt=None,
                 )
         finally:
+            # Bookend so subscribed SSE streams close immediately, even on errors.
+            if body.client_run_id:
+                try:
+                    _publish_progress("orchestration_done", {
+                        "client_run_id": body.client_run_id,
+                    })
+                except Exception:
+                    pass
+                try:
+                    _unregister_owner(body.client_run_id)
+                except Exception:
+                    pass
             set_approval_scope_user_id(None)
             current_orchestration_mode.reset(_t_om)
             current_cut_mode.reset(_t_cm)
             current_user_tier.reset(_t_ut)
+            current_client_run_id.reset(_t_cri)
 
         if usage.get("approval_state") == "pending":
             _store_pending_gate(conv_id, {
@@ -777,4 +811,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         tb = traceback.format_exc()
         print(f"[chat] send_message error: {exc}\n{tb}")
         raise HTTPException(status_code=500, detail=f"Chat error: {exc}")
-# 433:46
+# 601:130

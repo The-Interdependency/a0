@@ -1,4 +1,4 @@
-# 77:156
+# 80:168
 import math
 import os
 from fastapi import APIRouter, HTTPException, Request
@@ -293,4 +293,4 @@ editable_registry.register(EditableField(
     patch_endpoint="/api/v1/context/system-sections",
     query_key="/api/v1/contexts",
 ))
-# 77:156
+# 80:168

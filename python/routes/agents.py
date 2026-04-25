@@ -1,4 +1,4 @@
-# 160:9
+# 168:17
 import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -213,4 +213,4 @@ editable_registry.register(EditableField(
     query_key="/api/v1/agents/energy-providers",
     options=["grok", "gemini", "claude"],
 ))
-# 160:9
+# 168:17

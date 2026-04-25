@@ -1,4 +1,4 @@
-# 145:30
+# 100:23
 # DOC module: transcripts
 # DOC label: Transcripts
 # DOC endpoint: POST /api/v1/transcripts/upload | Upload a transcript file (txt/md/html/json/pdf/zip) for EDCMBONE scoring
@@ -151,4 +151,4 @@ async def get_report_messages(request: Request, report_id: int, limit: int = 200
         raise HTTPException(status_code=404, detail="report not found")
     msgs = await storage.get_transcript_messages(report_id, user_id=uid, limit=limit, offset=offset)
     return {"items": msgs, "report_id": report_id, "limit": limit, "offset": offset}
-# 145:30
+# 100:23

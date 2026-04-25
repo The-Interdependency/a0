@@ -1,4 +1,4 @@
-# 8:1
+# 143:23
 # DOC module: tests.inference_modes_usage
 # DOC label: Per-voice usage attach + aggregate (task 99)
 # DOC description: Verifies that _attach_per_voice_usage matches captured
@@ -186,4 +186,4 @@ def test_aggregate_round_trips_through_cache_breakdown():
     assert cb["cache_read"] == 75
     assert cb["cache_write"] == 10
     assert cb["output"] == 50
-# 8:1
+# 143:23

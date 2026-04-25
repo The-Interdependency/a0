@@ -1,3 +1,4 @@
+// 389:18
 // N:M
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -37,6 +38,11 @@ export interface ChatSendOpts {
   orchestration_mode?: string;
   providers?: string[];
   cut_mode?: string;
+  // Resolved providers list as displayed in the picker — surfaced so the
+  // page can render placeholder LiveOrchProgress cards before the server
+  // emits orchestration_start (which only fires once the chat handler
+  // reaches the multi-model branch).
+  resolved_providers?: string[];
 }
 
 const MODES = [
@@ -187,6 +193,12 @@ export function ChatInput({
     const opts: ChatSendOpts = { orchestration_mode: mode };
     if (currentMode.multi && selectedProviders.length > 0) {
       opts.providers = selectedProviders;
+      opts.resolved_providers = selectedProviders;
+    } else if (currentMode.multi && availableProviders.length > 0) {
+      // Default fan-out: server resolves to all available providers when
+      // body.providers is absent. Mirror that here so the live placeholder
+      // cards match what the server is about to call.
+      opts.resolved_providers = availableProviders.map((a) => a.id);
     }
     onSend(trimmed, attachments.map((a) => a.id), opts);
     setInput("");
@@ -418,3 +430,4 @@ export function ChatInput({
   );
 }
 // N:M
+// 389:18

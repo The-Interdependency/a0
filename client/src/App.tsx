@@ -1,4 +1,4 @@
-// 89:0
+// 96:0
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
@@ -104,4 +104,4 @@ export default function App() {
     </QueryClientProvider>
   );
 }
-// 89:0
+// 96:0

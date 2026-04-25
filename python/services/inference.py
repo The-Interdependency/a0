@@ -1,4 +1,4 @@
-# 624:108
+# 855:171
 import os
 import json
 import copy
@@ -456,6 +456,7 @@ async def call_energy_provider(
     user_id: Optional[str] = None,
     skip_approval: bool = False,
     reasoning_effort: Optional[str] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> tuple[str, dict]:
     """
     Forward messages to the active energy provider with the system prompt prepended.
@@ -514,6 +515,7 @@ async def call_energy_provider(
         api_key, spec["url"], spec["model"], payload_messages, max_tokens,
         use_tools=use_tools,
         reasoning_effort=reasoning_effort if spec.get("supports_reasoning_effort") else None,
+        progress_callback=progress_callback,
     )
 
 
@@ -746,11 +748,16 @@ async def _call_openai_compat(
     max_tokens: int,
     use_tools: bool = True,
     reasoning_effort: Optional[str] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> tuple[str, dict]:
     """
     Chat Completions format (Grok, Gemini).
     Runs tool-calling loop: execute tool_calls, inject tool results, re-call until done.
     reasoning_effort is forwarded only when the caller has confirmed support (Grok).
+
+    progress_callback(cumulative_chars, cumulative_tokens_estimate) — when
+    supplied with use_tools=False (multi-model path) the response streams
+    via SSE; tool-enabled calls keep the non-streaming tool loop intact.
     """
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -764,6 +771,19 @@ async def _call_openai_compat(
     provider_name = "grok" if "x.ai" in url else ("gemini" if "googleapis" in url else "provider")
     # Pin distiller to this provider so tool-result summarization self-routes.
     set_caller_provider(provider_name)
+
+    # Streaming branch only when the caller opted in AND tools are off.
+    # Falls back to the non-streaming branch on any error.
+    if progress_callback is not None and not use_tools:
+        try:
+            return await _call_openai_compat_streamed(
+                api_key, url, model, current_messages, max_tokens,
+                reasoning_effort=reasoning_effort,
+                provider_name=provider_name,
+                progress_callback=progress_callback,
+            )
+        except Exception as exc:
+            _log.warning("streaming path failed for %s, falling back: %s", provider_name, exc)
 
     chat_tools = TOOL_SCHEMAS_CHAT if use_tools else []
 
@@ -822,6 +842,89 @@ async def _call_openai_compat(
             })
 
     return "[tool loop exhausted]", accumulated_usage
+
+
+async def _call_openai_compat_streamed(
+    api_key: str,
+    url: str,
+    model: str,
+    messages: list[dict],
+    max_tokens: int,
+    reasoning_effort: Optional[str] = None,
+    provider_name: str = "provider",
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> tuple[str, dict]:
+    """Streaming Chat Completions call used by the multi-model path.
+    Emits ~6 progress callbacks/sec with chars/4 token estimates; final
+    usage block (stream_options.include_usage) overwrites the estimate."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+    }
+    payload: dict = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    if reasoning_effort:
+        payload["reasoning_effort"] = _gate_to_effort(reasoning_effort)
+
+    accumulated_usage: dict = {}
+    text_parts: list[str] = []
+    cumulative_chars = 0
+    last_emit = 0.0
+    EMIT_THROTTLE_S = 0.15  # cap progress events to ~6/sec/provider
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=15.0)) as client:
+            async with client.stream("POST", url, json=payload, headers=headers) as resp:
+                if resp.status_code >= 400:
+                    body = await resp.aread()
+                    raise RuntimeError(f"HTTP {resp.status_code}: {body[:300]!r}")
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    chunk_str = line[5:].strip()
+                    if not chunk_str or chunk_str == "[DONE]":
+                        continue
+                    try:
+                        chunk = json.loads(chunk_str)
+                    except Exception:
+                        continue
+                    cu = chunk.get("usage") or {}
+                    for k, v in cu.items():
+                        if isinstance(v, (int, float)):
+                            accumulated_usage[k] = accumulated_usage.get(k, 0) + v
+                    for ch in chunk.get("choices") or []:
+                        delta = (ch.get("delta") or {}).get("content")
+                        if not delta:
+                            continue
+                        text_parts.append(delta)
+                        cumulative_chars += len(delta)
+                        if progress_callback is not None:
+                            now = asyncio.get_event_loop().time()
+                            if now - last_emit >= EMIT_THROTTLE_S:
+                                last_emit = now
+                                est_tokens = max(1, cumulative_chars // 4)
+                                try:
+                                    progress_callback(cumulative_chars, est_tokens)
+                                except Exception:
+                                    pass
+    except Exception:
+        raise
+
+    # Final flush so the live counter lands on the last estimate before call_complete.
+    if progress_callback is not None and cumulative_chars > 0:
+        try:
+            progress_callback(cumulative_chars, max(1, cumulative_chars // 4))
+        except Exception:
+            pass
+
+    content = "".join(text_parts) or "[no content]"
+    return content, accumulated_usage
 
 
 async def _call_grok_responses_with_search(
@@ -1060,4 +1163,4 @@ async def _call_anthropic(
 
 def _fallback_response(provider_id: str) -> str:
     return f"[{provider_id} API key not configured — energy provider unavailable]"
-# 624:108
+# 855:171

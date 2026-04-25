@@ -1,4 +1,4 @@
-// 310:5
+// 388:7
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -16,6 +16,7 @@ import {
   conversationCostUSD,
   fmtCostUSD,
 } from "@/components/chat-messages";
+import { LiveOrchProgress } from "@/components/LiveOrchProgress";
 import { Badge } from "@/components/ui/badge";
 import {
   type Conversation,
@@ -153,6 +154,12 @@ export default function ChatPage() {
     onError: (e: Error) => toast({ title: "Archive failed", description: e.message, variant: "destructive" }),
   });
 
+  // Per-send state for the LiveOrchProgress panel; cleared on success.
+  const [liveSend, setLiveSend] = useState<{
+    runId: string;
+    providers: string[];
+    mode: string;
+  } | null>(null);
   const sendMessage = useMutation({
     mutationFn: async (payload: {
       content: string;
@@ -160,8 +167,24 @@ export default function ChatPage() {
       orchestration_mode?: string;
       providers?: string[];
       cut_mode?: string;
+      resolved_providers?: string[];
     }) => {
       if (!activeConvId) throw new Error("No conversation selected");
+      const isMulti =
+        !!payload.orchestration_mode && payload.orchestration_mode !== "single";
+      // Fallback id keeps the request flowing if crypto.randomUUID is missing.
+      const runId = isMulti
+        ? typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+        : null;
+      if (runId) {
+        setLiveSend({
+          runId,
+          providers: payload.resolved_providers ?? payload.providers ?? [],
+          mode: payload.orchestration_mode ?? "",
+        });
+      }
       const body: Record<string, unknown> = {
         role: "user",
         content: payload.content,
@@ -170,14 +193,19 @@ export default function ChatPage() {
       if (payload.orchestration_mode) body.orchestration_mode = payload.orchestration_mode;
       if (payload.providers && payload.providers.length) body.providers = payload.providers;
       if (payload.cut_mode) body.cut_mode = payload.cut_mode;
+      if (runId) body.client_run_id = runId;
       const res = await apiRequest("POST", `/api/v1/conversations/${activeConvId}/messages`, body);
       return res.json();
     },
     onSuccess: () => {
+      setLiveSend(null);
       qc.invalidateQueries({ queryKey: ["/api/v1/conversations", activeConvId, "messages"] });
       qc.invalidateQueries({ queryKey: ["/api/v1/conversations"] });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => {
+      setLiveSend(null);
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    },
   });
 
   const focusMutation = useMutation({
@@ -348,11 +376,22 @@ export default function ChatPage() {
             <div ref={scrollRef} className="flex-1 overflow-auto p-4">
               {msgsLoading ? (
                 <div className="flex flex-col gap-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-3/4" />)}</div>
-              ) : messages.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-muted-foreground" data-testid="no-messages"><p className="text-sm">No messages yet</p></div>
               ) : (
                 <div className="flex flex-col gap-3">
+                  {messages.length === 0 && !sendMessage.isPending && (
+                    <div className="flex items-center justify-center h-full text-muted-foreground" data-testid="no-messages">
+                      <p className="text-sm">No messages yet</p>
+                    </div>
+                  )}
                   {messages.map((m) => <MessageBubble key={m.id} message={m} onSend={(c) => sendMessage.mutate({ content: c })} />)}
+                  {/* Mounted for any in-flight multi-model send, including the first turn. */}
+                  {sendMessage.isPending && liveSend && (
+                    <LiveOrchProgress
+                      clientRunId={liveSend.runId}
+                      fallbackProviders={liveSend.providers}
+                      fallbackMode={liveSend.mode}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -381,4 +420,4 @@ export default function ChatPage() {
     </div>
   );
 }
-// 310:5
+// 388:7

@@ -1,4 +1,4 @@
-# 98:12
+# 104:16
 """HTTP API for the unified artifacts archive."""
 from typing import Any, Optional
 import datetime as _dt
@@ -146,4 +146,4 @@ async def patch_artifact(artifact_id: str, body: PatchArtifact, request: Request
     if not row:
         raise HTTPException(status_code=404, detail="artifact not found")
     return _serialize(row)
-# 98:12
+# 104:16

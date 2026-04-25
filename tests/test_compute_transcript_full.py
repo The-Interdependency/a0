@@ -1,4 +1,4 @@
-# 9:5
+# 9:32
 # DOC module: tests.test_compute_transcript_full
 # DOC label: EDCMBONE transcript rollup
 # DOC description: Locks the contract of edcm.compute_transcript_full —
@@ -49,3 +49,4 @@ def test_compute_transcript_full_single_message_returns_one_round():
     out = edcm_svc.compute_transcript_full("x")
     assert out["message_count"] == 1
     assert out["edcmbone_version"] == edcm_svc.EDCMBONE_VERSION
+# 9:32

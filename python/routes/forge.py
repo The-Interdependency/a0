@@ -1,4 +1,4 @@
-# 318:32
+# 320:37
 """The Forge — character-sheet style agent instantiation.
 
 Self-updating tool/model docs DB:
@@ -402,4 +402,4 @@ async def duel_stub() -> dict:
 def _jsonb(value) -> str:
     import json
     return json.dumps(value) if value is not None else "null"
-# 318:32
+# 320:37

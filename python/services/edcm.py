@@ -1,4 +1,4 @@
-# 85:24
+# 160:34
 # N:M
 """EDCM service — delegates measurement math to edcmbone.
 
@@ -225,4 +225,4 @@ def compute_transcript_full(text: str) -> dict[str, Any]:
         "per_round": per_round,
     }
 # N:M
-# 85:24
+# 160:34

@@ -1,4 +1,4 @@
-# 157:4
+# 169:4
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -27,6 +27,7 @@ from .energy import router as energy_router, pcna_router as energy_pcna_router
 from .liminals import router as liminals_router
 from .artifacts import router as artifacts_router
 from .runs import router as runs_router
+from .orch_progress import router as orch_progress_router
 from .preferences import router as preferences_router
 from .fleet import router as fleet_router
 from .transcripts import router as transcripts_router
@@ -63,6 +64,7 @@ ALL_ROUTERS = [
     liminals_router,
     artifacts_router,
     runs_router,
+    orch_progress_router,
     preferences_router,
     fleet_router,
     transcripts_router,
@@ -182,4 +184,4 @@ def collect_doc_meta() -> list[dict]:
             results.append(meta)
     results.sort(key=lambda d: d.get("label", ""))
     return results
-# 157:4
+# 169:4

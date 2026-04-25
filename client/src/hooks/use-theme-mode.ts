@@ -1,4 +1,4 @@
-// 56:0
+// 48:4
 import { useCallback, useEffect, useState } from "react";
 
 export const MODES = ["light", "dark", "system"] as const;
@@ -62,4 +62,4 @@ export const MODE_LABELS: Record<ThemeMode, string> = {
   dark: "Dark",
   system: "System",
 };
-// 56:0
+// 48:4

@@ -1,3 +1,4 @@
+# 252:69
 # N:M
 """run_inference_with_mode — orchestration entry point that fans aimmh-lib's
 multi-model primitives over the existing energy provider call path.
@@ -25,6 +26,7 @@ from .energy_registry import (
     energy_registry, resolve_providers, get_multi_model_hub,
     reset_per_call_usage,
 )
+from . import orch_progress as _op
 
 
 _VALID_MODES = (
@@ -308,6 +310,13 @@ async def run_inference_with_mode(
     # so concurrent route handlers cannot collide).
     usage_bucket = reset_per_call_usage()
 
+    # Pre-render hint for the live UI: providers + rounds before any call_start.
+    _op.publish("orchestration_start", {
+        "orchestration_mode": orchestration_mode,
+        "providers": list(resolved),
+        "rounds": int(rounds),
+    })
+
     if orchestration_mode == "fan_out":
         results = await hub.fan_out(resolved, messages)
     elif orchestration_mode == "daisy_chain":
@@ -346,3 +355,4 @@ async def run_inference_with_mode(
     }
     return _summarize_results(results), usage
 # N:M
+# 252:69
