@@ -19,7 +19,14 @@ export interface OrchestrationResponse {
   model?: string;
   content?: string;
   error?: string;
-  usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+    total_tokens?: number;
+  } | null;
+  cost_usd?: number | null;
   [key: string]: unknown;
 }
 
@@ -74,6 +81,14 @@ export function tokenCount(usage?: UsageData | null): number | null {
 
 export function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+export function fmtCostUSD(usd: number): string {
+  if (usd <= 0) return "$0";
+  if (usd < 0.0001) return "<$0.0001";
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
+  if (usd < 1) return `$${usd.toFixed(3)}`;
+  return `$${usd.toFixed(2)}`;
 }
 
 function looksLikeHtmlPage(s: string): boolean {
@@ -280,11 +295,41 @@ function OrchestrationCard({
       style={indentPx ? { marginLeft: `${indentPx}px` } : undefined}
       data-testid={`${testIdPrefix}-${idx}`}
     >
-      <div className="flex items-center gap-1 mb-1 text-[9px] text-muted-foreground">
+      <div className="flex items-center gap-1 mb-1 text-[9px] text-muted-foreground flex-wrap">
         {testIdPrefix === "orchestration-step" && <span>step {idx + 1}</span>}
         {r.provider && <Badge variant="outline" className="text-[9px] h-3.5 px-1">{r.provider}</Badge>}
         {roleLabel && <Badge variant="secondary" className="text-[9px] h-3.5 px-1">{roleLabel}</Badge>}
         {r.model && <span className="truncate opacity-60">{r.model}</span>}
+        {!r.error && r.usage && (
+          <>
+            <Badge
+              variant="outline"
+              className="text-[9px] h-3.5 px-1 font-mono"
+              title="Input tokens (fresh, excluding cache reads)"
+              data-testid={`tokens-in-${testIdPrefix}-${idx}`}
+            >
+              ↓{fmtTokens(Number(r.usage.input_tokens ?? 0))}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="text-[9px] h-3.5 px-1 font-mono"
+              title="Output tokens"
+              data-testid={`tokens-out-${testIdPrefix}-${idx}`}
+            >
+              ↑{fmtTokens(Number(r.usage.output_tokens ?? 0))}
+            </Badge>
+            {typeof r.cost_usd === "number" && (
+              <Badge
+                variant="outline"
+                className="text-[9px] h-3.5 px-1 font-mono"
+                title="Estimated USD cost for this voice"
+                data-testid={`cost-${testIdPrefix}-${idx}`}
+              >
+                {fmtCostUSD(r.cost_usd)}
+              </Badge>
+            )}
+          </>
+        )}
         <button
           onClick={copy}
           className="ml-auto hover:opacity-80 shrink-0"

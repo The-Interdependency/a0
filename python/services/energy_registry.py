@@ -1,5 +1,7 @@
 # 251:35
+import contextvars
 import os
+from typing import Optional
 from sqlalchemy import text as sa_text
 
 BUILTIN_PROVIDERS = {
@@ -317,6 +319,45 @@ energy_registry = EnergyRegistry()
 import time as _time
 
 
+# Per-call usage capture for the multi-model path.
+#
+# aimmh-lib's CallFn contract is `(model_id, messages) -> str`, so the underlying
+# provider's usage dict is discarded by the time the hub returns its
+# ModelResult list. To surface honest per-voice token counts and cost without
+# breaking aimmh's contract, _aimmh_call_fn writes each call's usage into a
+# ContextVar-backed dict keyed by `(model_id, call_idx)` where `call_idx` is
+# a per-model counter assigned at call START. This is collision-proof for
+# every orchestration mode aimmh exposes:
+#   - fan_out: each model called once per slot → call_idx 0..N-1 unambiguous
+#   - daisy_chain / room_all / room_synthesized / council: per-model calls
+#     are strictly sequential across rounds (round R+1 awaits round R) so
+#     start-order == completion-order for any given model, even when
+#     different models run concurrently within a round
+# Matching is therefore (model, per-model occurrence index in the result
+# list) — never by content — so two calls returning identical strings still
+# attribute usage to the right card.
+#
+# ContextVar gives per-async-task isolation so concurrent route handlers
+# cannot collide on the global capture state.
+_per_call_usage_cv: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar(
+    "a0p_aimmh_per_call_usage", default=None,
+)
+
+
+def reset_per_call_usage() -> dict:
+    """Initialize the per-call usage capture state for the current async
+    context and return it so callers can read it after the hub returns.
+    Shape: {"by_key": {(model_id, call_idx): {usage, content}}, "counters":
+    {model_id: next_idx}}."""
+    state: dict = {"by_key": {}, "counters": {}}
+    _per_call_usage_cv.set(state)
+    return state
+
+
+def get_per_call_usage() -> dict:
+    return _per_call_usage_cv.get() or {"by_key": {}, "counters": {}}
+
+
 async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30):
     """Bridge aimmh-lib's CallFn signature into call_energy_provider.
 
@@ -327,19 +368,50 @@ async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30
     MUST return a plain string here — returning a ModelResult would cause
     aimmh's downstream `content.startswith("[ERROR]")` check to crash with
     `'ModelResult' object has no attribute 'startswith'`.
+
+    Side effect: when _per_call_usage_cv has been initialized by the caller,
+    records this call's usage in state["by_key"][(model_id, call_idx)] where
+    call_idx is a per-model counter assigned at call START. usage=None on
+    the error path or when the provider returned no usage dict so the UI
+    hides badges instead of lying about a failed call.
     """
     from .inference import call_energy_provider as _cep
+    state = _per_call_usage_cv.get()
+    # Reserve the per-model index BEFORE awaiting so concurrent calls within
+    # a round (e.g. fan_out) get distinct call_idx values even though they
+    # complete out of order. Reads/writes around `counters` happen between
+    # awaits, so they're atomic under cooperative concurrency.
+    call_idx = None
+    if state is not None:
+        call_idx = state["counters"].get(model_id, 0)
+        state["counters"][model_id] = call_idx + 1
     try:
-        content, _usage = await _cep(
+        content, usage = await _cep(
             provider_id=model_id,
             messages=list(messages or []),
             system_prompt=system_context,
             use_tools=False,
         )
-        return content or ""
+        out = content or ""
+        if state is not None:
+            state["by_key"][(model_id, call_idx)] = {
+                "model_id": model_id,
+                "call_idx": call_idx,
+                "content": out,
+                "usage": dict(usage) if usage else None,
+            }
+        return out
     except Exception as exc:
         # aimmh interprets a "[ERROR] ..." prefix as an error result.
-        return f"[ERROR] {exc}"[:500]
+        out = f"[ERROR] {exc}"[:500]
+        if state is not None:
+            state["by_key"][(model_id, call_idx)] = {
+                "model_id": model_id,
+                "call_idx": call_idx,
+                "content": out,
+                "usage": None,
+            }
+        return out
 
 
 _HUB_CACHE: dict = {"hub": None}

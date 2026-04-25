@@ -23,6 +23,7 @@ from .run_logger import get_run_logger
 from .cut_modes import tools_for_cut_mode
 from .energy_registry import (
     energy_registry, resolve_providers, get_multi_model_hub,
+    reset_per_call_usage,
 )
 
 
@@ -50,17 +51,39 @@ def _flatten_user_text(messages: list[dict]) -> str:
     return "\n\n".join(reversed([c for c in chunks if c]))
 
 
-def _emit_provider_response(provider: str, content: str, elapsed_ms: int) -> None:
-    """Cheap usage estimation when the multi-model path didn't capture provider usage."""
+def _emit_provider_response(
+    provider: str, usage: Optional[dict], elapsed_ms: int,
+) -> None:
+    """Emit a provider_response run-log event with the real per-voice usage
+    captured from the underlying provider call. usage=None means the call
+    failed or the provider returned no usage dict — we report it honestly
+    (missing_usage=True) instead of fabricating numbers from a char heuristic."""
     logger = get_run_logger()
-    out_tokens = max(1, len(content) // 4)
-    cost = energy_registry.estimate_cost(provider, 0, out_tokens)
     try:
+        if not usage:
+            logger.emit("provider_response", {
+                "provider": provider,
+                "prompt_tokens": None,
+                "completion_tokens": None,
+                "cache_hit_tokens": None,
+                "cost_usd_estimate": None,
+                "elapsed_ms": elapsed_ms,
+                "missing_usage": True,
+            })
+            return
+        cb = energy_registry.cache_breakdown(usage)
+        cost = energy_registry.estimate_cost(
+            provider,
+            cb.get("fresh_input", 0),
+            cb.get("output", 0),
+            cb.get("cache_read", 0),
+            cb.get("cache_write", 0),
+        )
         logger.emit("provider_response", {
             "provider": provider,
-            "prompt_tokens": 0,
-            "completion_tokens": out_tokens,
-            "cache_hit_tokens": 0,
+            "prompt_tokens": cb.get("fresh_input", 0),
+            "completion_tokens": cb.get("output", 0),
+            "cache_hit_tokens": cb.get("cache_read", 0),
             "cost_usd_estimate": round(float(cost), 6),
             "elapsed_ms": elapsed_ms,
         })
@@ -83,6 +106,110 @@ def _serialize_results(results: list[Any]) -> list[dict]:
             "error": getattr(r, "error", None),
         })
     return out
+
+
+def _attach_per_voice_usage(
+    serialized: list[dict], usage_state: dict,
+) -> None:
+    """Merge per-call usage dicts captured by _aimmh_call_fn into each
+    serialized response card.
+
+    Keying is `(model_id, call_idx)` — the call_idx is a per-model counter
+    assigned by _aimmh_call_fn at call START (see energy_registry doc), so
+    two calls returning identical text from the same model still attribute
+    usage to the right card. We reconstruct each result's call_idx by its
+    per-model occurrence position in `serialized` (0-based).
+
+    Why per-model occurrence is reliable:
+      - aimmh's serialized result list orders calls by hub round (and by
+        slot position within a round). For any single model, calls happen
+        strictly sequentially across rounds (round R+1 awaits round R), so
+        the i-th appearance of a given model in `serialized` corresponds
+        to the i-th call_idx _aimmh_call_fn assigned for that model.
+
+    Honest errors:
+      - error path: usage stays None, cost_usd stays None — the UI hides
+        badges rather than render "0 tok / $0.00" on a failed call.
+      - provider returned no usage dict: same — None, never zero.
+      - no captured entry for (model, call_idx): same — surfaces missing
+        attribution rather than fabricating numbers.
+    """
+    by_key = usage_state.get("by_key", {}) if usage_state else {}
+    seen_count: dict[str, int] = {}
+    for entry in serialized:
+        entry["usage"] = None
+        entry["cost_usd"] = None
+        model = entry.get("model")
+        # Reserve this entry's per-model occurrence index BEFORE the error
+        # short-circuit so a failed call still consumes its slot — that
+        # keeps subsequent successful calls from this same model aligned
+        # with their captured (model, call_idx) entries.
+        call_idx = seen_count.get(model, 0)
+        seen_count[model] = call_idx + 1
+        entry["call_idx"] = call_idx
+        if entry.get("error"):
+            continue
+        rec = by_key.get((model, call_idx))
+        if rec is None:
+            continue
+        raw_usage = rec.get("usage")
+        if not raw_usage:
+            continue
+        cb = energy_registry.cache_breakdown(raw_usage)
+        cost = energy_registry.estimate_cost(
+            model,
+            cb.get("fresh_input", 0),
+            cb.get("output", 0),
+            cb.get("cache_read", 0),
+            cb.get("cache_write", 0),
+        )
+        entry["usage"] = {
+            "input_tokens": cb.get("fresh_input", 0),
+            "output_tokens": cb.get("output", 0),
+            "cache_read_input_tokens": cb.get("cache_read", 0),
+            "cache_creation_input_tokens": cb.get("cache_write", 0),
+            "total_tokens": (
+                cb.get("fresh_input", 0)
+                + cb.get("cache_read", 0)
+                + cb.get("cache_write", 0)
+                + cb.get("output", 0)
+            ),
+        }
+        entry["cost_usd"] = round(float(cost), 6)
+
+
+def _aggregate_voice_usage(serialized: list[dict]) -> dict:
+    """Sum per-voice usage into a single message-level usage shape so the
+    aggregate token pill (chat-messages.tsx tokenCount) and cache_breakdown
+    reflect the true total spent on this multi-model turn.
+
+    Anthropic-style fields (input_tokens = fresh-only) are used so
+    cache_breakdown can normalize back to the same numbers without
+    subtracting cache_read twice."""
+    fi = cr = cw = out = 0
+    cost = 0.0
+    counted = 0
+    for entry in serialized:
+        u = entry.get("usage")
+        if not u:
+            continue
+        counted += 1
+        fi += int(u.get("input_tokens") or 0)
+        cr += int(u.get("cache_read_input_tokens") or 0)
+        cw += int(u.get("cache_creation_input_tokens") or 0)
+        out += int(u.get("output_tokens") or 0)
+        c = entry.get("cost_usd")
+        if c is not None:
+            cost += float(c)
+    return {
+        "input_tokens": fi,
+        "output_tokens": out,
+        "cache_read_input_tokens": cr,
+        "cache_creation_input_tokens": cw,
+        "total_tokens": fi + cr + cw + out,
+        "cost_usd": round(cost, 6),
+        "voices_with_usage": counted,
+    }
 
 
 def _summarize_results(results: list[Any]) -> str:
@@ -176,6 +303,11 @@ async def run_inference_with_mode(
     hub = get_multi_model_hub()
     prompt = _flatten_user_text(messages) or "(no prompt)"
 
+    # Init the per-call usage bucket BEFORE invoking the hub. _aimmh_call_fn
+    # appends one entry per provider call into this list (ContextVar-scoped
+    # so concurrent route handlers cannot collide).
+    usage_bucket = reset_per_call_usage()
+
     if orchestration_mode == "fan_out":
         results = await hub.fan_out(resolved, messages)
     elif orchestration_mode == "daisy_chain":
@@ -191,19 +323,26 @@ async def run_inference_with_mode(
     else:
         raise ValueError(f"unhandled mode {orchestration_mode!r}")
 
-    for r in results:
+    serialized = _serialize_results(results)
+    _attach_per_voice_usage(serialized, usage_bucket)
+
+    for entry in serialized:
         _emit_provider_response(
-            getattr(r, "model", "?"),
-            getattr(r, "content", "") or "",
-            int(getattr(r, "response_time_ms", 0) or 0),
+            entry.get("model") or "?",
+            # Re-hydrate the raw provider usage shape from the per-voice
+            # cb-style numbers we attached. cache_breakdown handles either
+            # shape, so feeding it back is safe and keeps a single code path.
+            entry.get("usage"),
+            int(entry.get("elapsed_ms") or 0),
         )
 
-    serialized = _serialize_results(results)
+    agg = _aggregate_voice_usage(serialized)
     usage = {
         "orchestration_mode": orchestration_mode,
         "providers": resolved,
         "responses": serialized,
         "rounds": rounds,
+        **agg,
     }
     return _summarize_results(results), usage
 # N:M
