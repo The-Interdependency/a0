@@ -280,17 +280,28 @@ async def _build_system_prompt(tier: str, agent_persona: str | None = None) -> s
 
 
 def _parse_approve_scope(content: str) -> str | None:
-    """Return scope name if message is 'APPROVE SCOPE <scope>', else None."""
-    stripped = content.strip()
+    """Return scope name if message contains 'APPROVE SCOPE <scope>'.
+
+    Tolerant of leading/trailing text so the parse still works when a user
+    pastes (or a mobile UI concatenates) the assistant's full approval line
+    that ends with '...APPROVE SCOPE <scope>'. Scope names are restricted to
+    [a-z0-9_-] so we don't swallow trailing punctuation.
+    """
     import re as _re
-    m = _re.match(r"^APPROVE\s+SCOPE\s+(\S+)$", stripped, _re.IGNORECASE)
+    m = _re.search(r"\bAPPROVE\s+SCOPE\s+([a-z][a-z0-9_-]*)\b", content, _re.IGNORECASE)
     return m.group(1).lower() if m else None
 
 
 def _parse_approve_gate(content: str) -> str | None:
-    """Return gate_id if message is 'APPROVE gate-<hex>', else None."""
+    """Return gate_id if message contains 'APPROVE gate-<hex>'.
+
+    Tolerant of trailing text (e.g. when the user echoes the whole approval
+    line back, which includes a follow-up 'APPROVE SCOPE ...' phrase). The
+    gate hex is anchored with \\b so we don't accidentally extend into other
+    tokens.
+    """
     import re as _re
-    m = _re.match(r"^APPROVE\s+(gate-[0-9a-f]+)$", content.strip(), _re.IGNORECASE)
+    m = _re.search(r"\bAPPROVE\s+(gate-[0-9a-f]+)\b", content, _re.IGNORECASE)
     return m.group(1).lower() if m else None
 
 
@@ -383,8 +394,105 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                     detail=f"Provider '{_pid}' is disabled in energy settings",
                 )
 
+        # Parse both up front. Explicit per-gate approval takes priority
+        # over scope grant — scope only helps FUTURE gates, while the user
+        # is trying to clear the gate the model is currently holding. If
+        # both phrases appear in one message (common when the user pastes
+        # or the mobile UI concatenates the assistant's full approval line),
+        # we clear the gate AND record the scope grant as a bonus.
+        gate_id_to_approve = _parse_approve_gate(body.content)
         scope_to_grant = _parse_approve_scope(body.content)
-        if scope_to_grant and uid:
+
+        async def _grant_scope_if_valid(scope: str) -> tuple[bool, str]:
+            """Validate + grant a scope. Returns (granted, status_note)."""
+            from ..config.policy_loader import get_scope_categories, get_safety_floor_actions
+            valid_scopes = get_scope_categories()
+            safety_floor = get_safety_floor_actions()
+            if scope in safety_floor:
+                return False, f"`{scope}` is on the safety floor and cannot be pre-approved."
+            if scope not in valid_scopes:
+                return False, f"`{scope}` is not a recognized scope."
+            from ..storage.domain import check_scope_grant_tier
+            try:
+                await check_scope_grant_tier(uid)
+            except ValueError as _terr:
+                return False, str(_terr)
+            await storage.grant_approval_scope(uid, scope)
+            meta = valid_scopes[scope]
+            return True, f"`{scope}` — {meta['label']} pre-approved."
+
+        if gate_id_to_approve:
+            pending = _pending_gates.get(conv_id)
+            user_msg = await storage.create_message({
+                "conversation_id": conv_id,
+                "role": "user",
+                "content": body.content,
+                "model": model_id,
+                "metadata": {"tier": tier},
+            })
+            gate_matched = (
+                pending
+                and pending.get("gate_id") == gate_id_to_approve
+                and pending.get("uid", uid) == uid
+            )
+            scope_note = ""
+            if scope_to_grant and uid:
+                granted, note = await _grant_scope_if_valid(scope_to_grant)
+                scope_note = f"\n\n[SCOPE BONUS] {note}" if granted else f"\n\n[SCOPE SKIPPED] {note}"
+            if gate_matched:
+                _pending_gates.pop(conv_id, None)
+                replay_provider = pending["provider_id"]
+                from ..services.tool_executor import set_approval_scope_user_id
+                set_approval_scope_user_id(uid or None)
+                try:
+                    approved_content, approved_usage = await call_energy_provider(
+                        provider_id=replay_provider,
+                        messages=pending["history"],
+                        system_prompt=pending["system_prompt"],
+                        user_id=uid or None,
+                        skip_approval=True,
+                    )
+                finally:
+                    set_approval_scope_user_id(None)
+                reply = f"[APPROVED — gate {gate_id_to_approve} cleared]{scope_note}\n\n{approved_content}"
+            else:
+                replay_provider = "system"
+                reply = (
+                    f"[APPROVE ERROR] Gate `{gate_id_to_approve}` not found or already consumed. "
+                    f"If you meant to pre-approve a category, use: APPROVE SCOPE <scope>{scope_note}"
+                )
+                approved_usage = {}
+            assistant_msg = await storage.create_message({
+                "conversation_id": conv_id,
+                "role": "assistant",
+                "content": reply,
+                "model": replay_provider,
+                "metadata": {
+                    "tier": tier,
+                    "gate_approved": gate_id_to_approve,
+                    "scope_bonus": scope_to_grant if scope_note.startswith("\n\n[SCOPE BONUS]") else None,
+                    "usage": approved_usage,
+                    "cache": energy_registry.cache_breakdown(approved_usage),
+                },
+            })
+            return {
+                "user_message": user_msg,
+                "assistant_message": assistant_msg,
+                "conversation_id": conv_id,
+            }
+
+        # Scope-only path: require strict line-anchored phrasing so
+        # incidental prose like "I want to APPROVE SCOPE publish" doesn't
+        # silently grant a scope on a normal chat turn. The bonus path
+        # above (gate + scope) keeps the tolerant search because the gate
+        # approval already proves explicit intent.
+        import re as _re_strict
+        scope_only_strict = bool(scope_to_grant) and bool(
+            _re_strict.search(
+                r"(?m)^\s*APPROVE\s+SCOPE\s+", body.content, _re_strict.IGNORECASE
+            )
+        )
+        if scope_to_grant and uid and scope_only_strict:
             from ..config.policy_loader import get_scope_categories, get_safety_floor_actions
             valid_scopes = get_scope_categories()
             safety_floor = get_safety_floor_actions()
@@ -469,57 +577,6 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 "content": reply,
                 "model": "system",
                 "metadata": {"tier": tier, "scope_grant": scope_to_grant, "replayed": replay_result is not None},
-            })
-            return {
-                "user_message": user_msg,
-                "assistant_message": assistant_msg,
-                "conversation_id": conv_id,
-            }
-
-        gate_id_to_approve = _parse_approve_gate(body.content)
-        if gate_id_to_approve:
-            pending = _pending_gates.get(conv_id)
-            user_msg = await storage.create_message({
-                "conversation_id": conv_id,
-                "role": "user",
-                "content": body.content,
-                "model": model_id,
-                "metadata": {"tier": tier},
-            })
-            gate_matched = (
-                pending
-                and pending.get("gate_id") == gate_id_to_approve
-                and pending.get("uid", uid) == uid
-            )
-            if gate_matched:
-                _pending_gates.pop(conv_id, None)
-                replay_provider = pending["provider_id"]
-                from ..services.tool_executor import set_approval_scope_user_id
-                set_approval_scope_user_id(uid or None)
-                try:
-                    approved_content, approved_usage = await call_energy_provider(
-                        provider_id=replay_provider,
-                        messages=pending["history"],
-                        system_prompt=pending["system_prompt"],
-                        user_id=uid or None,
-                        skip_approval=True,
-                    )
-                finally:
-                    set_approval_scope_user_id(None)
-                reply = f"[APPROVED — gate {gate_id_to_approve} cleared]\n\n{approved_content}"
-            else:
-                replay_provider = "system"
-                reply = (
-                    f"[APPROVE ERROR] Gate `{gate_id_to_approve}` not found or already consumed. "
-                    f"If you meant to pre-approve a category, use: APPROVE SCOPE <scope>"
-                )
-                approved_usage = {}
-            assistant_msg = await storage.create_message({
-                "conversation_id": conv_id,
-                "role": "assistant",
-                "content": reply,
-                "model": replay_provider,
-                "metadata": {"tier": tier, "gate_approved": gate_id_to_approve, "usage": approved_usage, "cache": energy_registry.cache_breakdown(approved_usage)},
             })
             return {
                 "user_message": user_msg,
