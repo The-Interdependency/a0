@@ -4,21 +4,23 @@
 # DOC label: EDCM uses edcmbone
 # DOC description: After the edcmbone swap-in, the EDCM service must report
 # the installed edcmbone version on every score response.
-import edcmbone
+from importlib.metadata import version as _pkg_version
 
 from python.services import edcm as edcm_svc
 
 
 def test_edcm_module_pins_edcmbone_version():
+    # edcmbone exposes its version through importlib.metadata (no __version__
+    # attribute). edcm.py reads it the same way at import.
     assert hasattr(edcm_svc, "EDCMBONE_VERSION")
-    assert edcm_svc.EDCMBONE_VERSION == edcmbone.__version__
+    assert edcm_svc.EDCMBONE_VERSION == _pkg_version("edcmbone")
 
 
 def test_compute_metrics_returns_canonical_keys():
-    out = edcm_svc.compute_metrics(
-        text="a b c a b c d e f g",
-        baseline="a b c d e f g h i j",
-    )
+    # compute_metrics takes (responses: list[dict], context: str) — the old
+    # text=/baseline= signature was retired with the orchestration refactor.
+    responses = [{"provider": "test", "content": "a b c a b c d e f g"}]
+    out = edcm_svc.compute_metrics(responses, "a b c d e f g h i j")
     assert isinstance(out, dict)
     for k in edcm_svc.METRIC_NAMES:
         assert k in out, f"missing canonical metric {k}"

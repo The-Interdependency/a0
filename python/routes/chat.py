@@ -84,8 +84,12 @@ def _attach_cost_usd(usage: dict | None, provider_id: str | None) -> None:
             cb.get("cache_write", 0),
         )
         usage["cost_usd"] = round(float(cost), 6)
-    except Exception:
+    except Exception as exc:
+        # Surface the failure instead of silently swallowing — empty cost in the
+        # UI is indistinguishable from "free model", which masks pricing config bugs.
+        print(f"[chat._attach_cost_usd] cost estimate failed for {provider_id}: {exc}")
         usage["cost_usd"] = None
+        usage["cost_error"] = str(exc)
 
 # DOC module: chat
 # DOC label: Chat

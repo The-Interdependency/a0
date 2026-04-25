@@ -384,7 +384,7 @@ export interface AgentStats {
 
 export const agentInstances = pgTable("agent_instances", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   slot: text("slot").notNull().default("zfae"),
   directives: text("directives").notNull().default(""),
   tools: jsonb("tools").$type<string[]>().default([]),
