@@ -13,6 +13,7 @@ repl_nix_workspace.egg-info/top_level.txt
 tests/test_artifacts.py
 tests/test_cut_modes.py
 tests/test_edcm_uses_package.py
+tests/test_inference_modes_usage.py
 tests/test_live_server.py
 tests/test_route_imports.py
 tests/test_run_context.py

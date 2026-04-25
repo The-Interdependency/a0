@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, Fragment } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -65,7 +66,34 @@ type MessageRow = {
   int_val: number;
   tbf: number;
   directives_fired: string[] | null;
+  risk_loop?: number | null;
+  risk_fixation?: number | null;
 };
+
+type MetricKey = "cm" | "da" | "drift" | "dvg" | "int_val" | "tbf";
+const METRIC_KEYS: MetricKey[] = ["cm", "da", "drift", "dvg", "int_val", "tbf"];
+
+// A row's "spike" metric is THE metric with the highest value on that row
+// (the row max) — but only if that row-max value also passes both thresholds:
+// (a) >= 75% of the page max for that metric, and (b) >= 0.5 absolute floor.
+// If the row-max metric fails either threshold, we return null rather than
+// promoting some other non-row-max metric that happens to pass.
+function spikeMetricFor(
+  row: MessageRow,
+  pageMaxes: Record<MetricKey, number>,
+): MetricKey | null {
+  let rowMax: { key: MetricKey; score: number } | null = null;
+  for (const k of METRIC_KEYS) {
+    const v = (row[k] ?? 0) as number;
+    if (v == null || Number.isNaN(v)) continue;
+    if (rowMax == null || v > rowMax.score) rowMax = { key: k, score: v };
+  }
+  if (rowMax == null) return null;
+  if (rowMax.score < 0.5) return null; // absolute floor
+  const pageMax = pageMaxes[rowMax.key] || 1e-9;
+  if (rowMax.score < pageMax * 0.75) return null; // page-relative threshold
+  return rowMax.key;
+}
 
 const PAGE_SIZE = 50;
 
@@ -223,6 +251,20 @@ export default function TranscriptsPage() {
   const uploads = uploadsData?.items ?? [];
   const reports = reportsData?.items ?? [];
   const messages = messagesData?.items ?? [];
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+
+  const pageMaxes = useMemo(() => {
+    const out: Record<MetricKey, number> = {
+      cm: 0, da: 0, drift: 0, dvg: 0, int_val: 0, tbf: 0,
+    };
+    for (const m of messages) {
+      for (const k of METRIC_KEYS) {
+        const v = (m[k] ?? 0) as number;
+        if (v != null && !Number.isNaN(v) && v > out[k]) out[k] = v;
+      }
+    }
+    return out;
+  }, [messages]);
   const totalMessages = report?.message_count ?? 0;
   const hasNext = (page + 1) * PAGE_SIZE < totalMessages;
 
@@ -578,6 +620,7 @@ export default function TranscriptsPage() {
                   <table className="w-full text-xs">
                     <thead className="bg-muted/30 text-[10px] uppercase tracking-wide text-muted-foreground">
                       <tr>
+                        <th className="text-left p-2 w-8"></th>
                         <th className="text-left p-2 w-10">#</th>
                         <th className="text-left p-2 w-20">speaker</th>
                         <th className="text-left p-2">content</th>
@@ -590,30 +633,126 @@ export default function TranscriptsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {messages.map((m) => (
-                        <tr
-                          key={m.id}
-                          className="border-t border-border align-top"
-                          data-testid={`row-message-${m.id}`}
-                        >
-                          <td className="p-2 text-muted-foreground tabular-nums">{m.idx}</td>
-                          <td className="p-2 font-mono">{m.speaker ?? "—"}</td>
-                          <td className="p-2 max-w-md">
-                            <div
-                              className="line-clamp-3 text-foreground/90"
-                              data-testid={`text-message-content-${m.id}`}
+                      {messages.map((m) => {
+                        const spike = spikeMetricFor(m, pageMaxes);
+                        const isOpen = !!expanded[m.id];
+                        const cellCls = (k: MetricKey) =>
+                          cn(
+                            "p-2 text-right font-mono tabular-nums",
+                            spike === k && "bg-amber-500/15 text-amber-200 font-semibold rounded-sm",
+                          );
+                        const toggle = () =>
+                          setExpanded((prev) => ({ ...prev, [m.id]: !prev[m.id] }));
+                        return (
+                          <Fragment key={m.id}>
+                            <tr
+                              className="border-t border-border align-top hover:bg-muted/20 cursor-pointer"
+                              onClick={toggle}
+                              data-testid={`row-message-${m.id}`}
                             >
-                              {m.content ?? ""}
-                            </div>
-                          </td>
-                          <td className="p-2 text-right font-mono tabular-nums">{fmt(m.cm)}</td>
-                          <td className="p-2 text-right font-mono tabular-nums">{fmt(m.da)}</td>
-                          <td className="p-2 text-right font-mono tabular-nums">{fmt(m.drift)}</td>
-                          <td className="p-2 text-right font-mono tabular-nums">{fmt(m.dvg)}</td>
-                          <td className="p-2 text-right font-mono tabular-nums">{fmt(m.int_val)}</td>
-                          <td className="p-2 text-right font-mono tabular-nums">{fmt(m.tbf)}</td>
-                        </tr>
-                      ))}
+                              <td className="p-2 text-muted-foreground">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); toggle(); }}
+                                  className="hover:text-foreground transition-colors"
+                                  aria-label={isOpen ? "Collapse" : "Expand"}
+                                  data-testid={`button-toggle-message-${m.id}`}
+                                >
+                                  <ChevronDown
+                                    className={cn("w-3 h-3 transition-transform", !isOpen && "-rotate-90")}
+                                  />
+                                </button>
+                              </td>
+                              <td className="p-2 text-muted-foreground tabular-nums">{m.idx}</td>
+                              <td className="p-2 font-mono">{m.speaker ?? "—"}</td>
+                              <td className="p-2 max-w-md">
+                                <div
+                                  className={cn(
+                                    "text-foreground/90 whitespace-pre-wrap",
+                                    !isOpen && "line-clamp-3",
+                                  )}
+                                  data-testid={`text-message-content-${m.id}`}
+                                >
+                                  {m.content ?? ""}
+                                </div>
+                              </td>
+                              <td className={cellCls("cm")}>{fmt(m.cm)}</td>
+                              <td className={cellCls("da")}>{fmt(m.da)}</td>
+                              <td className={cellCls("drift")}>{fmt(m.drift)}</td>
+                              <td className={cellCls("dvg")}>{fmt(m.dvg)}</td>
+                              <td className={cellCls("int_val")}>{fmt(m.int_val)}</td>
+                              <td className={cellCls("tbf")}>{fmt(m.tbf)}</td>
+                            </tr>
+                            {isOpen && (
+                              <tr className="border-t border-border bg-muted/10" data-testid={`row-message-detail-${m.id}`}>
+                                <td colSpan={10} className="p-3">
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px]">
+                                    <div className="md:col-span-2 space-y-2">
+                                      <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                                        Full parsed content
+                                      </div>
+                                      <div
+                                        className="font-mono whitespace-pre-wrap break-words bg-background/40 border border-border rounded p-2 max-h-96 overflow-y-auto"
+                                        data-testid={`text-full-content-${m.id}`}
+                                      >
+                                        {m.content?.trim() ? m.content : <span className="text-muted-foreground italic">[empty after parsing]</span>}
+                                      </div>
+                                    </div>
+                                    <div className="space-y-3">
+                                      {(m.risk_loop != null || m.risk_fixation != null) && (
+                                        <div className="space-y-1">
+                                          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                                            Risk
+                                          </div>
+                                          <div className="flex flex-wrap gap-1">
+                                            {m.risk_loop != null && (
+                                              <Badge
+                                                variant={m.risk_loop > 0.5 ? "destructive" : "secondary"}
+                                                className="font-mono text-[10px]"
+                                                data-testid={`badge-row-risk-loop-${m.id}`}
+                                              >
+                                                loop {fmt(m.risk_loop)}
+                                              </Badge>
+                                            )}
+                                            {m.risk_fixation != null && (
+                                              <Badge
+                                                variant={m.risk_fixation > 0.5 ? "destructive" : "secondary"}
+                                                className="font-mono text-[10px]"
+                                                data-testid={`badge-row-risk-fixation-${m.id}`}
+                                              >
+                                                fixation {fmt(m.risk_fixation)}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {m.directives_fired && m.directives_fired.length > 0 && (
+                                        <div className="space-y-1">
+                                          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                                            Directives fired
+                                          </div>
+                                          <div className="flex flex-wrap gap-1" data-testid={`list-row-directives-${m.id}`}>
+                                            {m.directives_fired.map((d) => (
+                                              <Badge key={d} variant="secondary" className="font-mono text-[10px]">
+                                                {d}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {spike && (
+                                        <div className="text-[10px] text-amber-300/90">
+                                          Spike on <span className="font-mono">{spike === "int_val" ? "int" : spike}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

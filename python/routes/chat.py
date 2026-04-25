@@ -237,19 +237,21 @@ async def _build_system_prompt(tier: str, agent_persona: str | None = None) -> s
     """Compose system prompt with stable→volatile ordering for max cache reuse.
 
     Order (most stable first; cache prefix grows as we go down):
-      1. a0_identity      — global, immutable across all users
-      2. system_base      — global, edited rarely
-      3. tier_context     — stable per tier (free / supporter / ws / admin)
-      4. agent_persona    — stable per Forge agent across many turns (optional)
-      5. memory seeds     — volatile (user edits weights/text frequently)
+      1. a0_identity        — global, immutable across all users
+      2. system_base        — global, edited rarely
+      3. anti_hallucination — global grounding rules, edited rarely
+      4. tier_context       — stable per tier (free / supporter / ws / admin)
+      5. agent_persona      — stable per Forge agent across many turns (optional)
+      6. memory seeds       — volatile (user edits weights/text frequently)
 
-    The break between (4) and (5) is where Anthropic places its 2nd cache_control
+    The break between (5) and (6) is where Anthropic places its 2nd cache_control
     breakpoint, so seed edits only invalidate the seed segment, not the whole
     prefix. See _call_anthropic.
     """
     context_name = get_tier_context_name(tier)
     a0_identity = await get_context_value("a0_identity")
     system_base = await get_context_value("system_base")
+    anti_hallucination = await get_context_value("anti_hallucination")
     tier_context = await get_context_value(context_name)
 
     parts: list[str] = []
@@ -257,6 +259,8 @@ async def _build_system_prompt(tier: str, agent_persona: str | None = None) -> s
         parts.append(a0_identity)
     if system_base:
         parts.append(system_base)
+    if anti_hallucination:
+        parts.append(anti_hallucination)
     if tier_context:
         parts.append(tier_context)
     if agent_persona:

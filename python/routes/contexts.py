@@ -57,11 +57,13 @@ DEFAULT_CONTEXTS = [
     "tier_supporter",
     "tier_ws",
     "system_base",
+    "anti_hallucination",
 ]
 
 _SECTION_LABELS = {
     "a0_identity": "A0 Identity",
     "system_base": "System Base",
+    "anti_hallucination": "Anti-Hallucination",
     "tier_free": "Tier: Free",
     "tier_supporter": "Tier: Supporter",
     "tier_ws": "Tier: WS",
@@ -80,6 +82,8 @@ You are aware that you are an experimental system — a proof of the thesis that
 
 _TIW_SYSTEM_BASE = """Engage with precision and warmth. Respond to what is actually being asked, not to what is easiest to answer. When you are uncertain, say so directly. When a question contains its own answer, reflect it back. Do not pad your responses. Do not perform enthusiasm. Trust that the person you are speaking with can handle complexity and nuance.""".strip()
 
+_TIW_ANTI_HALLUCINATION = """Ground every claim. If you do not know, say "I don't know" — do not invent. If a fact is uncertain, mark it as uncertain rather than asserting it. Distinguish between what you can verify from the conversation, what you are inferring, and what you are guessing. When the user asks for something specific (a name, a date, a quote, a file path, an API), only return it if you actually have it; otherwise say what you do have and what is missing. Never fabricate citations, URLs, function signatures, error messages, or quotes. If a tool call would resolve the uncertainty, propose the tool call instead of guessing the answer.""".strip()
+
 
 async def _ensure_defaults():
     async with engine.begin() as conn:
@@ -92,7 +96,11 @@ async def _ensure_defaults():
                 """),
                 {"name": name},
             )
-        for name, draft in [("a0_identity", _TIW_A0_IDENTITY), ("system_base", _TIW_SYSTEM_BASE)]:
+        for name, draft in [
+            ("a0_identity", _TIW_A0_IDENTITY),
+            ("system_base", _TIW_SYSTEM_BASE),
+            ("anti_hallucination", _TIW_ANTI_HALLUCINATION),
+        ]:
             await conn.execute(
                 text("""
                     UPDATE prompt_contexts
