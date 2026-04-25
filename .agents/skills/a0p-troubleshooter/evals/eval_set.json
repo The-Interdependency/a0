@@ -1,0 +1,50 @@
+[
+  {
+    "query": "My GitHub Actions deploy is failing with a console-tab regression guard error. What happened?",
+    "should_trigger": true
+  },
+  {
+    "query": "I'm getting a SQLAlchemy TooManyConnectionsError in the FastAPI logs right after deploying a new route module.",
+    "should_trigger": true
+  },
+  {
+    "query": "My custom domain interdependentway.org stopped working after I pushed to gh-pages. GitHub Pages shows a 404.",
+    "should_trigger": true
+  },
+  {
+    "query": "An agent run is stuck in 'running' status in the Fleet even though the process crashed 20 minutes ago.",
+    "should_trigger": true
+  },
+  {
+    "query": "I added a new Python route module with UI_META but the tab doesn't show up in the console. What did I miss?",
+    "should_trigger": true
+  },
+  {
+    "query": "Why did this break? The PCNA coherence lock is firing on every heartbeat tick since I updated the prompt context.",
+    "should_trigger": true
+  },
+  {
+    "query": "The deploy worked on staging but is failing on prod with a 500. It started after the last deploy.",
+    "should_trigger": true
+  },
+  {
+    "query": "I'm seeing unattributed cost in the Fleet — the total_cost_usd on the run is $0 even though I know the provider was called.",
+    "should_trigger": true
+  },
+  {
+    "query": "What's the best model to use for bulk classification in a0p?",
+    "should_trigger": false
+  },
+  {
+    "query": "How do I add a new orchestration mode to the platform?",
+    "should_trigger": false
+  },
+  {
+    "query": "Can you write a Python route module for tracking user sessions?",
+    "should_trigger": false
+  },
+  {
+    "query": "What are the tier gates for the billing system?",
+    "should_trigger": false
+  }
+]

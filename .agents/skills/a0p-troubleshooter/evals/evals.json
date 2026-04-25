@@ -1,0 +1,70 @@
+{
+  "skill_name": "a0p-troubleshooter",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "My GitHub Actions deploy workflow is failing. Here's the error from the console-tab regression guard step:\n\n```\nERROR: Tab 'diagnostics' declared in UI_META has no sections and no custom renderer.\nDeploy blocked.\n```\n\nWhat went wrong and how do I fix it?",
+      "expected_output": "Identifies the CI failure class, explains the four-place registration requirement and console-tab guard rule, provides a concrete fix (add sections to UI_META or add a CUSTOM_TAB_RENDERERS entry), and gives verification steps.",
+      "expectations": [
+        "The output classifies the failure as ci_build or similar",
+        "The output mentions check-console-tabs.mjs or the console-tab regression guard",
+        "The output mentions CUSTOM_TAB_RENDERERS in client/src/pages/console.tsx",
+        "The output mentions adding sections to UI_META as a fix option",
+        "The output includes a verification step",
+        "The output follows the JSON schema with summary, classification, hypotheses, fix_plan"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I'm seeing this traceback in the FastAPI logs:\n\n```\nTraceback (most recent call last):\n  File \"python/routes/my_module.py\", line 47, in get_data\n    result = await db.execute(select(MyModel).where(MyModel.user_id == user_id))\n  File \"python/database.py\", line 23, in execute\n    async with self._session() as session:\nsqlalchemy.exc.OperationalError: (asyncpg.exceptions.TooManyConnectionsError) sorry, too many clients already\n```\n\nThis started about 30 minutes ago after we deployed a new route module.",
+      "expected_output": "Classifies as runtime_crash or db_migration, identifies connection pool exhaustion, links to the recent deploy as the likely trigger, proposes checking for missing session cleanup in the new route, and suggests a mitigation (restart + connection pool config).",
+      "expectations": [
+        "The output classifies the failure as runtime_crash or db_migration",
+        "The output identifies connection pool exhaustion as the root cause or primary hypothesis",
+        "The output links the new route module deploy to the timing of the failure",
+        "The output suggests checking for unclosed database sessions or missing async context managers",
+        "The output proposes a mitigation (restart, pool size config, or session cleanup)",
+        "The output includes verification steps",
+        "The output follows the JSON schema"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "My custom domain interdependentway.org stopped working. GitHub Pages is showing a 404. I deployed to the gh-pages branch yesterday.",
+      "expected_output": "Classifies as github_pages or dns_https, explains the CNAME file overwrite pattern (most common cause after a deploy), gives exact steps to verify and restore the CNAME file, and checks DNS record configuration.",
+      "expectations": [
+        "The output classifies the failure as github_pages or dns_https",
+        "The output identifies CNAME file overwrite during deploy as the primary hypothesis",
+        "The output explains that the CNAME file must contain only the bare domain name at the publish source root",
+        "The output mentions checking Settings → Pages to confirm Pages is still enabled",
+        "The output includes DNS verification steps",
+        "The output follows the JSON schema with at least two hypotheses"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "An agent run in the Fleet is stuck in 'running' status even though I can see it hasn't emitted a log event in 15 minutes. The agent process appears to have crashed. How do I diagnose this?",
+      "expected_output": "Classifies as agent_run, explains the frozen 'running' pattern (finally block raised before status update), references run_logger and run_context, gives steps to fix the status in the DB and prevent recurrence.",
+      "expectations": [
+        "The output classifies the failure as agent_run",
+        "The output explains that the finally block likely raised before the status update",
+        "The output mentions wrapping the status UPDATE in its own try block as the fix",
+        "The output references python/services/run_logger.py or python/services/run_context.py",
+        "The output suggests a mitigation to manually update the run status",
+        "The output follows the JSON schema"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "I added a new Python route module but its tab doesn't appear in the console UI. I added the file to python/routes/ and wrote the UI_META. What did I miss?",
+      "expected_output": "Classifies as config_drift or similar, walks through all four registration points in python/routes/__init__.py, and explains which missing step would cause which symptom.",
+      "expectations": [
+        "The output identifies the four-place registration checklist in python/routes/__init__.py",
+        "The output lists: import, ALL_ROUTERS, collect_doc_meta file list, collect_ui_meta module list",
+        "The output explains which missing step causes which symptom (routes not mounting vs tab not appearing)",
+        "The output mentions the # DOC block requirement",
+        "The output follows the JSON schema"
+      ]
+    }
+  ]
+}
