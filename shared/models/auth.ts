@@ -29,6 +29,7 @@ export const users = pgTable("users", {
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   subscriptionStatus: varchar("subscription_status").notNull().default("active"),
   byokEnabled: boolean("byok_enabled").notNull().default(false),
+  transcriptsUnlocked: boolean("transcripts_unlocked").notNull().default(false),
   founderSlot: integer("founder_slot"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

@@ -9,7 +9,7 @@ export * from "./models/auth";
 export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
   title: text("title").notNull().default("New Chat"),
-  model: text("model").notNull().default("gemini"),
+  model: text("model").notNull(),
   userId: varchar("user_id"),
   contextBoost: text("context_boost"),
   parentConvId: integer("parent_conv_id"),
