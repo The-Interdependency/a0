@@ -181,7 +181,7 @@ async def cli_chat(body: CliChatBody, request: Request):
         conv_id = body.conversation_id
         prior_msgs = await storage.get_messages(conv_id)
     else:
-        conv = await storage.create_conversation({"user_id": uid, "title": "CLI", "model": body.model or "grok"})
+        conv = await storage.create_conversation({"title": "CLI", "model": body.model or "grok"}, owner_user_id=uid)
         conv_id = conv["id"]
         prior_msgs = []
 

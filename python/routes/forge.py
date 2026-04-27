@@ -398,9 +398,8 @@ async def start_chat(agent_id: int, request: Request) -> dict:
     conv = await storage.create_conversation({
         "title": f"⚔ {arow['name']}",
         "model": arow["model_id"] or "grok",
-        "user_id": uid,
         "agent_id": agent_id,
-    })
+    }, owner_user_id=uid)
     return {"conversation": conv}
 
 

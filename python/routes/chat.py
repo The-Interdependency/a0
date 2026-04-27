@@ -239,9 +239,7 @@ async def create_conversation(body: CreateConversation, request: Request):
             ),
         )
     data: dict = {"title": body.title, "model": model}
-    if uid:
-        data["user_id"] = uid
-    return await storage.create_conversation(data)
+    return await storage.create_conversation(data, owner_user_id=uid)
 
 
 @router.get("/conversations/{conv_id}")

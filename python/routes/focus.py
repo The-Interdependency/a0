@@ -175,12 +175,11 @@ async def launch_subagent(body: SubagentBody, request: Request):
     uid = _uid(request)
 
     conv = await storage.create_conversation({
-        "user_id": uid,
         "title": f"[sub-agent] {body.task[:60]}",
         "model": body.model or "grok",
         "parent_conv_id": body.parent_conv_id,
         "subagent_status": "running",
-    })
+    }, owner_user_id=uid)
     conv_id = conv["id"]
 
     await storage.create_message({

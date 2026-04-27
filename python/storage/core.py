@@ -13,9 +13,13 @@ from ..models import (
 
 
 # Allowed client-supplied fields for create operations. Internal columns
-# (id, created_at, updated_at, etc.) are set server-side only.
+# (id, created_at, updated_at) AND ownership (user_id) are set
+# server-side only — see create_conversation's owner_user_id kwarg.
+# Including user_id here would be a mass-assignment hole: any route that
+# forwards request body into the data dict could let a caller plant a
+# row under another user's id.
 _CONV_ALLOWED_FIELDS = {
-    "title", "model", "user_id", "context_boost",
+    "title", "model", "context_boost",
     "parent_conv_id", "subagent_status", "subagent_error", "archived",
     "agent_id",
 }
@@ -82,8 +86,23 @@ class _CoreStorage:
             result = await session.execute(select(Conversation).where(Conversation.id == id))
             return _row_to_dict(result.scalar_one_or_none())
 
-    async def create_conversation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_conversation(
+        self,
+        data: Dict[str, Any],
+        *,
+        owner_user_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Create a Conversation row.
+
+        Ownership is keyword-only and never read from `data` — pass the
+        authenticated user id as `owner_user_id`. If a caller smuggles
+        `"user_id"` inside `data` it will be silently dropped by the
+        allowed-field filter (it's not in _CONV_ALLOWED_FIELDS).
+        Anonymous / system-owned conversations may pass owner_user_id=None.
+        """
         safe = _filter_fields(data, _CONV_ALLOWED_FIELDS)
+        if owner_user_id is not None:
+            safe["user_id"] = owner_user_id
         async with get_session() as session:
             conv = Conversation(**safe)
             session.add(conv)
