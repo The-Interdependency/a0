@@ -14,8 +14,8 @@ Resolution order (highest precedence first):
      comes from python/config/providers.json. This is the doctrine baseline.
 
 Raises ValueError if none of the three yields a model id — no silent
-fallback to gpt-4o or anything else, since silent fallbacks burn user
-trust harder than failing loudly with a real exception.
+fallback to any default, since silent fallbacks burn user trust harder
+than failing loudly with a real exception.
 """
 from __future__ import annotations
 

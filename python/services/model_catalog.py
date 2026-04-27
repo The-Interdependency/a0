@@ -146,7 +146,7 @@ async def list_models_for_user(user_id: Optional[str]) -> dict[str, Any]:
             "min_tier": null, "tier_blocked": False,
             "models": [
               {
-                "model_id": "gpt-5-mini",
+                "model_id": "<model_id>",
                 "is_primary": True,
                 "in_assignments": ["conduct","perform"],
                 "in_presets": ["balance","speed","coding"],

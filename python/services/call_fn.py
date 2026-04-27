@@ -9,11 +9,11 @@ when actually invoking a model. Provider routing is internal.
 Two flavors:
 
   call = make_call_fn(user_id)
-  text = await call("gpt-5-mini", messages, system_prompt="...")
+  text = await call("<model_id>", messages, system_prompt="...")
     → returns just the assistant text, mirrors aimmh_lib's CallFn signature.
 
   call = make_call_fn_full(user_id)
-  text, usage = await call("gpt-5-mini", messages, system_prompt="...")
+  text, usage = await call("<model_id>", messages, system_prompt="...")
     → returns (content, usage) so callers tracking cost/tokens don't lose
       that data. This is the preferred a0p variant since approval gates
       and billing live in usage.

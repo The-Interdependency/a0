@@ -8,8 +8,8 @@ items where one big call would be slow, blow the context window, or
 collapse distinct judgements into mush.
 
 Doctrine: `.agents/skills/a0p-model-selector/SKILL.md` — pick a T0/T1
-producer (gemini-flash-lite, gpt-5-nano), optional T2 critic. Cheap models
-in parallel beat one flagship for sort/tag/extract.
+producer (cheap-tier slug from the energy registry), optional T2 critic.
+Cheap models in parallel beat one flagship for sort/tag/extract.
 
 NO silent fallback: a batch that cannot be coerced to schema after retries
 is marked `error=...` on each row. The critic (if configured) gets first

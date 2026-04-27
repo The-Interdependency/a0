@@ -485,11 +485,12 @@ async def call_energy_provider(
     Returns (content, usage_dict).
     user_id is threaded into the OpenAI path for approval-scope checking.
     skip_approval=True bypasses the approval gate (used for replay after explicit APPROVE).
-    reasoning_effort is mapped per-provider:
-      - OpenAI: passed via openai_router call_cfg (this param is ignored on the openai branch)
-      - Grok:   passed as reasoning_effort on grok-4 / grok-4-fast-reasoning
-      - Claude: mapped to thinking.budget_tokens (extended thinking)
-      - Gemini: not honored on the compat endpoint (no thinking_config support there)
+    reasoning_effort is mapped per-provider, gated by capability flags in
+    providers.json (single source of truth — no model slugs in code):
+      - OpenAI: passed via openai_router call_cfg (ignored on the openai branch)
+      - Grok:   passed as reasoning_effort when spec.supports_reasoning_effort
+      - Claude: mapped to thinking.budget_tokens when spec.supports_thinking
+      - Gemini: honored only on the native SDK path (gemini3 spec.supports_thinking)
     """
     system_prompt = _prepend_doctrine(system_prompt)
     messages = _build_provider_messages(messages, provider_id)

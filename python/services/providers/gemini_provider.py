@@ -2,11 +2,11 @@
 
 Thin contract-conforming wrapper around services/gemini_native.call_gemini_native.
 gemini_native already uses the official google-genai SDK (no httpx), with full
-tool-loop support, automatic citation extraction for grounding, and the
-gemini-3-pro thinking_config when supports_thinking=True. This module exists
-only to give it the standard `providers/<name>.call(messages, role=..., ...)`
-contract so the inference dispatcher delegates uniformly across all four
-providers.
+tool-loop support, automatic citation extraction for grounding, and a
+thinking_config branch gated by spec.supports_thinking from providers.json.
+This module exists only to give it the standard
+`providers/<name>.call(messages, role=..., ...)` contract so the inference
+dispatcher delegates uniformly across all four providers.
 
 Why both files exist (no merge): gemini_native.py is also imported by
 non-provider callers (the chat composer's grounding badge code reads
