@@ -22,6 +22,48 @@ _PROVIDER_PRICING_URLS: dict[str, str] = {
     if spec.get("pricing_url")
 }
 
+# Per-model pricing manifest — boot source-of-truth for input/output/cached
+# rates per individual model id (vs. providers.json which only knows the
+# provider flagship's rate). Hydrates ws_modules.route_config.available_models
+# on first boot and on POST /api/energy/refresh-pricing/{provider_id}.
+_PRICING_JSON_PATH = Path(__file__).parent.parent / "config" / "pricing.json"
+
+
+def _load_pricing_doc() -> dict:
+    with open(_PRICING_JSON_PATH, "r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+_PRICING_DOC: dict = _load_pricing_doc()
+
+
+def get_pricing_models(provider_id: str) -> list[dict]:
+    """Return the per-model pricing list for a provider, or [] if unknown.
+    Each entry: {id, context_window, input_per_1m, output_per_1m,
+    cached_input_per_1m?, cache_write_per_1m?, supports_vision?, ...}.
+    """
+    return list(
+        _PRICING_DOC.get("providers", {}).get(provider_id, {}).get("models", [])
+    )
+
+
+def get_model_pricing(provider_id: str, model_id: str) -> dict | None:
+    """Look up the pricing entry for a specific model. Returns None if either
+    the provider or the model is not in pricing.json — caller should fall
+    back to provider flagship rate from BUILTIN_PROVIDERS."""
+    for entry in get_pricing_models(provider_id):
+        if entry.get("id") == model_id:
+            return entry
+    return None
+
+
+def reload_pricing_doc() -> dict:
+    """Re-read pricing.json from disk. Used by the admin refresh endpoint so
+    pricing edits propagate without an uvicorn restart. Returns the full doc."""
+    global _PRICING_DOC
+    _PRICING_DOC = _load_pricing_doc()
+    return _PRICING_DOC
+
 # Mutable runtime caches. Auto-discovery (Phase 5) populates available_models;
 # capability detection populates capabilities; per-seed enabled_tools list is
 # read from ws_modules.route_config in callers, this dict is a lazy mirror.
@@ -142,11 +184,35 @@ class EnergyRegistry:
         completion_tokens: int,
         cache_read_tokens: int = 0,
         cache_write_tokens: int = 0,
+        model: str | None = None,
     ) -> float:
-        """Cost in USD. Cache-aware: read tokens billed at cache_read_per_1k_input,
-        write tokens at cache_write_per_1k_input, fresh input at full rate.
+        """Cost in USD. Cache-aware: read tokens billed at cached input rate,
+        write tokens at cache_write rate, fresh input at full rate.
         prompt_tokens should be the *uncached* fresh input tokens; cache_read
-        and cache_write are reported separately by the provider."""
+        and cache_write are reported separately by the provider.
+
+        When `model` is supplied AND found in pricing.json, uses that model's
+        per-1M rates. Otherwise falls back to the provider flagship's per-1K
+        rates from providers.json. This lets callers that know which model
+        they're using get exact per-model cost without forcing every existing
+        caller to be updated at once."""
+        per_model = get_model_pricing(provider_id, model) if model else None
+        if per_model:
+            in_rate_1m = float(per_model.get("input_per_1m", 0.0))
+            out_rate_1m = float(per_model.get("output_per_1m", 0.0))
+            cache_read_rate_1m = float(
+                per_model.get("cached_input_per_1m", in_rate_1m)
+            )
+            cache_write_rate_1m = float(
+                per_model.get("cache_write_per_1m", in_rate_1m)
+            )
+            return (
+                (prompt_tokens / 1_000_000) * in_rate_1m
+                + (cache_read_tokens / 1_000_000) * cache_read_rate_1m
+                + (cache_write_tokens / 1_000_000) * cache_write_rate_1m
+                + (completion_tokens / 1_000_000) * out_rate_1m
+            )
+        # Flagship fallback (legacy per-1K shape from providers.json).
         info = self._providers.get(provider_id)
         if not info:
             return 0.0

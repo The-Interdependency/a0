@@ -535,6 +535,43 @@ async def discover_models(provider_id: str, request: Request):
     return await run_discover_models(provider_id)
 
 
+@router.post("/refresh-pricing/{provider_id}")
+async def refresh_pricing(provider_id: str, request: Request):
+    """
+    Re-read pricing.json from disk and re-hydrate the seed's available_models
+    list with the latest per-model rates. Admin only.
+
+    This is the source-of-truth refresh: edit pricing.json in repo, redeploy,
+    then call this endpoint to propagate to the live seed without an uvicorn
+    restart. Live HTML extraction from `pricing_url` is a future phase — for
+    now /discover does the live URL fetch + regex extraction (lossy), and
+    this endpoint does the canonical re-hydration from the repo manifest.
+
+    Returns: {provider_id, model_count, refreshed_at, models:[{id,...}]}.
+    """
+    await _require_admin(request)
+    if provider_id not in BUILTIN_PROVIDERS:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_id}")
+    from ..services.energy_registry import reload_pricing_doc, get_pricing_models
+    reload_pricing_doc()
+    models = get_pricing_models(provider_id)
+    refreshed_at = int(time.time() * 1000)
+    try:
+        await _update_seed_route_config(provider_id, {
+            "available_models": models,
+            "prices_updated_at": refreshed_at,
+            "pricing_url": _PROVIDER_PRICING_URLS.get(provider_id, ""),
+        })
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"seed update failed: {exc}")
+    return {
+        "provider_id": provider_id,
+        "model_count": len(models),
+        "refreshed_at": refreshed_at,
+        "models": models,
+    }
+
+
 # PCNA converge endpoint
 @pcna_router.post("/converge/{provider_id}")
 async def converge_provider_pcna(provider_id: str, request: Request):

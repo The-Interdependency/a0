@@ -98,6 +98,10 @@ async def call_model(
             raise PermissionError(
                 f"Provider {provider_id!r} is disabled in route_config"
             )
+    # call_energy_provider raises RuntimeError on missing api_key or unknown
+    # provider — we let it propagate (no silent-fallback doctrine). Earlier
+    # versions returned a fake "[provider API key not configured…]" string;
+    # that sentinel detection is gone now that the upstream raises directly.
     content, usage = await call_energy_provider(
         provider_id=provider_id,
         messages=messages,
@@ -108,18 +112,6 @@ async def call_model(
         skip_approval=skip_approval,
         reasoning_effort=reasoning_effort,
     )
-    # Detect the inference._fallback_response sentinel and raise instead of
-    # letting "[provider API key not configured — energy provider
-    # unavailable]" pose as a real assistant turn.
-    if (
-        content
-        and content.startswith(f"[{provider_id} API key not configured")
-        and not usage
-    ):
-        raise RuntimeError(
-            f"Provider {provider_id!r} API key not configured "
-            f"(env var: {spec.get('env_key')})"
-        )
     return content, usage
 
 

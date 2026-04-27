@@ -526,11 +526,17 @@ async def call_energy_provider(
 
     spec = BUILTIN_PROVIDERS.get(provider_id)
     if not spec:
-        return _fallback_response(provider_id), {}
+        raise RuntimeError(
+            f"Unknown provider_id={provider_id!r} — no spec in BUILTIN_PROVIDERS. "
+            f"This indicates a misrouted call; fix at the caller."
+        )
 
     api_key = os.environ.get(spec["env_key"], "")
     if not api_key:
-        return _fallback_response(provider_id), {}
+        raise RuntimeError(
+            f"{provider_id} unavailable: env var {spec['env_key']} is not set. "
+            f"Set the API key or route the request to a configured provider."
+        )
 
     payload_messages: list[dict] = []
     if system_prompt:
@@ -655,7 +661,10 @@ async def _call_openai_routed(
 
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
-        return _fallback_response("openai"), {}
+        raise RuntimeError(
+            "openai unavailable: env var OPENAI_API_KEY is not set. "
+            "Set the API key or route the request to a configured provider."
+        )
 
     full_input: list[dict] = []
     if system_prompt:
@@ -860,8 +869,4 @@ async def _call_anthropic_LEGACY_DEAD_PATH(
         current_messages.append({"role": "user", "content": tool_results})
 
     return "[claude: tool loop exhausted]", accumulated_usage
-
-
-def _fallback_response(provider_id: str) -> str:
-    return f"[{provider_id} API key not configured — energy provider unavailable]"
 # 855:171

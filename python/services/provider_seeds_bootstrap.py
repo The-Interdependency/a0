@@ -48,6 +48,7 @@ from .energy_registry import (
     BUILTIN_PROVIDERS,
     _PROVIDER_PRESETS,
     _PROVIDER_PRICING_URLS,
+    get_pricing_models,
 )
 
 _CAPABILITY_KEYS = (
@@ -62,16 +63,30 @@ _CAPABILITY_KEYS = (
 
 
 def _default_route_config(provider_id: str) -> dict[str, Any]:
-    """Build the canonical seed route_config for a fresh provider row."""
+    """Build the canonical seed route_config for a fresh provider row.
+
+    available_models is hydrated from pricing.json (full per-model dicts:
+    id, context_window, input_per_1m, output_per_1m, cached_input_per_1m,
+    capability flags). If pricing.json has no entry for this provider the
+    list falls back to a single-entry list with just the flagship slug —
+    surfaces are expected to handle both shapes (dict-with-id or bare-string).
+    """
     spec = BUILTIN_PROVIDERS.get(provider_id, {})
     presets = _PROVIDER_PRESETS.get(provider_id, {})
     primary_model = spec.get("model", "")
     balance = presets.get("balance") or {}
     capabilities = {k: spec[k] for k in _CAPABILITY_KEYS if k in spec}
+    pricing_models = get_pricing_models(provider_id)
+    if pricing_models:
+        available_models: list = list(pricing_models)
+    elif primary_model:
+        available_models = [primary_model]
+    else:
+        available_models = []
     return {
         "model_assignments": dict(balance),
         "active_preset": "balance",
-        "available_models": [primary_model] if primary_model else [],
+        "available_models": available_models,
         "enabled_tools": [],
         "capabilities": capabilities,
         "presets": presets,
