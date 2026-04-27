@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Send, Paperclip, X, FileText, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { ModelPicker } from "@/components/model-picker";
 
 export interface PendingAttachment {
   id: number;
@@ -43,6 +44,10 @@ export interface ChatSendOpts {
   // emits orchestration_start (which only fires once the chat handler
   // reaches the multi-model branch).
   resolved_providers?: string[];
+  // Per-message model id chosen in the composer's single-mode picker. When
+  // present the backend pins this turn to that model; when absent the
+  // backend falls back through agent_model > active_provider > conv.model.
+  model?: string;
 }
 
 const MODES = [
@@ -58,9 +63,16 @@ interface PrefsRes { orchestration_mode?: string; cut_mode?: string; providers?:
 export function ChatInput({
   onSend,
   isSending,
+  hideModelPicker = false,
 }: {
   onSend: (content: string, attachmentIds: number[], opts?: ChatSendOpts) => void;
   isSending: boolean;
+  // Forge surfaces wire ChatInput but discard `opts` — surfacing a picker
+  // there would mislead the user (the chosen model would silently do
+  // nothing). Forge agents also carry their own configured model_id, so a
+  // per-message override would conflict with that design. Pass true to
+  // hide the picker on those surfaces.
+  hideModelPicker?: boolean;
 }) {
   const { toast } = useToast();
   const [input, setInput] = useState("");
@@ -72,6 +84,9 @@ export function ChatInput({
   const [mode, setMode] = useState<string>("single");
   const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
   const [showOrch, setShowOrch] = useState(false);
+  // Per-message model override (single mode only). null = "auto" — let the
+  // backend resolve via agent model > active_provider > conv.model.
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
   const { data: availability = [] } = useQuery<AvailEntry[]>({
     queryKey: ["/api/v1/agents/energy-providers"],
@@ -200,6 +215,13 @@ export function ChatInput({
       // cards match what the server is about to call.
       opts.resolved_providers = availableProviders.map((a) => a.id);
     }
+    // Single-mode model override is meaningless in fan-out / council /
+    // daisy-chain (those route to multiple providers) — only attach it
+    // when we're in single mode and the user picked something other than
+    // auto.
+    if (!currentMode.multi && selectedModel) {
+      opts.model = selectedModel;
+    }
     onSend(trimmed, attachments.map((a) => a.id), opts);
     setInput("");
     setAttachments((prev) => {
@@ -317,12 +339,24 @@ export function ChatInput({
                 </button>
               )}
             </>
-          ) : (
+          ) : hideModelPicker ? (
             <span className="text-muted-foreground">
               provider:{" "}
-              <span className="text-foreground">
-                {activeProviderId ?? "—"}
-              </span>
+              <span className="text-foreground">{activeProviderId ?? "—"}</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              model:
+              <ModelPicker value={selectedModel} onChange={setSelectedModel} />
+              {!selectedModel && activeProviderId && (
+                <span
+                  className="text-foreground/70"
+                  data-testid="text-default-provider"
+                  title="Default provider when picker is set to auto"
+                >
+                  → {activeProviderId}
+                </span>
+              )}
             </span>
           )}
           <button

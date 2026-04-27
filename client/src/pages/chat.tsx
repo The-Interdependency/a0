@@ -168,6 +168,7 @@ export default function ChatPage() {
       providers?: string[];
       cut_mode?: string;
       resolved_providers?: string[];
+      model?: string;
     }) => {
       if (!activeConvId) throw new Error("No conversation selected");
       const isMulti =
@@ -193,6 +194,10 @@ export default function ChatPage() {
       if (payload.orchestration_mode) body.orchestration_mode = payload.orchestration_mode;
       if (payload.providers && payload.providers.length) body.providers = payload.providers;
       if (payload.cut_mode) body.cut_mode = payload.cut_mode;
+      // Per-message model override. Backend chain is body.model > agent
+      // model > active_provider > conv.model — sending it here pins this
+      // single turn to the chosen model without flipping global defaults.
+      if (payload.model) body.model = payload.model;
       if (runId) body.client_run_id = runId;
       const res = await apiRequest("POST", `/api/v1/conversations/${activeConvId}/messages`, body);
       return res.json();

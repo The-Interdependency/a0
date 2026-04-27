@@ -195,7 +195,11 @@ export default function ForgeAgentChat({ agentId, agentName, onClose }: Props) {
       </div>
 
       {!!activeConvId && (
-        <ChatInput onSend={(c) => sendMessage.mutate(c)} isSending={sendMessage.isPending} />
+        <ChatInput
+          onSend={(c) => sendMessage.mutate(c)}
+          isSending={sendMessage.isPending}
+          hideModelPicker
+        />
       )}
     </div>
   );

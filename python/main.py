@@ -230,6 +230,16 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS transcripts_unlocked BOOLEAN NOT NULL DEFAULT false"
         ))
     print("[users] transcripts_unlocked column ensured")
+    # Drop the old `server_default='gemini'` on conversations.model. Every
+    # call site (chat.py, forge.py, focus.py, cli.py) already passes a model
+    # explicitly; the default was a silent fallback that could hide a bug
+    # where future code paths forgot to set it. Idempotent — Postgres turns
+    # ALTER COLUMN ... DROP DEFAULT into a no-op when no default exists.
+    async with get_session() as _sess:
+        await _sess.execute(_sa_text(
+            "ALTER TABLE conversations ALTER COLUMN model DROP DEFAULT"
+        ))
+    print("[conversations] silent 'gemini' default dropped from model column")
     async with get_session() as _sess:
         await _sess.execute(_sa_text("""
             CREATE TABLE IF NOT EXISTS ws_modules (

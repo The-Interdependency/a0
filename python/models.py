@@ -46,7 +46,7 @@ class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(Text, nullable=False, server_default="New Chat")
-    model = Column(Text, nullable=False, server_default="gemini")
+    model = Column(Text, nullable=False)
     user_id = Column(String)
     context_boost = Column(Text)
     parent_conv_id = Column(Integer)
