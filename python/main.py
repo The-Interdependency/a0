@@ -37,6 +37,45 @@ def get_pcna_8() -> PCNAEngine:
     return _pcna_8
 
 
+# Per-provider PCNA cores — lazy-forked from the primary p7 engine on the first
+# chat turn routed through that provider. Each core receives infer signals from
+# its provider's chat turns; rewards stay explicit (pcna_reward tool routes via
+# caller_provider). Converge back to primary is admin-triggered via
+# /api/v1/pcna/converge/{provider_id} (already wired in routes/energy.py).
+_provider_pcna_cores: dict[str, PCNAEngine] = {}
+
+
+def get_provider_pcna_cores() -> dict[str, PCNAEngine]:
+    """Return the live registry of forked provider cores. Empty until first call."""
+    return _provider_pcna_cores
+
+
+async def get_or_fork_provider_pcna(provider_id: str) -> PCNAEngine:
+    """Lazy-fork primary into a provider-scoped core on first call.
+
+    Sets _checkpoint_key so save_checkpoint persists under
+    `pcna_provider_<id>`; tries to load the prior checkpoint so per-provider
+    learning persists across restarts (silent return if none exists, which is
+    the normal case on first-ever fork).
+    """
+    existing = _provider_pcna_cores.get(provider_id)
+    if existing is not None:
+        return existing
+    from .engine import InstanceMerge
+    parent = get_pcna()
+    child, fork_meta = InstanceMerge.fork(parent)
+    child._checkpoint_key = f"pcna_provider_{provider_id}"
+    await child.load_checkpoint()
+    _provider_pcna_cores[provider_id] = child
+    _instances[child.theta.instance_id] = child
+    print(
+        f"[pcna] forked provider core '{provider_id}' "
+        f"(parent={fork_meta.get('parent_id', '')[:12]}, "
+        f"child={fork_meta.get('child_id', '')[:12]})"
+    )
+    return child
+
+
 _ZFAE_TOOL_SPECS = {
     "pcna_infer": {
         "description": "Run PCNA tensor inference — propagates a signal through phi/psi/omega rings and returns coherence output",

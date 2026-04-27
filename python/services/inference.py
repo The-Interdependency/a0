@@ -495,6 +495,32 @@ async def call_energy_provider(
     system_prompt = _prepend_doctrine(system_prompt)
     messages = _build_provider_messages(messages, provider_id)
 
+    # Per-provider PCNA: lazy-fork on first call, fire infer signal with the
+    # last user text. Reward stays explicit (pcna_reward tool, routed via
+    # caller_provider). Failure to fork or infer must NOT block the chat —
+    # PCNA is a learning side-effect, not the user-facing concern. Logged at
+    # WARNING so genuine bugs surface without silently corrupting output.
+    try:
+        from ..main import get_or_fork_provider_pcna
+        _core = await get_or_fork_provider_pcna(provider_id)
+        _last_user_text = ""
+        for _m in reversed(messages):
+            if _m.get("role") == "user":
+                _c = _m.get("content")
+                if isinstance(_c, str):
+                    _last_user_text = _c
+                elif isinstance(_c, list):
+                    for _p in _c:
+                        if isinstance(_p, dict) and _p.get("type") == "text":
+                            _last_user_text = _p.get("text", "")
+                            break
+                break
+        if _last_user_text:
+            # Cap to avoid projecting megabytes — projection is fixed-dim.
+            _core.infer(_last_user_text[:4000])
+    except Exception as _pcna_err:
+        _log.warning("[pcna] provider core infer skipped for %s: %s", provider_id, _pcna_err)
+
     if provider_id == "openai":
         return await _call_openai_routed(messages, system_prompt, use_tools=use_tools, user_id=user_id, skip_approval=skip_approval)
 

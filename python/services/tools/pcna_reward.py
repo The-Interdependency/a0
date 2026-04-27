@@ -36,14 +36,30 @@ SCHEMA = {
 
 
 async def handle(score: float = 0.0, reason: str = "", **_) -> str:
-    from ...main import get_pcna as _get
-    pcna = _get()
+    """Route reward to the caller's provider core if active, else primary.
+
+    Honest dual-routing: caller_provider is set by the inference dispatcher
+    during a chat turn, so a reward fired inside a turn lands on that
+    provider's forked core. Tools fired outside any chat context (admin
+    invocation, batch jobs, etc.) reward primary. Both paths are observable
+    in the returned `routed_to` field — no silent fallback.
+    """
+    from ...main import get_pcna, get_or_fork_provider_pcna
+    from ..tool_distill import get_caller_provider
     score = float(score)
-    pcna.reward(winner="agent", outcome=score)
+    caller = get_caller_provider()
+    if caller:
+        target = await get_or_fork_provider_pcna(caller)
+        routed_to = f"provider_{caller}"
+    else:
+        target = get_pcna()
+        routed_to = "primary"
+    target.reward(winner="agent", outcome=score)
     return json.dumps({
         "applied_score": score,
         "reason": reason or "not specified",
-        "reward_count": pcna.reward_count,
-        "last_coherence": round(pcna.last_coherence, 4),
+        "reward_count": target.reward_count,
+        "last_coherence": round(target.last_coherence, 4),
+        "routed_to": routed_to,
     })
 # 43:1

@@ -25,6 +25,12 @@ def set_caller_provider(provider_id: str | None):
     return _caller_provider.set(provider_id)
 
 
+def get_caller_provider() -> str | None:
+    """Read the current caller_provider — the provider whose chat turn this
+    code is executing inside, if any. Returns None outside any chat context."""
+    return _caller_provider.get()
+
+
 def reset_caller_provider(token) -> None:
     """Reset the caller_provider contextvar to its prior value."""
     try:
