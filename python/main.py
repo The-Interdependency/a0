@@ -488,6 +488,9 @@ async def lifespan(app: FastAPI):
     from .services.bg_tasks import spawn as _spawn_bg
     _spawn_bg(pending_gate_sweep_loop(), name="pending_gate_sweep")
     print("[chat] pending-gate sweep loop started")
+    from .services.spawn_executor import _poll_loop as _spawn_exec_loop
+    _spawn_bg(_spawn_exec_loop(), name="spawn_executor_poll")
+    print("[spawn_executor] poll loop started — pending agent_runs will be executed")
     yield
     await heartbeat_service.stop()
     try:
