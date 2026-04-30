@@ -4,6 +4,15 @@ Agentic Model Wrapper and Inference Engine exploring Prime Consciousness Theory 
 
 This repository is the primary implementation home for **a0**: an agent wrapper/runtime intended to support coherent tool use, model/provider routing, memory, documentation, evaluation, and durable human-facing workflows.
 
+## Project name: `a0` vs `a0p`
+
+If you arrived here from the deployed app and saw a different name, here is the relationship:
+
+- **`a0`** is the project — this repository, the runtime, the codebase, and everything you contribute to. Issues, PRs, docs, and roadmap are all under the name `a0`.
+- **`a0p`** is the deployed instance of `a0` — the live, public-facing research instrument operated by the project owner. The user-visible app copy (titles, billing, pricing, splash) uses `a0p` to refer to that running instance.
+
+In short: **`a0` is the thing you build; `a0p` is the thing that runs.** Anywhere you see `a0p` in user-facing UI, billing copy, or backend comments, it refers to the deployed instance of this same `a0` codebase. Contributor-facing material (README, CONTRIBUTING, `docs/`) refers to the project as `a0`.
+
 ## Current contributor needs
 
 We are looking for collaborators interested in:
@@ -26,14 +35,14 @@ Start here:
 
 ## Access model (what is open, what is owner-only)
 
-a0 ships as a research instrument. The deployed app (a0p) is honest about who can do what:
+`a0` ships as a research instrument. The deployed instance (`a0p`) is honest about who can do what:
 
 - **Reading and using the app is free for everyone.** Every tab is open. There is no paywall and donations do not unlock anything.
 - **Donations fund the work, not access.** The `/pricing` page exists for donors who want to support the project. No tier change, no perks.
 - **A monthly free-tier upload quota** caps compute cost for transcript uploads. It is a guardrail, not a paywall — donations do not lift it.
 - **Owner-only ("admin") write endpoints exist** for actions that mutate the shared research instrument: agent state, learning state, system configuration, and module toggles. Per-user CRUD on your own data is not gated. The contract lives in `python/services/gating.py`.
 
-**What this means for contributors:** standard contribution work — code, docs, tests, evaluation harnesses, website improvements — does not require any in-app access tier. Pull requests go through normal GitHub review. You will only encounter a 403 if you try to invoke an instrument-mutation endpoint directly against the deployed app, which is not part of the documented contribution path. If you need to develop or test something that touches an owner-gated endpoint, open an issue first so we can scope the work or set up a local environment for it.
+**What this means for contributors:** standard contribution work — code, docs, tests, evaluation harnesses, website improvements — does not require any in-app access tier. Pull requests go through normal GitHub review. You will only encounter a 403 if you try to invoke an instrument-mutation endpoint directly against the deployed instance (`a0p`), which is not part of the documented contribution path. If you need to develop or test something that touches an owner-gated endpoint, open an issue first so we can scope the work or set up a local environment for it.
 
 ## Related project
 

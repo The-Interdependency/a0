@@ -84,4 +84,4 @@ Large rewrites are discouraged until the current architecture is documented.
 
 ## A note on access
 
-The deployed app (a0p) is free to use. Donations support the project but do not unlock anything. A small set of write endpoints are owner-only because they mutate shared research-instrument state — see "Access model" in `README.md` and `python/services/gating.py`. None of the contribution areas above require hitting an owner-gated endpoint; if a task you propose appears to, flag that on the issue so we can scope it.
+The deployed instance (`a0p`, the public-facing deployment of `a0`) is free to use. Donations support the project but do not unlock anything. A small set of write endpoints are owner-only because they mutate shared research-instrument state — see "Access model" in `README.md` and `python/services/gating.py`. None of the contribution areas above require hitting an owner-gated endpoint; if a task you propose appears to, flag that on the issue so we can scope it.

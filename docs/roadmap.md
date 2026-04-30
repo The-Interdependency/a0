@@ -2,6 +2,8 @@
 
 This roadmap is a practical contributor guide, not a promise of dates.
 
+> Naming: `a0` is the project / runtime described by this roadmap. `a0p` is the deployed instance of `a0` running publicly. See "Project name: `a0` vs `a0p`" in `README.md`.
+
 ## Phase 1 — Make the project legible
 
 - [ ] Confirm canonical repository structure.

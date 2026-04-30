@@ -1,7 +1,9 @@
 # a0p — a research instrument
 
 ## Identity
-**a0p is a research instrument, not a product.** It explores agent / energy-provider / PCNA dynamics in the open. Anyone may read and use it. Code-altering access is restricted to the owner (Erin) and a small set of explicitly-invited collaborators. The instrument is funded by donations; it does not solicit subscribers.
+**a0p is a research instrument, not a product.** It is the deployed instance of `a0` (this codebase / repository) running publicly. It explores agent / energy-provider / PCNA dynamics in the open. Anyone may read and use it. Code-altering access is restricted to the owner (Erin) and a small set of explicitly-invited collaborators. The instrument is funded by donations; it does not solicit subscribers.
+
+> Naming: `a0` = the project / runtime / repository (used in `README.md`, `CONTRIBUTING.md`, `docs/`, GitHub). `a0p` = the deployed instance of `a0` (used in user-facing UI copy, billing, pricing, splash). See "Project name: `a0` vs `a0p`" in `README.md`.
 
 ## User Preferences
 - Clear and concise explanations.

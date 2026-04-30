@@ -1,6 +1,8 @@
 # a0 Architecture
 
-This document is a living map of the a0 implementation. It is intentionally practical: identify what exists, what is intended, and what remains unresolved.
+This document is a living map of the `a0` implementation. It is intentionally practical: identify what exists, what is intended, and what remains unresolved.
+
+> Naming: `a0` refers to the project / runtime / repository described here. `a0p` refers to the deployed instance of `a0` that runs publicly. See "Project name: `a0` vs `a0p`" in `README.md`.
 
 ## Purpose
 
@@ -54,7 +56,7 @@ Open questions:
 
 ## Access and gating layer
 
-The deployed app uses a simple two-tier model defined in `python/services/gating.py`:
+The deployed instance (`a0p`) uses a simple two-tier model defined in `python/services/gating.py`:
 
 - **Open access** — every UI tab, every read endpoint, and per-user CRUD on the caller's own data. No paywall, no donation gate.
 - **Owner-only writes** — endpoints that mutate shared research-instrument state (agent state, learning state, system configuration, module toggles) require the caller's `x-user-role` header to be `admin`. The contract is enforced by `python/tests/contracts/gating.py` against an explicit allowlist in `python/services/gating_allowlist.py`.
