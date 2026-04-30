@@ -52,6 +52,17 @@ Open questions:
 5. What fallback behavior is acceptable when a provider fails?
 6. What user approval scopes are required before tool execution?
 
+## Access and gating layer
+
+The deployed app uses a simple two-tier model defined in `python/services/gating.py`:
+
+- **Open access** — every UI tab, every read endpoint, and per-user CRUD on the caller's own data. No paywall, no donation gate.
+- **Owner-only writes** — endpoints that mutate shared research-instrument state (agent state, learning state, system configuration, module toggles) require the caller's `x-user-role` header to be `admin`. The contract is enforced by `python/tests/contracts/gating.py` against an explicit allowlist in `python/services/gating_allowlist.py`.
+
+Donations (`/pricing`) are pure support and do not change tier or unlock endpoints. The grandfathered "supporter" label exists only for legacy Stripe subscriptions that pre-date the donation reframe.
+
+This posture is described for new contributors in `README.md` ("Access model") and `CONTRIBUTING.md` ("How access works for contributors").
+
 ## Safety and audit requirements
 
 Implementation should prefer:
