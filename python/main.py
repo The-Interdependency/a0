@@ -559,16 +559,25 @@ async def lifespan(app: FastAPI):
     # append-only audit log lives in bandit_pulls. We snapshot row
     # count to the log on the way out so operators are not surprised
     # by data loss on first boot after the migration.
-    async with get_session() as _sess:
-        try:
+    #
+    # The probe and the drop MUST run in separate sessions: if
+    # bandit_arms doesn't exist, the probe SELECT raises UndefinedTable
+    # which poisons the transaction (asyncpg) — a subsequent DROP in
+    # the same session then fails with "current transaction is aborted"
+    # and crashes the entire FastAPI lifespan. Two sessions = two
+    # independent transactions.
+    try:
+        async with get_session() as _sess:
             n = (await _sess.execute(_sa_text(
                 "SELECT COUNT(*) AS n FROM bandit_arms"
             ))).scalar() or 0
             if n:
                 print(f"[bandit_arms] dropping legacy table ({n} rows); "
                       "live state moved to PCNAEngine.bandit_state.")
-        except Exception:
-            pass
+    except Exception:
+        # Table may already be gone on a re-boot after first migration.
+        pass
+    async with get_session() as _sess:
         await _sess.execute(_sa_text("DROP TABLE IF EXISTS bandit_arms"))
     print("[bandit_arms] legacy table dropped (Task #112)")
     await _seed_system_shadow_modules()
