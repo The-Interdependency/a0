@@ -39,6 +39,20 @@ human request
 - `DEPLOYMENT.md` — deployment notes.
 - `interdependent_way.md` — philosophical/source doctrine for project behavior and voice.
 
+## Where things live
+
+A short implementation map for the working component layers in this repo:
+
+- `a0 agent interface` → `client/` for the browser UI, `server/` for the Express proxy, and `python/routes/` for backend API endpoints.
+- `context / memory layer` → `python/engine/pcna.py` (PCNA engine and memory inference), with persisted state modeled in `python/models.py` and `python/storage/domain.py`.
+- `planner / policy layer` → `python/services/inference.py` for orchestration and `python/config/policy_loader.py` for policy config.
+- `provider routing layer` → `python/services/energy_registry.py` and `python/services/providers/` (including `python/services/providers/_resolver.py`).
+- `model call(s)` → `python/services/inference.py` plus provider implementations under `python/services/providers/`.
+- `tool execution layer` → `python/services/tool_executor.py` and tool handlers in `python/services/tools/`.
+- `audit / logging layer` → `python/logger.py` for log streams and audit plumbing in services such as `python/services/spawn_executor.py`.
+- `gating / access control` → `python/services/gating.py` (with explicit allowlist rules in `python/services/gating_allowlist.py`).
+- `agent runtime` → `python/main.py` for FastAPI startup, PCNA lifecycle, and route registration.
+
 ## AIMMH boundary
 
 AIMMH is expected to provide, or eventually provide, the multimodel/multimodal hub layer. The clean boundary still needs confirmation.
