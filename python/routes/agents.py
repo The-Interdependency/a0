@@ -1,7 +1,6 @@
-# 168:17
+# 171:18
 import time
 from fastapi import APIRouter, HTTPException, Request
-from ..services.gating import require_admin
 from pydantic import BaseModel
 from typing import Optional
 
@@ -12,6 +11,7 @@ from ..agents.zfae import (
 )
 from ..services.energy_registry import energy_registry
 from ..engine import PCNAEngine, InstanceMerge
+from ._admin_gate import require_admin
 
 # DOC module: agents
 # DOC label: Agents
@@ -171,19 +171,16 @@ async def list_energy_providers():
 
 
 @router.post("/agents/energy-providers/active")
-async def set_active_provider(body: SetProviderRequest, request: Request):
-    require_admin(request)
+async def set_active_provider(request: Request, body: SetProviderRequest):
+    await require_admin(request)
     if not await energy_registry.set_active_provider_persistent(body.provider_id):
         raise HTTPException(status_code=400, detail="unknown provider")
     return {"active": body.provider_id, "agent_name": compose_name(body.provider_id)}
 
 
 @router.post("/agents/spawn")
-async def spawn_sub_agent(body: SpawnRequest, request: Request):
-    # Sub-agent spawn forks the primary PCNA into shared in-memory state
-    # (`_sub_agents`) — that is an instrument-mutating action, not per-user
-    # CRUD. Owner-only.
-    require_admin(request)
+async def spawn_sub_agent(request: Request, body: SpawnRequest):
+    await require_admin(request)
     from ..main import get_pcna
     global _sub_counter
     parent = get_pcna()
@@ -198,8 +195,7 @@ async def spawn_sub_agent(body: SpawnRequest, request: Request):
 
 @router.post("/agents/{agent_name}/merge")
 async def merge_sub_agent(agent_name: str, request: Request):
-    # Merge mutates the primary PCNA's tensor state — owner-only.
-    require_admin(request)
+    await require_admin(request)
     from ..main import get_pcna
     if agent_name not in _sub_agents:
         raise HTTPException(status_code=404, detail="sub-agent not found")

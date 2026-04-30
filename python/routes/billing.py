@@ -1,4 +1,4 @@
-# 371:80
+# 501:58
 import os
 import stripe
 from fastapi import APIRouter, HTTPException, Request
@@ -10,16 +10,16 @@ from ..services.stripe_service import STRIPE_SECRET_KEY
 from .billing_helpers import is_supporter_subscription
 
 # DOC module: billing
-# DOC label: Funding
-# DOC description: a0p is a research instrument funded by donations. Free tier is the only tier ordinary users see; the legacy Supporter recurring tier is retired (existing subscribers grandfathered). ws tier auto-assigned to @interdependentway.org accounts.
+# DOC label: Billing
+# DOC description: Donations-only billing surface. a0p is a research instrument, not a subscription product — there is no recurring sign-up tier. Existing Supporter subscribers are honored until they cancel via the Stripe portal. ws tier auto-assigned to @interdependentway.org accounts; admin tier reserved for the owner + invited collaborators.
 # DOC tier: free
 # DOC endpoint: GET /api/v1/billing/status | Get current user billing status and tier
-# DOC endpoint: GET /api/v1/billing/plans | List available tiers (free + donation only)
-# DOC endpoint: GET /api/v1/billing/funding-statement | Return the verbatim donation legal/tax copy
-# DOC endpoint: POST /api/v1/billing/donate | Create one-off Stripe checkout session for a donation
-# DOC endpoint: POST /api/v1/billing/portal | Open Stripe customer portal (legacy supporter management only)
+# DOC endpoint: GET /api/v1/billing/plans | List supported flows (donation only; legacy Supporter tier retired)
+# DOC endpoint: POST /api/v1/billing/donate | One-off donation to support the instrument (no perks unlocked)
+# DOC endpoint: POST /api/v1/billing/portal | Open Stripe customer portal for legacy subscribers to cancel
 # DOC endpoint: POST /api/v1/billing/webhook | Stripe webhook receiver
 # DOC endpoint: PATCH /api/v1/billing/admin/users/tier | (admin) Set a user tier directly
+# DOC notes: Verbatim copy block visible on /pricing — "I don't have the cash required for 501c3 status, so I have to report it for taxes, but every tax payer is allowed to claim up to five hundred dollars in charitable donations per year without receipts required."
 
 UI_META = {
     "tab_id": "billing",
@@ -43,7 +43,6 @@ DATA_SCHEMA = {
     "endpoints": [
         {"method": "GET", "path": "/api/v1/billing/status"},
         {"method": "GET", "path": "/api/v1/billing/plans"},
-        {"method": "GET", "path": "/api/v1/billing/funding-statement"},
         {"method": "POST", "path": "/api/v1/billing/donate"},
         {"method": "POST", "path": "/api/v1/billing/portal"},
         {"method": "POST", "path": "/api/v1/billing/webhook"},
@@ -52,25 +51,28 @@ DATA_SCHEMA = {
 
 router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
 
-# Verbatim funding statement — owner-authored legal/tax copy. DO NOT paraphrase.
-# This block is the source of truth surfaced by GET /funding-statement and embedded
-# in replit.md and README.md. If the owner edits the wording, edit it here.
-FUNDING_STATEMENT = (
-    "I don't have the cash required for 501c3 status, so I have to report it for "
-    "taxes, but every tax payer is allowed to claim up to five hundred dollars in "
-    "charitable donations per year without receipts required."
-)
-
+# Donations-only — there is no recurring "Supporter" tier any more.
+# The interval/Supporter scaffolding has been retired (Task #110); existing
+# subscribers are honored via the Stripe webhook + portal until they cancel.
 _DONATION_RETURN_PATH = "/pricing?donation=success"
 _WS_DOMAIN = "interdependentway.org"
 _ALLOWED_USER_COLS = {
     "stripe_customer_id", "stripe_subscription_id", "subscription_tier",
-    "subscription_status", "transcripts_unlocked",
+    "subscription_status",
 }
 
-# `supporter` is grandfathered — existing rows remain valid, but no path creates new ones.
-VALID_TIERS = ("free", "supporter", "ws", "admin")
-DONATION_MIN_CENTS = 500  # $5.00 minimum donation amount
+VALID_TIERS = ("free", "ws", "admin")
+DONATION_MIN_CENTS = 500  # $5.00 minimum one-off donation. Donations DO NOT unlock features.
+
+# Verbatim copy block for the donations surface. Source of truth — the
+# /pricing page reads this through GET /plans so the wording stays in one
+# place.
+DONATION_LEGAL_COPY = (
+    "I don't have the cash required for 501c3 status, so I have to report "
+    "it for taxes, but every tax payer is allowed to claim up to five "
+    "hundred dollars in charitable donations per year without receipts "
+    "required."
+)
 
 
 def _user_id(request: Request) -> Optional[str]:
@@ -163,43 +165,37 @@ async def get_status(request: Request):
 
 @router.get("/config")
 async def get_billing_config():
-    """Return public billing configuration (publishable key, interval info)."""
+    """Return public billing configuration (publishable key only)."""
     pk = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
-    return {
-        "stripe_publishable_key": pk,
-        "donation_min_cents": DONATION_MIN_CENTS,
-    }
+    return {"stripe_publishable_key": pk}
 
 
 @router.get("/plans")
 async def list_plans():
-    """Return the (small) catalog: free tier + donation. The legacy Supporter
-    recurring tier is retired — existing subscribers manage via /portal."""
+    """Donations-only — no tiers, no plans, no perks.
+
+    a0p is a research instrument. There is nothing to buy. The endpoint
+    exists so the /pricing page can render the donation prompt and the
+    verbatim 501c3 / $500 disclosure copy from a single source of truth.
+    There is intentionally no "Free" plan object — every signed-in user
+    already has full console access; surfacing a "Free" tier here would
+    falsely imply a paid tier exists alongside it.
+    """
     return {
         "tiers": [
             {
-                "name": "Free",
-                "product_key": "free",
-                "amount": 0,
-                "description": "Full console access — every tab unlocked. This is the only tier ordinary users see.",
+                "name": "Donation",
+                "product_key": "donation",
+                "amount_min_cents": DONATION_MIN_CENTS,
+                "description": (
+                    "One-off contribution to keep the instrument running. "
+                    "Buys no perks, no tier, no unlock — pure support."
+                ),
+                "legal_copy": DONATION_LEGAL_COPY,
             },
         ],
-        "donation": {
-            "min_cents": DONATION_MIN_CENTS,
-            "description": "One-off donation in any amount you choose. Donations fund the research instrument; they do not unlock features.",
-        },
+        "legal_copy": DONATION_LEGAL_COPY,
     }
-
-
-@router.get("/funding-statement")
-async def funding_statement():
-    """Return the verbatim, owner-authored donation legal/tax copy.
-
-    This is the source of truth for the wording surfaced on /pricing and in
-    the public README. It is intentionally a server endpoint (not hardcoded
-    in the client) so future edits to the wording happen in exactly one place.
-    """
-    return {"statement": FUNDING_STATEMENT}
 
 
 class SetTierBody(BaseModel):
@@ -236,15 +232,17 @@ class DonateBody(BaseModel):
 
 @router.post("/donate")
 async def create_donation(body: DonateBody, request: Request):
-    """One-off donation to fund the research instrument.
+    """One-off donation to support the research instrument.
 
-    Donations do NOT unlock features — every tab is already free for everyone.
-    The only thing donations buy is the continued existence of the instrument.
-    Therefore: anonymous donors are accepted. The whole point of the reframe
-    is that anyone, logged in or not, can support the instrument.
-
-    Tax handling for donors is described verbatim by GET /funding-statement.
+    A donation buys NOTHING — no tier change, no transcript unlock, no perks.
+    It is purely contribution. Free-tier upload quota stays as it is for
+    everyone whether or not they donate. (Task #110 retired the
+    donation-unlocks-uploads paywall logic that contradicted the
+    research-instrument framing.)
     """
+    uid = _user_id(request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     if not STRIPE_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Stripe not configured")
     if body.amount_cents < DONATION_MIN_CENTS:
@@ -253,27 +251,22 @@ async def create_donation(body: DonateBody, request: Request):
             detail=f"Minimum donation is ${DONATION_MIN_CENTS / 100:.2f}",
         )
 
-    uid = _user_id(request)  # may be None — anonymous donations are allowed.
-
     stripe.api_key = STRIPE_SECRET_KEY
     origin = request.headers.get("origin") or "https://a0p.replit.app"
     return_url = body.return_url or f"{origin}{_DONATION_RETURN_PATH}"
 
-    customer_id: str | None = None
-    user_email: str | None = None
-    if uid:
-        async with engine.connect() as conn:
-            row = await conn.execute(
-                text("SELECT email, stripe_customer_id FROM users WHERE id = :id"),
-                {"id": uid},
-            )
-            rec = row.mappings().first()
-        if rec:
-            customer_id = rec["stripe_customer_id"]
-            user_email = rec["email"]
+    async with engine.connect() as conn:
+        row = await conn.execute(
+            text("SELECT email, stripe_customer_id FROM users WHERE id = :id"),
+            {"id": uid},
+        )
+        rec = row.mappings().first()
+
+    customer_id = rec["stripe_customer_id"] if rec else None
+    user_email = rec["email"] if rec else None
 
     session_kwargs: dict = {
-        "ui_mode": "embedded_page",
+        "ui_mode": "embedded",
         "return_url": return_url,
         "mode": "payment",
         "line_items": [
@@ -281,8 +274,11 @@ async def create_donation(body: DonateBody, request: Request):
                 "price_data": {
                     "currency": "usd",
                     "product_data": {
-                        "name": "a0p — Donation",
-                        "description": "Donation to fund the a0p research instrument. Does not unlock features (everything is already free).",
+                        "name": "a0p donation",
+                        "description": (
+                            "Supports the research instrument. No perks, no "
+                            "tier change, no unlocks — pure contribution."
+                        ),
                     },
                     "unit_amount": body.amount_cents,
                 },
@@ -290,9 +286,7 @@ async def create_donation(body: DonateBody, request: Request):
             }
         ],
         "metadata": {
-            # `user_id` is "anonymous" for un-logged-in donors so the webhook
-            # handler can short-circuit before trying to update a user row.
-            "user_id": uid or "anonymous",
+            "user_id": uid,
             "product_key": "donation",
             "amount_cents": str(body.amount_cents),
         },
@@ -496,23 +490,12 @@ async def _dispatch_webhook(event: dict) -> None:
 
 
 async def _handle_checkout_completed(sess: dict) -> None:
-    """Persist Stripe identifiers from a completed checkout.
-
-    Doctrine post-reframe: donations DO NOT side-effect anything except
-    storing the customer_id (so the user can manage refunds via the
-    portal). They no longer flip transcripts_unlocked or any tier.
-    The legacy 'supporter' product_key branch is kept ONLY to honor
-    in-flight subscriptions started before the reframe — no new path
-    creates supporter checkouts.
-    """
     uid = sess.get("metadata", {}).get("user_id")
     product_key = sess.get("metadata", {}).get("product_key", "")
     customer_id = sess.get("customer")
     subscription_id = sess.get("subscription")
 
-    # Anonymous donors carry uid == "anonymous" (set in /donate). There is no
-    # user row to update — accept the donation in Stripe, no DB side effect.
-    if not uid or uid == "anonymous":
+    if not uid:
         return
 
     updates: dict = {}
@@ -520,13 +503,20 @@ async def _handle_checkout_completed(sess: dict) -> None:
         updates["stripe_customer_id"] = customer_id
     if subscription_id:
         updates["stripe_subscription_id"] = subscription_id
-    if product_key == "supporter":
-        # Grandfathered: only fires for in-flight subscriptions that
-        # predate the reframe. New checkouts never carry this key.
+    # The /checkout endpoint that created Supporter sessions has been
+    # removed (Task #110). However, a Supporter checkout that the user
+    # opened *before* the cutover can still complete after deploy. When
+    # that happens we honor the in-flight session: record the
+    # customer/subscription ids and set tier='supporter' so subsequent
+    # webhook events (subscription.updated / .deleted) that match on
+    # subscription_tier='supporter' route to the correct rows. The
+    # /checkout endpoint stays gone — no NEW supporter sessions can be
+    # created from this codebase.
+    # product_key == "donation" is intentionally a no-op on user
+    # state: donations buy nothing.
+    if product_key == "supporter" and subscription_id:
         updates["subscription_tier"] = "supporter"
         updates["subscription_status"] = "active"
-    # product_key == "donation" intentionally has no side effect — donations
-    # fund the instrument; they do not unlock features.
 
     if updates:
         safe = {k: v for k, v in updates.items() if k in _ALLOWED_USER_COLS}
@@ -538,7 +528,13 @@ async def _handle_checkout_completed(sess: dict) -> None:
 
 
 async def _handle_subscription_updated(sub: dict) -> None:
-    """Maintain status on grandfathered Supporter subscriptions only."""
+    """Track status on legacy supporter subscriptions only.
+
+    Task #110 retired the Supporter tier. We still process status
+    updates for in-flight subscriptions so the user's portal view stays
+    accurate, but we no longer (re-)promote anyone TO 'supporter' here
+    — the status column is updated, the tier column is not touched.
+    """
     customer_id = sub.get("customer")
     status = sub.get("status", "active")
     if not customer_id:
@@ -552,14 +548,20 @@ async def _handle_subscription_updated(sub: dict) -> None:
         await conn.execute(
             text("""
                 UPDATE users
-                SET subscription_status = :status, subscription_tier = 'supporter'
-                WHERE stripe_customer_id = :cid
+                SET subscription_status = :status
+                WHERE stripe_customer_id = :cid AND subscription_tier = 'supporter'
             """),
             {"status": status, "cid": customer_id},
         )
 
 
 async def _handle_subscription_deleted(sub: dict) -> None:
+    """Drop legacy Supporter subscribers back to free on cancel.
+
+    The Supporter tier is retired (Task #110) but existing subscribers
+    were left untouched until they cancel via the Stripe portal. When
+    that cancellation arrives, downgrade to free + mark canceled.
+    """
     customer_id = sub.get("customer")
     if not customer_id:
         return
@@ -586,4 +588,4 @@ async def _handle_subscription_deleted(sub: dict) -> None:
 #   class: idempotency
 #   call:  python.tests.contracts.billing.test_webhook_replay_is_idempotent
 # === END CONTRACTS ===
-# 371:80
+# 501:58

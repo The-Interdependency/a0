@@ -1,9 +1,10 @@
-# 53:6
-from fastapi import APIRouter
+# 55:7
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from typing import Optional
 
 from ..logger import append_openai_hmmm, read_openai_hmmm
+from ._admin_gate import require_admin
 
 # DOC module: openai
 # DOC label: OpenAI
@@ -57,7 +58,8 @@ async def list_hmmm():
 
 
 @router.post("/hmmm")
-async def add_hmmm(body: HmmmItem):
+async def add_hmmm(request: Request, body: HmmmItem):
+    await require_admin(request)
     import uuid
     from datetime import datetime
     item = {
@@ -69,4 +71,4 @@ async def add_hmmm(body: HmmmItem):
     }
     await append_openai_hmmm(item)
     return {"ok": True, "item": item}
-# 53:6
+# 55:7

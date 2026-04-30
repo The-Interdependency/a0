@@ -1,4 +1,4 @@
-# 320:37
+# 322:38
 """The Forge — character-sheet style agent instantiation.
 
 Self-updating tool/model docs DB:
@@ -16,6 +16,7 @@ from sqlalchemy import text as sa_text
 from ..database import get_session
 from ..services.energy_registry import energy_registry
 from ..services.tool_executor import TOOL_SCHEMAS_CHAT
+from ._admin_gate import require_admin
 
 # DOC module: forge
 # DOC label: Forge
@@ -404,12 +405,13 @@ async def start_chat(agent_id: int, request: Request) -> dict:
 
 
 @router.post("/duel")
-async def duel_stub() -> dict:
+async def duel_stub(request: Request) -> dict:
     """RPG-style agent vs agent — DB shape live, logic deferred."""
+    await require_admin(request)
     raise HTTPException(501, "Agent-vs-agent dueling is stubbed; ring is set up but the bell hasn't rung.")
 
 
 def _jsonb(value) -> str:
     import json
     return json.dumps(value) if value is not None else "null"
-# 320:37
+# 322:38

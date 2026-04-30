@@ -1,4 +1,4 @@
-# 100:23
+# 202:22
 # DOC module: transcripts
 # DOC label: Transcripts
 # DOC endpoint: POST /api/v1/transcripts/upload | Upload a transcript file (txt/md/html/json/pdf/zip) for EDCMBONE scoring
@@ -24,6 +24,10 @@ from ..services.transcript_ingest import (
 from ..storage import storage
 
 FREE_MONTHLY_UPLOAD_LIMIT = 1
+# Task #110: 'supporter' is retired; only the operator tiers (ws, admin)
+# get unlimited transcript uploads. Legacy supporters are kept here so
+# in-flight subscribers don't lose access mid-month — when their Stripe
+# subscription is canceled the webhook drops them back to 'free'.
 UNLIMITED_TIERS = {"supporter", "ws", "admin"}
 
 router = APIRouter(prefix="/api/v1/transcripts", tags=["transcripts"])
@@ -53,17 +57,11 @@ async def _quota_state(uid: str) -> dict:
     Returns a dict shaped like:
       {
         "unlimited": bool,
-        "reason": "tier" | "grandfathered" | "free",
+        "reason": "tier" | "donation" | "free",
         "tier": str,
         "used_this_month": int,
         "limit": int | None,   # None when unlimited
       }
-
-    Note on `transcripts_unlocked`: legacy column from the old "donate to
-    unlock" paywall. Donations no longer flip this bit (see Task #110:
-    research-instrument reframe). Existing users with the bit already set
-    keep their unlimited access — labeled "grandfathered" — but no new
-    user can acquire it via donation.
     """
     async with engine.connect() as conn:
         row = await conn.execute(
@@ -84,9 +82,8 @@ async def _quota_state(uid: str) -> dict:
             "used_this_month": 0, "limit": None,
         }
     if unlocked:
-        # Grandfathered from the retired paywall; preserved as-is.
         return {
-            "unlimited": True, "reason": "grandfathered", "tier": tier,
+            "unlimited": True, "reason": "donation", "tier": tier,
             "used_this_month": 0, "limit": None,
         }
 
@@ -128,17 +125,16 @@ async def _user_upload_lock(uid: str):
 def _quota_blocked_payload(state: dict) -> dict:
     """Shape the JSON body returned with a 402 when the user is over quota.
 
-    Donations do not unlock anything — the limit is a capacity constraint
-    on the instrument's processing, not a paywall. The body explains the
-    limit honestly and points the user at the donation page only as a way
-    to support the instrument, not as a bypass.
+    Task #110: a0p is donations-funded, not paywalled. Donations no
+    longer unlock uploads. Free tier means free tier; the limit resets
+    at the next month boundary.
     """
     return {
         "error": "quota_exceeded",
         "detail": (
-            f"Monthly upload capacity reached: {state['used_this_month']} of "
-            f"{state['limit']} this month. The limit will reset at the start "
-            "of next month."
+            f"Free tier limit reached: {state['used_this_month']} of "
+            f"{state['limit']} upload(s) this month. Quota resets at the "
+            "start of next month."
         ),
         "quota": state,
     }
@@ -271,4 +267,4 @@ async def get_report_messages(request: Request, report_id: int, limit: int = 200
         raise HTTPException(status_code=404, detail="report not found")
     msgs = await storage.get_transcript_messages(report_id, user_id=uid, limit=limit, offset=offset)
     return {"items": msgs, "report_id": report_id, "limit": limit, "offset": offset}
-# 100:23
+# 202:22

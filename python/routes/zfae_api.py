@@ -14,6 +14,8 @@ DELETE /api/v1/zfae/resolution/directory — remove per-directory override (ws t
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from ._admin_gate import require_admin
+
 # DOC module: zfae
 # DOC label: ZFAE
 # DOC description: Zeta Function Alpha Echo subsystem. Maintains a rolling event echo buffer and exposes the ZetaEngine state and review history. Supports per-directory and global resolution levels (1–5) to control observation depth; comment lines are free of the 400-line budget.
@@ -71,23 +73,15 @@ def _get_zeta():
 
 
 async def _require_ws(request: Request) -> str:
-    """Require ws/pro/admin tier. Returns user_id."""
+    """Resolve user_id after admin gate (Task #110: admin-only writes).
+
+    The function name is preserved for backwards compatibility, but the
+    actual policy is admin-only. Resolution config is global and so any
+    write to it requires the admin role.
+    """
+    await require_admin(request)
     uid = request.headers.get("x-user-id", "").strip()
-    if not uid:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    from ..database import engine as _engine
-    from sqlalchemy import text as _sa_text
-    async with _engine.connect() as conn:
-        row = await conn.execute(
-            _sa_text("SELECT subscription_tier, role FROM users WHERE id = :id"),
-            {"id": uid},
-        )
-        rec = row.mappings().first()
-    tier = (rec["subscription_tier"] if rec else None) or "free"
-    is_admin = rec["role"] == "admin" if rec else False
-    if tier not in _WS_TIERS and not is_admin:
-        raise HTTPException(status_code=403, detail="ws, pro, or admin tier required")
-    return uid
+    return uid or "admin"
 
 
 async def _persist_resolution(config: dict) -> None:
@@ -157,7 +151,8 @@ class RemoveDirectoryResolutionBody(BaseModel):
 
 @router.put("/resolution")
 async def set_global_resolution(body: SetGlobalResolutionBody, request: Request):
-    """Set the global (fallback) resolution level. Requires ws tier."""
+    """Set the global (fallback) resolution level. Admin-only — global config."""
+    await require_admin(request)
     await _require_ws(request)
     if not (1 <= body.level <= 5):
         raise HTTPException(status_code=400, detail="Level must be between 1 and 5")
@@ -168,7 +163,8 @@ async def set_global_resolution(body: SetGlobalResolutionBody, request: Request)
 
 @router.put("/resolution/directory")
 async def set_directory_resolution(body: SetDirectoryResolutionBody, request: Request):
-    """Set resolution for a specific directory path. Requires ws tier."""
+    """Set resolution for a specific directory path. Admin-only — global config."""
+    await require_admin(request)
     await _require_ws(request)
     if not body.path.startswith("/"):
         raise HTTPException(status_code=400, detail="Path must be absolute (start with /)")
@@ -183,7 +179,8 @@ async def set_directory_resolution(body: SetDirectoryResolutionBody, request: Re
 
 @router.delete("/resolution/directory")
 async def remove_directory_resolution(body: RemoveDirectoryResolutionBody, request: Request):
-    """Remove a per-directory resolution override. Requires ws tier."""
+    """Remove a per-directory resolution override. Admin-only — global config."""
+    await require_admin(request)
     await _require_ws(request)
     config = _get_zeta().remove_directory_resolution(body.path)
     await _persist_resolution(config)

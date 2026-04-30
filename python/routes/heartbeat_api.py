@@ -1,10 +1,10 @@
-# 82:9
+# 85:10
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 
 from ..storage import storage
-from ..services.gating import require_admin
+from ._admin_gate import require_admin
 
 # DOC module: heartbeat
 # DOC label: Heartbeat
@@ -88,14 +88,14 @@ async def list_tasks():
 
 
 @router.post("/heartbeat/tasks")
-async def create_task(body: CreateTask, request: Request):
-    require_admin(request)
+async def create_task(request: Request, body: CreateTask):
+    await require_admin(request)
     return await storage.upsert_heartbeat_task(body.model_dump())
 
 
 @router.patch("/heartbeat/tasks/{task_id}")
-async def update_task(task_id: int, body: UpdateTask, request: Request):
-    require_admin(request)
+async def update_task(task_id: int, request: Request, body: UpdateTask):
+    await require_admin(request)
     updates = body.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="no updates")
@@ -105,7 +105,7 @@ async def update_task(task_id: int, body: UpdateTask, request: Request):
 
 @router.delete("/heartbeat/tasks/{task_id}")
 async def delete_task(task_id: int, request: Request):
-    require_admin(request)
+    await require_admin(request)
     await storage.delete_heartbeat_task(task_id)
     return {"ok": True}
 
@@ -113,4 +113,4 @@ async def delete_task(task_id: int, request: Request):
 @router.get("/heartbeat/logs")
 async def list_logs(limit: int = 24):
     return await storage.get_heartbeats(limit)
-# 82:9
+# 85:10

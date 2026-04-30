@@ -1,4 +1,4 @@
-# 169:4
+# 171:16
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -184,4 +184,19 @@ def collect_doc_meta() -> list[dict]:
             results.append(meta)
     results.sort(key=lambda d: d.get("label", ""))
     return results
-# 169:4
+
+
+# === CONTRACTS ===
+# id: routes_write_endpoints_gated
+#   given: every @router.{post,patch,delete,put} handler in
+#          python/routes/*.py (excluding billing_helpers.py and __init__)
+#   then:  the handler body must reference at least one gating sentinel
+#          (admin check, x-user-id resolution, ownership filter, internal
+#          token, HMAC verification, or FastAPI Depends auth) OR be in
+#          the explicit ALLOWLIST in route_gating.py with a justification.
+#          Stale ALLOWLIST entries (route no longer exists) also fail.
+#   class: security
+#   call:  python.tests.contracts.route_gating.test_every_write_route_is_gated
+# === END CONTRACTS ===
+# 171:16
+

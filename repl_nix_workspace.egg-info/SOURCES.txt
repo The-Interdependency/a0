@@ -1,3 +1,4 @@
+README.md
 pyproject.toml
 python/__init__.py
 python/auth.py

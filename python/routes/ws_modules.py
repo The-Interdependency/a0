@@ -1,8 +1,10 @@
-# 265:62
+# 343:16
 """WS Module registry API.
 
-Provides CRUD for user-defined and system-shadow console modules.
-All write operations require a write token obtained from the token endpoint.
+Provides CRUD for user-defined and system-shadow console modules. All
+write operations alter shared / hot-mounted runtime state and are
+therefore restricted to admins (Task #110: two-tier write gating —
+research instrument with admin-only write surfaces).
 
 Status semantics:
   system   — shadow record for a hardcoded route; visible, immutable via API
@@ -13,7 +15,7 @@ Status semantics:
 
 Authorization layers (server-side, not just UI):
   1. Must be authenticated (x-user-id header)
-  2. Must hold ws, pro, or admin subscription tier for any write
+  2. Must be an admin (require_admin) — code-altering / hot-swap surface
   3. system modules are blocked at the storage call — no write at all
   4. locked modules block all edits except lock-toggle by owner/admin
   5. Every create/patch/delete/swap requires a valid, unexpired write token
@@ -29,6 +31,7 @@ from typing import Optional
 from ..storage import storage
 from ..services.module_write_token import issue_token, consume_token
 from ..engine.module_registry import get_registry
+from ._admin_gate import require_admin
 
 # DOC module: ws_modules
 # DOC label: Modules
@@ -100,11 +103,17 @@ async def _resolve_user_context(request: Request) -> tuple[str, str, bool]:
 
 
 async def _require_ws(request: Request) -> tuple[str, str, bool]:
-    """Require ws/pro/admin tier. Returns (user_id, tier, is_admin)."""
+    """Require admin role for module mutations. Returns (user_id, tier, is_admin).
+
+    Task #110 collapsed the writer ladder to a single admin gate. The
+    function name is preserved for backwards compatibility, but the
+    actual policy is admin-only — module CRUD alters shared / hot-mounted
+    runtime state and is therefore not safe to expose to free / ws / pro
+    users.
+    """
+    await require_admin(request)
     uid, tier, is_admin = await _resolve_user_context(request)
-    if tier not in _WS_TIERS and not is_admin:
-        raise HTTPException(status_code=403, detail="ws, pro, or admin tier required")
-    return uid, tier, is_admin
+    return uid, tier, True
 
 
 def _can_write_module(mod: dict, user_id: str, is_admin: bool) -> None:
@@ -211,7 +220,8 @@ async def get_write_token(module_id: str, request: Request):
 
 @router.post("/modules")
 async def create_module(body: CreateModuleBody, request: Request):
-    """Create a new user module. Requires ws tier + valid creation write token."""
+    """Create a new user module. Admin-only + valid creation write token."""
+    await require_admin(request)
     uid, tier, is_admin = await _require_ws(request)
 
     if not consume_token(body.write_token, "new", uid):
@@ -242,7 +252,8 @@ async def create_module(body: CreateModuleBody, request: Request):
 
 @router.patch("/modules/{module_id}")
 async def patch_module(module_id: int, body: PatchModuleBody, request: Request):
-    """Edit a module's metadata. Requires ws tier + valid write token + ownership."""
+    """Edit a module's metadata. Admin-only + valid write token + ownership."""
+    await require_admin(request)
     uid, tier, is_admin = await _require_ws(request)
 
     mod = await storage.get_ws_module(module_id)
@@ -278,11 +289,12 @@ async def patch_module(module_id: int, body: PatchModuleBody, request: Request):
 
 @router.patch("/modules/{module_id}/lock")
 async def toggle_lock(module_id: int, body: LockToggleBody, request: Request):
-    """Lock or unlock a module. Owner can toggle their own; admin can toggle any.
+    """Lock or unlock a module. Admin-only.
 
     Locking stores a content hash to detect tampering. Locking does NOT require
     a write token — the lock toggle is its own protected action.
     """
+    await require_admin(request)
     uid, tier, is_admin = await _require_ws(request)
 
     mod = await storage.get_ws_module(module_id)
@@ -314,10 +326,11 @@ async def toggle_lock(module_id: int, body: LockToggleBody, request: Request):
 
 @router.delete("/modules/{module_id}")
 async def delete_module(module_id: int, body: DeleteBody, request: Request):
-    """Delete a user module. Requires ownership (or admin) + valid write token.
+    """Delete a user module. Admin-only + valid write token.
 
     System modules cannot be deleted — they exist as long as their backing code does.
     """
+    await require_admin(request)
     uid, tier, is_admin = await _require_ws(request)
 
     mod = await storage.get_ws_module(module_id)
@@ -341,13 +354,14 @@ async def delete_module(module_id: int, body: DeleteBody, request: Request):
 
 @router.post("/modules/{module_id}/swap")
 async def swap_module(module_id: int, body: SwapBody, request: Request):
-    """Hot-swap a module's handler code and activate it live.
+    """Hot-swap a module's handler code and activate it live. Admin-only.
 
     Compiles the handler code, mounts its routes on the running app, and sets
     status='active'. If compilation fails, status is set to 'error' and the
     error_log field is populated; existing routes (if any) are left in place.
     A write token is required, obtained from GET /modules/{id}/write-token.
     """
+    await require_admin(request)
     uid, tier, is_admin = await _require_ws(request)
     mod = await storage.get_ws_module(module_id)
     if not mod:
@@ -389,8 +403,9 @@ async def swap_module(module_id: int, body: SwapBody, request: Request):
 async def deactivate_module(module_id: int, body: DeactivateBody, request: Request):
     """Unmount a module's routes from the live app without deleting the record.
 
-    Sets status='inactive'. Requires ownership (or admin) + write token.
+    Sets status='inactive'. Admin-only + write token.
     """
+    await require_admin(request)
     uid, tier, is_admin = await _require_ws(request)
     mod = await storage.get_ws_module(module_id)
     if not mod:
