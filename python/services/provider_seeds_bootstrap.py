@@ -1,4 +1,4 @@
-# 183:73
+# 219:81
 """provider_seeds_bootstrap — eager idempotent bootstrap of provider seed
 records into ws_modules on every lifespan start.
 
@@ -214,6 +214,55 @@ async def _migrate_legacy_double_colon_seeds() -> int:
     return migrated
 
 
+def _build_provider_description(provider_id: str, cfg: dict) -> str:
+    """Build a unique, informative description for a provider seed row.
+
+    Uses model slug, vendor, pricing tier, capabilities, and the human-readable
+    note from providers.json so every provider reads distinctly rather than
+    sharing a generic template body.
+    """
+    label = cfg.get("label", provider_id)
+    model = cfg.get("model", "")
+    vendor_map = {
+        "openai": "OpenAI",
+        "google": "Google AI",
+        "anthropic": "Anthropic",
+        "xai": "xAI",
+    }
+    vendor = vendor_map.get(cfg.get("vendor", ""), cfg.get("vendor", "").capitalize())
+    api_family = cfg.get("api_family", "chat")
+    label_lower = label.lower()
+    parts: list[str] = [f"{label} ({vendor}"]
+    if api_family == "responses" and "responses api" not in label_lower:
+        parts[0] += ", Responses API"
+    parts[0] += f"). Model: {model}." if model else ")."
+
+    caps: list[str] = []
+    if cfg.get("supports_streaming"):
+        caps.append("streaming")
+    if cfg.get("supports_prompt_caching"):
+        caps.append("prompt caching")
+    if cfg.get("supports_thinking"):
+        caps.append("extended thinking")
+    if cfg.get("supports_reasoning_effort"):
+        caps.append("reasoning effort control")
+    if cfg.get("supports_vision"):
+        caps.append("vision")
+    if caps:
+        parts.append("Capabilities: " + ", ".join(caps) + ".")
+
+    min_tier = cfg.get("min_tier", "")
+    if min_tier:
+        parts.append(f"Minimum tier: {min_tier}.")
+
+    note = cfg.get("note", "")
+    if note:
+        parts.append(note if note.endswith(".") else note + ".")
+
+    parts.append("route_config: model_assignments (per-role picks), presets, pricing_url, enabled_tools.")
+    return " ".join(parts)
+
+
 async def seed_provider_modules() -> int:
     """Idempotently upsert one ws_modules row per BUILTIN_PROVIDERS entry.
 
@@ -234,17 +283,14 @@ async def seed_provider_modules() -> int:
     async with get_session() as session:
         for provider_id in BUILTIN_PROVIDERS.keys():
             slug = f"provider_{provider_id}"
-            label = BUILTIN_PROVIDERS[provider_id].get("label", provider_id)
-            description = (
-                f"Provider seed — {label}. route_config holds model_assignments "
-                f"(per-role model picks), available_models, presets, pricing_url, "
-                f"capabilities, enabled_tools."
-            )
+            cfg_entry = BUILTIN_PROVIDERS[provider_id]
+            label = cfg_entry.get("label", provider_id)
+            description = _build_provider_description(provider_id, cfg_entry)
             defaults = _default_route_config(provider_id)
             row = (
                 await session.execute(
                     sa_text(
-                        "SELECT id, route_config FROM ws_modules WHERE slug = :slug"
+                        "SELECT id, route_config, description FROM ws_modules WHERE slug = :slug"
                     ),
                     {"slug": slug},
                 )
@@ -267,15 +313,20 @@ async def seed_provider_modules() -> int:
                 continue
             existing = row["route_config"] if isinstance(row["route_config"], dict) else {}
             merged = _merge_preserve_admin(existing, defaults)
-            if merged != existing:
+            # Refresh description if it matches the old generic template or differs
+            # from the current per-provider description (keeps descriptions current
+            # as providers.json notes/models evolve without manual DB edits).
+            existing_desc = row["description"] or ""
+            desc_stale = existing_desc != description
+            if merged != existing or desc_stale:
                 await session.execute(
                     sa_text(
                         "UPDATE ws_modules SET route_config = CAST(:cfg AS jsonb), "
-                        "updated_at = NOW() WHERE id = :id"
+                        "description = :desc, updated_at = NOW() WHERE id = :id"
                     ),
-                    {"id": row["id"], "cfg": json.dumps(merged)},
+                    {"id": row["id"], "cfg": json.dumps(merged), "desc": description},
                 )
                 written += 1
         await session.commit()
     return written
-# 183:73
+# 219:81
