@@ -44,6 +44,14 @@ Start here:
 
 **What this means for contributors:** standard contribution work — code, docs, tests, evaluation harnesses, website improvements — does not require any in-app access tier. Pull requests go through normal GitHub review. You will only encounter a 403 if you try to invoke an instrument-mutation endpoint directly against the deployed instance (`a0p`), which is not part of the documented contribution path. If you need to develop or test something that touches an owner-gated endpoint, open an issue first so we can scope the work or set up a local environment for it.
 
+## How to support the work
+
+a0p runs on donations. There is no subscription tier and no perk unlocked by donating — it is pure support for the instrument. To donate, visit [a0p/pricing](https://a0p.replit.app/pricing).
+
+> "I don't have the cash required for 501c3 status, so I have to report it for taxes, but every tax payer is allowed to claim up to five hundred dollars in charitable donations per year without receipts required."
+
+The only productized service is the **EDCMbone transcript explainer** — a one-off paid analysis ($50 for 3 explanations, ~$16.67 each) priced against the operator's $1,000/hr benchmark.
+
 ## Related project
 
 AIMMH — AI Multimodel Multimodal Hub — is expected to be the adjacent multimodel/provider orchestration layer. Where implementation overlaps, issues should clearly state whether the work belongs in `a0`, `aimmh`, or both.

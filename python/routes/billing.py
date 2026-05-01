@@ -1,4 +1,4 @@
-# 365:253
+# 368:258
 import os
 import stripe
 from fastapi import APIRouter, HTTPException, Request
@@ -15,6 +15,7 @@ from .billing_helpers import is_supporter_subscription
 # DOC tier: free
 # DOC endpoint: GET /api/v1/billing/status | Get current user billing status and tier
 # DOC endpoint: GET /api/v1/billing/plans | List supported flows (donation only; legacy Supporter tier retired)
+# DOC endpoint: GET /api/v1/billing/funding-statement | Verbatim 501c3/$500 disclosure copy
 # DOC endpoint: POST /api/v1/billing/donate | One-off donation to support the instrument (no perks unlocked)
 # DOC endpoint: POST /api/v1/billing/portal | Open Stripe customer portal for legacy subscribers to cancel
 # DOC endpoint: POST /api/v1/billing/webhook | Stripe webhook receiver
@@ -168,6 +169,16 @@ async def get_billing_config():
     """Return public billing configuration (publishable key only)."""
     pk = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
     return {"stripe_publishable_key": pk}
+
+
+@router.get("/funding-statement")
+async def funding_statement():
+    """Return the verbatim 501c3 / $500 disclosure copy.
+
+    Single source of truth for the legal framing used on /pricing,
+    README.md, and any future surface that displays it.
+    """
+    return {"statement": DONATION_LEGAL_COPY}
 
 
 @router.get("/plans")
@@ -726,4 +737,4 @@ async def explainer_checkout(request: Request):
 #   class: idempotency
 #   call:  python.tests.contracts.billing.test_webhook_replay_is_idempotent
 # === END CONTRACTS ===
-# 365:253
+# 368:258
