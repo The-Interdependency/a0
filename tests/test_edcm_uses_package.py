@@ -1,4 +1,4 @@
-# 17:6
+# 15:10
 # N:M
 # DOC module: tests.test_edcm_uses_package
 # DOC label: EDCM uses edcmbone
@@ -31,4 +31,4 @@ def test_edcm_score_tool_schema_mentions_edcmbone():
     desc = edcm_tool.SCHEMA["function"]["description"]
     assert "edcmbone" in desc.lower()
 # N:M
-# 17:6
+# 15:10

@@ -1,3 +1,4 @@
+# 106:8
 """Contract test runner — see .local/skills/test-build/SKILL.md.
 
 Walks python/ for `# === CONTRACTS ===` blocks, parses entries, imports
@@ -126,3 +127,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
+# 106:8

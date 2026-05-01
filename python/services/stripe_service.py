@@ -1,4 +1,4 @@
-# 33:5
+# 16:20
 """Stripe configuration shim.
 
 Donations-only after Task #110: there is no recurring "Supporter"
@@ -45,4 +45,4 @@ def get_tier_context_name(tier: str) -> str:
         "admin": "tier_ws",
     }
     return mapping.get(tier, "tier_free")
-# 33:5
+# 16:20

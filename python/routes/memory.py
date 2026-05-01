@@ -1,4 +1,4 @@
-# 305:11
+# 306:10
 import math
 import random
 from fastapi import APIRouter, HTTPException, Request
@@ -372,4 +372,4 @@ async def get_subcore_state():
             "anomalies": anomalies,
         },
     }
-# 305:11
+# 306:10

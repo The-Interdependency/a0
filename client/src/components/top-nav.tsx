@@ -1,4 +1,4 @@
-// 173:0
+// 174:0
 import { useLocation, Link } from "wouter";
 import { Zap, Shield, Palette, Check, Archive, Network, Images, FileSearch, Sun, Moon, Monitor, Cpu } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -180,4 +180,4 @@ export default function TopNav() {
     </nav>
   );
 }
-// 173:0
+// 174:0

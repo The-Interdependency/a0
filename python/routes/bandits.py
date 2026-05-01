@@ -1,4 +1,4 @@
-# 94:11
+# 106:20
 from fastapi import APIRouter
 from typing import Optional
 
@@ -140,4 +140,4 @@ async def list_pulls(domain: Optional[str] = None, limit: int = 100):
     async with get_session() as s:
         rows = (await s.execute(_sa_text(sql), params)).mappings().all()
     return [dict(r) for r in rows]
-# 94:11
+# 106:20

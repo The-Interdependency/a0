@@ -1,3 +1,4 @@
+# 125:33
 """claude_provider — Anthropic Messages API via the official SDK.
 
 One of four sibling modules under python/services/providers/. Exposes a
@@ -181,3 +182,4 @@ async def call(
         current_messages.append({"role": "user", "content": tool_results})
 
     return "[claude: tool loop exhausted]", accumulated_usage
+# 125:33

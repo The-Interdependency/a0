@@ -1,3 +1,4 @@
+// 68:10
 // Per-conversation model picker for the chat composer (single mode only).
 // Reads /api/energy/providers, groups enabled models by provider, lets the
 // user pick one model for the next send. "auto" means: don't include a
@@ -82,3 +83,4 @@ export function ModelPicker({
     </select>
   );
 }
+// 68:10

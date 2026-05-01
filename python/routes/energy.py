@@ -1,4 +1,4 @@
-# 406:87
+# 420:120
 # DOC module: energy
 # DOC label: Energy Providers
 # DOC description: Provider seed management — model_assignments, optimizer presets, PCNA core converge, and model discovery for all AI providers.
@@ -605,4 +605,4 @@ async def converge_provider_pcna(provider_id: str, request: Request):
 #   class: correctness
 #   call:  python.tests.contracts.energy.test_providers_list_public_read
 # === END CONTRACTS ===
-# 406:87
+# 420:120

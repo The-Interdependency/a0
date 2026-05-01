@@ -1,3 +1,4 @@
+# 256:38
 """grok_provider — xAI Grok via api.x.ai.
 
 Two upstream surfaces:
@@ -331,3 +332,4 @@ async def _stream_chat(
         except Exception:
             pass
     return ("".join(text_parts) or "[no content]"), accumulated_usage
+# 256:38

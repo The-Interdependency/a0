@@ -1,4 +1,4 @@
-# 108:52
+# 99:53
 """call_fn — canonical CallFn adapter.
 
 aimmh_lib.adapters.make_call_fn pattern, ported to a0p. The CallFn is the
@@ -174,4 +174,4 @@ def make_call_fn(
         content, _usage = await full(model_id, messages, **kwargs)
         return content
     return _call
-# 108:52
+# 99:53

@@ -1,4 +1,4 @@
-# 171:16
+# 169:17
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -200,3 +200,4 @@ def collect_doc_meta() -> list[dict]:
 # === END CONTRACTS ===
 # 171:16
 
+# 169:17

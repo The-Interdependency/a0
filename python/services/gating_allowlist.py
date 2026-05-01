@@ -1,4 +1,4 @@
-# 102:3
+# 51:30
 """Explicit allowlist of write routes that do NOT require admin gating.
 
 The two-tier write-access model says: anything that alters the research
@@ -100,4 +100,4 @@ def allowlist_summary() -> dict:
         "total": len(OWNER_OR_PUBLIC_WRITES),
         "by_file": dict(sorted(by_file.items())),
     }
-# 102:3
+# 51:30

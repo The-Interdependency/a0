@@ -1,4 +1,4 @@
-// 179:4
+// 183:4
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Loader2, MessageSquare, Trash2, X } from "lucide-react";
@@ -204,4 +204,4 @@ export default function ForgeAgentChat({ agentId, agentName, onClose }: Props) {
     </div>
   );
 }
-// 179:4
+// 183:4

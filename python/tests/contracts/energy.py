@@ -1,3 +1,4 @@
+# 40:5
 """Contracts protecting python/routes/energy.py."""
 from __future__ import annotations
 from . import client, new_uid
@@ -47,3 +48,4 @@ async def test_providers_list_public_read() -> None:
             assert "id" in p and "route_config" in p, (
                 f"provider entry missing required fields: {p!r}"
             )
+# 40:5

@@ -1,3 +1,4 @@
+# 274:71
 """Contract tests for python.services.edcmbone_explainer.
 
 Each test is referenced from the CONTRACTS block at the bottom of
@@ -386,3 +387,4 @@ async def test_idempotent_no_double_charge() -> None:
                     _sa_text("DELETE FROM transcript_uploads WHERE id = :id"),
                     {"id": upload_id},
                 )
+# 274:71

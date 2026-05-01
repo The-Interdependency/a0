@@ -1,3 +1,4 @@
+# 48:24
 """Contract test harness — see .local/skills/test-build/SKILL.md.
 
 Provides a shared httpx AsyncClient configured against the running
@@ -84,3 +85,4 @@ async def db_delete_conv(conv_id: int) -> None:
             text("DELETE FROM conversations WHERE id = :cid"),
             {"cid": conv_id},
         )
+# 48:24

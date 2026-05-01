@@ -1,3 +1,4 @@
+# 40:30
 """resolve_model_for_role — env > seed > spec primary.
 
 Purpose: every provider module asks one question on every call:
@@ -79,3 +80,4 @@ async def resolve_model_for_role(provider_id: str, role: str) -> str:
         f"(checked env {prefix or '?'}{role_norm.upper()}, seed model_assignments, "
         f"and providers.json primary)"
     )
+# 40:30

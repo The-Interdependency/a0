@@ -1,3 +1,4 @@
+// 46:0
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -50,3 +51,4 @@ export function useProviderActions(providerId: string, label: string) {
 
   return { patchSeed, applyPreset, refreshPricing };
 }
+// 46:0

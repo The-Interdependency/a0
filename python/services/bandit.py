@@ -1,4 +1,4 @@
-# 41:0
+# 110:31
 """bandit — pure UCB1 math kernel; live state lives on PCNA core (Task #112).
 
 Reward shape: one scalar per pull via compute_reward(). Default
@@ -165,4 +165,4 @@ def select_filtered(
     if not pool:
         return None
     return select_arm(pool)
-# 41:0
+# 110:31

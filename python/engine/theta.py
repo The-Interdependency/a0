@@ -1,3 +1,4 @@
+# 255:43
 """
 Θ (Theta) — N=29 prime-node microkernel ring (formerly Guardian).
 
@@ -343,3 +344,4 @@ def _shard_blueprint(bp_hash: str, n: int) -> list[str]:
         shard = bp_hash[start:start + BLUEPRINT_CHUNK_SIZE]
         shards.append(shard.ljust(BLUEPRINT_CHUNK_SIZE, "0"))
     return shards
+# 255:43

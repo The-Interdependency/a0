@@ -1,4 +1,4 @@
-# 38:9
+# 29:22
 # DOC module: _admin_gate
 # DOC label: Admin Gate
 # DOC description: Shared write-gate for instrument-wide mutation endpoints.
@@ -56,3 +56,4 @@ async def require_admin(request: Request) -> None:
         except Exception:
             pass
     raise HTTPException(status_code=403, detail="Admin only")
+# 29:22

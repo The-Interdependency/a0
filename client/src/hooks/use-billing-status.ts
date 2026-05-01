@@ -1,4 +1,4 @@
-// 33:0
+// 33:4
 import { useQuery } from "@tanstack/react-query";
 
 export interface BillingStatus {
@@ -41,4 +41,4 @@ export function useBillingStatus() {
     userId: data?.user_id ?? null,
   };
 }
-// 33:0
+// 33:4

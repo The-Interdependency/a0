@@ -1,4 +1,4 @@
-# 43:1
+# 51:8
 """pcna_reward — apply a reward signal to the PCNA engine."""
 import json
 
@@ -62,4 +62,4 @@ async def handle(score: float = 0.0, reason: str = "", **_) -> str:
         "last_coherence": round(target.last_coherence, 4),
         "routed_to": routed_to,
     })
-# 43:1
+# 51:8

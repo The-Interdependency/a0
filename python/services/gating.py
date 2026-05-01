@@ -1,4 +1,4 @@
-# 78:6
+# 25:69
 """Canonical access-control helpers for a0p.
 
 Two-tier write-access model — owner (Erin + invitees with `role == 'admin'`)
@@ -110,4 +110,4 @@ def require_owner_of(request: Request, resource_user_id: str | None) -> str:
 #   class: security
 #   call:  python.tests.contracts.gating.test_instrument_mutation_files_have_all_writes_gated
 # === END CONTRACTS ===
-# 78:6
+# 25:69

@@ -1,3 +1,4 @@
+# 183:73
 """provider_seeds_bootstrap — eager idempotent bootstrap of provider seed
 records into ws_modules on every lifespan start.
 
@@ -277,3 +278,4 @@ async def seed_provider_modules() -> int:
                 written += 1
         await session.commit()
     return written
+# 183:73

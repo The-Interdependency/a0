@@ -1,4 +1,4 @@
-# 295:27
+# 325:37
 """
 PCNA Inference Engine — six-ring pipeline, all rings real.
 
@@ -406,4 +406,4 @@ class PCNAEngine:
                 for d, arms in (self.bandit_state or {}).items()
             },
         }
-# 295:27
+# 325:37

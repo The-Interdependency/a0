@@ -1,3 +1,4 @@
+# 132:27
 """openai_provider — OpenAI GPT-5 family via the Responses API (/v1/responses).
 
 This module owns the actual outbound API call. The role-decision /
@@ -184,3 +185,4 @@ async def _call_responses(
             })
 
     return "[openai: tool loop exhausted]", accumulated_usage
+# 132:27

@@ -1,4 +1,4 @@
-# 343:16
+# 271:70
 """WS Module registry API.
 
 Provides CRUD for user-defined and system-shadow console modules. All
@@ -419,4 +419,4 @@ async def deactivate_module(module_id: int, body: DeactivateBody, request: Reque
     await get_registry().unmount_safe(module_id)
     updated = await storage.update_ws_module(module_id, {"status": "inactive"})
     return updated
-# 265:62
+# 271:70

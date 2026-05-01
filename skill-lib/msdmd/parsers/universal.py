@@ -1,3 +1,4 @@
+# 85:29
 """Universal msdmd parser — pure stdlib.
 
 Implements the parser contract from ``msdmd/SKILL.md``: extracts every
@@ -132,3 +133,4 @@ def walk_tree(
         else:
             untested.append(path)
     return annotated, untested
+# 85:29

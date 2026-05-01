@@ -1,4 +1,4 @@
-# 29:0
+# 34:4
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -48,4 +48,4 @@ async def guest_chat(body: GuestChatBody):
         tokens_used = max(10, len(body.message.split()) + len(content.split()))
 
     return {"content": content, "tokens_used": tokens_used}
-# 29:0
+# 34:4
