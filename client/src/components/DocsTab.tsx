@@ -1,8 +1,13 @@
-// 253:0
+// 286:0
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, BookOpen, ChevronRight, FileText } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 interface Endpoint {
   method: string;
@@ -24,6 +29,31 @@ interface DocEntry {
 interface ReadmeResponse {
   content: string;
   modules: DocEntry[];
+}
+
+const MD_PLUGINS = {
+  remarkPlugins: [remarkGfm, remarkMath],
+  rehypePlugins: [rehypeKatex],
+};
+
+function Md({ children, className = "" }: { children: string; className?: string }) {
+  return (
+    <ReactMarkdown
+      {...MD_PLUGINS}
+      className={`prose prose-sm dark:prose-invert max-w-none
+        prose-headings:font-semibold prose-headings:tracking-tight
+        prose-code:before:content-none prose-code:after:content-none
+        prose-code:bg-muted prose-code:text-foreground prose-code:rounded prose-code:px-1 prose-code:py-0.5 prose-code:text-xs
+        prose-pre:bg-muted/60 prose-pre:border prose-pre:border-border prose-pre:rounded-md
+        prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+        prose-blockquote:border-primary/40
+        prose-table:text-xs
+        prose-th:bg-muted/50
+        ${className}`}
+    >
+      {children}
+    </ReactMarkdown>
+  );
 }
 
 function tierVariant(tier: string): string {
@@ -70,9 +100,9 @@ function ModuleDetail({ entry }: { entry: DocEntry }) {
         </div>
       </div>
 
-      <p className="text-sm text-muted-foreground leading-relaxed" data-testid="docs-description">
-        {entry.description}
-      </p>
+      <div data-testid="docs-description">
+        <Md>{entry.description}</Md>
+      </div>
 
       {entry.endpoints.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -112,9 +142,11 @@ function ModuleDetail({ entry }: { entry: DocEntry }) {
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Notes
           </h3>
-          <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+          <ul className="flex flex-col gap-1">
             {entry.notes.map((n, i) => (
-              <li key={i} data-testid={`docs-note-${i}`}>{n}</li>
+              <li key={i} data-testid={`docs-note-${i}`} className="text-sm text-muted-foreground">
+                <Md>{n}</Md>
+              </li>
             ))}
           </ul>
         </div>
@@ -147,9 +179,12 @@ function ReadmePane() {
 
   return (
     <div className="flex flex-col gap-6 p-6 overflow-y-auto h-full" data-testid="readme-pane">
-      <pre className="text-xs text-foreground whitespace-pre-wrap font-mono leading-relaxed bg-muted/40 rounded-md p-4 border border-border" data-testid="readme-content">
-        {data.content}
-      </pre>
+      <div
+        className="rounded-md border border-border bg-muted/20 p-5"
+        data-testid="readme-content"
+      >
+        <Md>{data.content}</Md>
+      </div>
 
       {data.modules.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -275,4 +310,4 @@ export default function DocsTab() {
     </div>
   );
 }
-// 253:0
+// 286:0
