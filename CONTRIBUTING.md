@@ -18,8 +18,9 @@ Useful contributions include:
 
 1. Read `README.md`.
 2. Read `docs/help-wanted.md`.
-3. Pick a small issue labeled `good first issue` or `help wanted`.
-4. If no issue fits, open a question issue before doing large work.
+3. If your local setup hits trouble, check [`docs/troubleshooting.md`](docs/troubleshooting.md) before opening an issue.
+4. Pick a small issue labeled `good first issue` or `help wanted`.
+5. If no issue fits, open a question issue before doing large work.
 
 ## Working norms
 

@@ -37,4 +37,4 @@ This repository currently contains a mixed web/application structure. Until setu
 - `.replit`
 - `DEPLOYMENT.md`
 
-If setup fails, please open an issue with your OS, Node/Python versions, command run, and full error output.
+If setup fails, see [`docs/troubleshooting.md`](docs/troubleshooting.md) for the most common stumbles and their fixes. If your case is not covered there, please open an issue with your OS, Node/Python versions, command run, and full error output.
