@@ -1,4 +1,11 @@
 # 77:0
+# DOC module: admin
+# DOC label: Admin Emails
+# DOC description: Admin email allow-list management for elevated console/operator access checks.
+# DOC tier: admin
+# DOC endpoint: GET /api/v1/admin/emails | List configured admin emails.
+# DOC endpoint: POST /api/v1/admin/emails | Add an admin email.
+# DOC endpoint: DELETE /api/v1/admin/emails/{email} | Remove an admin email.
 import os
 from typing import Optional
 from fastapi import APIRouter, Request

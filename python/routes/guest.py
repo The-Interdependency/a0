@@ -1,4 +1,9 @@
 # 34:4
+# DOC module: guest
+# DOC label: Guest Chat
+# DOC description: Unauthenticated preview chat endpoint that routes through the currently active provider.
+# DOC tier: free
+# DOC endpoint: POST /api/v1/guest/chat | Send one guest preview message.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 

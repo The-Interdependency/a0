@@ -40,7 +40,7 @@ from ..services import energy_registry
 router = APIRouter(prefix="/api/v1/fleet", tags=["fleet"])
 
 UI_META = {
-    "tab_id": "fleet_bench",
+    "tab_id": "fleet",
     "label": "Fleet Bench",
     "icon": "Trophy",
     "order": 26,
