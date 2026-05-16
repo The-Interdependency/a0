@@ -20,7 +20,7 @@ from ..database import engine
 router = APIRouter(prefix="/api/v1/cli", tags=["cli"])
 
 UI_META = {
-    "tab_id": "cli_keys",
+    "tab_id": "cli",
     "label": "CLI Keys",
     "icon": "Terminal",
     "order": 14,

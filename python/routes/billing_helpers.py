@@ -1,4 +1,8 @@
 # 7:16
+# DOC module: billing_helpers
+# DOC label: Billing Helpers
+# DOC description: Legacy Supporter-tier helper functions used by billing webhook handling paths.
+# DOC tier: admin
 """
 Billing helpers — Supporter-tier shims kept alive only for legacy webhook traffic.
 

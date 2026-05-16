@@ -2,6 +2,7 @@
 # DOC module: _admin_gate
 # DOC label: Admin Gate
 # DOC description: Shared write-gate for instrument-wide mutation endpoints.
+# DOC tier: admin
 """Shared admin / operator gate for routes that mutate global instrument
 state (memory seeds, PCNA channels, sigma watches, system toggles, agents,
 bandits, deals, discovery drafts).

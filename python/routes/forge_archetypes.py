@@ -1,4 +1,8 @@
 # 105:3
+# DOC module: forge_archetypes
+# DOC label: Forge Archetypes
+# DOC description: Static archetype template catalog and tool category mapping consumed by forge route handlers.
+# DOC tier: free
 """Archetype template data and tool category map for the Forge.
 
 Pure data module — no FastAPI, no DB. Imported by forge.py routes.

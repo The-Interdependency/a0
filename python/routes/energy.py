@@ -1,14 +1,4 @@
 # 420:120
-# DOC module: energy
-# DOC label: Energy Providers
-# DOC description: Provider seed management — model_assignments, optimizer presets, PCNA core converge, and model discovery for all AI providers.
-# DOC tier: admin
-# DOC endpoint: GET /api/energy/providers | List all provider seed modules with PCNA stats
-# DOC endpoint: GET /api/energy/providers/{provider_id} | Get one provider with full route_config + PCNA stats
-# DOC endpoint: PATCH /api/energy/providers/{provider_id}/route_config | Partial-update route_config (merges model_assignments)
-# DOC endpoint: POST /api/energy/optimize/{provider_id} | Apply optimizer preset (speed/depth/price/balance/creativity/coding) to model_assignments
-# DOC endpoint: POST /api/energy/discover/{provider_id} | Refresh available_models (returns seed list + timestamp)
-# DOC endpoint: POST /api/energy/converge/{provider_id} | Merge provider PCNA core into main PCNA (0.8/0.2 blend)
 """
 Energy provider management routes.
 
