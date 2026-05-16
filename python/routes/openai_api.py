@@ -1,6 +1,6 @@
 # 55:6
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from ..logger import append_openai_hmmm, read_openai_hmmm
@@ -26,7 +26,9 @@ UI_META = {
             "fields": [
                 {"key": "data.id", "type": "text", "label": "ID"},
                 {"key": "data.status", "type": "badge", "label": "Status"},
-                {"key": "data.note", "type": "text", "label": "Note"},
+                {"key": "data.unresolved_constraint", "type": "text", "label": "Unresolved Constraint"},
+                {"key": "data.honest_incompletion", "type": "text", "label": "Honest Incompletion"},
+                {"key": "data.continuation_marker", "type": "text", "label": "Continuation Marker"},
                 {"key": "data.owner", "type": "text", "label": "Owner"},
                 {"key": "timestamp", "type": "text", "label": "Logged"},
             ],
@@ -47,7 +49,10 @@ router = APIRouter(prefix="/api/v1/openai", tags=["openai"])
 class HmmmItem(BaseModel):
     id: Optional[str] = None
     status: str = "open"
-    note: str
+    unresolved_constraint: str = Field(..., min_length=1)
+    honest_incompletion: str = Field(..., min_length=1)
+    continuation_marker: str = Field(..., min_length=1)
+    note: Optional[str] = None
     owner: Optional[str] = None
 
 
@@ -65,7 +70,9 @@ async def add_hmmm(request: Request, body: HmmmItem):
     item = {
         "id": body.id or f"hmmm-{uuid.uuid4().hex[:8]}",
         "status": body.status,
-        "note": body.note,
+        "unresolved_constraint": body.unresolved_constraint,
+        "honest_incompletion": body.honest_incompletion,
+        "continuation_marker": body.continuation_marker,
         "owner": body.owner or "user",
         "created_at": datetime.utcnow().isoformat() + "Z",
     }
