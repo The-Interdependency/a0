@@ -187,6 +187,9 @@ async def _seed_system_shadow_modules() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("[python] FastAPI starting — DB engine initialized")
+    from .services.interdependent_bootstrap import require_interdependent_core_ready
+    _idl = require_interdependent_core_ready()
+    print(f"[interdependent-core] status={_idl.get('status')} version={_idl.get('version')} payload_py={_idl.get('payload_py')}")
     pcna = get_pcna()
     await pcna.load_checkpoint()
     print(f"[python] PCNA p7 online — blueprint {pcna.blueprint_hash[:12]}...")
