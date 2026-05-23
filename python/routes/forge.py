@@ -1,6 +1,13 @@
 # 226:39
 """The Forge — character-sheet style agent instantiation.
 
+Instantiation mechanics (high level):
+  1) Require signed-in caller via x-user-id header.
+  2) Resolve template + default prompt/personality/tool suggestions.
+  3) Validate requested tools against TOOL_SCHEMAS_CHAT.
+  4) Require explicit model_id or configured active_provider; resolve via model catalog.
+  5) Enforce per-user unique agent name, then insert into agent_instances.
+
 Self-updating tool/model docs DB:
   - GET /forge/tools introspects TOOL_SCHEMAS_CHAT every call → always fresh.
   - GET /forge/models introspects energy_registry.list_providers() every call.
