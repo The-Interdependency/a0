@@ -8,6 +8,7 @@ from typing import Optional
 from ..storage import storage
 from ..services.stripe_service import get_tier_context_name
 from ..services.energy_registry import energy_registry
+from ..services.turn_model_resolution import resolve_turn_model
 from ..services.inference import call_energy_provider
 from ..services.bg_tasks import spawn as _spawn_bg
 from .contexts import get_context_value
@@ -366,47 +367,6 @@ def _parse_approve_gate(content: str) -> str | None:
     return m.group(1).lower() if m else None
 
 
-async def _resolve_turn_model(
-    *,
-    body_model: str | None,
-    agent_model_id: str | None,
-    conv_model: str | None,
-) -> tuple[str, str]:
-    """Resolve this turn's model to (requested_model_id, provider_id)."""
-    model_from_body = bool(body_model)
-    model_id = (
-        body_model
-        or agent_model_id
-        or energy_registry.get_active_provider()
-        or conv_model
-    )
-    if not model_id:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "No model resolvable for this turn: no body.model, no agent "
-                "model, no active_provider set, and conversation has no "
-                "stored model. Set the global default via "
-                "POST /api/agents/active-provider."
-            ),
-        )
-    from ..services.model_catalog import resolve_model_id as _resolve_model
-    try:
-        provider_id, _ = await _resolve_model(model_id)
-    except ValueError:
-        if model_from_body:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Unknown model id {model_id!r}. The model picker may "
-                    f"be out of date or this id is not registered in the "
-                    f"catalog. Refresh the providers list or pick 'auto'."
-                ),
-            )
-        provider_id = energy_registry.get_active_provider() or model_id
-    return model_id, provider_id
-
-
 @router.post("/conversations/{conv_id}/messages")
 async def send_message(conv_id: int, body: SendMessage, request: Request):
     try:
@@ -461,7 +421,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         # turn of every existing conversation. If all four are empty we
         # cannot route, so refuse — same principle as the inference
         # dispatcher's no-silent-fallback contract.
-        model_id, provider_id = await _resolve_turn_model(
+        model_id, provider_id = await resolve_turn_model(
             body_model=body.model,
             agent_model_id=agent_model_id,
             conv_model=conv.get("model"),
