@@ -23,6 +23,7 @@ from sqlalchemy import text as sa_text
 from ..database import get_session
 from ..services.energy_registry import energy_registry
 from ..services.tool_executor import TOOL_SCHEMAS_CHAT
+from ..services.forge_instantiation import require_forge_user_id, resolve_forge_model_id
 from ._admin_gate import require_admin
 from .forge_archetypes import ARCHETYPES, TOOL_CATEGORIES
 
@@ -80,10 +81,7 @@ def _archetype(template_id: str) -> dict:
 
 
 def _user_id(request: Request) -> str:
-    uid = request.headers.get("x-user-id") or request.headers.get("X-User-Id")
-    if not uid:
-        raise HTTPException(401, "Sign in required to use the Forge.")
-    return uid
+    return require_forge_user_id(request.headers)
 
 
 def _valid_tools() -> set[str]:
@@ -178,16 +176,7 @@ async def instantiate(request: Request, body: InstantiateRequest) -> dict:
     personality = body.personality_override or arche["personality"]
     # No silent fallback to "gemini": forge requires either an explicit
     # model_id in the body or a configured global active_provider.
-    model_id = body.model_id or energy_registry.get_active_provider()
-    if not model_id:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Cannot instantiate forge agent: no model_id provided and no "
-                "active_provider configured. Set one via "
-                "POST /api/agents/active-provider."
-            ),
-        )
+    model_id = resolve_forge_model_id(body.model_id)
     provider_info = _validate_model(model_id)
     provider = provider_info.get("vendor", model_id)
     stats = arche["stats"]

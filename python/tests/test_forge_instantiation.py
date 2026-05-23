@@ -2,42 +2,29 @@ from __future__ import annotations
 
 import pytest
 from fastapi import HTTPException
-from starlette.requests import Request
 
-from python.routes import forge
-
-
-def _request_with_headers(headers: list[tuple[bytes, bytes]]) -> Request:
-    return Request({"type": "http", "headers": headers})
+from python.services.forge_instantiation import (
+    require_forge_user_id,
+    resolve_forge_model_id,
+)
 
 
-@pytest.mark.asyncio
-async def test_instantiate_requires_signed_in_user() -> None:
-    body = forge.InstantiateRequest(
-        template_id=forge.ARCHETYPES[0]["id"],
-        name="NoAuth",
-    )
-    req = _request_with_headers([])
-
+def test_require_forge_user_id_requires_signin() -> None:
     with pytest.raises(HTTPException) as exc:
-        await forge.instantiate(req, body)
+        require_forge_user_id({})
 
     assert exc.value.status_code == 401
     assert "Sign in required" in str(exc.value.detail)
 
 
-@pytest.mark.asyncio
-async def test_instantiate_requires_model_or_active_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    body = forge.InstantiateRequest(
-        template_id=forge.ARCHETYPES[0]["id"],
-        name="NoModel",
+def test_resolve_forge_model_id_requires_model_or_active_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "python.services.forge_instantiation.energy_registry.get_active_provider",
+        lambda: None,
     )
-    req = _request_with_headers([(b"x-user-id", b"u-test")])
-
-    monkeypatch.setattr(forge.energy_registry, "get_active_provider", lambda: None)
 
     with pytest.raises(HTTPException) as exc:
-        await forge.instantiate(req, body)
+        resolve_forge_model_id(None)
 
     assert exc.value.status_code == 503
     detail = str(exc.value.detail)
