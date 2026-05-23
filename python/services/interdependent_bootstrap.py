@@ -38,7 +38,7 @@ def check_interdependent_core() -> dict:
                 importlib.import_module(mod)
                 importable_mod = mod
                 break
-            except Exception:
+            except (ModuleNotFoundError, ImportError):
                 continue
 
         if payload_py and importable_mod:
