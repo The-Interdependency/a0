@@ -1,3 +1,4 @@
+# 12:4
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -18,3 +19,4 @@ def run_edcm(text: str) -> Dict[str, Any]:
                 "note": "install edcm-org to enable: pip install -e edcm-org/"}
     except Exception as exc:
         return {"tool": "edcm", "status": "error", "error": str(exc), "input_chars": len(text)}
+# 12:4

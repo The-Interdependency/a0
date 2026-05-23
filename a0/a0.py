@@ -1,3 +1,4 @@
+# 30:0
 from __future__ import annotations
 
 import sys
@@ -35,3 +36,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+# 30:0

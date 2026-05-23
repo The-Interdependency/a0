@@ -1,3 +1,4 @@
+# 59:35
 """PCTA circle tensor layer.
 
 Transforms PCNA state (Cartesian tensor values) into circular /
@@ -123,3 +124,4 @@ def combined_phase_state(
         "omega": omega_result.get("omega", {}),
     }
     return to_phase_coords(merged)
+# 59:35

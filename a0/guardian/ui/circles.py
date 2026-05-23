@@ -1,3 +1,4 @@
+# 38:10
 """Circle — the tab unit of the Guardian UI.
 
 Each tab is a circle. Seeds group circles.
@@ -54,3 +55,4 @@ class Circle:
             hmmm=entries,
             state=self.state,
         )
+# 38:10

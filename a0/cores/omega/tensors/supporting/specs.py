@@ -1,3 +1,4 @@
+# 34:4
 """Spec catalog — canonical reference specifications.
 
 Each entry names a specification, its version, and its scope.
@@ -38,3 +39,4 @@ SPECS = {
         "resides_in": "psi_tensors",
     },
 }
+# 34:4

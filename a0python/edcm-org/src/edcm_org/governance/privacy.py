@@ -1,3 +1,4 @@
+# 30:32
 """
 EDCM-Org Privacy Guard — spec v0.1 enforcement.
 
@@ -82,3 +83,4 @@ class EDCMPrivacyGuard:
         Returns True if within window, False if data should be purged.
         """
         return data_age_months <= self.cfg.retain_months
+# 30:32

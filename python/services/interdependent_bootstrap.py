@@ -1,3 +1,4 @@
+# 63:3
 """Interdependent-core bootstrap checks for a0 startup."""
 
 from __future__ import annotations
@@ -78,3 +79,4 @@ def require_interdependent_core_ready() -> dict:
         f"(status={state.get('status')}, dist={state.get('dist')}, "
         f"version={state.get('version')}, payload_py={state.get('payload_py')})."
     )
+# 63:3

@@ -1,3 +1,4 @@
+# 38:23
 """Internal encryption for a0 persistent state.
 
 Uses Fernet (AES-128-CBC + HMAC-SHA256) when A0_MEMORY_KEY is set.
@@ -79,3 +80,4 @@ def decrypt(ciphertext: str) -> str:
     except Exception:
         # Tolerate legacy plaintext files written before encryption was enabled.
         return ciphertext
+# 38:23

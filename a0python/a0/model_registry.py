@@ -1,3 +1,4 @@
+# 170:122
 """model_registry — LLM model registry for a0.
 
 Modelled on the DEFAULT_REGISTRY / generate_response(model_id, messages, registry, user)
@@ -363,3 +364,4 @@ def make_complete_fn(
         return handle(req, registry=resolved_registry, context=call_context)
 
     return _complete
+# 170:122

@@ -1,3 +1,4 @@
+# 100:23
 """
 Spec compliance tests — metric range validation.
 
@@ -165,3 +166,4 @@ class TestClampUtilities:
 
     def test_clamp11_within(self):
         assert clamp11(-0.3) == -0.3
+# 100:23

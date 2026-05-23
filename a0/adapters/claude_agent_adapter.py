@@ -1,3 +1,4 @@
+# 51:88
 """ClaudeAgentAdapter — ModelAdapter wrapping claude-agent-sdk.
 
 This adapter wires the PTCA architecture into the claude-agent-sdk:
@@ -163,3 +164,4 @@ class ClaudeAgentAdapter:
             elif role == "assistant":
                 parts.append(f"[prior assistant turn]: {content}")
         return "\n\n".join(parts) if parts else ""
+# 51:88

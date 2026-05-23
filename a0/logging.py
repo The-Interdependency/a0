@@ -1,3 +1,4 @@
+# 14:0
 from __future__ import annotations
 
 import json
@@ -16,3 +17,4 @@ def log_event(log_dir: Path, task_id: str, event: Dict[str, Any]) -> None:
     e["ts"] = datetime.now(timezone.utc).isoformat()
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(e, ensure_ascii=False) + "\n")
+# 14:0

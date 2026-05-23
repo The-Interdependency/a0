@@ -1,4 +1,4 @@
-# 231:75
+# 236:77
 # DOC module: transcripts
 # DOC label: Transcripts
 # DOC description: Transcript upload, ingestion, and EDCMBONE report retrieval endpoints with owner-scoped access.
@@ -368,4 +368,4 @@ async def explain_report_endpoint(request: Request, report_id: int):
             status_code=502,
             detail=f"explainer failed: {type(exc).__name__}: {exc}",
         )
-# 231:75
+# 236:77

@@ -1,3 +1,4 @@
+# 4:28
 # Emergent Labs adapter — placeholder
 #
 # To activate:
@@ -31,3 +32,4 @@ raise NotImplementedError(
     "EmergentAdapter is not yet configured. "
     "See the comments in this file for setup instructions."
 )
+# 4:28

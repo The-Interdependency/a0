@@ -1,3 +1,4 @@
+# 7:8
 """Psi — private semantic and contextual cognitive core.
 
 Psi thinks. Psi does not emit outward directly.
@@ -22,3 +23,4 @@ class Psi(PrivateCore):
 
     def _process(self, stimulus: Any) -> Any:
         return {"core": self.name, "processed": True, "stimulus_type": type(stimulus).__name__}
+# 7:8

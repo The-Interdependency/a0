@@ -1,4 +1,4 @@
-# 77:0
+# 77:7
 # DOC module: admin
 # DOC label: Admin Emails
 # DOC description: Admin email allow-list management for elevated console/operator access checks.
@@ -100,4 +100,4 @@ async def remove_admin_email(request: Request, email: str):
         if result.rowcount == 0:
             return JSONResponse(status_code=404, content={"error": "Not found"})
     return {"ok": True, "email": target}
-# 77:0
+# 77:7

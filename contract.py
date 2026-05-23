@@ -1,3 +1,4 @@
+# 19:2
 cat > a0/contract.py <<'EOF'
 # a0/contract.py
 # hmmm: Contract is the stability anchor.
@@ -23,3 +24,4 @@ class A0Response:
     logs: Dict[str, Any] = field(default_factory=lambda: {"events": []})
     hmm: List[str] = field(default_factory=list)
 EOF
+# 19:2

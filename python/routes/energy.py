@@ -1,4 +1,4 @@
-# 420:120
+# 420:110
 """
 Energy provider management routes.
 
@@ -595,4 +595,4 @@ async def converge_provider_pcna(provider_id: str, request: Request):
 #   class: correctness
 #   call:  python.tests.contracts.energy.test_providers_list_public_read
 # === END CONTRACTS ===
-# 420:120
+# 420:110

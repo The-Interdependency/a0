@@ -1,3 +1,4 @@
+# 29:39
 """env — Psi tensor for runtime configuration.
 
 Single source of truth for all a0 environment variables.
@@ -89,3 +90,4 @@ A0_TRAINER_MODEL: str   = os.environ.get("A0_TRAINER_MODEL",   "")
 A0_TRAINING_DIR: str    = os.environ.get("A0_TRAINING_DIR",    "")
 
 ENV_PATH: Path = _ENV_FILE
+# 29:39

@@ -1,3 +1,4 @@
+# 87:12
 """Guardian sentinel suite.
 
 Sentinels protect structural legality, executable legality, integrity,
@@ -143,3 +144,4 @@ class SentinelSuite:
 
     def failures(self, results: List[SentinelResult]) -> List[SentinelResult]:
         return [r for r in results if r.verdict == SentinelVerdict.FAIL]
+# 87:12

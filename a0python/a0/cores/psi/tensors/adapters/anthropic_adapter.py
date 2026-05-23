@@ -1,3 +1,4 @@
+# 47:14
 """anthropic_adapter — calls the Anthropic Messages API directly.
 
 Selected when A0_MODEL=anthropic-api in .env, or when a ModelConfig with
@@ -75,3 +76,4 @@ class AnthropicAdapter:
             "raw": {"stop_reason": response.stop_reason},
             "subagents_used": [],
         }
+# 47:14

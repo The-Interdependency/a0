@@ -1,4 +1,4 @@
-# 105:3
+# 105:7
 # DOC module: forge_archetypes
 # DOC label: Forge Archetypes
 # DOC description: Static archetype template catalog and tool category mapping consumed by forge route handlers.
@@ -114,4 +114,4 @@ ARCHETYPES: list[dict] = [
         "system_prompt": "You are The Captain — break the task into orders, dispatch sub-agents, merge results, report.",
     },
 ]
-# 105:3
+# 105:7

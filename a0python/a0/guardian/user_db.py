@@ -1,3 +1,4 @@
+# 145:66
 """guardian.user_db — user registry for the Guardian shell.
 
 Tracks per-user identity, passphrase (hashed), affiliation level, and
@@ -261,3 +262,4 @@ class UserDB:
         except Exception:
             # Corrupt or legacy file — start clean rather than crash.
             pass
+# 145:66

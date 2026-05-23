@@ -1,3 +1,4 @@
+# 65:7
 # DOC module: tests.test_energy_registry_persistence
 # DOC label: Provider persistence path
 # DOC description: Exercises success/failure behavior of
@@ -98,3 +99,4 @@ def test_persistent_switch_rejects_unknown_provider(monkeypatch):
     ok = asyncio.run(registry.set_active_provider_persistent("definitely-not-a-provider"))
     assert ok is False
     assert registry.get_active_provider() == current
+# 65:7

@@ -1,3 +1,4 @@
+# 36:5
 # a0/router.py
 # hmmm: router chooses tool vs model. Keep deterministic when possible.
 
@@ -51,3 +52,4 @@ def handle(req: A0Request) -> A0Response:
     resp = adapter.complete([{"role": "user", "content": text}])
     log_event(LOG_DIR, req.task_id, {"type": "model", "name": adapter.name})
     return A0Response(task_id=req.task_id, result={"text": resp.get("text", ""), "artifacts": []}, hmm=req.hmm)
+# 36:5
