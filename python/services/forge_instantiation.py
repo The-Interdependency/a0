@@ -1,3 +1,4 @@
+# 21:2
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -28,3 +29,4 @@ def resolve_forge_model_id(model_id: str | None) -> str:
             ),
         )
     return resolved
+# 21:2

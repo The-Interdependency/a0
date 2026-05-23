@@ -1,3 +1,4 @@
+# 54:3
 """Glossary — canonical term definitions across the system."""
 
 GLOSSARY = {
@@ -56,3 +57,4 @@ GLOSSARY = {
         "A diagnostic label, not a judgment."
     ),
 }
+# 54:3

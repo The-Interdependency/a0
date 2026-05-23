@@ -1,3 +1,4 @@
+# 69:36
 """
 Low-level text extraction utilities for EDCM metric computation.
 
@@ -124,3 +125,4 @@ def blame_density(text: str) -> float:
         if any(m in s.lower() for m in blame_markers)
     )
     return blame_sents / max(1, len(sentences))
+# 69:36

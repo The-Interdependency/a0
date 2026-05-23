@@ -1,3 +1,4 @@
+# 23:22
 """
 Persistence parameter (alpha) estimation.
 
@@ -55,3 +56,4 @@ def estimate_alpha(c_series: List[float]) -> float:
     lam = -num / den  # decay rate; negate because slope is negative for decay
     alpha = 1.0 - max(0.0, min(1.0, lam))
     return max(0.0, min(1.0, alpha))
+# 23:22

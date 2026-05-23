@@ -17,8 +17,10 @@ tests/test_artifacts.py
 tests/test_compute_transcript_full.py
 tests/test_cut_modes.py
 tests/test_edcm_uses_package.py
+tests/test_energy_registry_persistence.py
 tests/test_hmmm_boundary.py
 tests/test_inference_modes_usage.py
+tests/test_interdependent_bootstrap.py
 tests/test_live_server.py
 tests/test_route_imports.py
 tests/test_run_context.py

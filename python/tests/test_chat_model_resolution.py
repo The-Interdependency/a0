@@ -1,3 +1,4 @@
+# 31:0
 from __future__ import annotations
 
 import pytest
@@ -40,3 +41,4 @@ async def test_resolve_turn_model_unknown_body_model_400() -> None:
 
     assert exc.value.status_code == 400
     assert "Unknown model id" in str(exc.value.detail)
+# 31:0

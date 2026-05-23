@@ -1,3 +1,4 @@
+# 21:13
 """Psi tensors — the build logic of a0.
 
 The code to build a0 resides here.
@@ -36,3 +37,4 @@ __all__ = [
     "run_pdf_extract",
     "run_whisper_segments",
 ]
+# 21:13

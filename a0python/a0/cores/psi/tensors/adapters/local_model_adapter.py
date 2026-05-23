@@ -1,3 +1,4 @@
+# 48:21
 """Local model adapters — run inference without external API calls.
 
 Two options:
@@ -85,3 +86,4 @@ class LlamaCppAdapter:
             "raw": result,
             "subagents_used": [],
         }
+# 48:21

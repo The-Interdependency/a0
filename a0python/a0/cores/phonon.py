@@ -1,3 +1,4 @@
+# 35:8
 """Phonon — private transport-only internal resonance.
 
 Law 2: Transport is not display.
@@ -54,3 +55,4 @@ class Phonon:
             active_channels=len(self._channels),
             structural_variance=0.0,
         )
+# 35:8

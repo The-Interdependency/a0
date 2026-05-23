@@ -1,3 +1,4 @@
+# 4:8
 """PCNA — Prime Circular Neural Architecture.
 
 The inference engine layer of a0. phi, psi, omega are distinct tensor
@@ -13,3 +14,4 @@ from .psi import PsiTensor
 from .omega import OmegaTensor
 
 __all__ = ["PhiTensor", "PsiTensor", "OmegaTensor"]
+# 4:8

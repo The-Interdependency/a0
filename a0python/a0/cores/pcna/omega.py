@@ -1,3 +1,4 @@
+# 25:13
 """Omega tensor field — synthesis and integration layer of PCNA.
 
 Omega's domain: combining phi and psi outputs into a coherent unified
@@ -46,3 +47,4 @@ class OmegaTensor:
                 "backend": slices.backend_name,
             }
         }
+# 25:13

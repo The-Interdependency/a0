@@ -1,4 +1,4 @@
-// 694:26
+// 695:26
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, serial, integer, timestamp, jsonb, real, boolean, uniqueIndex, index, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -820,4 +820,4 @@ export const settings = pgTable("settings", {
 }, (t) => [uniqueIndex("uq_settings_user_key").on(t.userId, t.key)]);
 
 export type Setting = typeof settings.$inferSelect;
-// 694:26
+// 695:26

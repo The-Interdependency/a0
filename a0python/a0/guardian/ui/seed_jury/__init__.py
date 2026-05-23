@@ -1,3 +1,4 @@
+# 5:1
 """seed_jury — circles for the adjudication layer."""
 from ..circles import Circle
 
@@ -6,3 +7,4 @@ CONFLICTS_CIRCLE    = Circle(name="conflicts",    label="Conflicts",    seed="se
 STANDARDS_CIRCLE    = Circle(name="standards",    label="Standards",    seed="seed_jury")
 
 CIRCLES = [ADJUDICATION_CIRCLE, CONFLICTS_CIRCLE, STANDARDS_CIRCLE]
+# 5:1

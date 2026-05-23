@@ -1,3 +1,4 @@
+# 34:0
 import importlib.metadata as md
 import importlib.util
 from pathlib import Path
@@ -44,3 +45,4 @@ def test_require_interdependent_core_ready_raises(monkeypatch):
         raise AssertionError("expected RuntimeError")
     except RuntimeError as exc:
         assert "status=metadata_only" in str(exc)
+# 34:0

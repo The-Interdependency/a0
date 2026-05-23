@@ -1,3 +1,4 @@
+# 30:32
 """context_builder — assemble effective system prompt from Memory + ModelConfig.
 
 Bridges the Tier 2 continuity substrate (Memory) to the text context sent to
@@ -79,3 +80,4 @@ def build_memory_context(
     if base_system_prompt:
         return f"{block}\n\n{base_system_prompt}"
     return block
+# 30:32

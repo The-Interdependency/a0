@@ -1,4 +1,4 @@
-# 7:16
+# 7:20
 # DOC module: billing_helpers
 # DOC label: Billing Helpers
 # DOC description: Legacy Supporter-tier helper functions used by billing webhook handling paths.
@@ -32,4 +32,4 @@ def is_supporter_subscription(metadata: dict) -> bool:
     legacy Supporter sub. Used to filter webhook events so we only
     touch rows that were actually Supporter subscribers."""
     return metadata.get("product_key") == "supporter"
-# 7:16
+# 7:20

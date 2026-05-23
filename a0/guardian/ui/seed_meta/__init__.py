@@ -1,3 +1,4 @@
+# 5:1
 """seed_meta — circles for the executive layer (Meta-13)."""
 from ..circles import Circle
 
@@ -6,3 +7,4 @@ FAST_PATH_CIRCLE  = Circle(name="fast_path",  label="Fast Path",  seed="seed_met
 SLOW_PATH_CIRCLE  = Circle(name="slow_path",  label="Slow Path",  seed="seed_meta")
 
 CIRCLES = [EXECUTIVE_CIRCLE, FAST_PATH_CIRCLE, SLOW_PATH_CIRCLE]
+# 5:1

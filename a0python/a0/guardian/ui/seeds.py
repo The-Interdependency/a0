@@ -1,3 +1,4 @@
+# 124:34
 """Seeds — circle group containers for the Guardian UI.
 
 Seeds group circles. Each seed is a named category of tabs.
@@ -182,3 +183,4 @@ def default_layout() -> SeedLayout:
             ],
         ),
     ])
+# 124:34

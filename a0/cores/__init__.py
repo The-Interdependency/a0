@@ -1,3 +1,4 @@
+# 5:12
 """Private cognitive cores — Phi, Psi, Omega — and Phonon transport.
 
 They think. They do not emit outward directly.
@@ -19,3 +20,4 @@ from .omega import Omega
 from .phonon import Phonon
 
 __all__ = ["Phi", "Psi", "Omega", "Phonon"]
+# 5:12

@@ -1,3 +1,4 @@
+# 106:66
 """
 Secondary EDCM metrics — require window history.
 
@@ -216,3 +217,4 @@ def modifier_topic_drift(window_texts: List[str]) -> float:
         drifts.append(1.0 - overlap)
 
     return clamp01(sum(drifts) / len(drifts))
+# 106:66

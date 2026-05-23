@@ -1,4 +1,4 @@
-# 226:39
+# 215:45
 """The Forge — character-sheet style agent instantiation.
 
 Instantiation mechanics (high level):
@@ -304,4 +304,4 @@ async def duel_stub(request: Request) -> dict:
 def _jsonb(value) -> str:
     import json
     return json.dumps(value) if value is not None else "null"
-# 226:39
+# 215:45

@@ -1,3 +1,4 @@
+# 45:5
 from __future__ import annotations
 
 from fastapi import HTTPException
@@ -55,3 +56,4 @@ async def resolve_turn_model(
         provider_id = energy_registry.get_active_provider() or model_id
 
     return model_id, provider_id
+# 45:5

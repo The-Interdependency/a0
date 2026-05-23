@@ -1,4 +1,4 @@
-# 34:4
+# 34:9
 # DOC module: guest
 # DOC label: Guest Chat
 # DOC description: Unauthenticated preview chat endpoint that routes through the currently active provider.
@@ -53,4 +53,4 @@ async def guest_chat(body: GuestChatBody):
         tokens_used = max(10, len(body.message.split()) + len(content.split()))
 
     return {"content": content, "tokens_used": tokens_used}
-# 34:4
+# 34:9

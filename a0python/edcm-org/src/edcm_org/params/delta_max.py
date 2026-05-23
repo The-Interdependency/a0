@@ -1,3 +1,4 @@
+# 31:35
 """
 delta_max parameter estimation.
 
@@ -81,3 +82,4 @@ def estimate_delta_max(
 
     # delta_max = P90 of the median estimate (conservative)
     return max(0.0, min(1.0, (median_rate + p90) / 2.0))
+# 31:35

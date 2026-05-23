@@ -1,3 +1,4 @@
+# 89:28
 """Provenance — hash-chain event history.
 
 Canonical law:
@@ -150,3 +151,4 @@ def read_provenance(log_dir: Path, task_id: str) -> Dict[str, Any]:
     if not provenance_path.exists():
         return {"chain": [], "sealed": False, "seal_hash": None}
     return json.loads(provenance_path.read_text(encoding="utf-8"))
+# 89:28

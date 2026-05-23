@@ -1,3 +1,4 @@
+# 23:0
 from __future__ import annotations
 
 import pytest
@@ -30,3 +31,4 @@ def test_resolve_forge_model_id_requires_model_or_active_provider(monkeypatch: p
     detail = str(exc.value.detail)
     assert "no model_id provided" in detail
     assert "active_provider configured" in detail
+# 23:0

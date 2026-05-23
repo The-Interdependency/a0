@@ -1,3 +1,4 @@
+# 174:85
 """PTCA seed tensor routing lattice.
 
 53 seeds organized as:
@@ -313,3 +314,4 @@ class SeedRouter:
             "g0": self._g0.name,
             "meta_routers": list(self._meta_seeds.keys()),
         }
+# 174:85
