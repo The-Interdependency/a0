@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 213:38 5:8 1:7
-=======
-# 215:45
->>>>>>> origin/pr/32
 """The Forge — character-sheet style agent instantiation.
 
 Instantiation mechanics (high level):
@@ -164,18 +160,12 @@ async def instantiate(request: Request, body: InstantiateRequest) -> dict:
     tools = _validate_tools(body.enabled_tools if body.enabled_tools is not None else arche["suggested_tools"])
     prompt = body.system_prompt_override or arche["system_prompt"]
     personality = body.personality_override or arche["personality"]
-<<<<<<< HEAD
     model_id = body.model_id
     if not model_id:
         try:
             model_id = await active_provider()
         except RuntimeError as e:
             raise HTTPException(status_code=503, detail=str(e))
-=======
-    # No silent fallback to "gemini": forge requires either an explicit
-    # model_id in the body or a configured global active_provider.
-    model_id = resolve_forge_model_id(body.model_id)
->>>>>>> origin/pr/32
     provider_info = _validate_model(model_id)
     provider = provider_info.get("vendor", model_id)
     stats = arche["stats"]
@@ -309,8 +299,4 @@ async def duel_stub(request: Request) -> dict:
 def _jsonb(value) -> str:
     import json
     return json.dumps(value) if value is not None else "null"
-<<<<<<< HEAD
 # 213:38 5:8 1:7
-=======
-# 215:45
->>>>>>> origin/pr/32

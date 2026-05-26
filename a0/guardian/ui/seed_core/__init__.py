@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 5:1 0:0 0:1
-=======
-# 5:1
->>>>>>> origin/pr/32
 """seed_core — circles for the private cognitive cores (Phi, Psi, Omega)."""
 from ..circles import Circle
 
@@ -11,8 +7,4 @@ PSI_CIRCLE   = Circle(name="psi",   label="Psi",   seed="seed_core")
 OMEGA_CIRCLE = Circle(name="omega", label="Omega", seed="seed_core")
 
 CIRCLES = [PHI_CIRCLE, PSI_CIRCLE, OMEGA_CIRCLE]
-<<<<<<< HEAD
 # 5:1 0:0 0:1
-=======
-# 5:1
->>>>>>> origin/pr/32

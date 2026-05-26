@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 77:8 0:0 1:1
 # DOC module: admin
 # DOC label: Admin Email Allowlist
@@ -8,16 +7,6 @@
 # DOC endpoint: GET /api/v1/admin/emails | List configured admin email entries.
 # DOC endpoint: POST /api/v1/admin/emails | Add an admin email entry.
 # DOC endpoint: DELETE /api/v1/admin/emails/{email} | Remove an admin email entry.
-=======
-# 77:7
-# DOC module: admin
-# DOC label: Admin Emails
-# DOC description: Admin email allow-list management for elevated console/operator access checks.
-# DOC tier: admin
-# DOC endpoint: GET /api/v1/admin/emails | List configured admin emails.
-# DOC endpoint: POST /api/v1/admin/emails | Add an admin email.
-# DOC endpoint: DELETE /api/v1/admin/emails/{email} | Remove an admin email.
->>>>>>> origin/pr/32
 import os
 from typing import Optional
 from fastapi import APIRouter, Request
@@ -112,8 +101,4 @@ async def remove_admin_email(request: Request, email: str):
         if result.rowcount == 0:
             return JSONResponse(status_code=404, content={"error": "Not found"})
     return {"ok": True, "email": target}
-<<<<<<< HEAD
 # 77:8 0:0 1:1
-=======
-# 77:7
->>>>>>> origin/pr/32

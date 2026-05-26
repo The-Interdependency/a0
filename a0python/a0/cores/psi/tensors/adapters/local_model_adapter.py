@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 48:21 0:0 1:0
-=======
-# 48:21
->>>>>>> origin/pr/32
 """Local model adapters — run inference without external API calls.
 
 Two options:
@@ -90,8 +86,4 @@ class LlamaCppAdapter:
             "raw": result,
             "subagents_used": [],
         }
-<<<<<<< HEAD
 # 48:21 0:0 1:0
-=======
-# 48:21
->>>>>>> origin/pr/32

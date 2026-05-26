@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 61:4 0:0 1:0
-=======
-# 63:3
->>>>>>> origin/pr/32
 """Interdependent-core bootstrap checks for a0 startup."""
 
 from __future__ import annotations
@@ -46,20 +42,11 @@ def check_interdependent_core() -> dict:
             except (ModuleNotFoundError, ImportError):
                 continue
 
-<<<<<<< HEAD
         # A successfully importable module is "ready"; payload_py/sample are diagnostic only.
         if importable_mod:
             status = "ready"
         elif payload_py:
             status = "module_unimportable"
-=======
-        if payload_py and importable_mod:
-            status = "ready"
-        elif payload_py and not importable_mod:
-            status = "module_unimportable"
-        elif not payload_py and importable_mod:
-            status = "metadata_only_but_importable"
->>>>>>> origin/pr/32
         else:
             status = "metadata_only"
 
@@ -91,8 +78,4 @@ def require_interdependent_core_ready() -> dict:
         f"(status={state.get('status')}, dist={state.get('dist')}, "
         f"version={state.get('version')}, payload_py={state.get('payload_py')})."
     )
-<<<<<<< HEAD
 # 61:4 0:0 1:0
-=======
-# 63:3
->>>>>>> origin/pr/32

@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 156:15 0:0 0:0
-=======
-# 156:15
->>>>>>> origin/pr/32
 """
 EDCM Basin Taxonomy — v0.1
 
@@ -185,8 +181,4 @@ def get_basin_spec(name: str) -> BasinSpec | None:
         if spec["name"] == name:
             return spec
     return None
-<<<<<<< HEAD
 # 156:15 0:0 0:0
-=======
-# 156:15
->>>>>>> origin/pr/32

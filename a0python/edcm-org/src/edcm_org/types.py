@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 69:32 0:0 10:0
-=======
-# 69:32
->>>>>>> origin/pr/32
 """
 Typed state and output envelope for EDCM-Org v0.1.
 
@@ -128,8 +124,4 @@ class OutputEnvelope:
             errors.append(f"Unknown spec_version: {self.spec_version!r}")
 
         return errors
-<<<<<<< HEAD
 # 69:32 0:0 10:0
-=======
-# 69:32
->>>>>>> origin/pr/32

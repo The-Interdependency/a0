@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 67:23 0:0 2:2
-=======
-# 67:23
->>>>>>> origin/pr/32
 """Memory — continuity substrate.
 
 Memory is not raw history.
@@ -115,8 +111,4 @@ class Memory:
                 )
         except (json.JSONDecodeError, KeyError):
             pass
-<<<<<<< HEAD
 # 67:23 0:0 2:2
-=======
-# 67:23
->>>>>>> origin/pr/32

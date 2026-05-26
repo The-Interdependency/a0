@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 11:10 0:0 0:2
-=======
-# 11:10
->>>>>>> origin/pr/32
 """Omega — private synthesis and integration cognitive core.
 
 Omega thinks. Omega does not emit outward directly.
@@ -33,8 +29,4 @@ class Omega(PrivateCore):
         result = OmegaTensor().process(text)
         result["core"] = self.name
         return result
-<<<<<<< HEAD
 # 11:10 0:0 0:2
-=======
-# 11:10
->>>>>>> origin/pr/32

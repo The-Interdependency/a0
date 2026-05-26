@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 49:9 0:0 1:2
-=======
-# 49:9
->>>>>>> origin/pr/32
 """Heartbeat — maintenance-only cycle.
 
 Heartbeat may NOT:
@@ -80,8 +76,4 @@ class Heartbeat:
 
     def modify_safety_policy(self, *args, **kwargs) -> None:
         raise HeartbeatViolationError("Heartbeat may not modify safety policy.")
-<<<<<<< HEAD
 # 49:9 0:0 1:2
-=======
-# 49:9
->>>>>>> origin/pr/32

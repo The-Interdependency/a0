@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 170:122 0:0 0:0
-=======
-# 170:122
->>>>>>> origin/pr/32
 """model_registry — LLM model registry for a0.
 
 Modelled on the DEFAULT_REGISTRY / generate_response(model_id, messages, registry, user)
@@ -368,8 +364,4 @@ def make_complete_fn(
         return handle(req, registry=resolved_registry, context=call_context)
 
     return _complete
-<<<<<<< HEAD
 # 170:122 0:0 0:0
-=======
-# 170:122
->>>>>>> origin/pr/32

@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 16:4 0:0 2:2
-=======
-# 16:4
->>>>>>> origin/pr/32
 """Guardian audit boundary — event-write enforcement.
 
 Law 14: Missing required invariants fail closed.
@@ -32,8 +28,4 @@ def _sentinel_preflight(event: Dict[str, Any]) -> None:
 
 def _sentinel_postflight(event: Dict[str, Any]) -> None:
     pass
-<<<<<<< HEAD
 # 16:4 0:0 2:2
-=======
-# 16:4
->>>>>>> origin/pr/32

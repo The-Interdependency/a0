@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 87:12 0:0 2:0
-=======
-# 87:12
->>>>>>> origin/pr/32
 """Guardian sentinel suite.
 
 Sentinels protect structural legality, executable legality, integrity,
@@ -148,8 +144,4 @@ class SentinelSuite:
 
     def failures(self, results: List[SentinelResult]) -> List[SentinelResult]:
         return [r for r in results if r.verdict == SentinelVerdict.FAIL]
-<<<<<<< HEAD
 # 87:12 0:0 2:0
-=======
-# 87:12
->>>>>>> origin/pr/32

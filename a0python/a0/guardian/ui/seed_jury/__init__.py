@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 5:1 0:0 0:1
-=======
-# 5:1
->>>>>>> origin/pr/32
 """seed_jury — circles for the adjudication layer."""
 from ..circles import Circle
 
@@ -11,8 +7,4 @@ CONFLICTS_CIRCLE    = Circle(name="conflicts",    label="Conflicts",    seed="se
 STANDARDS_CIRCLE    = Circle(name="standards",    label="Standards",    seed="seed_jury")
 
 CIRCLES = [ADJUDICATION_CIRCLE, CONFLICTS_CIRCLE, STANDARDS_CIRCLE]
-<<<<<<< HEAD
 # 5:1 0:0 0:1
-=======
-# 5:1
->>>>>>> origin/pr/32

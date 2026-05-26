@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 52:7 0:0 0:0
-=======
-# 52:7
->>>>>>> origin/pr/32
 """Bandit — bounded advisory salience machinery.
 
 Bandits do not choose. Meta-13 chooses.
@@ -78,8 +74,4 @@ class BanditAdvisor:
         total_probes = sum(self._probe_counts.values()) or 1
         exploration = math.sqrt(2 * math.log(total_probes) / count)
         return mean_reward + self._exploration_rate * exploration
-<<<<<<< HEAD
 # 52:7 0:0 0:0
-=======
-# 52:7
->>>>>>> origin/pr/32

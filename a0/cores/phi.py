@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 7:4 0:0 4:1
-=======
-# 7:4
->>>>>>> origin/pr/32
 """Phi — private cognitive core.
 
 Phi thinks. Phi does not emit outward directly.
@@ -21,8 +17,4 @@ class Phi(PrivateCore):
 
     def _process(self, stimulus: Any) -> Any:
         return {"core": self.name, "processed": True, "stimulus_type": type(stimulus).__name__}
-<<<<<<< HEAD
 # 7:4 0:0 4:1
-=======
-# 7:4
->>>>>>> origin/pr/32

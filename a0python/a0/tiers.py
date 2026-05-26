@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 29:20 0:0 2:1
-=======
-# 29:20
->>>>>>> origin/pr/32
 """Tier system — volatile vs. committed continuity.
 
 Tier 1 (Volatile): Core ↔ Phonon
@@ -66,8 +62,4 @@ class Tier2:
                 "Tier 2 write requires a Jury token — cannot commit without adjudication."
             )
         return cls(content=content, jury_token=jury_token)
-<<<<<<< HEAD
 # 29:20 0:0 2:1
-=======
-# 29:20
->>>>>>> origin/pr/32

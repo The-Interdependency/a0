@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 69:36 0:0 10:0
-=======
-# 69:36
->>>>>>> origin/pr/32
 """
 Low-level text extraction utilities for EDCM metric computation.
 
@@ -129,8 +125,4 @@ def blame_density(text: str) -> float:
         if any(m in s.lower() for m in blame_markers)
     )
     return blame_sents / max(1, len(sentences))
-<<<<<<< HEAD
 # 69:36 0:0 10:0
-=======
-# 69:36
->>>>>>> origin/pr/32

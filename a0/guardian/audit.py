@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 16:14 0:0 2:2
-=======
-# 16:14
->>>>>>> origin/pr/32
 """Guardian audit boundary — event-write enforcement.
 
 Every event passing through the Guardian audit boundary must:
@@ -44,8 +40,4 @@ def _sentinel_preflight(event: Dict[str, Any]) -> None:
 def _sentinel_postflight(event: Dict[str, Any]) -> None:
     """Integrity verification after event write."""
     pass
-<<<<<<< HEAD
 # 16:14 0:0 2:2
-=======
-# 16:14
->>>>>>> origin/pr/32

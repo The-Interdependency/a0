@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 28:10 0:0 6:0
-=======
-# 28:10
->>>>>>> origin/pr/32
 """Base class for private cognitive cores.
 
 Law 1: Private process is not public output.
@@ -53,8 +49,4 @@ class PrivateCore:
             is_active=True,
             structural_variance=0.0,
         )
-<<<<<<< HEAD
 # 28:10 0:0 6:0
-=======
-# 28:10
->>>>>>> origin/pr/32

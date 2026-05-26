@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 59:5 0:0 4:8
-=======
-# 57:5
->>>>>>> origin/pr/32
 from __future__ import annotations
 
 import os
@@ -82,8 +78,4 @@ def handle(req: A0Request) -> A0Response:
         "hmmm": hmmm,
     })
     return A0Response(task_id=req.task_id, result={"text": resp.get("text", ""), "artifacts": []}, hmmm=hmmm)
-<<<<<<< HEAD
 # 59:5 0:0 4:8
-=======
-# 57:5
->>>>>>> origin/pr/32

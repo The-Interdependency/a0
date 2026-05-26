@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 12:4 0:0 3:0
-=======
-# 12:4
->>>>>>> origin/pr/32
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -23,8 +19,4 @@ def run_edcm(text: str) -> Dict[str, Any]:
                 "note": "install edcm-org to enable: pip install -e edcm-org/"}
     except Exception as exc:
         return {"tool": "edcm", "status": "error", "error": str(exc), "input_chars": len(text)}
-<<<<<<< HEAD
 # 12:4 0:0 3:0
-=======
-# 12:4
->>>>>>> origin/pr/32

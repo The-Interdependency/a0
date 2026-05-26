@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 100:23 0:0 0:0
-=======
-# 100:23
->>>>>>> origin/pr/32
 """
 Spec compliance tests — metric range validation.
 
@@ -170,8 +166,4 @@ class TestClampUtilities:
 
     def test_clamp11_within(self):
         assert clamp11(-0.3) == -0.3
-<<<<<<< HEAD
 # 100:23 0:0 0:0
-=======
-# 100:23
->>>>>>> origin/pr/32

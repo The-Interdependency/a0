@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 13:14 0:0 0:6
-=======
-# 13:14
->>>>>>> origin/pr/32
 """Guardian — the microkernel operating shell.
 
 Guardian is constitutive to the architecture, not a wrapper.
@@ -33,8 +29,4 @@ __all__ = [
     "UserDB", "UserRecord", "AffiliationLevel",
     "UserDBError", "UserNotFoundError", "UsernameTakenError", "BadPassphraseError",
 ]
-<<<<<<< HEAD
 # 13:14 0:0 0:6
-=======
-# 13:14
->>>>>>> origin/pr/32

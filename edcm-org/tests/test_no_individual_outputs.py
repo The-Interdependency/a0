@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 66:6 0:0 0:0
-=======
-# 66:6
->>>>>>> origin/pr/32
 """
 Spec compliance test: no individual-level outputs.
 
@@ -89,8 +85,4 @@ class TestNoIndividualOutputs:
             assert any(metric_name in e for e in result.errors), (
                 f"Error message should reference metric {metric_name}"
             )
-<<<<<<< HEAD
 # 66:6 0:0 0:0
-=======
-# 66:6
->>>>>>> origin/pr/32

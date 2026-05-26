@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 55:31 0:0 1:2
-=======
-# 55:31
->>>>>>> origin/pr/32
 """Heartbeat — maintenance-only cycle.
 
 If a heartbeat exists, it is maintenance-only.
@@ -112,8 +108,4 @@ class Heartbeat:
         raise HeartbeatViolationError(
             "Heartbeat may not modify safety policy."
         )
-<<<<<<< HEAD
 # 55:31 0:0 1:2
-=======
-# 55:31
->>>>>>> origin/pr/32

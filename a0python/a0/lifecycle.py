@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 211:136 0:0 0:0
-=======
-# 211:136
->>>>>>> origin/pr/32
 """a0 lifecycle — spawn, clone, merge, diversify.
 
 The four fundamental operations for a multi-agent a0 ecosystem:
@@ -424,8 +420,4 @@ def list_instances() -> List[InstanceDescriptor]:
             except Exception:
                 pass
     return result
-<<<<<<< HEAD
 # 211:136 0:0 0:0
-=======
-# 211:136
->>>>>>> origin/pr/32

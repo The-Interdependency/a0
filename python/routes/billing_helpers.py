@@ -1,16 +1,9 @@
-<<<<<<< HEAD
 # 7:21 0:0 1:0
-=======
-# 7:20
->>>>>>> origin/pr/32
 # DOC module: billing_helpers
 # DOC label: Billing Helpers
 # DOC description: Legacy Supporter-tier helper functions used by billing webhook handling paths.
 # DOC tier: admin
-<<<<<<< HEAD
 # DOC role: service
-=======
->>>>>>> origin/pr/32
 """
 Billing helpers — Supporter-tier shims kept alive only for legacy webhook traffic.
 
@@ -40,8 +33,4 @@ def is_supporter_subscription(metadata: dict) -> bool:
     legacy Supporter sub. Used to filter webhook events so we only
     touch rows that were actually Supporter subscribers."""
     return metadata.get("product_key") == "supporter"
-<<<<<<< HEAD
 # 7:21 0:0 1:0
-=======
-# 7:20
->>>>>>> origin/pr/32

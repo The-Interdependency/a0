@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 87:21 0:0 0:1
-=======
-# 87:21
->>>>>>> origin/pr/32
 """
 EDCM Non-Punitive Intervention Recommendations.
 
@@ -131,8 +127,4 @@ def recommend_interventions(basin: BasinName, m: Metrics) -> List[str]:
         )
 
     return recs
-<<<<<<< HEAD
 # 87:21 0:0 0:1
-=======
-# 87:21
->>>>>>> origin/pr/32

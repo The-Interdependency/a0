@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 63:36 0:0 0:0
-=======
-# 63:36
->>>>>>> origin/pr/32
 """Jury — legality and conflict-preservation adjudication layer.
 
 Jury:
@@ -128,8 +124,4 @@ class Jury:
         jury_token = f"jury_std_{uuid.uuid4().hex}"
         self._committed.append(jury_token)
         return jury_token
-<<<<<<< HEAD
 # 63:36 0:0 0:0
-=======
-# 63:36
->>>>>>> origin/pr/32

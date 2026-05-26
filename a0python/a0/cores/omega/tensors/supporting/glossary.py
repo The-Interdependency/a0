@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 54:3 0:0 2:0
-=======
-# 54:3
->>>>>>> origin/pr/32
 """Glossary — canonical term definitions across the system."""
 
 GLOSSARY = {
@@ -61,8 +57,4 @@ GLOSSARY = {
         "A diagnostic label, not a judgment."
     ),
 }
-<<<<<<< HEAD
 # 54:3 0:0 2:0
-=======
-# 54:3
->>>>>>> origin/pr/32

@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 58:74 0:0 0:2
-=======
-# 58:74
->>>>>>> origin/pr/32
 """A0App — Guardian's Textual TUI.
 
 Layout:
@@ -168,8 +164,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-<<<<<<< HEAD
 # 58:74 0:0 0:2
-=======
-# 58:74
->>>>>>> origin/pr/32

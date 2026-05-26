@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 11:6 0:0 0:2
-=======
-# 11:6
->>>>>>> origin/pr/32
 """Phi — private structural and analytic cognitive core.
 
 Phi thinks. Phi does not emit outward directly.
@@ -28,8 +24,4 @@ class Phi(PrivateCore):
         result = PhiTensor().process(text)
         result["core"] = self.name
         return result
-<<<<<<< HEAD
 # 11:6 0:0 0:2
-=======
-# 11:6
->>>>>>> origin/pr/32

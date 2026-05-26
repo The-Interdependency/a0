@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 55:6 0:0 4:1
-=======
-# 55:6
->>>>>>> origin/pr/32
 """Guardian external-effect approval gate.
 
 Law 8: Capability does not equal authority.
@@ -81,8 +77,4 @@ def is_undoable_internal(
         and provenance_complete
         and safety_policy_unchanged
     )
-<<<<<<< HEAD
 # 55:6 0:0 4:1
-=======
-# 55:6
->>>>>>> origin/pr/32

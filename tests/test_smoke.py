@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 16:1 0:0 0:0
-=======
-# 16:1
->>>>>>> origin/pr/32
 # tests/test_smoke.py
 import json, subprocess, sys, os
 
@@ -23,8 +19,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-<<<<<<< HEAD
 # 16:1 0:0 0:0
-=======
-# 16:1
->>>>>>> origin/pr/32

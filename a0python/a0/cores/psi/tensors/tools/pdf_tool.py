@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 17:4 0:0 3:0
-=======
-# 17:4
->>>>>>> origin/pr/32
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -30,8 +26,4 @@ def run_pdf_extract(files: List[str]) -> Dict[str, Any]:
             results.append({"file": path, "error": str(exc)})
 
     return {"tool": "pdf_extract", "status": "ok", "results": results}
-<<<<<<< HEAD
 # 17:4 0:0 3:0
-=======
-# 17:4
->>>>>>> origin/pr/32

@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 21:13 0:0 0:0
-=======
-# 21:13
->>>>>>> origin/pr/32
 """Psi tensors — the build logic of a0.
 
 The code to build a0 resides here.
@@ -41,8 +37,4 @@ __all__ = [
     "run_pdf_extract",
     "run_whisper_segments",
 ]
-<<<<<<< HEAD
 # 21:13 0:0 0:0
-=======
-# 21:13
->>>>>>> origin/pr/32

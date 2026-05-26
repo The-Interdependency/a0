@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 111:30 0:0 2:1
-=======
-# 111:30
->>>>>>> origin/pr/32
 """
 EDCM Basin Detection — spec-compliant classifier.
 
@@ -166,8 +162,4 @@ def detect_basin(
         ],
     }
     return "UNCLASSIFIED", 0.50, explanation
-<<<<<<< HEAD
 # 111:30 0:0 2:1
-=======
-# 111:30
->>>>>>> origin/pr/32

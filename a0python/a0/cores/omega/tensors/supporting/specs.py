@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 34:1 0:0 2:0
-=======
-# 34:1
->>>>>>> origin/pr/32
 """Spec catalog — canonical reference specifications."""
 
 SPECS = {
@@ -39,8 +35,4 @@ SPECS = {
         "resides_in": "psi_tensors",
     },
 }
-<<<<<<< HEAD
 # 34:1 0:0 2:0
-=======
-# 34:1
->>>>>>> origin/pr/32

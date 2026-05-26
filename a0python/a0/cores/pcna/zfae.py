@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 315:193 0:0 4:0
-=======
-# 315:193
->>>>>>> origin/pr/32
 """ZFAE v2 — Zeta-structured, Field-partitioned, Alpha-regulated, Echo-state engine.
 
 Architecture overview
@@ -634,8 +630,4 @@ def create_training_fleet(
     ]
 
     return diversify(parent_desc, configs)
-<<<<<<< HEAD
 # 315:193 0:0 4:0
-=======
-# 315:193
->>>>>>> origin/pr/32

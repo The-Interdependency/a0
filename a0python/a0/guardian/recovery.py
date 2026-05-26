@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 26:4 0:0 0:0
-=======
-# 26:4
->>>>>>> origin/pr/32
 """Guardian recovery and quarantine shell.
 
 Containment is preferred to collapse (Law 6).
@@ -46,8 +42,4 @@ class RecoveryShell:
 
     def clear(self) -> None:
         self._quarantine.clear()
-<<<<<<< HEAD
 # 26:4 0:0 0:0
-=======
-# 26:4
->>>>>>> origin/pr/32

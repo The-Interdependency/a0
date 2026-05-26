@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 8:2 0:0 0:1
-=======
-# 8:2
->>>>>>> origin/pr/32
 # a0/service/app.py
 # hmmm: keep off until you want it. Requires: pip install fastapi uvicorn
 
@@ -16,8 +12,4 @@ app = FastAPI()
 @app.post("/a0")
 def a0_endpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
     return handle_hub_payload(payload)
-<<<<<<< HEAD
 # 8:2 0:0 0:1
-=======
-# 8:2
->>>>>>> origin/pr/32

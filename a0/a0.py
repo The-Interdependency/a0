@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 30:0 0:0 0:3
-=======
-# 30:0
->>>>>>> origin/pr/32
 from __future__ import annotations
 
 import sys
@@ -40,8 +36,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-<<<<<<< HEAD
 # 30:0 0:0 0:3
-=======
-# 30:0
->>>>>>> origin/pr/32

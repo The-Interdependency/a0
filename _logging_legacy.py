@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 12:1 0:0 0:0
-=======
-# 12:1
->>>>>>> origin/pr/32
 # a0/logging.py
 from __future__ import annotations
 import json
@@ -17,8 +13,4 @@ def log_event(log_dir: Path, task_id: str, event: Dict[str, Any]) -> None:
     event["ts"] = datetime.now(timezone.utc).isoformat()
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(event, ensure_ascii=False) + "\n")
-<<<<<<< HEAD
 # 12:1 0:0 0:0
-=======
-# 12:1
->>>>>>> origin/pr/32

@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 19:2 0:0 7:0
-=======
-# 19:2
->>>>>>> origin/pr/32
 cat > a0/contract.py <<'EOF'
 # a0/contract.py
 # hmmm: Contract is the stability anchor.
@@ -28,8 +24,4 @@ class A0Response:
     logs: Dict[str, Any] = field(default_factory=lambda: {"events": []})
     hmm: List[str] = field(default_factory=list)
 EOF
-<<<<<<< HEAD
 # 19:2 0:0 7:0
-=======
-# 19:2
->>>>>>> origin/pr/32

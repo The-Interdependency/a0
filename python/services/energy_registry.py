@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 289:68 0:0 19:3
-=======
-# 334:125
->>>>>>> origin/pr/32
 import logging
 import contextvars
 import json
@@ -416,8 +412,4 @@ async def resolve_providers(providers: list[str] | None) -> list[str]:
         elif p in BUILTIN_PROVIDERS and p not in out:
             out.append(p)
     return out
-<<<<<<< HEAD
 # 289:68 0:0 19:3
-=======
-# 334:125
->>>>>>> origin/pr/32

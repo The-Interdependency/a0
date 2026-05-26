@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 637:187 2:7 2:16
-=======
-# 641:171
->>>>>>> origin/pr/32
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -10,16 +6,9 @@ from pydantic import BaseModel
 from typing import Optional
 
 from ..storage import storage
-<<<<<<< HEAD
 from ..services.energy_registry import active_provider, BUILTIN_PROVIDERS, cache_breakdown, estimate_cost
 from ..services.inference import call_provider
 from ..services.prompt_assembly import build_system_prompt
-=======
-from ..services.stripe_service import get_tier_context_name
-from ..services.energy_registry import energy_registry
-from ..services.turn_model_resolution import resolve_turn_model
-from ..services.inference import call_energy_provider
->>>>>>> origin/pr/32
 from ..services.bg_tasks import spawn as _spawn_bg
 
 # In-memory pending gate store: conv_id → {gate_id, history, system_prompt, provider_id, uid, ts}
@@ -371,7 +360,6 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         # turn of every existing conversation. If all four are empty we
         # cannot route, so refuse — same principle as the inference
         # dispatcher's no-silent-fallback contract.
-<<<<<<< HEAD
         model_from_body = bool(body.model)
         _from_conduct = False
         _conduct_sc: str = ""
@@ -410,13 +398,6 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 provider_id = await active_provider()
             except RuntimeError:
                 provider_id = model_id
-=======
-        model_id, provider_id = await resolve_turn_model(
-            body_model=body.model,
-            agent_model_id=agent_model_id,
-            conv_model=conv.get("model"),
-        )
->>>>>>> origin/pr/32
 
         # Tier-gate restricted models (e.g. gemini3 = ws/admin only).
         # Gate the *resolved* provider list — never raw body.providers — so
@@ -925,8 +906,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   class: correctness
 #   call:  python.tests.contracts.chat.test_unknown_body_model_400
 # === END CONTRACTS ===
-<<<<<<< HEAD
 # 637:187 2:7 2:16
-=======
-# 641:171
->>>>>>> origin/pr/32

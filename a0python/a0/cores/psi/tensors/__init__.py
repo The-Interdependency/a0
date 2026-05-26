@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 8:11 0:0 0:3
-=======
-# 8:11
->>>>>>> origin/pr/32
 """Psi tensors — canonical home of a0 build logic.
 
 The a0 routing and processing framework lives here.
@@ -25,8 +21,4 @@ __all__ = [
     "handle",
     "ModelAdapter", "LocalEchoAdapter",
 ]
-<<<<<<< HEAD
 # 8:11 0:0 0:3
-=======
-# 8:11
->>>>>>> origin/pr/32

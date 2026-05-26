@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # 94:179 0:0 0:0
-=======
-# 94:180
->>>>>>> origin/pr/32
 """Guardian web UI — Gradio application.
 
 Three tabs:
@@ -328,8 +324,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-<<<<<<< HEAD
 # 94:179 0:0 0:0
-=======
-# 94:180
->>>>>>> origin/pr/32
