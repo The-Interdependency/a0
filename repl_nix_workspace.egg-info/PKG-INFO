@@ -14,11 +14,7 @@ Requires-Dist: edcmbone>=0.1.0
 Requires-Dist: fastapi>=0.135.1
 Requires-Dist: google-genai>=1.73.1
 Requires-Dist: httpx>=0.28.1
-<<<<<<< HEAD
 Requires-Dist: interdependent-lib>=0.1.0
-=======
-Requires-Dist: interdependent-core>=0.1.0
->>>>>>> origin/pr/32
 Requires-Dist: itsdangerous>=2.2.0
 Requires-Dist: mako>=1.3.11
 Requires-Dist: numpy>=2.4.3
