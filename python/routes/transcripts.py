@@ -1,9 +1,17 @@
+<<<<<<< HEAD
 # 231:78 3:6 2:4
 # DOC module: transcripts
 # DOC label: Transcripts
 # DOC description: Transcript upload and EDCMBONE scoring — ingest files, list uploads/reports, and drill into per-round messages.
 # DOC tier: free
 # DOC role: route
+=======
+# 236:77
+# DOC module: transcripts
+# DOC label: Transcripts
+# DOC description: Transcript upload, ingestion, and EDCMBONE report retrieval endpoints with owner-scoped access.
+# DOC tier: ws
+>>>>>>> origin/pr/32
 # DOC endpoint: POST /api/v1/transcripts/upload | Upload a transcript file (txt/md/html/json/pdf/zip) for EDCMBONE scoring
 # DOC endpoint: GET /api/v1/transcripts/uploads | List the caller's recent uploads with status
 # DOC endpoint: GET /api/v1/transcripts/uploads/{id} | Get one upload's status (poll target for async)
@@ -35,7 +43,12 @@ UNLIMITED_TIERS = {"supporter", "ws", "admin"}
 
 router = APIRouter(prefix="/api/v1/transcripts", tags=["transcripts"])
 
-UI_META = {"label": "Transcripts", "module": "transcripts", "order": 25, "path": "/transcripts"}
+UI_META = {
+    "tab_id": "transcripts",
+    "label": "Transcripts",
+    "icon": "ScrollText",
+    "order": 25,
+}
 
 
 def _caller_uid(request: Request) -> Optional[str]:
@@ -364,4 +377,8 @@ async def explain_report_endpoint(request: Request, report_id: int):
             status_code=502,
             detail=f"explainer failed: {type(exc).__name__}: {exc}",
         )
+<<<<<<< HEAD
 # 231:78 3:6 2:4
+=======
+# 236:77
+>>>>>>> origin/pr/32

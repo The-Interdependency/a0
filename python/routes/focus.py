@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 321:53 0:7 1:9
+=======
+# 336:50
+>>>>>>> origin/pr/32
 # DOC module: focus
 # DOC label: Focus
 # DOC description: Model focus management. Provides context boost injection per conversation, focus regain directives, per-conversation tool selection, and system prompt preview.
@@ -355,6 +359,7 @@ async def get_inference_settings(conv_id: int, request: Request):
     }
 
 
+<<<<<<< HEAD
 @router.patch("/conversations/{conv_id}/inference-settings")
 async def patch_inference_settings(
     conv_id: int, body: InferenceSettingsBody, request: Request
@@ -450,3 +455,7 @@ async def get_prompt_sections(conv_id: int, request: Request):
     sections["conversation_id"] = conv_id
     return sections
 # 321:53 0:7 1:9
+=======
+    return result
+# 336:50
+>>>>>>> origin/pr/32

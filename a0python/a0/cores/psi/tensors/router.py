@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 152:37 0:0 4:12
+=======
+# 152:37
+>>>>>>> origin/pr/32
 from __future__ import annotations
 
 from pathlib import Path
@@ -226,4 +230,8 @@ def handle(
         result={"text": resp.get("text", ""), "artifacts": []},
         hmmm=req.hmmm,
     )
+<<<<<<< HEAD
 # 152:37 0:0 4:12
+=======
+# 152:37
+>>>>>>> origin/pr/32

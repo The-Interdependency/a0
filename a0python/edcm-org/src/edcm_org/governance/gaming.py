@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 39:27 0:0 2:1
+=======
+# 39:27
+>>>>>>> origin/pr/32
 """
 EDCM Metric Gaming Detection — always computed, non-optional.
 
@@ -81,4 +85,8 @@ def detect_gaming_alerts(
         )
 
     return alerts
+<<<<<<< HEAD
 # 39:27 0:0 2:1
+=======
+# 39:27
+>>>>>>> origin/pr/32

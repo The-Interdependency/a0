@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 20:4 0:0 19:0
+=======
+# 20:4
+>>>>>>> origin/pr/32
 """Circle — the tab unit of the Guardian UI.
 
 Each tab is a circle. Seeds group circles.
@@ -30,4 +34,8 @@ class Circle:
     def with_hmmm(self, entries: List[str]) -> "Circle":
         return Circle(name=self.name, label=self.label, seed=self.seed,
                       active=self.active, hmmm=entries, state=self.state)
+<<<<<<< HEAD
 # 20:4 0:0 19:0
+=======
+# 20:4
+>>>>>>> origin/pr/32

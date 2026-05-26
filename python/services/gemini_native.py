@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 186:46 0:0 1:1
+=======
+# 186:46
+>>>>>>> origin/pr/32
 """Native google-genai SDK adapter for Gemini 2.5 and Gemini 3.
 
 Replaces the OpenAI-compat HTTP path for Gemini providers. Unlocks:
@@ -268,4 +272,8 @@ async def call_gemini_native(
 
     # Loop exit safeguard (shouldn't reach here).
     return "[gemini: tool loop exhausted]", accumulated
+<<<<<<< HEAD
 # 186:46 0:0 1:1
+=======
+# 186:46
+>>>>>>> origin/pr/32

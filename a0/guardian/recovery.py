@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 26:5 0:0 0:0
+=======
+# 26:5
+>>>>>>> origin/pr/32
 """Guardian recovery and quarantine shell.
 
 Guardian is the recovery shell and the quarantine shell.
@@ -43,4 +47,8 @@ class RecoveryShell:
 
     def clear(self) -> None:
         self._quarantine.clear()
+<<<<<<< HEAD
 # 26:5 0:0 0:0
+=======
+# 26:5
+>>>>>>> origin/pr/32

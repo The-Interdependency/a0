@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 4:1 0:0 0:1
+=======
+# 4:1
+>>>>>>> origin/pr/32
 """seed_memory — circles for the continuity substrate."""
 from ..circles import Circle
 
@@ -6,4 +10,8 @@ CONTINUITY_CIRCLE = Circle(name="continuity", label="Continuity", seed="seed_mem
 RECALL_CIRCLE     = Circle(name="recall",     label="Recall",     seed="seed_memory")
 
 CIRCLES = [CONTINUITY_CIRCLE, RECALL_CIRCLE]
+<<<<<<< HEAD
 # 4:1 0:0 0:1
+=======
+# 4:1
+>>>>>>> origin/pr/32

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 8:5 0:0 0:2
+=======
+# 8:5
+>>>>>>> origin/pr/32
 """Omega tensors — the interdependent way and supporting material.
 
 The interdependent way and supporting material reside here.
@@ -15,4 +19,8 @@ __all__ = [
     "SPECS",
     "GLOSSARY",
 ]
+<<<<<<< HEAD
 # 8:5 0:0 0:2
+=======
+# 8:5
+>>>>>>> origin/pr/32

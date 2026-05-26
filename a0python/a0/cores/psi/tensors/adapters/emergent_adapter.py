@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 4:28 0:0 1:0
+=======
+# 4:28
+>>>>>>> origin/pr/32
 # Emergent Labs adapter — placeholder
 #
 # To activate:
@@ -32,4 +36,8 @@ raise NotImplementedError(
     "EmergentAdapter is not yet configured. "
     "See the comments in this file for setup instructions."
 )
+<<<<<<< HEAD
 # 4:28 0:0 1:0
+=======
+# 4:28
+>>>>>>> origin/pr/32

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 25:10 0:0 4:1
+=======
+# 25:10
+>>>>>>> origin/pr/32
 """Guardian emitter — the sole outward human-readable emitter.
 
 Law 9: Guardian alone owns human-readable outward emission.
@@ -45,4 +49,8 @@ def emit_error(message: str, *, stream=None) -> None:
         stream = sys.stderr
     stream.write(f"[GUARDIAN ERROR] {message}\n")
     stream.flush()
+<<<<<<< HEAD
 # 25:10 0:0 4:1
+=======
+# 25:10
+>>>>>>> origin/pr/32

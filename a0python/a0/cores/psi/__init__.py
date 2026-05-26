@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 11:8 0:0 0:2
+=======
+# 11:8
+>>>>>>> origin/pr/32
 """Psi — private semantic and contextual cognitive core.
 
 Psi thinks. Psi does not emit outward directly.
@@ -27,4 +31,8 @@ class Psi(PrivateCore):
         result = PsiTensor().process(text)
         result["core"] = self.name
         return result
+<<<<<<< HEAD
 # 11:8 0:0 0:2
+=======
+# 11:8
+>>>>>>> origin/pr/32

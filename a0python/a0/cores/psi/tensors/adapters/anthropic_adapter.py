@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 47:14 0:0 1:0
+=======
+# 47:14
+>>>>>>> origin/pr/32
 """anthropic_adapter — calls the Anthropic Messages API directly.
 
 Selected when A0_MODEL=anthropic-api in .env, or when a ModelConfig with
@@ -76,4 +80,8 @@ class AnthropicAdapter:
             "raw": {"stop_reason": response.stop_reason},
             "subagents_used": [],
         }
+<<<<<<< HEAD
 # 47:14 0:0 1:0
+=======
+# 47:14
+>>>>>>> origin/pr/32

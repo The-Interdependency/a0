@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 3:13 0:0 0:2
+=======
+# 3:13
+>>>>>>> origin/pr/32
 """Guardian UI — the user-facing layer owned by Guardian.
 
 Each tab is a circle. Seeds group circles.
@@ -19,4 +23,8 @@ from .circles import Circle
 from .seeds import Seed, SeedLayout, default_layout
 
 __all__ = ["Circle", "Seed", "SeedLayout", "default_layout"]
+<<<<<<< HEAD
 # 3:13 0:0 0:2
+=======
+# 3:13
+>>>>>>> origin/pr/32

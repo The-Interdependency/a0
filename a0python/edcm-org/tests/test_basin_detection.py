@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 71:10 0:0 0:0
+=======
+# 71:10
+>>>>>>> origin/pr/32
 """
 Basin detection tests — verify all basins fire at their documented thresholds.
 """
@@ -95,4 +99,8 @@ class TestBasinDetection:
         )
         # COMPLIANCE_STASIS should win because it's evaluated first
         assert basin == "COMPLIANCE_STASIS"
+<<<<<<< HEAD
 # 71:10 0:0 0:0
+=======
+# 71:10
+>>>>>>> origin/pr/32

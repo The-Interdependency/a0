@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 14:3 0:0 1:2
+=======
+# 14:3
+>>>>>>> origin/pr/32
 # a0/connectors/emergent_connector.py
 # hmmm: adapter layer for “model hub” style calling conventions.
 # Implement: translate hub payload <-> A0Request/A0Response.
@@ -18,4 +22,8 @@ def handle_hub_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     )
     resp = handle(req)
     return {"task_id": resp.task_id, "result": resp.result, "logs": resp.logs, "hmmm": resp.hmmm}
+<<<<<<< HEAD
 # 14:3 0:0 1:2
+=======
+# 14:3
+>>>>>>> origin/pr/32

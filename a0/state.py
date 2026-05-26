@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 14:0 0:0 2:0
+=======
+# 12:0
+>>>>>>> origin/pr/32
 from __future__ import annotations
 
 import json
@@ -17,4 +21,8 @@ def load_state() -> Dict[str, Any]:
 def save_state(state: Dict[str, Any]) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+<<<<<<< HEAD
 # 14:0 0:0 2:0
+=======
+# 12:0
+>>>>>>> origin/pr/32

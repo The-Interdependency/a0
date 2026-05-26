@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 61:3 0:0 3:0
+=======
+# 61:3
+>>>>>>> origin/pr/32
 """Core laws, tier law, and bandit influence law.
 
 Source: PTCA/PCTA/PCNA/Jury/Guardian Thread-Integrated Core Compression v1.3.2
@@ -67,4 +71,8 @@ BANDIT_INFLUENCE_LAW = {
     ],
     "summary": "Bandits bias attention upstream. Meta-13 decides.",
 }
+<<<<<<< HEAD
 # 61:3 0:0 3:0
+=======
+# 61:3
+>>>>>>> origin/pr/32

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 15:6 0:0 13:0
+=======
+# 15:6
+>>>>>>> origin/pr/32
 from __future__ import annotations
 
 from typing import Any
@@ -26,4 +30,8 @@ def require_hmmm(obj: Any) -> None:
         raise InvalidStateError(
             "hmmm is absent from object — invalid state blocks emission"
         )
+<<<<<<< HEAD
 # 15:6 0:0 13:0
+=======
+# 15:6
+>>>>>>> origin/pr/32

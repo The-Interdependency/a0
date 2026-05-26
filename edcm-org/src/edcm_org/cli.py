@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 125:20 0:0 1:13
+=======
+# 125:20
+>>>>>>> origin/pr/32
 """
 EDCM-Org CLI — entry point for organizational diagnostic runs.
 
@@ -176,4 +180,8 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+<<<<<<< HEAD
 # 125:20 0:0 1:13
+=======
+# 125:20
+>>>>>>> origin/pr/32

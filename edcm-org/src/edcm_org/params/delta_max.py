@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 31:35 0:0 2:1
+=======
+# 31:35
+>>>>>>> origin/pr/32
 """
 delta_max parameter estimation.
 
@@ -82,4 +86,8 @@ def estimate_delta_max(
 
     # delta_max = P90 of the median estimate (conservative)
     return max(0.0, min(1.0, (median_rate + p90) / 2.0))
+<<<<<<< HEAD
 # 31:35 0:0 2:1
+=======
+# 31:35
+>>>>>>> origin/pr/32

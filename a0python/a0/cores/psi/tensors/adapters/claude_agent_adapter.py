@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 90:7 0:0 4:1
+=======
+# 90:7
+>>>>>>> origin/pr/32
 """ClaudeAgentAdapter — ModelAdapter wrapping claude-agent-sdk.
 
 Law 9: Guardian alone owns human-readable outward emission.
@@ -116,4 +120,8 @@ class ClaudeAgentAdapter:
             elif role == "assistant":
                 parts.append(f"[prior assistant turn]: {content}")
         return "\n\n".join(parts) if parts else ""
+<<<<<<< HEAD
 # 90:7 0:0 4:1
+=======
+# 90:7
+>>>>>>> origin/pr/32

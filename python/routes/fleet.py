@@ -41,7 +41,7 @@ from ..services.energy_registry import cache_breakdown, estimate_cost
 router = APIRouter(prefix="/api/v1/fleet", tags=["fleet"])
 
 UI_META = {
-    "tab_id": "fleet_bench",
+    "tab_id": "fleet",
     "label": "Fleet Bench",
     "icon": "Trophy",
     "order": 26,

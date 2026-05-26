@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 16:3 0:0 3:0
+=======
+# 16:3
+>>>>>>> origin/pr/32
 """hmmm — the hard invariant.
 
 Source: PTCA/PCTA/PCNA/Jury/Guardian Thread-Integrated Core Compression v1.3.2
@@ -20,4 +24,8 @@ HMMM_INVARIANT = {
         "output_enforcement at Guardian display / emission boundary",
     ],
 }
+<<<<<<< HEAD
 # 16:3 0:0 3:0
+=======
+# 16:3
+>>>>>>> origin/pr/32

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 24:0 0:0 0:0
+=======
+# 24:0
+>>>>>>> origin/pr/32
 import json
 import os
 import subprocess
@@ -31,4 +35,8 @@ def test_cli_returns_structured_error_on_invalid_json():
     assert out["task_id"] == "task_invalid_json"
     assert "Invalid JSON payload" in out["result"]["error"]
     assert DEFAULT_HMMM_BOUNDARY in out["hmmm"]
+<<<<<<< HEAD
 # 24:0 0:0 0:0
+=======
+# 24:0
+>>>>>>> origin/pr/32

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 20:10 0:0 0:3
+=======
+# 20:10
+>>>>>>> origin/pr/32
 """The interdependent way.
 
 The relational framework governing the PTCA architecture.
@@ -33,4 +37,8 @@ __all__ = [
     "BANDIT_INFLUENCE_LAW",
     "HMMM_INVARIANT",
 ]
+<<<<<<< HEAD
 # 20:10 0:0 0:3
+=======
+# 20:10
+>>>>>>> origin/pr/32

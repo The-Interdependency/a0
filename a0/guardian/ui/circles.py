@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 38:10 0:0 19:0
+=======
+# 38:10
+>>>>>>> origin/pr/32
 """Circle — the tab unit of the Guardian UI.
 
 Each tab is a circle. Seeds group circles.
@@ -55,4 +59,8 @@ class Circle:
             hmmm=entries,
             state=self.state,
         )
+<<<<<<< HEAD
 # 38:10 0:0 19:0
+=======
+# 38:10
+>>>>>>> origin/pr/32

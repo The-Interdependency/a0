@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 30:32 0:0 2:0
+=======
+# 30:32
+>>>>>>> origin/pr/32
 """
 EDCM-Org Privacy Guard — spec v0.1 enforcement.
 
@@ -83,4 +87,8 @@ class EDCMPrivacyGuard:
         Returns True if within window, False if data should be purged.
         """
         return data_age_months <= self.cfg.retain_months
+<<<<<<< HEAD
 # 30:32 0:0 2:0
+=======
+# 30:32
+>>>>>>> origin/pr/32

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // 285:0 0:1 0:2
+=======
+// 285:0
+>>>>>>> origin/pr/32
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -309,4 +313,8 @@ export default function DocsTab() {
     </div>
   );
 }
+<<<<<<< HEAD
 // 285:0 0:1 0:2
+=======
+// 285:0
+>>>>>>> origin/pr/32

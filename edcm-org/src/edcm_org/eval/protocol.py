@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 105:35 0:0 0:2
+=======
+# 105:35
+>>>>>>> origin/pr/32
 """
 EDCM-Org Evaluation Protocol — spec compliance and diagnostic harness.
 
@@ -168,4 +172,8 @@ def evaluate_batch(envelopes: List[OutputEnvelope]) -> EvalReport:
         total_warnings=total_warnings,
         summary=summary,
     )
+<<<<<<< HEAD
 # 105:35 0:0 0:2
+=======
+# 105:35
+>>>>>>> origin/pr/32

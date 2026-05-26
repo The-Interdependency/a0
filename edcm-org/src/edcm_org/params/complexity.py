@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 42:32 0:0 4:1
+=======
+# 42:32
+>>>>>>> origin/pr/32
 """
 Complexity parameter estimation.
 
@@ -92,4 +96,8 @@ def bucket(complexity: float) -> str:
     if complexity < 0.66:
         return "medium"
     return "high"
+<<<<<<< HEAD
 # 42:32 0:0 4:1
+=======
+# 42:32
+>>>>>>> origin/pr/32

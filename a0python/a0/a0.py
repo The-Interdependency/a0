@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 21:8 0:0 0:3
+=======
+# 21:8
+>>>>>>> origin/pr/32
 """a0 CLI entry point — Guardian-owned.
 
 Thin shell that imports from psi tensors and emits through Guardian.
@@ -39,4 +43,8 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+<<<<<<< HEAD
 # 21:8 0:0 0:3
+=======
+# 21:8
+>>>>>>> origin/pr/32

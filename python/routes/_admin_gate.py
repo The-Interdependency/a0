@@ -1,9 +1,16 @@
+<<<<<<< HEAD
 # 29:23 0:0 11:2
+=======
+# 29:23
+>>>>>>> origin/pr/32
 # DOC module: _admin_gate
 # DOC label: Admin Gate
 # DOC description: Shared write-gate for instrument-wide mutation endpoints.
 # DOC tier: admin
+<<<<<<< HEAD
 # DOC role: service
+=======
+>>>>>>> origin/pr/32
 """Shared admin / operator gate for routes that mutate global instrument
 state (memory seeds, PCNA channels, sigma watches, system toggles, agents, deals).
 
@@ -57,4 +64,8 @@ async def require_admin(request: Request) -> None:
         except Exception:
             pass
     raise HTTPException(status_code=403, detail="Admin only")
+<<<<<<< HEAD
 # 29:23 0:0 11:2
+=======
+# 29:23
+>>>>>>> origin/pr/32

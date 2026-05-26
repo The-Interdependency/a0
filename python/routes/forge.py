@@ -1,5 +1,16 @@
+<<<<<<< HEAD
 # 213:38 5:8 1:7
+=======
+# 215:45
+>>>>>>> origin/pr/32
 """The Forge — character-sheet style agent instantiation.
+
+Instantiation mechanics (high level):
+  1) Require signed-in caller via x-user-id header.
+  2) Resolve template + default prompt/personality/tool suggestions.
+  3) Validate requested tools against TOOL_SCHEMAS_CHAT.
+  4) Require explicit model_id or configured active_provider; resolve via model catalog.
+  5) Enforce per-user unique agent name, then insert into agent_instances.
 
 Self-updating tool/model docs DB:
   - GET /forge/tools introspects TOOL_SCHEMAS_CHAT every call → always fresh.
@@ -16,6 +27,7 @@ from sqlalchemy import text as sa_text
 from ..database import get_session
 from ..services.energy_registry import active_provider
 from ..services.tool_executor import TOOL_SCHEMAS_CHAT
+from ..services.forge_instantiation import require_forge_user_id, resolve_forge_model_id
 from ._admin_gate import require_admin
 from .forge_archetypes import ARCHETYPES, TOOL_CATEGORIES
 
@@ -67,10 +79,7 @@ def _archetype(template_id: str) -> dict:
 
 
 def _user_id(request: Request) -> str:
-    uid = request.headers.get("x-user-id") or request.headers.get("X-User-Id")
-    if not uid:
-        raise HTTPException(401, "Sign in required to use the Forge.")
-    return uid
+    return require_forge_user_id(request.headers)
 
 
 def _valid_tools() -> set[str]:
@@ -155,12 +164,18 @@ async def instantiate(request: Request, body: InstantiateRequest) -> dict:
     tools = _validate_tools(body.enabled_tools if body.enabled_tools is not None else arche["suggested_tools"])
     prompt = body.system_prompt_override or arche["system_prompt"]
     personality = body.personality_override or arche["personality"]
+<<<<<<< HEAD
     model_id = body.model_id
     if not model_id:
         try:
             model_id = await active_provider()
         except RuntimeError as e:
             raise HTTPException(status_code=503, detail=str(e))
+=======
+    # No silent fallback to "gemini": forge requires either an explicit
+    # model_id in the body or a configured global active_provider.
+    model_id = resolve_forge_model_id(body.model_id)
+>>>>>>> origin/pr/32
     provider_info = _validate_model(model_id)
     provider = provider_info.get("vendor", model_id)
     stats = arche["stats"]
@@ -294,4 +309,8 @@ async def duel_stub(request: Request) -> dict:
 def _jsonb(value) -> str:
     import json
     return json.dumps(value) if value is not None else "null"
+<<<<<<< HEAD
 # 213:38 5:8 1:7
+=======
+# 215:45
+>>>>>>> origin/pr/32

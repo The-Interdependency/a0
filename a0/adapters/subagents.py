@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 136:37 0:0 4:0
+=======
+# 127:32
+>>>>>>> origin/pr/32
 """PTCA subagent definitions for the claude-agent-sdk.
 
 Each AgentDefinition maps to a PTCA architectural role.
@@ -190,4 +194,8 @@ MODE_SUBAGENTS: dict[str, dict[str, AgentDefinition]] = {
     "route": ROUTE_SUBAGENTS,
     "act": ACT_SUBAGENTS,
 }
+<<<<<<< HEAD
 # 136:37 0:0 4:0
+=======
+# 127:32
+>>>>>>> origin/pr/32

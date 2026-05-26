@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 24:11 0:0 4:1
+=======
+# 24:11
+>>>>>>> origin/pr/32
 """Psi tensor field — semantic analysis layer of PCNA.
 
 Psi's domain: semantic processing, contextual reasoning,
@@ -44,4 +48,8 @@ class PsiTensor:
                 "backend": slices.backend_name,
             }
         }
+<<<<<<< HEAD
 # 24:11 0:0 4:1
+=======
+# 24:11
+>>>>>>> origin/pr/32

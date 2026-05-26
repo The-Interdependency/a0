@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 36:29 0:0 2:0
+=======
+# 36:29
+>>>>>>> origin/pr/32
 """Phonon — private transport-only internal resonance.
 
 Phonon carries adjacency, phase, spin, and transient internal coupling.
@@ -84,4 +88,8 @@ class Phonon:
             active_channels=len(self._channels),
             structural_variance=0.0,
         )
+<<<<<<< HEAD
 # 36:29 0:0 2:0
+=======
+# 36:29
+>>>>>>> origin/pr/32

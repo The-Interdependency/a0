@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 358:23 0:0 5:0
+=======
+# 406:37
+>>>>>>> origin/pr/32
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float, DateTime, JSON,
     ARRAY, ForeignKey, UniqueConstraint, Index, text
@@ -448,4 +452,8 @@ class GeneratedImage(Base):
     featured = Column(Boolean, nullable=False, server_default=text("false"))
     tags = Column(JSONB, server_default=text("'[]'::jsonb"))
     skill_origin = Column(Text)
+<<<<<<< HEAD
 # 358:23 0:0 5:0
+=======
+# 406:37
+>>>>>>> origin/pr/32

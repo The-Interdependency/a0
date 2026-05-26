@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 # 49:0 0:0 0:0
+=======
+# 34:0
+import importlib.metadata as md
+>>>>>>> origin/pr/32
 import importlib.util
 from pathlib import Path
 
@@ -44,6 +49,7 @@ def test_require_interdependent_core_ready_raises(monkeypatch):
         raise AssertionError("expected RuntimeError")
     except RuntimeError as exc:
         assert "status=metadata_only" in str(exc)
+<<<<<<< HEAD
 
 
 def test_check_interdependent_core_ready_without_payload_files(monkeypatch):
@@ -67,3 +73,6 @@ def test_check_interdependent_core_import_error_is_reported(monkeypatch):
     assert got["status"] == "error"
     assert got["error"] == "boom"
 # 49:0 0:0 0:0
+=======
+# 34:0
+>>>>>>> origin/pr/32

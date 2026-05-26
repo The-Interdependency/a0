@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 18:0 0:0 7:0
+=======
+# 18:0
+>>>>>>> origin/pr/32
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal
@@ -20,4 +24,8 @@ class A0Response:
     result: Dict[str, Any]
     logs: Dict[str, Any] = field(default_factory=lambda: {"events": []})
     hmmm: List[str] = field(default_factory=list)
+<<<<<<< HEAD
 # 18:0 0:0 7:0
+=======
+# 18:0
+>>>>>>> origin/pr/32

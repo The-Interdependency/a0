@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // 629:11 0:5 0:12
+=======
+// 507:11
+>>>>>>> origin/pr/32
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -683,4 +687,8 @@ export function ConvToolsPopover({ convId }: { convId: number }) {
 }
 
 export { ChatInput } from "./chat-input";
+<<<<<<< HEAD
 // 629:11 0:5 0:12
+=======
+// 507:11
+>>>>>>> origin/pr/32

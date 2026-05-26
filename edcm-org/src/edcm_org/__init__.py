@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 4:5 0:0 0:1
+=======
+# 4:5
+>>>>>>> origin/pr/32
 """
 EDCM-Org: Energy-Dissonance Circuit Model — Organizational Diagnostic Package
 
@@ -12,4 +16,8 @@ __version__ = "0.1.0"
 __spec_version__ = SPEC_VERSION
 
 __all__ = ["SPEC_VERSION", "__version__", "__spec_version__"]
+<<<<<<< HEAD
 # 4:5 0:0 0:1
+=======
+# 4:5
+>>>>>>> origin/pr/32

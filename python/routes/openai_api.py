@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 # 62:7 0:2 1:2
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
+=======
+# 62:6
+from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
+>>>>>>> origin/pr/32
 from typing import Optional
 
 from ..logger import append_openai_hmmm, read_openai_hmmm
@@ -54,6 +60,10 @@ class HmmmItem(BaseModel):
     unresolved_constraint: str = Field(..., min_length=1)
     honest_incompletion: str = Field(..., min_length=1)
     continuation_marker: str = Field(..., min_length=1)
+<<<<<<< HEAD
+=======
+    note: Optional[str] = None
+>>>>>>> origin/pr/32
     owner: Optional[str] = None
 
 
@@ -79,4 +89,8 @@ async def add_hmmm(request: Request, body: HmmmItem):
     }
     await append_openai_hmmm(item)
     return {"ok": True, "item": item}
+<<<<<<< HEAD
 # 62:7 0:2 1:2
+=======
+# 62:6
+>>>>>>> origin/pr/32

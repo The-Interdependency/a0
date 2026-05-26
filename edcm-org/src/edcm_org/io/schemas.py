@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 72:8 0:0 0:0
+=======
+# 72:8
+>>>>>>> origin/pr/32
 """
 EDCM-Org JSON Schemas.
 
@@ -83,4 +87,8 @@ OUTPUT_ENVELOPE_SCHEMA: dict = {
     },
     "additionalProperties": False
 }
+<<<<<<< HEAD
 # 72:8 0:0 0:0
+=======
+# 72:8
+>>>>>>> origin/pr/32

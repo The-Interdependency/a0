@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 43:20 0:0 0:0
+=======
+# 43:20
+>>>>>>> origin/pr/32
 """agent — AgentZero, the single importable entry point for a0.
 
 Usage::
@@ -75,4 +79,8 @@ class AgentZero:
         return await anyio.to_thread.run_sync(
             lambda: self.run(text, mode=mode, tools=tools, hmmm=hmmm, history=history),
         )
+<<<<<<< HEAD
 # 43:20 0:0 0:0
+=======
+# 43:20
+>>>>>>> origin/pr/32

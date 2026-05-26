@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 68:59 0:0 6:1
+=======
+# 68:59
+>>>>>>> origin/pr/32
 """
 Primary EDCM metrics — range-checked, spec-compliant.
 
@@ -170,4 +174,8 @@ def metric_O(text: str) -> float:
     citations = count_markers(text, _EVIDENCE_MARKERS)
     raw = (absolutes - hedges - citations) / total_stmts
     return clamp11(raw)
+<<<<<<< HEAD
 # 68:59 0:0 6:1
+=======
+# 68:59
+>>>>>>> origin/pr/32

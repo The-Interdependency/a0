@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 58:56 0:0 2:0
+=======
+# 58:56
+>>>>>>> origin/pr/32
 """
 EDCM-Org Data Loaders.
 
@@ -136,4 +140,8 @@ def window_meeting_text(text: str, window_size: int = 500, overlap: int = 50) ->
         start += step
 
     return windows
+<<<<<<< HEAD
 # 58:56 0:0 2:0
+=======
+# 58:56
+>>>>>>> origin/pr/32

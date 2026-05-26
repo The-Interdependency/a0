@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 73:13 0:0 0:0
+=======
+# 73:13
+>>>>>>> origin/pr/32
 """Meta-13 — the executive chooser.
 
 Meta-13 receives:
@@ -109,4 +113,8 @@ class Meta13:
             return best.stance
 
         return None
+<<<<<<< HEAD
 # 73:13 0:0 0:0
+=======
+# 73:13
+>>>>>>> origin/pr/32

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # 352:72 0:0 12:4
+=======
+# 352:72
+>>>>>>> origin/pr/32
 """ZFAE Tool Executor — thin shim over the per-tool registry.
 
 Tools live in `python/services/tools/*.py` (one file per tool, self-declared
@@ -482,4 +486,8 @@ __all__ = [
     "get_active_chat_schemas",
     "get_active_responses_schemas",
 ]
+<<<<<<< HEAD
 # 352:72 0:0 12:4
+=======
+# 352:72
+>>>>>>> origin/pr/32
