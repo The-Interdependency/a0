@@ -1,0 +1,2 @@
+- [pip ignores uv sources](pip-vs-uv-git-deps.md) — prod build uses `pip install -e .`; git deps overriding PyPI name collisions must be PEP 508 direct refs in `[project.dependencies]`, not `[tool.uv.sources]`.
+- [interdependent-core readiness](interdependent-core-readiness.md) — boot gate needs `interdependent_lib` OR `interdependent_core` importable; failure crash-loops the FastAPI lifespan so port 5000 never opens and deploy fails.
