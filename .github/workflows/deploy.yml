@@ -59,15 +59,20 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
       - name: Install Python dependencies
-        run: pip install -e .
+        run: uv sync --frozen --no-dev
 
       - name: Apply database schema
         run: npm run db:push
 
       - name: Boot Python backend
         run: |
-          uvicorn python.main:app --host 127.0.0.1 --port 8001 \
+          uv run uvicorn python.main:app --host 127.0.0.1 --port 8001 \
             > /tmp/uvicorn.log 2>&1 &
           echo $! > /tmp/uvicorn.pid
           for i in $(seq 1 30); do
