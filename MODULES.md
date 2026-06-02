@@ -29,6 +29,12 @@ Modules divide into Category 1 (frame-independent) and Category 2 (frame-depende
 
 ## Coherence prime definition (fully pinned)
 
+**Canonical source:** `interdependent_lib.coherence_primes`
+(The-Interdependency/interdependent-lib) is the single source of truth for this
+sequence — its shared test oracle pins the early sequence, the scarcity count
+table, and the p=4373 recursive-ancestry regression. `coherence_primes.py` in
+this kit is the behaviourally identical in-tree copy; keep the two in lockstep.
+
 Base: C₀ = {3, 5, 7}
 
 A prime p ∈ C iff:
