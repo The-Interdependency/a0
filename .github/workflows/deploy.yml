@@ -60,9 +60,7 @@ jobs:
         run: npm ci
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
+        run: pip install uv
 
       - name: Install Python dependencies
         run: uv sync --frozen --no-dev
