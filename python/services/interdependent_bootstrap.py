@@ -1,7 +1,28 @@
-# 61:4 0:0 1:0
+# 61:24 0:0 1:0
 """Interdependent-core bootstrap checks for a0 startup."""
 
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_interdependent_bootstrap
+#   module_name: interdependent_bootstrap
+#   module_kind: service
+#   summary: Startup checks that verify the interdependent-core/interdependent-lib distribution and its sibling modules are installed and importable before a0 boots.
+#   owner: Erin Spencer
+#   public_surface: check_interdependent_core, require_interdependent_core_ready
+#   internal_surface: _first_installed_dist_name
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: tests/test_interdependent_bootstrap.py
+#   rollout: default_enabled
+#   rollback: Revert this file; startup proceeds without the interdependent-core readiness check.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import importlib
 import importlib.metadata as md
@@ -78,4 +99,4 @@ def require_interdependent_core_ready() -> dict:
         f"(status={state.get('status')}, dist={state.get('dist')}, "
         f"version={state.get('version')}, payload_py={state.get('payload_py')})."
     )
-# 61:4 0:0 1:0
+# 61:24 0:0 1:0

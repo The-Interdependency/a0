@@ -1,5 +1,27 @@
-# 73:1 0:0 0:2
+# 73:21 0:0 0:2
 """set_user_tier — admin-only DB tier override."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_set_user_tier
+#   module_name: set_user_tier
+#   module_kind: service
+#   summary: set_user_tier tool — admin-only override that writes a user's tier (free/supporter/ws/admin) directly to the DB.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: admin tier required to set another user's tier
+#   storage_boundary: write
+#   network_boundary: internal
+#   user_data_boundary: write
+#   admin_only: true
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the set_user_tier tool from the registry.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 
 SCHEMA = {
@@ -82,4 +104,4 @@ async def handle(user_id: str = "", tier: str = "", **_) -> str:
         "email": updated["email"],
         "tier": updated["subscription_tier"],
     })
-# 73:1 0:0 0:2
+# 73:21 0:0 0:2

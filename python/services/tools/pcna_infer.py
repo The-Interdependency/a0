@@ -1,5 +1,27 @@
-# 41:1 0:0 0:1
+# 41:21 0:0 0:1
 """pcna_infer — run a signal through the PCNA tensor engine."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_pcna_infer
+#   module_name: pcna_infer
+#   module_kind: service
+#   summary: pcna_infer tool — runs a scalar signal through the active PCNA tensor engine and returns the inference result (winner + coherence).
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the pcna_infer tool from the registry.
+#   requires: a0_engine_pcna
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 
 SCHEMA = {
@@ -44,4 +66,4 @@ async def handle(signal: float = 0.5, **_) -> str:
         "phi_coherence": result.get("step6_coherence", {}).get("phi", round(pcna.phi.ring_coherence, 4)),
         "infer_count": pcna.infer_count,
     })
-# 41:1 0:0 0:1
+# 41:21 0:0 0:1

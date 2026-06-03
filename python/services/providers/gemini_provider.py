@@ -1,4 +1,4 @@
-# 29:21 0:0 1:2
+# 29:41 0:0 1:2
 """gemini_provider — Google Gemini via the google-genai SDK.
 
 Thin contract-conforming wrapper around services/gemini_native.call_gemini_native.
@@ -19,6 +19,27 @@ gemini3 → True, gemini → False (matches the dispatcher behavior in
 inference.py:555).
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_providers_gemini
+#   module_name: gemini_provider
+#   module_kind: adapter
+#   summary: Gemini provider adapter — a thin contract-conforming wrapper that gives gemini_native.call_gemini_native the standard providers.call(messages, role=..., ...) shape so the inference dispatcher delegates uniformly.
+#   owner: Erin Spencer
+#   public_surface: call
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; Gemini provider dispatch reverts to prior wrapper behavior.
+#   requires: a0_service_providers_resolver, a0_service_gemini_native
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import os
 from typing import Optional
@@ -58,4 +79,4 @@ async def call(
         reasoning_effort=reasoning_effort,
         supports_thinking=supports_thinking,
     )
-# 29:21 0:0 1:2
+# 29:41 0:0 1:2

@@ -1,4 +1,4 @@
-# 294:27 0:0 2:6
+# 294:47 0:0 2:6
 """
 PCNA Inference Engine — six-ring pipeline, all rings real.
 
@@ -21,6 +21,27 @@ Six inference steps:
 Backprop:
   reward(winner, outcome) → nudge all three PTCA cores + theta + memory flush
 """
+
+# === MODULE_BUILD ===
+# id: a0_engine_pcna
+#   module_name: pcna
+#   module_kind: engine
+#   summary: Six-ring PCNA inference pipeline (Phi/Psi/Omega/Theta/Memory-L/Memory-S) running Project→Inject→Propagate→PTCA-seed→PCTA-circle→Coherence plus reward backprop.
+#   owner: Erin Spencer
+#   public_surface: PCNAEngine
+#   internal_surface: _tensor_to_b64, _b64_to_tensor
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: none
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; engine is reconstructed from checkpoint on next boot.
+#   requires: a0_engine_ptca_core, a0_engine_memory_core, a0_engine_theta
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import base64
 import hashlib
@@ -361,4 +382,4 @@ class PCNAEngine:
             "checkpoint_ring_means": self.checkpoint_ring_means,
             "echo_history": echo_history[-20:],
         }
-# 294:27 0:0 2:6
+# 294:47 0:0 2:6

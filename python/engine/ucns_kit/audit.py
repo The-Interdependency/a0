@@ -1,9 +1,31 @@
-# 26:8
+# 32:28
 """
 UCNSAuditLog — append-only audit log keyed by UCNSObject identity.
 S9-sentinel-compatible record format. In-memory only in v0.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_engine_ucns_kit_audit
+#   module_name: audit
+#   module_kind: engine
+#   summary: UCNSAuditLog — in-memory append-only audit log keyed by UCNSObject identity, with an S9-sentinel-compatible AuditRecord format.
+#   owner: Erin Spencer
+#   public_surface: AuditRecord, UCNSAuditLog
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; audit log is in-memory only in v0.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: In-memory only in v0; no persistence.
+# === END MODULE_BUILD ===
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -50,4 +72,4 @@ class UCNSAuditLog:
 
     def __len__(self) -> int:
         return len(self._records)
-# 26:8
+# 32:28

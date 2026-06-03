@@ -1,9 +1,30 @@
-# 119:9 0:0 4:0
+# 119:29 0:0 4:0
 """
 PTCACore — parameterized prime-ring tensor with heptagram propagation.
 Each instance self-declares: name, symbol, role, n, seed.
 Tensor shape: [N, DIMS=4, PHASES=8, HEPT=7]
 """
+
+# === MODULE_BUILD ===
+# id: a0_engine_ptca_core
+#   module_name: ptca_core
+#   module_kind: engine
+#   summary: PTCACore — parameterized prime-ring tensor base with heptagram propagation and coherence scoring; the substrate for the Phi/Psi/Omega rings.
+#   owner: Erin Spencer
+#   public_surface: PTCACore
+#   internal_surface: _adj_distances
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; pure-compute tensor primitive, rebuilt in-memory.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import math
 import time
@@ -147,4 +168,4 @@ class PTCACore:
             "last_reward": round(self.last_reward, 4),
             "node_coherence": [round(float(v), 4) for v in self.node_coherence],
         }
-# 119:9 0:0 4:0
+# 119:29 0:0 4:0

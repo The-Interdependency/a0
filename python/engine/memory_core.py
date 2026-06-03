@@ -1,4 +1,4 @@
-# 71:9 0:0 2:0
+# 71:29 0:0 2:0
 """
 MemoryCore — parameterized memory ring.
 Each instance self-declares: n, seed, role.
@@ -8,6 +8,27 @@ Instantiate as:
   MemoryCore(n=19, seed=19, role="long_term")
   MemoryCore(n=17, seed=17, role="short_term")
 """
+
+# === MODULE_BUILD ===
+# id: a0_engine_memory_core
+#   module_name: memory_core
+#   module_kind: engine
+#   summary: MemoryCore — parameterized memory ring (long-term N=19 / short-term N=17) with round-robin write, content-addressed query, and reward-gated flush short→long.
+#   owner: Erin Spencer
+#   public_surface: MemoryCore
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; memory rings are rebuilt in-memory and restored from PCNA checkpoint.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import time
 import numpy as np
@@ -94,4 +115,4 @@ class MemoryCore:
             "write_count": self.write_count,
             "flush_count": self.flush_count,
         }
-# 71:9 0:0 2:0
+# 71:29 0:0 2:0

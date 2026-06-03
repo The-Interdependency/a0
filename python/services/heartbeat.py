@@ -1,4 +1,24 @@
-# 67:227 0:0 1:5
+# 67:247 0:0 1:5
+# === MODULE_BUILD ===
+# id: a0_service_heartbeat
+#   module_name: heartbeat
+#   module_kind: service
+#   summary: HeartbeatService — periodic tick scheduler running audit snapshots, memory checkpoints, PCNA propagation, prime-seed ticks, and sub-agent cleanup.
+#   owner: Erin Spencer
+#   public_surface: HeartbeatService
+#   internal_surface: DEFAULT_TASKS
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: internal
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; stop the heartbeat task to disable periodic ticks.
+#   requires: a0_engine_pcna
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 import asyncio
 import json
 import time
@@ -337,4 +357,4 @@ class HeartbeatService:
 
 
 heartbeat_service = HeartbeatService()
-# 67:227 0:0 1:5
+# 67:247 0:0 1:5

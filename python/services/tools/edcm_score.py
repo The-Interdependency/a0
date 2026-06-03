@@ -1,6 +1,28 @@
-# 37:3 0:0 0:2
+# 37:23 0:0 0:2
 # N:M
 """edcm_score — return current EDCM ring coherence (edcmbone-backed)."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_edcm_score
+#   module_name: edcm_score
+#   module_kind: service
+#   summary: edcm_score tool — returns the current EDCM ring coherence metrics (edcmbone-backed) for the active PCNA engine.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the edcm_score tool from the registry.
+#   requires: a0_service_edcm, a0_engine_pcna
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 from ..edcm import EDCMBONE_VERSION
 
@@ -42,4 +64,4 @@ async def handle(**_) -> str:
         "edcmbone_version": EDCMBONE_VERSION,
     })
 # N:M
-# 37:3 0:0 0:2
+# 37:23 0:0 0:2

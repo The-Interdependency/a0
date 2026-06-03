@@ -1,5 +1,26 @@
-# 65:1 0:0 0:1
+# 65:21 0:0 0:1
 """tool_result_fetch — read a chunk of a previously persisted tool result."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_tool_result_fetch
+#   module_name: tool_result_fetch
+#   module_kind: service
+#   summary: tool_result_fetch tool — reads a chunk (by call_id + offset) of a previously persisted oversized tool result from storage.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: internal
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the tool_result_fetch tool from the registry.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 SCHEMA = {
     "type": "function",
@@ -68,4 +89,4 @@ async def handle(call_id: str = "", chunk: int = 0, chunk_size: int = 8000, **_)
         f"chunk {chunk + 1}/{n_chunks} · {total_bytes // 1024} KB total]\n\n"
         f"{body}"
     )
-# 65:1 0:0 0:1
+# 65:21 0:0 0:1

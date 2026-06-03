@@ -1,4 +1,24 @@
-# 41:0 0:0 0:0
+# 41:20 0:0 0:0
+# === MODULE_BUILD ===
+# id: a0_service_research
+#   module_name: research
+#   module_kind: service
+#   summary: Research-draft helpers — declares the RESEARCH_SOURCES catalog and provides relevance scoring, draft creation, and dedupe utilities over candidate results.
+#   owner: Erin Spencer
+#   public_surface: RESEARCH_SOURCES, score_relevance, create_draft, deduplicate_drafts
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; research draft helpers revert to prior behavior.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 import hashlib
 import time
 from typing import Any
@@ -47,4 +67,4 @@ def deduplicate_drafts(drafts: list[dict[str, Any]]) -> list[dict[str, Any]]:
             seen.add(key)
             unique.append(d)
     return unique
-# 41:0 0:0 0:0
+# 41:20 0:0 0:0

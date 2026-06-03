@@ -1,5 +1,27 @@
-# 72:1 0:0 0:0
+# 72:21 0:0 0:0
 """web_search — DuckDuckGo instant-answer lookup."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_web_search
+#   module_name: web_search
+#   module_kind: adapter
+#   summary: web_search tool — performs a DuckDuckGo instant-answer lookup for a query and returns the result text.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the web_search tool from the registry.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import urllib.parse
 import httpx
 
@@ -75,4 +97,4 @@ async def handle(query: str = "", **_) -> str:
         return f"Query: {query}\n" + "\n".join(parts)
     except Exception as exc:
         return f"[web_search error: {exc}]"
-# 72:1 0:0 0:0
+# 72:21 0:0 0:0

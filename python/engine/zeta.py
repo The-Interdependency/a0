@@ -1,4 +1,4 @@
-# 205:66 0:0 4:4
+# 205:86 0:0 4:4
 """
 ZetaEngine — Zeta Function Alpha Echo
 
@@ -20,6 +20,27 @@ Resolution:
   Level 1 = minimal/lightweight observation. Level 5 = maximum depth.
   Example: global=3, /system=5 means system-root paths are observed at full depth.
 """
+
+# === MODULE_BUILD ===
+# id: a0_engine_zeta
+#   module_name: zeta
+#   module_kind: engine
+#   summary: ZetaEngine (ZFAE) — passively scores every assistant response via EDCM (no LLM) and drives PCNA phi/psi/omega reward backprop, with per-directory observation resolution.
+#   owner: Erin Spencer
+#   public_surface: ZetaEngine
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; Zeta runs non-blocking after responses and can be disabled without affecting inference.
+#   requires: a0_engine_pcna, a0_service_edcm
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import time
 from collections import deque
@@ -308,4 +329,4 @@ class ZetaEngine:
 
 
 _zeta_engine = ZetaEngine()
-# 205:66 0:0 4:4
+# 205:86 0:0 4:4

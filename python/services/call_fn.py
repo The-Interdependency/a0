@@ -1,4 +1,4 @@
-# 99:53 0:0 3:2
+# 99:73 0:0 3:2
 """call_fn — canonical CallFn adapter.
 
 aimmh_lib.adapters.make_call_fn pattern, ported to a0p. The CallFn is the
@@ -32,6 +32,27 @@ place that knows about provider_id is this module plus the inference layer
 beneath it.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_call_fn
+#   module_name: call_fn
+#   module_kind: service
+#   summary: Canonical CallFn adapter (aimmh_lib.make_call_fn pattern) — the single seam every higher-level construct crosses to invoke a model, with internal provider routing, tier checks, and (content, usage) return.
+#   owner: Erin Spencer
+#   public_surface: call_model, make_call_fn_full, make_call_fn
+#   internal_surface: _check_tier
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; callers would fall back to direct call_provider invocations.
+#   requires: a0_service_inference, a0_service_model_catalog
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 from typing import Awaitable, Callable, Optional
 
@@ -174,4 +195,4 @@ def make_call_fn(
         content, _usage = await full(model_id, messages, **kwargs)
         return content
     return _call
-# 99:53 0:0 3:2
+# 99:73 0:0 3:2

@@ -1,4 +1,4 @@
-# 123:17 0:0 10:3
+# 123:37 0:0 10:3
 # N:M
 """Per-run buffered structured logger backed by the agent_logs table.
 
@@ -14,6 +14,28 @@ NO silent fallback: if the DB write fails the failure is re-raised so
 upstream sees the breakage. The buffer is preserved on failure so the
 next flush retries the unwritten rows.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_run_logger
+#   module_name: run_logger
+#   module_kind: service
+#   summary: Per-run buffered structured logger backed by the agent_logs table — queues emit() calls, drains via a background flusher, and exposes dump_run_jsonl for sub-agent merge archival.
+#   owner: Erin Spencer
+#   public_surface: RunLogger, get_run_logger, flush, start_flusher, dump_run_jsonl, queued_count
+#   internal_surface: _periodic_flush_loop
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: internal
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; logging reverts to prior buffered-writer behavior; agent_logs rows remain.
+#   requires: a0_service_run_context
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import asyncio
 import json
 import time
@@ -162,4 +184,4 @@ async def dump_run_jsonl(run_id: str) -> bytes:
 def queued_count() -> int:
     return len(_QUEUE)
 # N:M
-# 123:17 0:0 10:3
+# 123:37 0:0 10:3

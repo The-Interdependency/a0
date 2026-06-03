@@ -1,4 +1,4 @@
-# 136:11 0:0 0:4
+# 136:31 0:0 0:4
 # N:M
 """sub_agent_spawn — fork a ZFAE sub-agent for a parallel task.
 
@@ -11,6 +11,28 @@ Optional aimmh-lib orchestration knobs (orchestration_mode, providers,
 cut_mode) propagate into the new run row; the inference layer reads them
 back when the spawned agent's first turn lands.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_sub_agent_spawn
+#   module_name: sub_agent_spawn
+#   module_kind: service
+#   summary: sub_agent_spawn tool — forks a ZFAE sub-agent for a parallel task, enforcing depth/fanout caps and writing a fresh agent_runs row (with inherited run scope) that the spawn executor later picks up.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: internal
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the sub_agent_spawn tool from the registry.
+#   requires: a0_service_run_context, a0_service_run_logger, a0_service_spawn_caps
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 import uuid
 
@@ -156,4 +178,4 @@ async def handle(
         "note": "Sub-agent forked PCNA — call sub_agent_merge with run_id when complete",
     })
 # N:M
-# 136:11 0:0 0:4
+# 136:31 0:0 0:4

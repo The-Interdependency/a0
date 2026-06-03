@@ -1,4 +1,4 @@
-# 252:69 0:0 2:6
+# 252:89 0:0 2:6
 # N:M
 """run_inference_with_mode — orchestration entry point that fans aimmh-lib's
 multi-model primitives over the existing energy provider call path.
@@ -17,6 +17,28 @@ multi-model patterns themselves do not invoke tools (they're text-only).
 NO silent fallback: an unknown mode raises ValueError naming the bad mode;
 a missing provider id raises RuntimeError naming the provider.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_inference_modes
+#   module_name: inference_modes
+#   module_kind: service
+#   summary: run_inference_with_mode — orchestration entry point that fans aimmh-lib's multi-model primitives (single/fan_out/council/daisy_chain/room_all/room_synthesized) over the energy-provider call path, with per-voice usage aggregation.
+#   owner: Erin Spencer
+#   public_surface: run_inference_with_mode
+#   internal_surface: _flatten_user_text, _emit_provider_response, _serialize_results, _attach_per_voice_usage, _aggregate_voice_usage, _summarize_results
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: tests/test_inference_modes_usage.py
+#   rollout: default_enabled
+#   rollback: Revert this file; multi-model modes revert to prior behavior while single-mode inference is unaffected.
+#   requires: a0_service_run_logger, a0_service_cut_modes, a0_service_energy_registry, a0_service_orch_progress
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import time
 from typing import Any, Optional
 
@@ -355,4 +377,4 @@ async def run_inference_with_mode(
     }
     return _summarize_results(results), usage
 # N:M
-# 252:69 0:0 2:6
+# 252:89 0:0 2:6

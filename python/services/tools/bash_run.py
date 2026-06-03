@@ -1,4 +1,4 @@
-# 104:8 0:0 0:2
+# 104:28 0:0 0:2
 # N:M
 """bash_run — run a shell command. Admin-only, gated behind code_self_modify.
 
@@ -7,6 +7,28 @@ ungated *only* by an explicit user grant of the `code_self_modify` approval
 scope. Without that grant in the active ContextVar, every invocation
 returns a refusal — never silently runs.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_bash_run
+#   module_name: bash_run
+#   module_kind: adapter
+#   summary: bash_run tool — runs a shell command; the foundation for ZFAE self-modification, gated behind an explicit user grant of the code_self_modify approval scope and refusing otherwise.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: requires the active user to have granted the code_self_modify approval scope (admin tier); refuses to execute otherwise
+#   storage_boundary: write
+#   network_boundary: hmmm
+#   user_data_boundary: none
+#   admin_only: true
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; shell-command self-modification capability is removed.
+#   requires: a0_service_run_context
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import asyncio
 import json
 import os
@@ -118,4 +140,4 @@ async def handle(command: str = "", timeout_seconds: int = 60, cwd: str = ".", *
         "stderr": stderr.decode("utf-8", errors="replace")[:8192],
     })
 # N:M
-# 104:8 0:0 0:2
+# 104:28 0:0 0:2

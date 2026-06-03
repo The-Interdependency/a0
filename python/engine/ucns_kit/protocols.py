@@ -1,6 +1,28 @@
-# 19:13
+# 24:33
 """UCNS-kit protocol interfaces. No implementations — frame-independent contracts."""
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_engine_ucns_kit_protocols
+#   module_name: protocols
+#   module_kind: engine
+#   summary: UCNS-kit protocol interfaces — frame-independent contracts (RingState, PropagationRule, CoherenceMeasure, RewardMechanism, Serializer) with no implementations.
+#   owner: Erin Spencer
+#   public_surface: RingState, PropagationRule, CoherenceMeasure, RewardMechanism, Serializer
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; pure typing.Protocol contracts with no runtime behavior.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: Frame choice (A/B/C node semantics) is upstream of these interfaces and not yet pinned.
+# === END MODULE_BUILD ===
+
 from typing import Protocol, Iterable
 
 
@@ -56,4 +78,4 @@ class Serializer(Protocol):
 
     def from_bytes(self, data: bytes):
         pass
-# 19:13
+# 24:33

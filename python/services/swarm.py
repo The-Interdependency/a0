@@ -1,4 +1,4 @@
-# 223:90 0:0 1:0
+# 223:110 0:0 1:0
 """swarm — schema-validated parallel fan-out with confidence-gated escalation.
 
 Sidecar to aimmh-lib. Written against the aimmh CallFn contract
@@ -42,6 +42,28 @@ NO silent fallback policy:
     `critic_model=...`); the caller decides what to do, this module
     does not silently overwrite producer output without marking it.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_swarm
+#   module_name: swarm
+#   module_kind: service
+#   summary: Schema-validated parallel fan-out with confidence-gated escalation — call_with_schema (validated JSON CallFn invocation with retries) and swarm (batched fan-out routing low-confidence rows to an optional critic); aimmh-CallFn-shaped sidecar.
+#   owner: Erin Spencer
+#   public_surface: SchemaCallError, SwarmRow, call_with_schema, swarm
+#   internal_surface: _extract_json, _validate_batch_response
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; structured fan-out reverts to prior sidecar behavior. Model I/O is via the injected CallFn, not this module.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 from __future__ import annotations
 
 import asyncio
@@ -354,4 +376,4 @@ __all__ = [
     "call_with_schema",
     "swarm",
 ]
-# 223:90 0:0 1:0
+# 223:110 0:0 1:0

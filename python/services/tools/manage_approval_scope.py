@@ -1,5 +1,27 @@
-# 95:1 0:0 0:4
+# 95:21 0:0 0:4
 """manage_approval_scope — grant/revoke pre-approved action scopes."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_manage_approval_scope
+#   module_name: manage_approval_scope
+#   module_kind: service
+#   summary: manage_approval_scope tool — grants, revokes, or lists pre-approved action scopes for the active user, persisting them so future gated tools can run without re-prompting.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: scoped to the active approval-scope user id; mutates that user's granted scopes
+#   storage_boundary: write
+#   network_boundary: internal
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the manage_approval_scope tool from the registry.
+#   requires: a0_service_tool_executor
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 
 SCHEMA = {
@@ -106,4 +128,4 @@ async def handle(action: str = "list", scope: str | None = None, **_) -> str:
         return json.dumps({"ok": removed, "scope": scope, "revoked": removed})
 
     return f"[manage_approval_scope: unknown action '{action}']"
-# 95:1 0:0 0:4
+# 95:21 0:0 0:4

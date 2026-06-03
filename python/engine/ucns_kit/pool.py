@@ -1,6 +1,27 @@
-# 20:10
+# 20:30
 """UCNSPool — intern table for UCNSObject. Encode-once-refer-many."""
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_engine_ucns_kit_pool
+#   module_name: pool
+#   module_kind: engine
+#   summary: UCNSPool — intern table for UCNSObjects (encode-once-refer-many); identical objects by canonical key share a single instance.
+#   owner: Erin Spencer
+#   public_surface: UCNSPool
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; intern table is in-memory only.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 
 class UCNSPool:
@@ -36,4 +57,4 @@ class UCNSPool:
         # Using (n_dec, n_min, anchors_pos, faces_pos) pending review;
         # breaks when anchor payloads are recursive UCNSObjects (depth > 0).
         return (obj.n_dec, obj.n_min, obj.anchors_pos, obj.faces_pos)
-# 20:10
+# 20:30

@@ -1,5 +1,27 @@
-# 126:1 0:0 0:1
+# 126:21 0:0 0:1
 """github_write_file — single-file commit helper around the GitHub Contents API."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_github_write_file
+#   module_name: github_write_file
+#   module_kind: adapter
+#   summary: github_write_file tool — commits a single file to a repo via the GitHub Contents API; admin tier, gated behind the code_self_modify approval scope.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: admin tier, gated behind the code_self_modify approval scope
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: none
+#   admin_only: true
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the github_write_file tool from the registry.
+#   requires: a0_service_tools_github_api
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import base64 as _b64
 import json
 import os
@@ -135,4 +157,4 @@ async def handle(
             "file_sha": content_meta.get("sha"),
         })
     return json.dumps({"ok": False, "stage": "write", "response": write})
-# 126:1 0:0 0:1
+# 126:21 0:0 0:1

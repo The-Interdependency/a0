@@ -1,4 +1,4 @@
-# 160:22 0:0 1:4
+# 160:42 0:0 1:4
 """openai_provider — OpenAI GPT-5 family via the Responses API.
 
 Migrated from raw httpx to the `openai` Python SDK (v2). The contract is
@@ -14,6 +14,27 @@ HTTP call changes. `response.model_dump()` converts the SDK object to the same
 dict shape the tool-loop code already understood, so zero churn downstream.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_providers_openai
+#   module_name: openai_provider
+#   module_kind: adapter
+#   summary: OpenAI GPT-5-family provider adapter using the Responses API via the openai SDK — exposes the standard async call(...) -> (content, usage) with the shared tool-loop contract.
+#   owner: Erin Spencer
+#   public_surface: call
+#   internal_surface: _call_responses
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; OpenAI calls revert to the prior httpx-based implementation.
+#   requires: a0_service_providers_resolver, a0_service_tool_executor, a0_service_tool_distill, a0_service_inference
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import copy
 import json
@@ -205,4 +226,4 @@ async def _call_responses(
             })
 
     return "[openai: tool loop exhausted]", accumulated_usage
-# 160:22 0:0 1:4
+# 160:42 0:0 1:4

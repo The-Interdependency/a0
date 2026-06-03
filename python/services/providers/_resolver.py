@@ -1,4 +1,4 @@
-# 28:25 0:0 5:1
+# 28:45 0:0 5:1
 """resolve_model_for_role — env > spec primary.
 
 Purpose: every provider module asks one question on every call:
@@ -15,6 +15,27 @@ Resolution order (highest precedence first):
 Raises ValueError if neither yields a model id — no silent fallback.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_providers_resolver
+#   module_name: _resolver
+#   module_kind: service
+#   summary: resolve_model_for_role — the single answer to "given a role, which concrete model id should this provider send?", resolving env-var override first then the provider spec primary from providers.json.
+#   owner: Erin Spencer
+#   public_surface: resolve_model_for_role
+#   internal_surface: _PROVIDER_ENV_PREFIX
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; provider model resolution reverts to prior env/spec precedence.
+#   requires: a0_service_energy_registry
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import os
 
@@ -62,4 +83,4 @@ async def resolve_model_for_role(provider_id: str, role: str) -> str:
         f"No model resolvable for provider={provider_id!r} role={role_norm!r} "
         f"(checked env {prefix or '?'}{role_norm.upper()} and providers.json primary)"
     )
-# 28:25 0:0 5:1
+# 28:45 0:0 5:1

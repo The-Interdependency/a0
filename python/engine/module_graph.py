@@ -1,4 +1,4 @@
-# 174:15 0:0 0:0
+# 174:35 0:0 0:0
 """
 module_graph — live MODULE_BUILD coverage scanner for the a0p workspace.
 
@@ -11,6 +11,27 @@ Read-only: reads source files, never writes. Results are cached briefly so the
 tree is not re-walked on every request.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_engine_module_graph
+#   module_name: module_graph
+#   module_kind: instrument
+#   summary: read-only scanner that walks the workspace and emits the MODULE_BUILD/DOC coverage module-graph
+#   owner: Erin Spencer
+#   public_surface: scan, WORKSPACE_ROOT
+#   internal_surface: _compute, _parse_blocks, _validate, _infer_kind, _has_doc_cover, _iter_source_files
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: remove this engine and the module_graph route
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import re
 import time
@@ -213,4 +234,4 @@ def scan(force: bool = False) -> dict:
         _CACHE = _compute()
         _CACHE_AT = now
     return _CACHE
-# 174:15 0:0 0:0
+# 174:35 0:0 0:0

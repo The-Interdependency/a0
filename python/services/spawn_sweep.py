@@ -1,4 +1,4 @@
-# 113:30 0:0 1:5
+# 113:50 0:0 1:5
 """spawn_sweep — stale-claim reaper and no-orphan invariant check.
 
 Owns: _reap_stale_claims (single sweep pass), _emit_worker_lost_event,
@@ -6,6 +6,27 @@ _stale_sweep_loop (forever timer), and check_no_orphan_invariant
 (read-only DB↔registry reconciliation).
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_spawn_sweep
+#   module_name: spawn_sweep
+#   module_kind: service
+#   summary: Stale-claim reaper and no-orphan invariant checker for the spawn executor — sweeps timed-out claims, emits worker-lost events, and reconciles in-memory registry against agent_runs rows.
+#   owner: Erin Spencer
+#   public_surface: check_no_orphan_invariant
+#   internal_surface: _reap_stale_claims, _emit_worker_lost_event, _stale_sweep_loop
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: internal
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; stale-claim reaping stops but spawn rows remain consistent on restart.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import asyncio
 import datetime as _dt
@@ -163,4 +184,4 @@ async def check_no_orphan_invariant() -> dict:
         "ok": not registry_orphans and not worker_orphans,
         "worker_id": WORKER_ID,
     }
-# 113:30 0:0 1:5
+# 113:50 0:0 1:5

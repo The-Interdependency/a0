@@ -1,4 +1,4 @@
-# 175:131 0:0 2:7
+# 175:151 0:0 2:7
 # N:M
 """spawn_executor — execute the rows that sub_agent_spawn writes.
 
@@ -113,6 +113,27 @@ Sub-module layout (add behaviour there, not here):
 # === END CONTRACTS ===
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_spawn_executor
+#   module_name: spawn_executor
+#   module_kind: service
+#   summary: Executes the agent_runs rows sub_agent_spawn writes — atomically claims rows, binds run-scoped ContextVars, runs one AgentInstance inference turn, and writes results back through run_logger into the agent_logs stream.
+#   owner: Erin Spencer
+#   public_surface: inflight_count
+#   internal_surface: _execute_one, _on_inflight_done, _poll_loop
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: python/tests/contracts/spawn_executor.py
+#   rollout: default_enabled
+#   rollback: Revert this file; pending spawn rows remain unclaimed until executor is restored.
+#   requires: a0_service_spawn_db, a0_service_spawn_pcna, a0_service_spawn_sweep, a0_service_agent_instance, a0_service_run_logger, a0_service_run_context
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import asyncio
 import logging
@@ -333,4 +354,4 @@ async def _poll_loop() -> None:
 def inflight_count() -> int:
     """Introspection helper — returns the number of in-flight execution tasks."""
     return len(_inflight)
-# 175:131 0:0 2:7
+# 175:151 0:0 2:7

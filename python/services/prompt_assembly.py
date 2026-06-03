@@ -1,4 +1,4 @@
-# 147:61 0:0 4:5
+# 147:81 0:0 4:5
 """prompt_assembly — canonical prompt construction for all chat turns.
 
 Extracted from inference.py (doctrine/prime-seed functions) and chat.py
@@ -19,6 +19,27 @@ halves. Claude places a cache_control breakpoint here; other providers
 use auto-caching keyed on the same boundary.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_prompt_assembly
+#   module_name: prompt_assembly
+#   module_kind: service
+#   summary: Canonical system-prompt construction for all chat turns — composes the cacheable stable prefix (doctrine + skill manifest + LT prime-seed) and the volatile suffix (memory seeds + ST prime-seed + context boost).
+#   owner: Erin Spencer
+#   public_surface: build_system_prompt, build_prompt_sections
+#   internal_surface: _load_doctrine, _prime_seed_context_lines, _prepend_doctrine, _get_context_value
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: internal
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; prompt assembly reverts to prior prefix/suffix composition.
+#   requires: a0_engine_prime_seeds
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import os
 import logging
@@ -247,4 +268,4 @@ async def build_prompt_sections(
             "total": len(full),
         },
     }
-# 147:61 0:0 4:5
+# 147:81 0:0 4:5

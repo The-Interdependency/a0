@@ -1,4 +1,24 @@
-# 55:0 0:0 0:0
+# 55:20 0:0 0:0
+# === MODULE_BUILD ===
+# id: a0_service_zeta_observe
+#   module_name: zeta_observe
+#   module_kind: service
+#   summary: Zeta observation helpers — derive coherence and sentinel-seed observation summaries from a PCNA state dict / engine and classify coherence into bands.
+#   owner: Erin Spencer
+#   public_surface: observe_coherence, observe_sentinel_seeds
+#   internal_surface: _classify
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; zeta observation summaries revert to prior behavior.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 import time
 from typing import Any
 
@@ -64,4 +84,4 @@ def _classify(coherence: float) -> str:
     if coherence >= 0.2:
         return "low"
     return "critical"
-# 55:0 0:0 0:0
+# 55:20 0:0 0:0

@@ -1,4 +1,4 @@
-# 352:72 0:0 12:4
+# 352:92 0:0 12:4
 """ZFAE Tool Executor — thin shim over the per-tool registry.
 
 Tools live in `python/services/tools/*.py` (one file per tool, self-declared
@@ -14,6 +14,28 @@ SCHEMA + async handle). This module:
     get_approval_scope_user_id() and that chat.py sets via
     set_approval_scope_user_id().
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_tool_executor
+#   module_name: tool_executor
+#   module_kind: service
+#   summary: Thin shim over the per-tool registry — re-exports stable TOOL_SCHEMAS lists, wraps the dispatcher with call_id persistence and distiller summarization, and owns the distiller/a0 skill loaders and approval-scope ContextVar.
+#   owner: Erin Spencer
+#   public_surface: set_allowed_tools, reset_allowed_tools, get_active_chat_schemas, get_active_responses_schemas, get_a0_skill_manifest, get_a0_skill_body, TOOL_SCHEMAS_CHAT, TOOL_SCHEMAS_RESPONSES, execute_tool
+#   internal_surface: _parse_frontmatter, _discover_distiller_specs, _pick_distiller, _get_distiller_spec, _discover_a0_skills, _score_skill_match, _skill_recommend, _skill_load
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: none
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: tests/test_tools_registry.py
+#   rollout: default_enabled
+#   rollback: Revert this file; falls back to the tools registry dispatcher directly.
+#   requires: a0_service_tool_distill
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import contextvars as _cv
 import contextvars
 import os
@@ -482,4 +504,4 @@ __all__ = [
     "get_active_chat_schemas",
     "get_active_responses_schemas",
 ]
-# 352:72 0:0 12:4
+# 352:92 0:0 12:4

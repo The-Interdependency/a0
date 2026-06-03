@@ -1,4 +1,4 @@
-# 70:13 0:0 9:0
+# 70:33 0:0 9:0
 # N:M
 """Run-scoped ContextVars for ZFAE recursion tracking.
 
@@ -11,6 +11,28 @@ NO silent fallback: callers that need a run id must check whether one is
 present via `get_current_run_id()` and decide explicitly. The logger
 treats absence as "out of band" and logs to the unbound bucket.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_run_context
+#   module_name: run_context
+#   module_kind: service
+#   summary: Run-scoped ContextVars for ZFAE recursion tracking — run id, depth, root/parent run id, and approval-scope user id, inherited by async tool/inference calls and rebound on sub-agent spawn.
+#   owner: Erin Spencer
+#   public_surface: get_current_run_id, set_approval_scope_user_id, get_approval_scope_user_id, get_current_depth, get_current_root_run_id, get_current_parent_run_id, bind_run, reset_run, snapshot
+#   internal_surface: none
+#   auth_boundary: holds the approval-scope user id that tools read to scope pre-approved actions
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: tests/test_run_context.py
+#   rollout: default_enabled
+#   rollback: Revert this file; recursion tracking reverts to prior ContextVar surface.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import contextvars
 from typing import Optional
 
@@ -105,4 +127,4 @@ def snapshot() -> dict:
         "max_tool_rounds": current_max_tool_rounds.get(),
     }
 # N:M
-# 70:13 0:0 9:0
+# 70:33 0:0 9:0

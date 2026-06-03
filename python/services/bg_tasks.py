@@ -1,4 +1,4 @@
-# 36:14 0:0 3:0
+# 36:34 0:0 3:0
 """Managed background task registry.
 
 Wraps `asyncio.create_task` so that:
@@ -7,6 +7,28 @@ Wraps `asyncio.create_task` so that:
 - Done tasks remove themselves from the registry.
 - A coroutine factory `cancel_all` is exposed for shutdown integration.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_bg_tasks
+#   module_name: bg_tasks
+#   module_kind: service
+#   summary: Managed background-task registry wrapping asyncio.create_task — tracks fire-and-forget coroutines to prevent premature GC, logs exceptions instead of swallowing them, and exposes cancel_all for shutdown.
+#   owner: Erin Spencer
+#   public_surface: spawn, cancel_all, active_count
+#   internal_surface: _on_done
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; background tasks would revert to bare asyncio.create_task.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import asyncio
 import logging
 import traceback
@@ -60,4 +82,4 @@ async def cancel_all(timeout: float = 5.0) -> None:
 
 def active_count() -> int:
     return len(_tasks)
-# 36:14 0:0 3:0
+# 36:34 0:0 3:0

@@ -1,4 +1,4 @@
-# 16:20 0:0 3:0
+# 16:40 0:0 3:0
 """Stripe configuration shim.
 
 Donations-only after Task #110: there is no recurring "Supporter"
@@ -7,6 +7,28 @@ dynamic price_data per checkout session, so no static product list is
 required. This module is kept as the canonical home for STRIPE_SECRET_KEY
 and the tier→prompt-context mapping used by chat.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_stripe_service
+#   module_name: stripe_service
+#   module_kind: service
+#   summary: Stripe configuration shim — canonical home for STRIPE_SECRET_KEY and the tier→prompt-context mapping; donations-only after Task #110 so no static product bootstrap is required.
+#   owner: Erin Spencer
+#   public_surface: STRIPE_SECRET_KEY, ensure_stripe_products, get_tier_context_name
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; Stripe config shim reverts to prior constants/mapping.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import os
 
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
@@ -45,4 +67,4 @@ def get_tier_context_name(tier: str) -> str:
         "admin": "tier_ws",
     }
     return mapping.get(tier, "tier_free")
-# 16:20 0:0 3:0
+# 16:40 0:0 3:0

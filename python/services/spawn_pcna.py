@@ -1,10 +1,31 @@
-# 53:20 0:0 1:3
+# 53:40 0:0 1:3
 """spawn_pcna — provider resolution and PCNA helpers for the spawn executor.
 
 Owns: resolve_provider (active/explicit), snapshot_pcna, try_get_primary_pcna,
 and retire_fork_quietly. All functions are pure helpers — no DB writes.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_spawn_pcna
+#   module_name: spawn_pcna
+#   module_kind: service
+#   summary: Provider-resolution and PCNA helpers for the spawn executor — resolve_provider (active/explicit), snapshot_pcna, try_get_primary_pcna, and retire_fork_quietly; all pure helpers with no DB writes.
+#   owner: Erin Spencer
+#   public_surface: none
+#   internal_surface: _resolve_provider, _snapshot_pcna, _try_get_primary_pcna, _retire_fork_quietly
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: internal
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; spawn provider/PCNA helpers revert to prior behavior.
+#   requires: a0_service_energy_registry
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import json
 from typing import Any, Optional
@@ -87,4 +108,4 @@ def _retire_fork_quietly(parent_pcna: Any, sub_name: str) -> None:
         merge_sub_agent(parent_pcna, sub_name)
     except Exception:
         pass
-# 53:20 0:0 1:3
+# 53:40 0:0 1:3

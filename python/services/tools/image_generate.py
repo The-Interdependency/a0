@@ -1,5 +1,27 @@
-# 90:4 0:0 0:0
+# 90:24 0:0 0:0
 """image_generate — Google Imagen image generation, archived through artifacts."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_image_generate
+#   module_name: image_generate
+#   module_kind: adapter
+#   summary: image_generate tool — generates an image via Google Imagen and returns a produces-shaped payload so the archive wrapper persists it through the artifacts pipeline.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: external
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the image_generate tool from the registry.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import os
 
 SCHEMA = {
@@ -102,4 +124,4 @@ async def handle(prompt: str = "", aspect_ratio: str = "1:1", style_hint: str | 
             "model": "imagen-3",
         },
     }
-# 90:4 0:0 0:0
+# 90:24 0:0 0:0

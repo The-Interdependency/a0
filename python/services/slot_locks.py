@@ -1,4 +1,4 @@
-# 10:13 0:0 2:0
+# 10:33 0:0 2:0
 """Per-slot in-flight turn counter.
 
 Tracks how many main-chat inference turns are currently routed through
@@ -11,6 +11,27 @@ Thread-safety: this module runs inside the single asyncio event loop of
 the FastAPI/uvicorn process.  CPython's GIL makes integer increments atomic;
 no asyncio.Lock is required for a plain counter.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_slot_locks
+#   module_name: slot_locks
+#   module_kind: service
+#   summary: Per-slot in-flight turn counter — tracks how many main-chat turns are routed through the conduct slot so instance reassignment can return 409 Conflict while a turn is in flight.
+#   owner: Erin Spencer
+#   public_surface: conduct_turn_enter, conduct_turn_exit, conduct_is_active
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; conduct-slot in-flight guarding reverts to prior behavior.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 _conduct_turns: int = 0
 
@@ -31,4 +52,4 @@ def conduct_turn_exit() -> None:
 def conduct_is_active() -> bool:
     """Return True while at least one conduct-slot turn is in flight."""
     return _conduct_turns > 0
-# 10:13 0:0 2:0
+# 10:33 0:0 2:0

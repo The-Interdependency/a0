@@ -1,4 +1,4 @@
-# 176:35 0:0 2:1
+# 176:55 0:0 2:1
 """attachments — attachment resolution, extraction, and provider message building.
 
 Extracted from inference.py. Activated only when a message carries
@@ -15,6 +15,27 @@ folded into the user turn's content regardless of provider, so every
 model can read them even without vision capability.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_attachments
+#   module_name: attachments
+#   module_kind: service
+#   summary: Attachment resolution, text/document extraction, and provider-specific multimodal message building (OpenAI image_url, Claude image blocks, Gemini inline_data); extracted from inference.py and active only when a message carries attachments.
+#   owner: Erin Spencer
+#   public_surface: build_provider_messages
+#   internal_surface: _resolve_attachment_path, _read_attachment_b64, _extract_pdf_text, _extract_text_file, _extract_document_text, _att_kind
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: none
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; only affects multimodal/document turns — text-only turns are unaffected.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import os
 import logging
@@ -246,4 +267,4 @@ def build_provider_messages(messages: list[dict], provider_id: str) -> list[dict
             composed_text = (composed_text or "") + marker
         out.append({**base, "content": composed_text})
     return out
-# 176:35 0:0 2:1
+# 176:55 0:0 2:1
