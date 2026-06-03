@@ -1,4 +1,4 @@
-# 162:41 0:0 0:31
+# 166:41 0:0 0:31
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -30,6 +30,7 @@ from .fleet import router as fleet_router
 from .transcripts import router as transcripts_router
 from .models import router as models_router
 from .instances_api import router as instances_router
+from .module_graph import router as module_graph_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -64,6 +65,7 @@ ALL_ROUTERS = [
     transcripts_router,
     models_router,
     instances_router,
+    module_graph_router,
 ]
 
 
@@ -93,6 +95,7 @@ def collect_ui_meta() -> list[dict]:
         # and no sections, so aggregating them here makes the console render an
         # unrenderable placeholder tab (caught by the console-tab guard).
         "python.routes.fleet",
+        "python.routes.module_graph",
     ]
     tabs = []
     for mod_name in modules:
@@ -169,6 +172,7 @@ def collect_doc_meta() -> list[dict]:
         "artifacts.py", "instances_api.py", "guest.py", "admin.py",
         "_admin_gate.py", "forge_archetypes.py", "billing_helpers.py",
         "transcripts.py",
+        "module_graph.py",
     ]
     results: list[dict] = []
     for fname in route_files:
@@ -217,4 +221,4 @@ def collect_doc_meta() -> list[dict]:
 # === END CONTRACTS ===
 # 171:16
 
-# 162:41 0:0 0:31
+# 166:41 0:0 0:31
