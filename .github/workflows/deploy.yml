@@ -60,7 +60,7 @@ jobs:
         run: npm ci
 
       - name: Install uv
-        run: pip install uv
+        run: pip install uv==0.11.18
 
       - name: Install Python dependencies
         run: uv sync --frozen --no-dev
