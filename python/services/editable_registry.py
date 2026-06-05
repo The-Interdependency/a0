@@ -1,4 +1,24 @@
-# 33:19 0:0 5:1
+# 33:39 0:0 5:1
+# === MODULE_BUILD ===
+# id: a0_service_editable_registry
+#   module_name: editable_registry
+#   module_kind: service
+#   summary: In-memory registry of mutable backend fields (EditableField records) exposed to the WSEM editing surface, describing each field's key, label, control type, and metadata.
+#   owner: Erin Spencer
+#   public_surface: EditableField
+#   internal_surface: _EditableRegistry
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; the registry of editable fields is rebuilt in-memory on boot.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 from dataclasses import dataclass, field
 
 
@@ -63,4 +83,4 @@ class _EditableRegistry:
 
 
 editable_registry = _EditableRegistry()
-# 33:19 0:0 5:1
+# 33:39 0:0 5:1

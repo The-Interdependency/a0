@@ -1,4 +1,4 @@
-# 141:42 0:0 4:4
+# 141:62 0:0 4:4
 """
 PrimeSeedLayer — 7 independent PTCACore instances seeded from sigma tensor slices.
 
@@ -15,6 +15,27 @@ Injection context (for zeta prompt composition):
   ST (N=17) → after cache          (volatile, merged every tick)
   sub-agent seeds → volatile       (not persisted, not injected into cache)
 """
+
+# === MODULE_BUILD ===
+# id: a0_engine_prime_seeds
+#   module_name: prime_seeds
+#   module_kind: engine
+#   summary: PrimeSeedLayer — seven PTCACore instances (primes 3..19) seeded from sigma tensor slices, propagated each heartbeat tick and merged/promoted into pcna memory rings.
+#   owner: Erin Spencer
+#   public_surface: PrimeSeedLayer, get_prime_seeds
+#   internal_surface: _t2b64, _b64t
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; long-term seed is restored from checkpoint, short-term reseeds on next tick.
+#   requires: a0_engine_ptca_core, a0_engine_pcna
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import base64
 import io
@@ -219,4 +240,4 @@ _prime_seeds = PrimeSeedLayer()
 
 def get_prime_seeds() -> PrimeSeedLayer:
     return _prime_seeds
-# 141:42 0:0 4:4
+# 141:62 0:0 4:4

@@ -1,4 +1,4 @@
-# 62:10 0:0 0:1
+# 62:30 0:0 0:1
 """Auto-archive wrapper for tools that declare a `produces` SCHEMA key.
 
 Filename starts with underscore so the tool discovery scanner in this
@@ -11,6 +11,28 @@ Contract for tool handlers under "produces":
 Anything else raises TypeError. Per the no-silent-fallback doctrine, we
 fail loudly so the model sees the wrong shape.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_archive_wrap
+#   module_name: _archive_wrap
+#   module_kind: service
+#   summary: Auto-archive wrapper for tools that declare a `produces` SCHEMA key — validates the {data,filename,mime,provenance} shape and routes the byte stream into the artifacts archive; underscore-named so the tool scanner skips it.
+#   owner: Erin Spencer
+#   public_surface: none
+#   internal_surface: _validate_item
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; producing tools would return raw bytes without auto-archival.
+#   requires: a0_service_artifacts
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 from typing import Any
 import fnmatch
 
@@ -80,4 +102,4 @@ async def wrap(
             "size_bytes": rec["size_bytes"],
         })
     return {"artifacts": archived, "count": len(archived)}
-# 62:10 0:0 0:1
+# 62:30 0:0 0:1

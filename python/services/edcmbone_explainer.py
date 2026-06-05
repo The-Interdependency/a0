@@ -1,4 +1,4 @@
-# 258:200 0:0 2:5
+# 258:220 0:0 2:5
 """EDCMbone scoring report → 200-400 word human explanation with cited
 quoted spans from the transcript. Owner-only, idempotent per report
 (UNIQUE on report_id), strict-JSON output, refund-on-failure.
@@ -6,6 +6,27 @@ quoted spans from the transcript. Owner-only, idempotent per report
 Pricing: 3 free per user lifetime, then $50 = pack of 3.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_edcmbone_explainer
+#   module_name: edcmbone_explainer
+#   module_kind: service
+#   summary: Turns an EDCMbone scoring report into a 200-400 word human explanation with cited transcript spans via an LLM — owner-gated, idempotent per report, strict-JSON, with credit metering and refund-on-failure.
+#   owner: Erin Spencer
+#   public_surface: explain_report, InsufficientCredits, PromptTooLarge
+#   internal_surface: _format_round, _build_user_prompt, _strip_json_fences, _normalize_for_match, _quote_appears_in_transcript, _parse_explainer_output, _compute_cost_cents, _record_cost_metric, _emit_provider_log, _credits_view
+#   auth_boundary: resource ownership — raises PermissionError when report_id is not owned by user_id
+#   storage_boundary: write
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: python/tests/contracts/transcripts_explainer.py
+#   rollout: default_enabled
+#   rollback: Revert this file; existing cached explanations remain readable, no new ones generated.
+#   requires: a0_service_energy_registry
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import json
 from typing import Any, Dict, List, Optional, Tuple
@@ -512,4 +533,4 @@ def _credits_view(row: Dict[str, Any]) -> Dict[str, Any]:
 #   class: correctness
 #   call:  python.tests.contracts.transcripts_explainer.test_explainer_call_surfaces_in_learning_summary
 # === END CONTRACTS ===
-# 258:200 0:0 2:5
+# 258:220 0:0 2:5

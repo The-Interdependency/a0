@@ -1,4 +1,4 @@
-# 186:46 0:0 1:1
+# 186:66 0:0 1:1
 """Native google-genai SDK adapter for Gemini 2.5 and Gemini 3.
 
 Replaces the OpenAI-compat HTTP path for Gemini providers. Unlocks:
@@ -11,6 +11,27 @@ Kept feature-parity with `_call_openai_compat` for now (text + tools + usage).
 Streaming and Google Search grounding are deliberately out of scope for v1.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_gemini_native
+#   module_name: gemini_native
+#   module_kind: adapter
+#   summary: Native google-genai SDK adapter for Gemini 2.5/3 — replaces the OpenAI-compat HTTP path, unlocking thinking_config, implicit-cache usage surfacing, and a native FunctionDeclaration tool loop.
+#   owner: Erin Spencer
+#   public_surface: call_gemini_native
+#   internal_surface: _client, _effort_to_thinking_budget, _chat_tools_to_gemini, _split_system, _messages_to_contents, _accumulate_usage
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; Gemini calls fall back to the OpenAI-compat HTTP path.
+#   requires: a0_service_tool_executor
+#   since: 2026-06-02
+#   unresolved: Streaming and Google Search grounding deliberately out of scope for v1.
+# === END MODULE_BUILD ===
 
 import asyncio
 import json
@@ -268,4 +289,4 @@ async def call_gemini_native(
 
     # Loop exit safeguard (shouldn't reach here).
     return "[gemini: tool loop exhausted]", accumulated
-# 186:46 0:0 1:1
+# 186:66 0:0 1:1

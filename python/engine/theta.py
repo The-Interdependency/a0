@@ -1,4 +1,4 @@
-# 255:43 0:0 3:0
+# 255:63 0:0 3:0
 """
 Θ (Theta) — N=29 prime-node microkernel ring (formerly Guardian).
 
@@ -18,6 +18,27 @@ payloads; nobody else can.
 
 Architecturally unique — not parameterized like PTCACore.
 """
+
+# === MODULE_BUILD ===
+# id: a0_engine_theta
+#   module_name: theta
+#   module_kind: engine
+#   summary: ThetaTensor (Θ) — N=29 prime-node microkernel ring that runs PCEA encryption over external payloads using its own tensor state as the cryptographic key.
+#   owner: Erin Spencer
+#   public_surface: ThetaTensor
+#   internal_surface: _pack_payload_to_seeds, _unpack_seeds_to_payload, _quantize_tensor_to_seeds, _seeds_to_bytes, _bytes_to_seeds, _gen_instance_id, _compute_blueprint_hash, _shard_blueprint
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; Theta is reconstructed in-memory on PCNA engine init.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import hashlib
 import os
@@ -344,4 +365,4 @@ def _shard_blueprint(bp_hash: str, n: int) -> list[str]:
         shard = bp_hash[start:start + BLUEPRINT_CHUNK_SIZE]
         shards.append(shard.ljust(BLUEPRINT_CHUNK_SIZE, "0"))
     return shards
-# 255:43 0:0 3:0
+# 255:63 0:0 3:0

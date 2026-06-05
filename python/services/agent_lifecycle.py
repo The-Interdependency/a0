@@ -1,4 +1,4 @@
-# 91:55 0:0 5:2
+# 91:75 0:0 5:2
 # N:M
 """Canonical in-memory sub-agent registry (Task #122).
 
@@ -39,6 +39,27 @@ Each meta entry tracks `parent_run_id` and `run_id` so:
 # === END CONTRACTS ===
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_agent_lifecycle
+#   module_name: agent_lifecycle
+#   module_kind: service
+#   summary: Canonical in-memory sub-agent registry — owns the single _sub_agents dict (name → PCNAEngine + meta) and the lock-guarded spawn/merge/list/count helpers shared by routes/agents.py and the spawn executor.
+#   owner: Erin Spencer
+#   public_surface: spawn_sub_agent, merge_sub_agent, list_sub_agents, get_sub_agent_engine, count_live_for_parent, registry_snapshot
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; registry is in-memory only and rebuilt on process boot.
+#   requires: a0_engine_pcna, a0_engine_merge
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import threading
 import time
@@ -167,4 +188,4 @@ def registry_snapshot() -> list[dict]:
         for name, (_e, meta) in items
     ]
 # N:M
-# 91:55 0:0 5:2
+# 91:75 0:0 5:2

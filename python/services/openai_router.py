@@ -1,4 +1,24 @@
-# 127:31 0:0 1:1
+# 127:51 0:0 1:1
+# === MODULE_BUILD ===
+# id: a0_service_openai_router
+#   module_name: openai_router
+#   module_kind: service
+#   summary: Policy-driven routing layer — resolves a task's role/model/config from the policy config, detects approval-gated actions, and builds route decisions and approval packets.
+#   owner: Erin Spencer
+#   public_surface: resolve_role, resolve_model, resolve_role_config, make_route_decision, make_call_config, get_triggered_actions, make_approval_packet
+#   internal_surface: _build_keyword_index, _action_matched, _check_approval_required
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: none
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; routing reverts to prior policy-resolution behavior.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 import os
 import re
 from typing import Any
@@ -183,4 +203,4 @@ def make_approval_packet(task_text: str, gate_id: str) -> dict[str, Any]:
         "artifacts": [],
         "hmmm": {},
     }
-# 127:31 0:0 1:1
+# 127:51 0:0 1:1

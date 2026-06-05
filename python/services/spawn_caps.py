@@ -1,4 +1,4 @@
-# 111:30 0:0 1:2
+# 111:50 0:0 1:2
 # N:M
 """Recursion-cap enforcement for sub_agent_spawn.
 
@@ -12,6 +12,28 @@ Tier defaults baked into code (used when neither setting nor env present):
 NO silent truncation: a violation raises SpawnCapExceeded which the tool
 dispatcher converts into a tool_result error visible to the model.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_spawn_caps
+#   module_name: spawn_caps
+#   module_kind: service
+#   summary: Recursion-cap enforcement for sub_agent_spawn — resolves per-tier depth/fanout/concurrent-live caps from settings overrides then env defaults, and raises SpawnCapExceeded on violation.
+#   owner: Erin Spencer
+#   public_surface: SpawnCapExceeded, get_caps_for_tier, sibling_count, check_can_spawn, caps_description_tail
+#   internal_surface: _load_tier_overrides, _count_concurrent_live
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: internal
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: tests/test_spawn_caps.py
+#   rollout: default_enabled
+#   rollback: Revert this file; spawn caps revert to prior tier defaults and env precedence.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 import os
 from typing import Optional
@@ -163,4 +185,4 @@ def caps_description_tail() -> str:
         f"A0P_MAX_SPAWN_CONCURRENT_LIVE)."
     )
 # N:M
-# 111:30 0:0 1:2
+# 111:50 0:0 1:2

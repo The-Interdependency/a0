@@ -1,4 +1,4 @@
-# 160:34 0:0 4:0
+# 160:54 0:0 4:0
 # N:M
 """EDCM service — delegates measurement math to edcmbone.
 
@@ -13,6 +13,28 @@ package and are fully canon-versioned.
 NO silent fallback: if edcmbone fails to import or compute, we raise so
 callers see the real failure rather than a placeholder.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_edcm
+#   module_name: edcm
+#   module_kind: service
+#   summary: EDCM behavioral-directive scoring service — delegates measurement math to edcmbone while keeping the stable contract (compute_metrics / check_directives / delta_between) that routes, snapshots, and the edcm_score tool depend on.
+#   owner: Erin Spencer
+#   public_surface: compute_metrics, check_directives, delta_between, edcmbone_round, compute_transcript_full, METRIC_NAMES, DIRECTIVES
+#   internal_surface: _clamp, _build_transcript, _round_text
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: tests/test_edcm_uses_package.py
+#   rollout: default_enabled
+#   rollback: Revert this file; raises rather than falling back, so callers see real failures.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import math
 from typing import Any
 from importlib.metadata import version as _pkg_version
@@ -225,4 +247,4 @@ def compute_transcript_full(text: str) -> dict[str, Any]:
         "per_round": per_round,
     }
 # N:M
-# 160:34 0:0 4:0
+# 160:54 0:0 4:0

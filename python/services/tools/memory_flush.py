@@ -1,5 +1,27 @@
-# 28:1 0:0 0:1
+# 28:21 0:0 0:1
 """memory_flush — persist active memory seeds to checkpoint."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_memory_flush
+#   module_name: memory_flush
+#   module_kind: service
+#   summary: memory_flush tool — persists the active PCNA memory seeds to checkpoint on demand.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the memory_flush tool from the registry.
+#   requires: a0_engine_pcna
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 
 SCHEMA = {
@@ -31,4 +53,4 @@ async def handle(**_) -> str:
         "checkpoint_key": pcna._checkpoint_key,
         "infer_count": pcna.infer_count,
     })
-# 28:1 0:0 0:1
+# 28:21 0:0 0:1

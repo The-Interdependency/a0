@@ -1,6 +1,28 @@
-# 123:3 0:0 0:3
+# 123:23 0:0 0:3
 # N:M
 """sub_agent_merge — merge a sub-agent's ring state, archive its log stream."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_sub_agent_merge
+#   module_name: sub_agent_merge
+#   module_kind: service
+#   summary: sub_agent_merge tool — merges a sub-agent's PCNA ring state back into the parent, archives its run log stream as a JSONL artifact, and marks the agent_runs row merged.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: internal
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the sub_agent_merge tool from the registry.
+#   requires: a0_service_run_logger, a0_service_artifacts
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 
 from sqlalchemy import text as _sa_text
@@ -137,4 +159,4 @@ async def handle(agent_id: str = "", run_id: str = "", result_summary: str = "",
         "note": "Ring state consolidated; run log stream archived to artifacts.",
     })
 # N:M
-# 123:3 0:0 0:3
+# 123:23 0:0 0:3

@@ -1,4 +1,4 @@
-# 251:49 0:0 1:6
+# 251:69 0:0 1:6
 """xai_provider — xAI Grok via the official xai-sdk (gRPC).
 
 Migrated from raw httpx to the `xai-sdk` Python SDK (v1.12+). The contract
@@ -18,6 +18,27 @@ Streaming (no-tools + progress_callback) uses `chat.stream()`.
 Built-in OpenTelemetry tracing fires automatically for every sample/stream.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_providers_xai
+#   module_name: xai_provider
+#   module_kind: adapter
+#   summary: xAI Grok provider adapter over the official xai-sdk (gRPC) — exposes the standard async call(...) -> (content, usage) with a live-search path, a repeat-safe tool-loop path, and streaming.
+#   owner: Erin Spencer
+#   public_surface: call
+#   internal_surface: _effort_enum, _get_max_tool_rounds_xai, _to_xai_messages, _to_xai_tools, _usage_from_response, _fingerprint_tool_calls, _call_with_search
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; Grok calls revert to the prior httpx-based implementation.
+#   requires: a0_service_providers_resolver, a0_service_tool_executor, a0_service_tool_distill, a0_service_inference, a0_service_energy_registry, a0_service_run_context
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import asyncio
 import json
@@ -363,4 +384,4 @@ async def _stream_chat(
             pass
 
     return ("".join(text_parts) or "[no content]"), accumulated_usage
-# 251:49 0:0 1:6
+# 251:69 0:0 1:6

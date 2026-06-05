@@ -1,4 +1,4 @@
-# 108:66 0:0 7:1
+# 108:86 0:0 7:1
 """model_catalog — single source of truth for "what models can this user use".
 
 Today three surfaces answer this question independently:
@@ -21,6 +21,27 @@ A model is "tier_blocked" if the key+enabled checks pass but the user's
 tier is too low — surfaced so the UI can show it greyed-out with a CTA.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_model_catalog
+#   module_name: model_catalog
+#   module_kind: service
+#   summary: Single source of truth for "what models can this user invoke" — unifies Forge dropdown, chat chips, and subagent spawn into one tier-gated, provenance-annotated model list plus model_id resolution.
+#   owner: Erin Spencer
+#   public_surface: resolve_model_id, is_provider_enabled, list_models_for_user
+#   internal_surface: _tier_ok, _resolve_static, _user_tier
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: internal
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; model availability resolution reverts to prior per-surface logic.
+#   requires: a0_service_energy_registry
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 from typing import Any, Optional
 
@@ -204,4 +225,4 @@ async def list_models_for_user(user_id: Optional[str]) -> dict[str, Any]:
         })
 
     return {"user_tier": user_tier, "providers": out_providers}
-# 108:66 0:0 7:1
+# 108:86 0:0 7:1

@@ -1,4 +1,4 @@
-# 68:15
+# 68:35
 """
 Coherence-prime sequence. Definition fully pinned.
 
@@ -15,6 +15,27 @@ Rejection examples (held as module-level documentation):
   19: (19-1) % 4 = 2 ≠ 0           — fails condition 1
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_engine_ucns_kit_coherence_primes
+#   module_name: coherence_primes
+#   module_kind: engine
+#   summary: Coherence-prime sequence generator — pinned definition (base {3,5,7}; p≡1 mod 4 with squarefree kernel whose factors are already coherence primes) with membership and nth lookups.
+#   owner: Erin Spencer
+#   public_surface: is_coherence_prime, sequence_up_to, nth
+#   internal_surface: _is_prime, _is_squarefree, _prime_factors, _build_up_to
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: python/tests/test_coherence_primes.py
+#   rollout: default_enabled
+#   rollback: Revert this file; pure deterministic sequence generator.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 _BASE: frozenset[int] = frozenset({3, 5, 7})
 _CACHE: list[int] = sorted(_BASE)
@@ -100,4 +121,4 @@ def nth(k: int) -> int:
         _build_up_to(target)
         target *= 4
     return _CACHE[k - 1]
-# 68:15
+# 68:35

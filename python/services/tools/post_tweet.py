@@ -1,5 +1,27 @@
-# 120:2 0:0 0:0
+# 120:22 0:0 0:0
 """post_tweet — post a tweet to X via OAuth 1.0a."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_post_tweet
+#   module_name: post_tweet
+#   module_kind: adapter
+#   summary: post_tweet tool — posts a tweet (optionally a reply) to X via OAuth 1.0a-signed requests; gated behind the publish approval scope.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: gated behind the publish approval scope
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the post_tweet tool from the registry.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import base64
 import hashlib
 import hmac
@@ -131,4 +153,4 @@ async def handle(text: str = "", reply_to: str | None = None, **_) -> str:
         })
     except Exception as exc:
         return json.dumps({"ok": False, "error": f"request failed: {exc}"})
-# 120:2 0:0 0:0
+# 120:22 0:0 0:0

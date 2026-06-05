@@ -1,4 +1,4 @@
-# 210:29 0:0 3:1
+# 210:49 0:0 3:1
 """Unified artifacts archive — Replit Object Storage backed.
 
 Every byte stream a0 produces (images, reports, evidence files, generated
@@ -16,6 +16,28 @@ Bucket comes from DEFAULT_OBJECT_STORAGE_BUCKET_ID (set automatically by
 `setup_object_storage`). REPLIT_OBJECT_STORAGE_BUCKET_ID is also accepted
 as an alias for forward-compat with future skill versions.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_artifacts
+#   module_name: artifacts
+#   module_kind: service
+#   summary: Unified artifacts archive backed by Replit Object Storage — every byte stream a0 produces is dedup-uploaded (by sha256) and indexed in the DB with kind/date-partitioned storage keys and signed-URL retrieval.
+#   owner: Erin Spencer
+#   public_surface: archive_artifact, get_artifact_bytes, get_artifact_signed_url, list_artifacts, distinct_tool_names, set_public
+#   internal_surface: _bucket_id, _client, _storage_key, _find_by_sha, _insert_row, _public_url, _fetch_row
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: tests/test_artifacts.py
+#   rollout: default_enabled
+#   rollback: Revert this file; existing artifact rows and object-storage blobs remain readable.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import asyncio
 import datetime as _dt
 import hashlib
@@ -277,4 +299,4 @@ async def set_public(artifact_id: str, public: bool) -> dict | None:
             {"p": public, "id": artifact_id},
         )
     return await _fetch_row(artifact_id)
-# 210:29 0:0 3:1
+# 210:49 0:0 3:1

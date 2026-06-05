@@ -1,4 +1,4 @@
-# 63:18 0:0 1:2
+# 63:38 0:0 1:2
 # N:M
 """Cut-mode tool filter — gates which tools the model sees per turn.
 
@@ -11,6 +11,28 @@ The filter operates on the canonical tool list (chat-shape dicts produced by
 python.services.tools.tool_schemas_chat) so it can be invoked from either the
 inference layer or test harnesses without mounting the full registry.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_cut_modes
+#   module_name: cut_modes
+#   module_kind: service
+#   summary: Cut-mode tool filter — gates which tools the model sees per turn (off=all, soft=read-only, hard=spawn/merge only) over the canonical chat-shape tool list, plus per-user default lookup.
+#   owner: Erin Spencer
+#   public_surface: tools_for_cut_mode, get_user_default_cut_mode, names_in
+#   internal_surface: _tool_name, _tool_side_effects
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: tests/test_cut_modes.py
+#   rollout: default_enabled
+#   rollback: Revert this file; defaults to exposing every enabled tool.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 from typing import Iterable
 
 # Side-effect tags that cause a tool to be hidden in "soft" mode.
@@ -95,4 +117,4 @@ async def get_user_default_cut_mode(user_id: str | None) -> str:
 def names_in(tools: Iterable[dict]) -> list[str]:
     return [_tool_name(t) for t in tools]
 # N:M
-# 63:18 0:0 1:2
+# 63:38 0:0 1:2

@@ -1,4 +1,4 @@
-# 50:30 0:0 0:0
+# 49:50 0:0 0:0
 """Explicit allowlist of write routes that do NOT require admin gating.
 
 The two-tier write-access model says: anything that alters the research
@@ -24,6 +24,27 @@ unallowlisted write route will fail CI.
 
 Format: each entry is (filename, METHOD, path, justification).
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_gating_allowlist
+#   module_name: gating_allowlist
+#   module_kind: service
+#   summary: Explicit allowlist of write routes that legitimately do NOT require the admin gate (per-user CRUD, HMAC-authenticated webhooks, public entrypoints); consumed by the gating contract test.
+#   owner: Erin Spencer
+#   public_surface: AllowEntry, is_allowlisted, allowlist_summary
+#   internal_surface: none
+#   auth_boundary: declares which write routes are exempt from the admin gate — changes here directly affect the write-access enforcement boundary
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: python/tests/contracts/gating.py
+#   rollout: default_enabled
+#   rollback: Revert this file; restores the prior set of admin-gate exemptions (CI gating contract enforces correctness).
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 from typing import NamedTuple
 
@@ -98,4 +119,4 @@ def allowlist_summary() -> dict:
         "total": len(OWNER_OR_PUBLIC_WRITES),
         "by_file": dict(sorted(by_file.items())),
     }
-# 50:30 0:0 0:0
+# 49:50 0:0 0:0

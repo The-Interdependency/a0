@@ -1,4 +1,4 @@
-# 313:11 0:0 5:0
+# 313:31 0:0 5:0
 """
 SigmaCore — Σ — filesystem substrate companion core.
 Variable-size prime-node ring encoding the workspace filesystem as
@@ -7,6 +7,27 @@ which entries become tensor nodes. N is always the nearest prime to
 the entry count. Companion to Ψ (Psi): Sigma observes the physical
 substrate; Psi observes Sigma alongside Phi.
 """
+
+# === MODULE_BUILD ===
+# id: a0_engine_sigma
+#   module_name: sigma
+#   module_kind: engine
+#   summary: SigmaCore — variable-size prime-node ring that encodes the workspace filesystem as hyperdimensional vectors; companion observer to the Psi ring with its own checkpoint.
+#   owner: Erin Spencer
+#   public_surface: SigmaCore, get_sigma
+#   internal_surface: _is_prime, _nearest_prime, _name_angle, _scan_entries, _encode_entries, _file_hash
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; Sigma is an optional observer and degrades gracefully when absent.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import asyncio
 import hashlib
@@ -372,4 +393,4 @@ def get_sigma() -> SigmaCore:
     if _sigma_instance is None:
         _sigma_instance = SigmaCore(resolution=3)
     return _sigma_instance
-# 313:11 0:0 5:0
+# 313:31 0:0 5:0

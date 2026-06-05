@@ -1,10 +1,31 @@
-# 159:28 0:0 2:2
+# 159:48 0:0 2:2
 """spawn_db — raw database operations for the spawn executor.
 
 Owns: claim, heartbeat, persist-provider, mark-terminal, retry scheduling,
 and the transient-exception classifier that drives retry policy.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_spawn_db
+#   module_name: spawn_db
+#   module_kind: service
+#   summary: Raw database operations for the spawn executor — atomic claim, heartbeat loop, provider persistence, terminal marking, and retry scheduling with a transient-exception classifier.
+#   owner: Erin Spencer
+#   public_surface: none
+#   internal_surface: _is_transient_exception, _claim_one_pending, _heartbeat_loop, _persist_resolved_provider, _mark_terminal, _maybe_schedule_retry
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: internal
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; spawn-row DB operations revert to prior claim/retry behavior.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import asyncio
 import datetime as _dt
@@ -209,4 +230,4 @@ async def _maybe_schedule_retry(
     except Exception:
         pass
     return True
-# 159:28 0:0 2:2
+# 159:48 0:0 2:2

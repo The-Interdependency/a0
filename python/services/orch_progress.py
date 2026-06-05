@@ -1,10 +1,32 @@
-# 66:16 0:0 2:0
+# 66:36 0:0 2:0
 """Out-of-band progress bus for live multi-model orchestration meters.
 
 aimmh-lib's CallFn is non-streaming, so progress is published on a
 separate in-memory bus keyed by a client-generated client_run_id.
 Ephemeral, bounded, ContextVar-isolated per request.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_orch_progress
+#   module_name: orch_progress
+#   module_kind: service
+#   summary: Out-of-band, in-memory progress bus for live multi-model orchestration meters — publish/subscribe keyed by client_run_id with per-request ContextVar isolation and owner matching.
+#   owner: Erin Spencer
+#   public_surface: register_subscriber, unregister_subscriber, publish, has_subscribers, register_owner, unregister_owner, owner_matches
+#   internal_surface: none
+#   auth_boundary: owner_matches verifies the subscribing user_id owns the client_run_id before streaming progress
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; live progress meters stop publishing but orchestration is unaffected.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import asyncio
 import contextvars
 import time as _time
@@ -101,4 +123,4 @@ def owner_matches(client_run_id: str, user_id: Optional[str]) -> bool:
     if not client_run_id or client_run_id not in _OWNERSHIP:
         return False
     return (_OWNERSHIP[client_run_id] or "") == (user_id or "")
-# 66:16 0:0 2:0
+# 66:36 0:0 2:0

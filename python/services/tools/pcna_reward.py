@@ -1,5 +1,27 @@
-# 47:8 0:0 0:2
+# 47:28 0:0 0:2
 """pcna_reward — apply a reward signal to the PCNA engine."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_pcna_reward
+#   module_name: pcna_reward
+#   module_kind: service
+#   summary: pcna_reward tool — applies a reward signal (score + reason) to the active PCNA engine's reward backprop, targeting the primary core or a sub-agent's forked core.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the pcna_reward tool from the registry.
+#   requires: a0_engine_pcna
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 
 SCHEMA = {
@@ -58,4 +80,4 @@ async def handle(score: float = 0.0, reason: str = "", **_) -> str:
         "last_coherence": round(target.last_coherence, 4),
         "routed_to": routed_to,
     })
-# 47:8 0:0 0:2
+# 47:28 0:0 0:2

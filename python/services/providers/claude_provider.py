@@ -1,4 +1,4 @@
-# 131:34 0:0 1:4
+# 131:54 0:0 1:4
 """claude_provider — Anthropic Messages API via the official SDK.
 
 One of four sibling modules under python/services/providers/. Exposes a
@@ -24,6 +24,27 @@ Acceptance contract:
     short-circuits with "[noticed repeat tool call — answering directly]".
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_providers_claude
+#   module_name: claude_provider
+#   module_kind: adapter
+#   summary: Anthropic Messages API provider adapter — exposes the standard async call(messages, role=..., ...) -> (content, usage) with system blocks, prompt-cache breakpoints, extended thinking, and a repeat-detecting tool loop.
+#   owner: Erin Spencer
+#   public_surface: call
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; Claude calls revert to the prior inline _call_anthropic implementation.
+#   requires: a0_service_providers_resolver, a0_service_tool_executor, a0_service_tool_distill, a0_service_inference
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 import copy
 import json
@@ -190,4 +211,4 @@ async def call(
         current_messages.append({"role": "user", "content": tool_results})
 
     return "[claude: tool loop exhausted]", accumulated_usage
-# 131:34 0:0 1:4
+# 131:54 0:0 1:4

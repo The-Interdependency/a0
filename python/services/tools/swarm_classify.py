@@ -1,4 +1,4 @@
-# 220:29 0:0 0:4
+# 220:49 0:0 0:4
 # N:M
 """swarm_classify — schema-validated parallel fan-out tool.
 
@@ -16,6 +16,28 @@ is marked `error=...` on each row. The critic (if configured) gets first
 crack at error rows; whatever it can't fix stays errored. The caller sees
 the truth.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_swarm_classify
+#   module_name: swarm_classify
+#   module_kind: service
+#   summary: swarm_classify tool — wraps the swarm sidecar into a self-declaring tool for schema-validated parallel fan-out over many items (sort/tag/extract/route) with cheap producers and an optional critic.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: _make_call_fn
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the swarm_classify tool from the registry.
+#   requires: a0_service_swarm, a0_service_inference
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 from typing import Any
 
@@ -271,4 +293,4 @@ async def handle(
         ],
     })
 # N:M
-# 220:29 0:0 0:4
+# 220:49 0:0 0:4

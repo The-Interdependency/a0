@@ -1,4 +1,4 @@
-# 25:69 0:0 0:0
+# 25:89 0:0 0:0
 """Canonical access-control helpers for a0p.
 
 Two-tier write-access model — owner (Erin + invitees with `role == 'admin'`)
@@ -13,6 +13,27 @@ header level. If you find another implementation in routes/, replace it with
 a call to `is_admin` / `require_admin` here. Multiple implementations of the
 same gate are how silent regressions happen.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_gating
+#   module_name: gating
+#   module_kind: service
+#   summary: Canonical access-control helpers — the single definition of "owner/admin" at the HTTP-header level (is_admin / require_admin / require_owner_of / caller_uid) for the two-tier write-access model.
+#   owner: Erin Spencer
+#   public_surface: is_admin, caller_uid, require_admin, require_owner_of
+#   internal_surface: none
+#   auth_boundary: defines the owner/admin gate — require_admin raises 403 for non-admin callers; require_owner_of enforces per-resource ownership
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: python/tests/contracts/gating.py
+#   rollout: default_enabled
+#   rollback: Revert this file; this is the sole owner/admin gate so reverting changes the access model platform-wide.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 from fastapi import HTTPException, Request
 
@@ -110,4 +131,4 @@ def require_owner_of(request: Request, resource_user_id: str | None) -> str:
 #   class: security
 #   call:  python.tests.contracts.gating.test_instrument_mutation_files_have_all_writes_gated
 # === END CONTRACTS ===
-# 25:69 0:0 0:0
+# 25:89 0:0 0:0

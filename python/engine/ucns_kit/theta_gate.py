@@ -1,4 +1,4 @@
-# 20:14
+# 20:34
 """
 theta_gate — capability-gated view of a UCNSObject.
 
@@ -10,6 +10,27 @@ hmmm: capability taxonomy not yet defined.
       until taxonomy is pinned.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_engine_ucns_kit_theta_gate
+#   module_name: theta_gate
+#   module_kind: engine
+#   summary: theta_gate — returns a capability-gated view of a UCNSObject; granted capability yields the full object, ungranted yields a class-only view with anchors/faces cleared.
+#   owner: Erin Spencer
+#   public_surface: gate
+#   internal_surface: none
+#   auth_boundary: hmmm
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; gate is a pure view filter with no persistent effect.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: capability taxonomy not yet defined; allowlist is empty so all capabilities are ungrouped by default until pinned.
+# === END MODULE_BUILD ===
 
 try:
     from ucns_v04 import UCNSObject
@@ -40,4 +61,4 @@ def gate(obj, capability: str) -> object:
         anchors_pos=(),
         faces_pos=(),
     )
-# 20:14
+# 20:34

@@ -1,4 +1,24 @@
-# 289:68 0:0 19:3
+# 289:88 0:0 19:3
+# === MODULE_BUILD ===
+# id: a0_service_energy_registry
+#   module_name: energy_registry
+#   module_kind: service
+#   summary: Energy-provider catalog and pricing/cost layer — loads provider+pricing JSON data, resolves active/default/cheap providers, and estimates per-call cost and cache breakdown from usage.
+#   owner: Erin Spencer
+#   public_surface: BUILTIN_PROVIDERS, get_pricing_models, get_model_pricing, reload_pricing_doc, default_provider, active_provider, cheap_provider, estimate_cost, cache_breakdown, reset_per_call_usage
+#   internal_surface: _load_pricing_doc
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: internal
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; provider catalog and pricing revert to prior JSON-backed definitions.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 import logging
 import contextvars
 import json
@@ -412,4 +432,4 @@ async def resolve_providers(providers: list[str] | None) -> list[str]:
         elif p in BUILTIN_PROVIDERS and p not in out:
             out.append(p)
     return out
-# 289:68 0:0 19:3
+# 289:88 0:0 19:3

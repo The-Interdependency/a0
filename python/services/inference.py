@@ -1,4 +1,24 @@
-# 393:87 0:0 16:14
+# 393:107 0:0 16:14
+# === MODULE_BUILD ===
+# id: a0_service_inference
+#   module_name: inference
+#   module_kind: service
+#   summary: Orchestrates LLM calls across registered energy providers (Grok/Gemini/Claude/OpenAI-style) — resolves role, normalizes reasoning effort, runs the tool loop, and injects tier-specific prompt_context.
+#   owner: Erin Spencer
+#   public_surface: call_provider
+#   internal_surface: _instance_memory_block, _slot_instance_block, _slot_routing_info, _sanitize_provider_error, _canonical_tool_calls, _gate_to_effort, _effort_to_thinking_budget, _call_openai_routed, _call_anthropic
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; inference is the live model-call path and has no migration state.
+#   requires: a0_service_tool_executor, a0_service_prompt_assembly, a0_service_attachments, a0_service_energy_registry
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 import os
 import json
 import copy
@@ -541,4 +561,4 @@ async def _call_anthropic(
     )
 
 
-# 393:87 0:0 16:14
+# 393:107 0:0 16:14

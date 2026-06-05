@@ -1,4 +1,4 @@
-# 31:15
+# 36:35
 """
 text_to_ucns — tokenize text; map closed-class tokens to UCNSObject.
 Open-class tokens emit None; caller decides handling.
@@ -8,6 +8,28 @@ hmmm: edcmbone import path not resolved — pip-install vs vendored.
       Function raises RuntimeError at call time until resolved.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_engine_ucns_kit_encoder
+#   module_name: encoder
+#   module_kind: engine
+#   summary: text_to_ucns — tokenizes text and maps closed-class tokens to UCNSObjects (open-class tokens emit None); currently blocked on edcmbone import resolution.
+#   owner: Erin Spencer
+#   public_surface: text_to_ucns
+#   internal_surface: _tokenize, _entry_to_ucns
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; encoder raises RuntimeError at call time until edcmbone import is resolved, so no live consumers depend on it.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: edcmbone import path unresolved (pip-install vs vendored); blocked on edcmbone issue #46 (ucns_v04 on sys.path); raises RuntimeError at call time until resolved.
+# === END MODULE_BUILD ===
+
 import re
 
 try:
@@ -60,4 +82,4 @@ def _entry_to_ucns(entry: dict):
         anchors_pos=(AnchorPayload(theta=Fraction(0), payload=None),),
         faces_pos=(0,),
     )
-# 31:15
+# 36:35

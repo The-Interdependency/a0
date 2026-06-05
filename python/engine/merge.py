@@ -1,4 +1,4 @@
-# 118:8 0:0 1:3
+# 118:28 0:0 1:3
 """
 Instance Merge Protocol — three modes for multi-instance PCNA mesh.
 
@@ -8,6 +8,27 @@ Instance Merge Protocol — three modes for multi-instance PCNA mesh.
 
 Operates on PCNAEngine instances containing PTCACore + MemoryCore + ThetaTensor.
 """
+
+# === MODULE_BUILD ===
+# id: a0_engine_merge
+#   module_name: merge
+#   module_kind: engine
+#   summary: InstanceMerge — stateless absorb/fork/converge operators for the multi-instance PCNA mesh, blending PTCACore/MemoryCore/ThetaTensor state via federated averaging.
+#   owner: Erin Spencer
+#   public_surface: InstanceMerge
+#   internal_surface: _fed_avg, _blend_core
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; merge operators are pure functions over in-memory engine state.
+#   requires: a0_engine_theta, a0_engine_ptca_core, a0_engine_pcna
+#   since: 2026-06-02
+#   unresolved: fork() time-seeds its RNG so rapid successive calls may collide.
+# === END MODULE_BUILD ===
 
 import time
 import numpy as np
@@ -150,4 +171,4 @@ class InstanceMerge:
             "both_status": "diverging",
             "timestamp": time.time(),
         }
-# 118:8 0:0 1:3
+# 118:28 0:0 1:3

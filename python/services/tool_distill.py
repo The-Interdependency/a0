@@ -1,4 +1,4 @@
-# 126:19 0:0 5:2
+# 126:39 0:0 5:2
 """Tool-result distillation runner.
 
 Wraps oversized tool outputs in either a soft (paraphrase) or hard
@@ -6,6 +6,28 @@ Wraps oversized tool outputs in either a soft (paraphrase) or hard
 This module is the *consumer* of the distiller skill loader that lives in
 `tool_executor.py`; the loader itself stays put per the refactor scope.
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_tool_distill
+#   module_name: tool_distill
+#   module_kind: service
+#   summary: Tool-result distillation runner — wraps oversized tool outputs in a soft (paraphrase) or hard (verbatim+citation) summarization pass through the active energy provider, with caller-provider ContextVar plumbing.
+#   owner: Erin Spencer
+#   public_surface: set_caller_provider, get_caller_provider, reset_caller_provider, flat_truncate, maybe_summarize
+#   internal_surface: _try_parse_json_array, _filter_valid_claims
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: read
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; oversized tool outputs fall back to flat truncation without a model pass.
+#   requires: a0_service_energy_registry, a0_service_inference
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import contextvars as _cv
 import json
 
@@ -165,4 +187,4 @@ async def maybe_summarize(
         )
     except Exception:
         return flat_truncate(name, raw)
-# 126:19 0:0 5:2
+# 126:39 0:0 5:2

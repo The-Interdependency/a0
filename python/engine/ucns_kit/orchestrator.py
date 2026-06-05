@@ -1,4 +1,4 @@
-# 37:19
+# 37:39
 """
 Orchestrator — six-step UCNS-kit pipeline.
 
@@ -16,6 +16,27 @@ hmmm: frame/reward type detection not yet implemented.
       land and can be introspected by type.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_engine_ucns_kit_orchestrator
+#   module_name: orchestrator
+#   module_kind: engine
+#   summary: Orchestrator — six-step UCNS-kit pipeline (encode → pool/intern → inject → propagate → measure → reward) operating over frame-independent Category 2 protocol interfaces.
+#   owner: Erin Spencer
+#   public_surface: Orchestrator
+#   internal_surface: _check_compatibility
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; pipeline operates on protocol interfaces with no persistent state.
+#   requires: a0_engine_ucns_kit_pool
+#   since: 2026-06-02
+#   unresolved: frame/reward type detection not implemented; _check_compatibility is nominal until Frame and Reward implementations land.
+# === END MODULE_BUILD ===
 
 from .pool import UCNSPool
 
@@ -66,4 +87,4 @@ class Orchestrator:
         # hmmm: Frame C × R2 invalid (no anchors to promote in primary state).
         # Nominal until Frame/Reward implementations are identifiable by type.
         pass
-# 37:19
+# 37:39

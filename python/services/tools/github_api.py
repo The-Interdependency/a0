@@ -1,5 +1,27 @@
-# 101:2 0:0 1:0
+# 101:22 0:0 1:0
 """github_api — authenticated GitHub REST call."""
+
+# === MODULE_BUILD ===
+# id: a0_service_tools_github_api
+#   module_name: github_api
+#   module_kind: adapter
+#   summary: github_api tool — performs an authenticated GitHub REST call (method + endpoint + body) using the GITHUB_PAT, gated behind the github_write approval scope.
+#   owner: Erin Spencer
+#   public_surface: SCHEMA, handle
+#   internal_surface: none
+#   auth_boundary: gated behind the github_write approval scope
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; removes the github_api tool from the registry.
+#   requires: none
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import json
 import os
 import httpx
@@ -108,4 +130,4 @@ async def call_github_api(method: str, endpoint: str, body: dict | None = None) 
 
 async def handle(method: str = "GET", endpoint: str = "/user", body: dict | None = None, **_) -> str:
     return await call_github_api(method, endpoint, body)
-# 101:2 0:0 1:0
+# 101:22 0:0 1:0

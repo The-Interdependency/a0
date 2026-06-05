@@ -1,4 +1,4 @@
-# 191:43 0:0 1:2
+# 191:63 0:0 1:2
 """Transcript ingestion — parser dispatch + persistence driver.
 
 Accepts raw bytes from an upload, auto-detects format, normalizes to a
@@ -19,6 +19,28 @@ Supported formats (auto-detect by extension + content sniff):
   .json                       → ChatGPT export OR a0p conversations.json
   .zip                        → extracted, recursed, per-file breakdown
 """
+
+# === MODULE_BUILD ===
+# id: a0_service_transcript_ingest
+#   module_name: transcript_ingest
+#   module_kind: service
+#   summary: Transcript ingestion driver — auto-detects upload format, normalizes to SPEAKER:text, scores via compute_transcript_full, and persists report/messages/source/upload rows; raises (and marks upload error) on any failure.
+#   owner: Erin Spencer
+#   public_surface: extract_text, ingest_upload
+#   internal_surface: _slugify, _strip_html, _pdf_to_text, _json_to_transcript, _ingest_zip
+#   auth_boundary: none
+#   storage_boundary: write
+#   network_boundary: internal
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; transcript ingestion reverts to prior parser/persistence behavior.
+#   requires: a0_service_edcm
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
+
 import html as _html
 import io
 import json
@@ -264,4 +286,4 @@ async def ingest_upload(upload_id: int, filename: str, data: bytes) -> dict[str,
             finished_at=datetime.utcnow(),
         )
         raise
-# 191:43 0:0 1:2
+# 191:63 0:0 1:2

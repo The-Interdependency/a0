@@ -1,4 +1,4 @@
-# 112:47 0:0 3:3
+# 112:67 0:0 3:3
 """AgentInstance — runtime handle for "the thing that calls a model".
 
 Unifies three concepts that previously each had bespoke plumbing:
@@ -23,6 +23,27 @@ Honest semantics:
     populated lazily; use .ensure_resolved() if you need it before calling.
 """
 from __future__ import annotations
+
+# === MODULE_BUILD ===
+# id: a0_service_agent_instance
+#   module_name: agent_instance
+#   module_kind: service
+#   summary: AgentInstance — runtime handle for "the thing that calls a model", unifying Forge agents, spawned subagents, and pinned/ad-hoc model use behind one send-history-get-(content,usage) operation over the canonical CallFn.
+#   owner: Erin Spencer
+#   public_surface: AgentInstance
+#   internal_surface: none
+#   auth_boundary: none
+#   storage_boundary: none
+#   network_boundary: external
+#   user_data_boundary: write
+#   admin_only: false
+#   tests: hmmm
+#   rollout: default_enabled
+#   rollback: Revert this file; AgentInstance is a thin adapter over call_fn with no persistent state.
+#   requires: a0_service_call_fn, a0_service_model_catalog
+#   since: 2026-06-02
+#   unresolved: none
+# === END MODULE_BUILD ===
 
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -175,4 +196,4 @@ class AgentInstance:
             f"tools={self.use_tools}, "
             f"resolved={self.provider_id!r})"
         )
-# 112:47 0:0 3:3
+# 112:67 0:0 3:3
