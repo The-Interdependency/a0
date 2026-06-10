@@ -1,40 +1,21 @@
-================================================================================
-INTERIM LICENSE NOTICE  —  ACTION REQUIRED BEFORE MERGE / PUBLIC RELEASE
-================================================================================
+MIT License
 
-This platform will be offered under the Business Source License 1.1 (BSL 1.1),
-a source-available license that converts to an open-source license on a fixed
-Change Date.
+Copyright (c) 2026 Erin Patrick Spencer
 
-  SPDX-License-Identifier: BUSL-1.1
-  Canonical template: https://mariadb.com/bsl11/
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-License parameters for this work:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-  Licensor:             Erin Patrick Spencer
-  Licensed Work:        This repository and its contents.
-                        Copyright (c) 2026 Erin Patrick Spencer.
-  Additional Use Grant: You may make production use of the Licensed Work,
-                        provided that such use does not constitute a
-                        competing commercial hosted or managed offering of
-                        the Licensed Work.
-  Change Date:          2030-01-01
-  Change License:       Apache License, Version 2.0
-
-On the Change Date, the terms above are superseded and the Licensed Work
-becomes available under the Change License (Apache-2.0).
-
---------------------------------------------------------------------------------
-STATUS — FULL TEXT NOT YET INSERTED
-
-The full verbatim BSL 1.1 license body has NOT been pasted into this file. The
-automated environment that produced this branch had no outbound network access
-and could not retrieve the canonical template.
-
-Before this branch is merged or the work is released publicly, replace the
-marker line below with the full BSL 1.1 boilerplate from https://mariadb.com/bsl11/
-populated with the parameters above. Confirm the Additional Use Grant wording
-reflects your commercial intent.
---------------------------------------------------------------------------------
-
->>> INSERT FULL VERBATIM BSL 1.1 BODY (with parameters above) HERE <<<
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

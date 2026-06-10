@@ -13,7 +13,7 @@ interdependent-lib = { git = "https://github.com/The-Interdependency/interdepend
 name = "repl-nix-workspace"
 version = "0.1.0"
 description = "Add your description here"
-license = { text = "BUSL-1.1" }
+license = { text = "MIT" }
 requires-python = ">=3.12"
 dependencies = [
     "aimmh-lib>=1.1.0",
