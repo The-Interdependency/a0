@@ -4,6 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "a0python"
+license = { text = "AGPL-3.0-or-later" }
 version = "0.1.0"
 description = "a0 — PTCA-structured cognitive routing shell"
 requires-python = ">=3.10"

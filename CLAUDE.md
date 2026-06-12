@@ -17,7 +17,7 @@ A single persistent agent — **ZFAE** (`a0(zeta fun alpha echo)`) — runs on t
 | **Backend (TS)** | Express 5, Drizzle ORM, `connect-pg-simple` sessions |
 | **Backend (Py)** | FastAPI, uvicorn, SQLAlchemy async / asyncpg, Pydantic, Stripe, xai-sdk, anthropic, google-genai, openai |
 | **DB** | PostgreSQL (schema source of truth: `shared/schema.ts`) |
-| **License** | MIT — declared consistently across `LICENSE`, `package.json`, and `pyproject.toml` |
+| **License** | AGPL-3.0-or-later — declared consistently across `LICENSE`, `package.json`, and `pyproject.toml` (relicensed from MIT: network copyleft so any hosted fork must publish source). Vendored `skill-lib/` retains its upstream MPL-2.0 license. |
 | **Deploy** | Docker → Google Cloud Run (`a0p` service, port 5000) |
 
 ---
