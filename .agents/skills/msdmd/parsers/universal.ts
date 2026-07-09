@@ -1,4 +1,4 @@
-// 110:15 0:6 0:0
+// ratios: loc_comments=176:0 imports_exports=2:0 calls_definitions=53:0
 /**
  * Universal msdmd parser — pure Node stdlib (fs, path).
  *
@@ -10,6 +10,11 @@
  * Comment marker auto-detected by file extension. The block syntax
  * itself is identical across languages; only the per-line marker
  * changes.
+ *
+ * RATIOS is the one msdmd declaration that is not a fenced block — it is a
+ * single comment line on a file's first and last non-blank lines. Its reader
+ * (parseRatios / parseRatiosFile / ratiosPlacement) lives here too, as a
+ * sanctioned extension rather than a fork.
  *
  * Zero non-stdlib dependencies. Safe to copy verbatim into any
  * Node/Deno/Bun project that wants msdmd support.
@@ -137,4 +142,55 @@ export function walkTree(
   visit(root);
   return { annotated, untested };
 }
-// 110:15 0:6 0:0
+
+// --- RATIOS single-line declaration (msdmd extension) --------------------
+// Unlike every other declaration, RATIOS is not fenced. It is a single
+// comment line carrying the three canonical ratios, placed on the file's
+// first and last non-blank lines:
+//   <marker> ratios: loc_comments=N:M imports_exports=N:M calls_definitions=N:M
+export const RATIO_IDS = ["loc_comments", "imports_exports", "calls_definitions"] as const;
+
+function ratiosLineRe(marker: string): RegExp {
+  return new RegExp(`^${escapeRegex(marker)}\\s*ratios:\\s*(.+?)\\s*$`);
+}
+
+export function parseRatios(text: string, marker: string = "#"): Entry[] {
+  const lineRe = ratiosLineRe(marker);
+  const tokenRe = /([a-z_]+)=(\S+)/g;
+  const out: Entry[] = [];
+  for (const raw of text.split("\n")) {
+    const lm = lineRe.exec(raw.replace(/\s+$/, ""));
+    if (!lm) continue;
+    let tm: RegExpExecArray | null;
+    tokenRe.lastIndex = 0;
+    while ((tm = tokenRe.exec(lm[1])) !== null) {
+      out.push({ id: tm[1], value: tm[2] });
+    }
+  }
+  return out;
+}
+
+export function parseRatiosFile(path: string): Entry[] {
+  const marker = markerFor(path);
+  if (marker === null) return [];
+  try {
+    return parseRatios(readFileSync(path, "utf-8"), marker);
+  } catch {
+    return [];
+  }
+}
+
+export function ratiosPlacement(text: string, marker: string = "#"): [boolean, boolean] {
+  const lineRe = ratiosLineRe(marker);
+  const lines = text.split("\n");
+  if (lines.length === 0) return [false, false];
+  const firstOk = lineRe.test(lines[0].replace(/\s+$/, ""));
+  let lastOk = false;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].trim() === "") continue;
+    lastOk = lineRe.test(lines[i].replace(/\s+$/, ""));
+    break;
+  }
+  return [firstOk, lastOk];
+}
+// ratios: loc_comments=176:0 imports_exports=2:0 calls_definitions=53:0

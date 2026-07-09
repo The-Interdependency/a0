@@ -1,4 +1,4 @@
-# 85:29 0:0 0:0
+# ratios: loc_comments=128:49 imports_exports=4:7 calls_definitions=51:10
 """Universal msdmd parser — pure stdlib.
 
 Implements the parser contract from ``msdmd/SKILL.md``: extracts every
@@ -13,6 +13,14 @@ Public API:
     parse_text(text, block_name, marker="#") -> list[dict]
     parse_file(path, block_name) -> list[dict]
     walk_tree(root, block_name, *, skip=None, extensions=None) -> tuple[annotated, untested]
+
+RATIOS is the one msdmd declaration that is *not* a fenced block — it is a
+single comment line carried on a file's first and last non-blank lines. The
+reader for it lives here too, as a sanctioned extension rather than a fork:
+
+    parse_ratios(text, marker="#") -> list[dict]
+    parse_ratios_file(path) -> list[dict]
+    ratios_placement(text, marker="#") -> tuple[first_ok, last_ok]
 
 This module has zero non-stdlib dependencies and is safe to copy
 verbatim into any project that wants msdmd support.
@@ -143,4 +151,64 @@ def walk_tree(
         else:
             untested.append(path)
     return annotated, untested
-# 85:29 0:0 0:0
+
+
+# --- RATIOS single-line declaration (msdmd extension) --------------------
+# Unlike every other declaration, RATIOS is not fenced. It is a single
+# comment line carrying the three canonical ratios, placed on the file's
+# first and last non-blank lines:
+#     <marker> ratios: loc_comments=N:M imports_exports=N:M calls_definitions=N:M
+RATIO_IDS = ("loc_comments", "imports_exports", "calls_definitions")
+_RATIOS_TOKEN_RE = re.compile(r"(?P<key>[a-z_]+)=(?P<val>\S+)")
+
+
+def _ratios_line_re(marker: str) -> re.Pattern[str]:
+    return re.compile(rf"^{re.escape(marker)}\s*ratios:\s*(?P<body>.+?)\s*$")
+
+
+def parse_ratios(text: str, marker: str = "#") -> list[dict]:
+    """Read single-line RATIOS declarations from ``text``.
+
+    RATIOS is not a fenced block: it is one comment line of the form
+    ``<marker> ratios: loc_comments=N:M imports_exports=N:M calls_definitions=N:M``
+    placed on the file's first and last non-blank lines. Returns one flat
+    ``{"id", "value"}`` dict per (declaration line x ratio token) so a drift
+    gate can verify every occurrence.
+    """
+    line_re = _ratios_line_re(marker)
+    out: list[dict] = []
+    for raw in text.splitlines():
+        lm = line_re.match(raw.rstrip())
+        if not lm:
+            continue
+        for tm in _RATIOS_TOKEN_RE.finditer(lm.group("body")):
+            out.append({"id": tm.group("key"), "value": tm.group("val")})
+    return out
+
+
+def parse_ratios_file(path: Path) -> list[dict]:
+    """``parse_ratios`` for a file path (marker auto-detected); [] on error."""
+    marker = marker_for(path)
+    if marker is None:
+        return []
+    try:
+        return parse_ratios(path.read_text(encoding="utf-8"), marker)
+    except (OSError, UnicodeDecodeError):
+        return []
+
+
+def ratios_placement(text: str, marker: str = "#") -> tuple[bool, bool]:
+    """Return ``(first_line_has_ratios, last_non_blank_line_has_ratios)``."""
+    line_re = _ratios_line_re(marker)
+    lines = text.splitlines()
+    if not lines:
+        return (False, False)
+    first_ok = bool(line_re.match(lines[0].rstrip()))
+    last_ok = False
+    for raw in reversed(lines):
+        if raw.strip() == "":
+            continue
+        last_ok = bool(line_re.match(raw.rstrip()))
+        break
+    return (first_ok, last_ok)
+# ratios: loc_comments=128:49 imports_exports=4:7 calls_definitions=51:10
