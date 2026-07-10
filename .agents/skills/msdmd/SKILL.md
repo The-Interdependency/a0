@@ -1,6 +1,6 @@
 ---
 name: msdmd
-description: Module Self-Declared Metadata in Markdown — the foundational convention where each source module declares its own structured metadata in a fenced comment block. Other skills in this lib (test-build, doc-build, cap-build, etc.) are thin applications on top of this convention. Load this when authoring a new metadata-driven skill, when extending the block schema, or when building a parser/executor for a new application.
+description: Module Self-Declared Metadata in Markdown — the foundational convention where each source module declares its own structured metadata in a fenced comment block. Other skills in this lib (doc-build, cap-build, deps-build, owner-build, test-build, meta-module-build, risk-boundary-build, ratios, etc.) are thin applications on top of this convention. Load this when authoring a new metadata-driven skill, when extending the block schema, or when building a parser/executor for a new application.
 ---
 
 # msdmd — Module Self-Declared Metadata in Markdown
@@ -119,6 +119,71 @@ A reference implementation in pure stdlib Python lives at
 Both commit to zero non-stdlib dependencies so you can copy them into
 any project.
 
+## Repo collection point and visualizer
+
+Every consuming repo SHOULD maintain one repo-level collection point named
+`<reponame>_msdmd.ts` (for example, `a0_msdmd.ts`). This file is the
+canonical aggregation surface for all parsed msdmd declarations in that
+repo. It does not replace module-local blocks; it is generated from them
+or maintained as a thin index over them.
+
+The collection point SHOULD use the shared shapes in `msdmd/collection.ts`
+(or a verbatim copy in consuming repos) and export a `MsdmdCollection`:
+
+```typescript
+import { defineMsdmdCollection } from "./.agents/skills/msdmd/collection";
+
+export default defineMsdmdCollection({
+  repo: "<reponame>",
+  declarations: [
+    { file: "path/to/module.py", block: "CONTRACTS", id: "...", fields: { summary: "..." } },
+  ],
+  gaps: [
+    { file: "path/to/module.py", missing: ["CONTRACTS", "DOCS"] },
+  ],
+  edges: [
+    { from: "module_a", to: "module_b", kind: "requires", source_block: "DEPENDENCIES", source_id: "..." },
+  ],
+});
+
+export const declarations = [];
+export const gaps = [];
+```
+
+A repo-level msdmd visualizer SHOULD read `<reponame>_msdmd.ts` and render
+relationships between modules using the `MsdmdEdge` shape: `DEPENDENCIES.requires`,
+`CAPABILITIES.exposes`, `OWNERS.owner`, `BOUNDARIES` risk fields, `DOCS.covers`,
+`CONTRACTS.call`, and any `requires` edges shared across application skills.
+The visualizer is a consumer of the collection point, not a second metadata
+source.
+
+If a repo has no collection point or visualizer yet, record that as `hmmm` in
+repo-local planning rather than pretending the graph exists.
+
+A small stdlib generator prototype lives at `msdmd/collect.py`. Consuming repos
+can run it directly or copy it as a starting point:
+
+```bash
+python -m msdmd.collect --root . --repo <reponame> --out <reponame>_msdmd.ts
+```
+
+The generator is intentionally conservative: it parses module-local blocks,
+emits declarations, optional expected-block gaps, and simple relationship
+edges from reserved fields. Repo-specific runners may enrich the output, but
+should preserve the `MsdmdCollection` shape.
+
+A minimal Mermaid visualizer prototype lives at `msdmd/visualize.py` and reads
+raw JSON or generated TypeScript collection points:
+
+```bash
+python -m msdmd.visualize <reponame>_msdmd.ts --out <reponame>_msdmd.mmd
+```
+
+The visualizer is deliberately small: it renders declaration nodes, normalized
+edge relationships, and visible gap nodes. Rich repo-specific UIs should consume
+the same collection shape rather than re-parsing source files.
+
+
 ## The runner protocol
 
 A msdmd runner combines a parser and an executor:
@@ -133,11 +198,8 @@ Implementation rules every runner MUST follow:
    conventional non-source paths (`__pycache__`, `node_modules`,
    `.git`, build outputs, the runner's own test directory).
 2. **Detect comment marker by extension**, not by content sniffing.
-   The mapping examples below are not exhaustive: use the marker maps in
-   `parsers/universal.py` and `parsers/universal.ts` as the source of
-   truth. For example, `.py / .rb / .ex / .exs / .sh → #`. `.ts / .js /
-   .mjs / .tsx / .jsx / .rs / .go / .java / .c / .cc / .cpp / .h /
-   .hpp / .kt / .swift → //`. `.sql / .lua / .hs → --`.
+   `.py / .rb / .ex / .sh → #`. `.ts / .js / .tsx / .jsx / .rs / .go /
+   .java / .c / .cpp / .swift → //`. `.sql / .lua / .hs → --`.
 3. **Parse all matching blocks** in each file. Multiple blocks of the
    same type concatenate; entries from different blocks are
    distinguishable only by id, not by source block.
@@ -186,7 +248,10 @@ their own SKILL.md.
    executor's behavior, and at least one worked example.
 
 `test-build/` is the canonical reference application. Read its
-SKILL.md alongside this one to see the pattern fully realized.
+SKILL.md alongside this one to see the pattern fully realized; read
+`doc-build/`, `cap-build/`, `deps-build/`, `owner-build/`,
+`risk-boundary-build/`, and `ratios/` for additional applications over
+the same parser contract.
 
 ## Anti-patterns
 

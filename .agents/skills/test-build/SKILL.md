@@ -76,15 +76,13 @@ A test function:
 
 ## Authoring a runner
 
-The reference Python runner uses `msdmd/parsers/universal.py`. When
-running this example from this repo, make `.agents/skills` importable
-first (for example: `PYTHONPATH=.agents/skills python runner.py`):
+The reference Python runner uses `msdmd/parsers/universal.py`:
 
 ```python
 from pathlib import Path
 import asyncio, importlib, sys
 from collections import Counter
-from msdmd.parsers.universal import walk_tree
+from skill_lib.msdmd.parsers.universal import walk_tree
 
 async def run_one(entry: dict) -> dict:
     call = entry.get("call")
@@ -151,3 +149,7 @@ Field schema additions are non-breaking and don't bump the version.
 Field renames or removals are breaking; bump the major version and
 note the migration in the lib README. The `CONTRACTS` block name
 itself is stable — never reuse it for a different purpose.
+
+hmmm
+- Whether a future test-build runner should standardize quarantine/flaky/slow contract states or leave them to consuming repos.
+- The exact boundary between an `ERROR` caused by infrastructure and a `FAIL` caused by violated behavior can get swampy; bring boots.
