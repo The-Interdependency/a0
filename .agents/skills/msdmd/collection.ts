@@ -1,4 +1,4 @@
-// ratios: loc_comments=66:0 imports_exports=0:0 calls_definitions=1:0
+// ratios: loc_comments=67:0 imports_exports=0:0 calls_definitions=1:0
 /**
  * Shared TypeScript shapes for repo-level msdmd collection points.
  *
@@ -13,6 +13,7 @@ export type MsdmdBlockName =
   | "DEPENDENCIES"
   | "OWNERS"
   | "CONTRACTS"
+  | "CHECKS"
   | "MODULE_BUILD"
   | "BOUNDARIES"
   | "RATIOS"
@@ -24,7 +25,7 @@ export type MsdmdFieldMap = Record<string, string>;
 export interface MsdmdDeclaration {
   /** Repository-relative source file that owns the declaration. */
   file: string;
-  /** msdmd application block name, such as CONTRACTS or DOCS. */
+  /** msdmd application block name, such as CONTRACTS, CHECKS, or DOCS. */
   block: MsdmdBlockName;
   /** Stable entry id declared inside the block. */
   id: string;
@@ -46,7 +47,7 @@ export interface MsdmdEdge {
   from: string;
   /** Target declaration id, capability id, owner, route, file, or external system. */
   to: string;
-  /** Relationship kind: requires, exposes, owns, covers, calls, risk, etc. */
+  /** Relationship kind: requires, exposes, owns, covers, calls, claims_proves, risk, etc. */
   kind: string;
   /** Block that produced this edge. */
   source_block: MsdmdBlockName;
@@ -71,4 +72,4 @@ export interface MsdmdCollection {
 export function defineMsdmdCollection(collection: MsdmdCollection): MsdmdCollection {
   return collection;
 }
-// ratios: loc_comments=66:0 imports_exports=0:0 calls_definitions=1:0
+// ratios: loc_comments=67:0 imports_exports=0:0 calls_definitions=1:0
