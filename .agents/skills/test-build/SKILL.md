@@ -1,23 +1,38 @@
 ---
 name: test-build
-description: Self-declaring contract tests built on msdmd. Each module owns the tests that protect its contracts via a `# === CONTRACTS ===` block; a runner discovers and executes them and reports per-contract status plus visible coverage gaps. Load this when adding tests that ride the msdmd convention, when refactoring a module that has CONTRACTS declarations, or when authoring a new contract test executor.
+description: Self-declaring contract tests built on msdmd. Source modules own behavior obligations in `# === CONTRACTS ===` blocks; test modules own executable evidence in `# === CHECKS ===` blocks. Load this when adding tests that ride the msdmd convention, when refactoring a module with CONTRACTS/CHECKS declarations, or when authoring a contract/check audit or executor.
 ---
 
 # test-build — Contract tests on msdmd
 
 `test-build` is an application of [msdmd](../msdmd/SKILL.md). The
 foundational skill defines the comment-block convention, the universal
-parser, and the gap-reporting requirement; this skill applies the
-convention to test contracts and ships an executor.
+parser, and the visible-gap requirement; this skill applies the
+convention to behavior contracts and their executable witnesses.
 
 Read `msdmd/SKILL.md` first if you haven't — the block syntax,
 parser contract, and visibility rules below are inherited from there
 and not redefined.
 
-## The block
+For the ratified doctrine behind this split, see
+[`doctrine/msdmd-checks.md`](../doctrine/msdmd-checks.md).
 
-Every module that promises a contract declares it in a `CONTRACTS`
-block:
+## The split
+
+```text
+CONTRACTS are obligations.
+CHECKS are accountable witnesses.
+audit reconciles the witness list against the obligation list.
+```
+
+Source modules own promises. Test modules own evidence. Neither owns
+the other's declarations.
+
+## Source block: CONTRACTS
+
+Every module that promises behavior declares those obligations in a
+`CONTRACTS` block. A contract says what must remain true; it does not
+name the test topology.
 
 ```python
 # === CONTRACTS ===
@@ -25,131 +40,194 @@ block:
 #   given: POST /api/v1/conversations with x-user-id=A and body.user_id=B
 #   then:  stored row has user_id=A; smuggled value is dropped
 #   class: security
-#   call:  tests.contracts.chat.test_create_owner_isolation
 #
 # id: chat_get_other_owner_404
 #   given: GET /api/v1/conversations/{id} where conv.user_id != caller
 #   then:  returns 404 (existence non-disclosure, not 403)
 #   class: security
-#   call:  tests.contracts.chat.test_get_other_owner_404
 # === END CONTRACTS ===
 ```
 
-## Field schema
+### CONTRACTS field schema
 
 Required:
 
 | Field | Meaning |
 |---|---|
-| `id` | Unique snake_case identifier, stable across refactors. Becomes the test handle in reports. |
+| `id` | Unique snake_case identifier, stable across refactors. Becomes the contract handle in reports. |
 | `given` | Plain-English precondition / request shape. State the input, not the implementation. |
 | `then` | The asserted post-condition — the actual contract, not the steps to verify it. |
-| `call` | Fully-qualified path to the test function. The executor imports and invokes this. Sync or async; `None` return on pass; raise (typically `AssertionError`) on fail. |
 
 Optional:
 
 | Field | Meaning |
 |---|---|
-| `class` | Free-text tag (`security`, `correctness`, `idempotency`, `auth`, `regression`). The runner counts entries per class in the summary. |
-| `requires` | Comma-separated list of other contract ids this one depends on (informational; the runner does not currently enforce ordering). |
+| `class` | Free-text tag (`security`, `correctness`, `idempotency`, `auth`, `regression`, `doctrine`, `evidence`, `safety`). The runner counts entries per class in summaries. |
+| `requires` | Comma-separated list of other contract ids this contract depends on. |
 | `since` | Version or date the contract was added. |
 | `deprecated` | If present, the runner skips and reports the entry as deprecated. |
 
-## The contract for test functions
+`call:` is not a CONTRACTS field in skill-lib. The call belongs to the
+CHECKS entry that owns the executable evidence.
 
-A test function:
+## Test block: CHECKS
 
-- Is importable at the path declared in `call:`.
-- Is a plain function, sync or async. The executor awaits it if it's a
-  coroutine.
-- Takes no required arguments. The executor does not inject fixtures
-  or context; the test is self-contained or pulls from the language's
-  standard environment (env vars, a known service URL, etc.).
-- Returns `None` on pass.
-- Raises `AssertionError` on fail with a message that names the
-  violated invariant. Other exceptions are treated as `ERROR`
-  (test infra failure) rather than `FAIL` (contract violation).
-- Cleans up any persistent state it creates. Tests run against the
-  same database / service as the executor; isolation is the test's
-  responsibility (uuid-prefixed identities, deletion in `finally`,
-  etc.).
-
-## Authoring a runner
-
-The reference Python runner uses `msdmd/parsers/universal.py`:
+A test module declares the checks it contributes in a `CHECKS` block.
+A check is an evidentiary procedure: an executable claim to prove one
+or more named contracts.
 
 ```python
-from pathlib import Path
-import asyncio, importlib, sys
-from collections import Counter
-from skill_lib.msdmd.parsers.universal import walk_tree
-
-async def run_one(entry: dict) -> dict:
-    call = entry.get("call")
-    if not call:
-        return {**entry, "status": "ERROR", "error": "missing 'call' field"}
-    mod_path, _, fn_name = call.rpartition(".")
-    try:
-        fn = getattr(importlib.import_module(mod_path), fn_name)
-    except Exception as e:
-        return {**entry, "status": "ERROR", "error": f"import: {e}"}
-    try:
-        if asyncio.iscoroutinefunction(fn):
-            await fn()
-        else:
-            fn()
-    except AssertionError as e:
-        return {**entry, "status": "FAIL", "error": str(e)}
-    except Exception as e:
-        return {**entry, "status": "ERROR", "error": f"{type(e).__name__}: {e}"}
-    return {**entry, "status": "PASS", "error": None}
-
-async def main(root: Path) -> int:
-    annotated, untested = walk_tree(root, "CONTRACTS")
-    results = [await run_one(e) for _, entries in annotated for e in entries]
-    counts = Counter(r["status"] for r in results)
-    for r in results:
-        sym = {"PASS": "✓", "FAIL": "✗", "ERROR": "!"}[r["status"]]
-        tail = "" if r["status"] == "PASS" else f" — {r['error']}"
-        print(f"  {sym} {r['id']}{tail}")
-    print(f"\n{counts['PASS']} pass / {counts['FAIL']} fail / "
-          f"{counts['ERROR']} error    "
-          f"{len(untested)} modules without CONTRACTS")
-    for p in untested[:20]:
-        print(f"  · {p.relative_to(root.parent)}")
-    return 0 if counts["FAIL"] + counts["ERROR"] == 0 else 1
-
-if __name__ == "__main__":
-    sys.exit(asyncio.run(main(Path(sys.argv[1]).resolve())))
+# === CHECKS ===
+# id: check_chat_create_owner_isolation_http
+#   proves: chat_create_owner_isolation
+#   call: self::test_chat_create_owner_isolation_http
+#   requires: python3, posix_shell
+#   timeout: 20
+#   mutates: db
+#   cleanup: transaction_rollback
+#
+# id: check_chat_get_other_owner_404_http
+#   proves: chat_get_other_owner_404
+#   call: self::test_chat_get_other_owner_404_http
+#   requires: python3, posix_shell
+#   timeout: 20
+#   mutates: db
+#   cleanup: transaction_rollback
+# === END CHECKS ===
 ```
 
-The visibility-of-gaps requirement (`untested` list) is mandatory per
-msdmd. Drop it and the runner stops being a msdmd application.
+### CHECKS field schema
+
+Required:
+
+| Field | Meaning |
+|---|---|
+| `id` | Unique snake_case identifier for this evidentiary procedure. |
+| `proves` | Comma-separated contract ids this check claims to prove. "Proves" means claims-to-prove; audit verifies linkage, not mutation sensitivity. |
+| `call` | Executable target resolved by the runner. In Python skill-lib checks, the sanctioned no-exec audit form is `self::fn`. |
+| `mutates` | Declared side-effect surface (`none`, `filesystem`, `db`, `network`, `external_service`, etc.). |
+| `cleanup` | Cleanup/isolation obligation (`none`, `tempdir_teardown`, `transaction_rollback`, `finally_delete_created_rows`, etc.). |
+
+Conditionally required when consumed by the runner:
+
+| Field | Meaning |
+|---|---|
+| `requires` | Comma-separated host capabilities. A runner that reads this field must refuse execution when requirements are missing. |
+| `timeout` | Per-check execution bound. A runner that reads this field must apply it to the spawned work, not merely print it. |
+
+Fields enter the schema in the same change that makes a runner consume
+them. Declared-but-unread metadata is decorative and should be treated
+as a defect, not diligence.
+
+## The contract for check functions
+
+A check function:
+
+- Is resolvable at the path declared in `call:`.
+- Takes no required arguments. The executor does not inject fixtures
+  or context; the check is self-contained or pulls from the language's
+  standard environment (env vars, a known service URL, etc.).
+- Returns `None` on pass.
+- Raises `AssertionError` on behavior violation. The runner reports
+  this as `FAIL`.
+- Lets unexpected exceptions escape. The runner reports these as
+  `ERROR` (infrastructure/harness failure) rather than `FAIL`
+  (contract violation).
+- Cleans up any persistent state it creates. Isolation is the check's
+  responsibility unless the runner explicitly provides a fixture.
+
+## Authoring an audit
+
+Audit is the cheapest runner mode: reconcile declarations without
+executing checks. A Python audit for `self::fn` checks can avoid import
+side effects entirely:
+
+```python
+def resolve_self_call(spec: str, namespace: dict) -> object:
+    if not spec.startswith("self::"):
+        raise LookupError(f"only self::fn resolves without execution: {spec}")
+    fn = namespace.get(spec[len("self::"):])
+    if not callable(fn):
+        raise LookupError(f"not callable: {spec}")
+    return fn
+```
+
+An audit MUST report, at minimum:
+
+```text
+GAP  <contract>  has no CHECKS entry claiming to prove it
+GAP  <check> claims unknown contract: <id>
+GAP  <check> call does not resolve: <reason>
+GAP  executable check <fn> has no resolving CHECKS declaration
+```
+
+Exit nonzero on any gap. A reconciler that has only ever said
+"closed" is itself unverified; negative-test it by planting an orphan
+contract, a phantom `proves` target, and an unresolvable call, then
+observing the GAP.
+
+## Authoring an executor
+
+A full executor runs after audit or as part of the same command. It
+should:
+
+1. Parse source `CONTRACTS` and test `CHECKS` using the msdmd parser.
+2. Reconcile the graph before execution.
+3. Refuse execution when consumed `requires` fields are unmet.
+4. Apply consumed `timeout` fields to the actual spawned work.
+5. Report per-check `PASS`, `FAIL`, and `ERROR` without aborting the
+   remaining checks on a single harness error.
+6. Surface source contracts with no proving checks, checks proving
+   unknown contracts, and executable checks with no declaration.
+
+The visibility-of-gaps requirement is mandatory per msdmd. Drop it and
+the runner stops being a msdmd application.
+
+## Semantics of "proves"
+
+`proves:` means claims-to-prove. Audit verifies linkage and call
+resolution. A passing check demonstrates the declared witness ran
+successfully. It does not prove the check is sensitive to every
+possible breakage of the contract.
+
+Status vocabulary:
+
+```text
+[implemented-prototype]   runs; verified by session contact only
+[test-backed]             suite passes and audit closes the graph
+[mutation-verified]       checks demonstrated to notice planted breakage
+```
+
+Do not claim one rung above the evidence.
 
 ## Anti-patterns
 
 - **Contracts in test files instead of source files.** The contract
-  belongs to the module that promises the behavior; the test file just
-  implements the check. Putting the CONTRACTS block in the test file
-  inverts the doctrine and lets the source module be deleted without
-  the contract noticing.
-- **Tests with no CONTRACTS entry.** Orphan tests don't run via the
-  runner; they're dead weight. If you write a test, declare it.
+  belongs to the module that promises the behavior; the test file owns
+  the check.
+- **`call:` in CONTRACTS.** Source modules should not know test
+  topology. Put executable targets in CHECKS.
+- **Executable tests with no CHECKS entry.** They may still run through
+  ad hoc tooling, but they are invisible to the msdmd evidence graph.
+- **CHECKS proving unknown CONTRACTS.** This is an orphan witness; fix
+  the target id or declare the source contract.
 - **Implementation-shaped ids.** `chat_create_returns_200` tells you
-  nothing; `chat_create_owner_isolation` tells you what's protected.
-  Ids are part of the documentation.
-- **Catching unexpected exceptions in the test to "make it pass".**
-  Let the exception escape — the runner will mark it `ERROR` (infra
-  problem) instead of `PASS` (contract holds), which is the correct
-  signal.
+  little; `chat_create_owner_isolation` tells you what's protected.
+- **Importing during audit.** Python imports execute module top level.
+  Use no-exec resolution such as `self::fn`, or make import execution
+  an explicit non-audit mode.
+- **Catching unexpected exceptions in the check to "make it pass".**
+  Let the exception escape so the runner can mark `ERROR` honestly.
 
 ## Versioning
 
-Field schema additions are non-breaking and don't bump the version.
-Field renames or removals are breaking; bump the major version and
-note the migration in the lib README. The `CONTRACTS` block name
-itself is stable — never reuse it for a different purpose.
+The `CONTRACTS` block name remains stable for source-owned
+obligations. `CHECKS` is the paired test-owned evidence block.
+Field additions are non-breaking only when they are additive and
+consumed by a runner. Field renames or removals are breaking; bump the
+major version and note the migration in the lib README.
 
 hmmm
-- Whether a future test-build runner should standardize quarantine/flaky/slow contract states or leave them to consuming repos.
-- The exact boundary between an `ERROR` caused by infrastructure and a `FAIL` caused by violated behavior can get swampy; bring boots.
+- The block type for harness/infrastructure tests that prove no product contract remains unnamed is still unsettled.
+- Mutation-level verification is defined but not yet generalized across skills.
+- Slow/flaky/quarantined states should enter only when a runner consumes them rather than as decorative labels.

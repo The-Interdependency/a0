@@ -1,4 +1,4 @@
-# ratios: loc_comments=141:7 imports_exports=6:3 calls_definitions=35:6
+# ratios: loc_comments=143:7 imports_exports=6:3 calls_definitions=35:6
 """Generate repo-level msdmd collection-point TypeScript.
 
 This is a small stdlib helper for consuming repos that want to generate a
@@ -20,6 +20,7 @@ DEFAULT_BLOCK_NAMES = (
     "DEPENDENCIES",
     "OWNERS",
     "CONTRACTS",
+    "CHECKS",
     "MODULE_BUILD",
     "BOUNDARIES",
     "RATIOS",
@@ -33,6 +34,7 @@ EDGE_FIELDS = {
     "owner": "owns",
     "covers": "covers",
     "call": "calls",
+    "proves": "claims_proves",
     "boundaries": "risk",
 }
 
@@ -172,4 +174,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# ratios: loc_comments=141:7 imports_exports=6:3 calls_definitions=35:6
+# ratios: loc_comments=143:7 imports_exports=6:3 calls_definitions=35:6

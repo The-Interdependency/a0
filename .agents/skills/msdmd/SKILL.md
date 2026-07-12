@@ -1,17 +1,18 @@
 ---
 name: msdmd
-description: Module Self-Declared Metadata in Markdown — the foundational convention where each source module declares its own structured metadata in a fenced comment block. Other skills in this lib (doc-build, cap-build, deps-build, owner-build, test-build, meta-module-build, risk-boundary-build, ratios, etc.) are thin applications on top of this convention. Load this when authoring a new metadata-driven skill, when extending the block schema, or when building a parser/executor for a new application.
+description: Module Self-Declared Metadata in Markdown — the foundational convention where each module declares its own structured metadata in a fenced comment block. Other skills in this lib (doc-build, cap-build, deps-build, owner-build, test-build, meta-module-build, risk-boundary-build, ratios, etc.) are thin applications on top of this convention. Load this when authoring a new metadata-driven skill, when extending the block schema, or when building a parser/executor for a new application.
 ---
 
 # msdmd — Module Self-Declared Metadata in Markdown
 
 ## The doctrine
 
-Every cross-cutting fact a module owns — its test contracts, its public
-documentation, its declared capabilities, its dependency edges, its
-owner — should live **in the same file as the code that implements it**,
-in a structured comment block. A meta-runner walks the tree, parses
-every block, and acts on it.
+Every cross-cutting fact a module owns — its behavior obligations,
+public documentation, declared capabilities, dependency edges, owner,
+runtime boundaries, or executable evidence — should live **in the same
+file as the module that owns that fact**, in a structured comment
+block. A meta-runner walks the tree, parses every block, and acts on
+it.
 
 Modules without the relevant block surface as visible coverage gaps in
 the runner output. Coverage is observable, not implicit.
@@ -20,8 +21,14 @@ This is the inverse of the conventional "keep your docs/tests/configs in
 sync with code" approach, which fails because the contract and the
 implementation live in different files. Anyone can delete the code and
 forget the doc; the lie persists. msdmd makes the lie structurally
-impossible: when you delete the code, you delete the block in the same
-diff.
+visible: when the implementation-owning file disappears, its owned
+block disappears in the same diff.
+
+For tests, ownership is split rather than flattened: source modules own
+`CONTRACTS` obligations; test modules own `CHECKS` evidence that
+claims to prove those obligations. See
+[`test-build/SKILL.md`](../test-build/SKILL.md) and
+[`doctrine/msdmd-checks.md`](../doctrine/msdmd-checks.md).
 
 ## Block syntax
 
@@ -39,8 +46,8 @@ diff.
 ### Universal rules
 
 - **Fence**: `=== <BLOCK_NAME> ===` opens, `=== END <BLOCK_NAME> ===`
-  closes. Block name is uppercase snake_case (e.g. `CONTRACTS`, `DOCS`,
-  `CAPABILITIES`, `REQUIRES`, `OWNERS`).
+  closes. Block name is uppercase snake_case (e.g. `CONTRACTS`,
+  `CHECKS`, `DOCS`, `CAPABILITIES`, `OWNERS`).
 - **Comment marker**: whatever is idiomatic for the file's language.
   `#` for Python / Ruby / Elixir / shell. `//` for TS / JS / Rust / Go /
   Java / C / C++ / Swift. `--` for SQL / Lua / Haskell. The marker
@@ -58,7 +65,7 @@ diff.
   `CONTRACTS` and `DOCS` (and any others). Each is parsed
   independently by its respective application.
 
-### Example (Python)
+### Example (Python source module)
 
 ```python
 # === CONTRACTS ===
@@ -66,11 +73,24 @@ diff.
 #   given: GET /api/v1/conversations/{id} with x-user-id != row.user_id
 #   then:  404 (existence non-disclosure)
 #   class: security
-#   call:  tests.contracts.chat.test_get_other_owner_404
 # === END CONTRACTS ===
 ```
 
-### Example (TypeScript)
+### Example (Python test module)
+
+```python
+# === CHECKS ===
+# id: check_chat_get_other_owner_404_http
+#   proves: chat_get_other_owner_404
+#   call: self::test_chat_get_other_owner_404_http
+#   requires: python3, posix_shell
+#   timeout: 20
+#   mutates: db
+#   cleanup: transaction_rollback
+# === END CHECKS ===
+```
+
+### Example (TypeScript source module)
 
 ```typescript
 // === CONTRACTS ===
@@ -78,7 +98,6 @@ diff.
 //   given: a message is in flight
 //   then:  send button is disabled and shows pending state
 //   class: ux_correctness
-//   call:  src/__contracts__/chat_input.ts#test_send_disabled_while_pending
 // === END CONTRACTS ===
 ```
 
@@ -137,12 +156,14 @@ export default defineMsdmdCollection({
   repo: "<reponame>",
   declarations: [
     { file: "path/to/module.py", block: "CONTRACTS", id: "...", fields: { summary: "..." } },
+    { file: "tests/test_module.py", block: "CHECKS", id: "...", fields: { proves: "..." } },
   ],
   gaps: [
     { file: "path/to/module.py", missing: ["CONTRACTS", "DOCS"] },
   ],
   edges: [
     { from: "module_a", to: "module_b", kind: "requires", source_block: "DEPENDENCIES", source_id: "..." },
+    { from: "check_module_a", to: "module_a_contract", kind: "claims_proves", source_block: "CHECKS", source_id: "..." },
   ],
 });
 
@@ -151,11 +172,12 @@ export const gaps = [];
 ```
 
 A repo-level msdmd visualizer SHOULD read `<reponame>_msdmd.ts` and render
-relationships between modules using the `MsdmdEdge` shape: `DEPENDENCIES.requires`,
-`CAPABILITIES.exposes`, `OWNERS.owner`, `BOUNDARIES` risk fields, `DOCS.covers`,
-`CONTRACTS.call`, and any `requires` edges shared across application skills.
-The visualizer is a consumer of the collection point, not a second metadata
-source.
+relationships between modules using the `MsdmdEdge` shape:
+`DEPENDENCIES.requires`, `CAPABILITIES.exposes`, `OWNERS.owner`,
+`BOUNDARIES` risk fields, `DOCS.covers`, `CHECKS.call`,
+`CHECKS.proves` as `claims_proves`, and any `requires` edges shared
+across application skills. The visualizer is a consumer of the
+collection point, not a second metadata source.
 
 If a repo has no collection point or visualizer yet, record that as `hmmm` in
 repo-local planning rather than pretending the graph exists.
@@ -220,16 +242,17 @@ consistency):
 |---|---|
 | `id` | Unique stable identifier within the block. Required on every entry. |
 | `class` | Free-text tag for grouping (`security`, `correctness`, `idempotency`, etc.). The runner counts entries per class in summaries. |
-| `call` | Fully-qualified path to an executable target (Python module path, JS module + export, etc.) the executor will invoke. |
+| `call` | Executable target owned by an evidence/check declaration. Source `CONTRACTS` do not use this field for test topology. |
+| `proves` | Comma-separated ids this evidence/check entry claims to prove. The collection edge kind is `claims_proves`; mutation sensitivity is a higher verification rung. |
 | `summary` | One-sentence human description. |
-| `requires` | Comma-separated list of other entry ids this one depends on. |
+| `requires` | Comma-separated dependency ids or host capabilities. Exact semantics are application-specific and must be documented by the skill that consumes it. |
 | `owner` | Who is responsible (person, agent role, team). |
 | `since` | Version or date this declaration was added. |
 | `deprecated` | If present, marks the entry as scheduled for removal. |
 
 Application-specific fields (`given`, `then`, `expects`, `inputs`,
-`outputs`, etc.) are introduced by individual SKILLs and documented in
-their own SKILL.md.
+`outputs`, `mutates`, `cleanup`, `timeout`, etc.) are introduced by
+individual SKILLs and documented in their own SKILL.md.
 
 ## Authoring a new msdmd application
 
@@ -247,18 +270,20 @@ their own SKILL.md.
 5. **Author a SKILL.md** in this lib with the convention spec, the
    executor's behavior, and at least one worked example.
 
-`test-build/` is the canonical reference application. Read its
-SKILL.md alongside this one to see the pattern fully realized; read
-`doc-build/`, `cap-build/`, `deps-build/`, `owner-build/`,
-`risk-boundary-build/`, and `ratios/` for additional applications over
-the same parser contract.
+`test-build/` is the canonical reference application for paired source
+`CONTRACTS` and test `CHECKS`. Read its SKILL.md alongside this one to
+see the pattern fully realized; read `doc-build/`, `cap-build/`,
+`deps-build/`, `owner-build/`, `risk-boundary-build/`, and `ratios/`
+for additional applications over the same parser contract.
 
 ## Anti-patterns
 
-- **Don't define the contract in a separate file.** The whole point is
-  that the declaration lives next to the implementation. If you find
-  yourself writing `tests.yaml` or `docs.json`, you're outside the
-  doctrine.
+- **Don't define an owned declaration in a detached side file.** The
+  whole point is that the declaration lives next to the module that
+  owns that fact. Source obligations belong in source; test evidence
+  belongs in the test module that owns the evidence.
+- **Don't put `call:` in source `CONTRACTS`.** Source modules own
+  obligations, not test topology. Put executable targets in `CHECKS`.
 - **Don't make ids reflect implementation details.** `chat_returns_200`
   tells future-you nothing; `chat_get_other_owner_404` tells you what's
   protected. Ids are part of the documentation.
