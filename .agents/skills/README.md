@@ -6,7 +6,7 @@ Canonical source:
 - Preferred: `The-Interdependency/skill-lib`
 - Temporary source: `The-Interdependency/a0/skill-lib`
 
-Source commit: `The-Interdependency/skill-lib` @ `6f36340` (verbatim sync).
+Source commit: `The-Interdependency/skill-lib` @ `05ee7aa` (verbatim sync).
 
 Installed skills:
 - `msdmd/` — Module Self-Declared Metadata Markdown

@@ -139,18 +139,35 @@ A check function:
 ## Authoring an audit
 
 Audit is the cheapest runner mode: reconcile declarations without
-executing checks. A Python audit for `self::fn` checks can avoid import
-side effects entirely:
+executing checks. Resolve `self::fn` against the declaring file's
+**parsed** function definitions — never by importing it or reading
+loaded callables, since import executes module top level and an audit
+that executes is not an audit:
 
 ```python
-def resolve_self_call(spec: str, namespace: dict) -> object:
+import ast
+
+def defined_functions(source_path: str) -> set[str]:
+    tree = ast.parse(open(source_path, encoding="utf-8").read())
+    return {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+def resolve_self_call(spec: str, defined: set[str]) -> str:
     if not spec.startswith("self::"):
         raise LookupError(f"only self::fn resolves without execution: {spec}")
-    fn = namespace.get(spec[len("self::"):])
-    if not callable(fn):
-        raise LookupError(f"not callable: {spec}")
-    return fn
+    name = spec[len("self::"):]
+    if name not in defined:
+        raise LookupError(f"self:: target not defined in file: {spec}")
+    return name
 ```
+
+(The bundled `tests/test_repo_loto.py` reads `globals()` instead — it
+can, because its audit runs *as* that module, so its own `def`s are
+already in scope. A central audit walking other test files has no such
+shortcut and must parse, as above.)
 
 An audit MUST report, at minimum:
 
