@@ -55,27 +55,38 @@ beneath it:
 CONTRACTS fields: `id`, `given`, `then`, `class`
 (doctrine | evidence | safety | security).
 
-CHECKS fields, all consumed: `id`, `proves`, `call`, `requires`
-(runner refuses to execute on hosts missing them), `timeout` (runner
-sets the active subprocess bound per check), `mutates` and `cleanup`
-(danger documentation read by humans deciding when a check may run).
+CHECKS fields — every one has a consumer, whether the runner or the
+operator: `id`, `proves`, `call`, `requires` (runner refuses to execute
+on hosts missing them), `timeout` (runner sets the active subprocess
+bound per check) — these four are **runner-consumed** — plus `mutates`
+and `cleanup`, which are **operator-consumed**: the danger documentation
+a human reads to decide when a check may run. Operator-consumed is
+consumed; it is not decoration.
 
 ## The field-entry rule
 
-A field enters the schema in the same change that makes a runner
-consume it, not before. Declared-but-unread metadata is F6 —
+A field enters the schema in the same change that gives it a consumer —
+a runner mode that reads it, or a documented operator decision it feeds
+— not before. Metadata read by *neither* runner nor operator is F6 —
 decorative preservation — and is treated as a defect, not diligence.
-(`determinism` and `level` are currently out for exactly this reason;
-they enter when a runner mode reads them. Note that `determinism` is
-self-reported until a runner measures it by repeated execution.)
+(`mutates`/`cleanup` clear this bar as operator-consumed. `determinism`
+and `level` do not yet: nothing reads them, so they stay out until a
+runner mode does. Note that `determinism` is self-reported until a
+runner measures it by repeated execution.)
 
 ## call: resolution
 
-The only sanctioned form is `self::fn` — a callable defined in the
+The only sanctioned form is `self::fn` — a function defined in the
 file that declares the check. Dotted import paths are refused by the
 audit: Python imports execute module top level, and **an audit that
-executes is not an audit**. The `self::` form is also rename-immune;
-copies and uploads reconcile identically.
+executes is not an audit**. A no-exec audit therefore resolves `self::fn`
+against the file's **parsed** `def`/`async def` names (read the source,
+walk the AST) — never by importing the module or inspecting loaded
+callables. (The reference `tests/test_repo_loto.py` reads `globals()`
+only because its audit runs *as* that module, so the definitions are
+already in scope; a central audit walking many files must parse.) The
+`self::` form is also rename-immune; copies and uploads reconcile
+identically.
 
 ## audit
 
