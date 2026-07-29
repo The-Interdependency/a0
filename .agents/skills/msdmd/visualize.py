@@ -1,10 +1,12 @@
-# ratios: loc_comments=63:8 imports_exports=5:3 calls_definitions=40:5
+# ratios: loc_comments=167:13 imports_exports=5:3 calls_definitions=70:8
 """Render an msdmd collection as a small Mermaid relationship graph.
 
-The input may be raw JSON or the generated TypeScript shape emitted by
-``msdmd.collect.render_typescript``. This helper is intentionally minimal:
-it visualizes the normalized ``edges`` array from a ``MsdmdCollection`` and
-adds gap nodes for visible coverage gaps.
+The input may be raw JSON, the generated TypeScript shape emitted by
+``msdmd.collect.render_typescript``, or a hand-authored collection point
+(unquoted keys, trailing commas, ``//`` comments, single-quoted strings,
+and the ``ratios:`` seal after the closing ``});`` all parse). This helper
+is intentionally minimal: it visualizes the normalized ``edges`` array from
+a ``MsdmdCollection`` and adds gap nodes for visible coverage gaps.
 """
 from __future__ import annotations
 
@@ -13,21 +15,134 @@ import json
 import re
 from pathlib import Path
 
-_TS_COLLECTION_RE = re.compile(r"defineMsdmdCollection\((?P<payload>.*)\);\s*$", re.DOTALL)
 _SAFE_NODE_RE = re.compile(r"[^A-Za-z0-9_]")
+_IDENT_RE = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
+_CALL_MARKER = "defineMsdmdCollection("
+
+
+def _strip_comments(text: str) -> str:
+    """Remove ``//`` and ``/* */`` comments outside string literals."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    quote = ""
+    while i < n:
+        ch = text[i]
+        if quote:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in "\"'":
+            quote = ch
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "/" and text[i + 1 : i + 2] == "/":
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if ch == "/" and text[i + 1 : i + 2] == "*":
+            end = text.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _extract_payload(text: str, path: Path) -> str:
+    """Return the argument of ``defineMsdmdCollection(...)`` in ``text``."""
+    start = text.find(_CALL_MARKER)
+    if start < 0:
+        raise ValueError(f"{path} is not JSON or a defineMsdmdCollection TypeScript collection point")
+    i = start + len(_CALL_MARKER)
+    depth, j, quote = 1, i, ""
+    while j < len(text):
+        ch = text[j]
+        if quote:
+            if ch == "\\":
+                j += 2
+                continue
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return text[i:j]
+        j += 1
+    raise ValueError(f"{path} has an unterminated defineMsdmdCollection call")
+
+
+def _object_literal_to_json(text: str) -> str:
+    """Convert a comment-free TS/JS object literal to parseable JSON."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch in "\"'":
+            buf: list[str] = []
+            j = i + 1
+            while j < n:
+                c = text[j]
+                if c == "\\" and j + 1 < n:
+                    buf.append(c)
+                    buf.append(text[j + 1])
+                    j += 2
+                    continue
+                if c == ch:
+                    j += 1
+                    break
+                buf.append(c)
+                j += 1
+            content = "".join(buf)
+            if ch == "'":
+                content = content.replace("\\'", "'").replace('"', '\\"')
+            out.append(f'"{content}"')
+            i = j
+            continue
+        if ch in "}]":
+            k = len(out) - 1
+            while k >= 0 and out[k].isspace():
+                k -= 1
+            if k >= 0 and out[k] == ",":
+                del out[k]
+            out.append(ch)
+            i += 1
+            continue
+        match = _IDENT_RE.match(text, i)
+        if match:
+            ident = match.group(0)
+            j = match.end()
+            while j < n and text[j].isspace():
+                j += 1
+            out.append(f'"{ident}"' if j < n and text[j] == ":" else ident)
+            i = match.end()
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 def load_collection(path: Path) -> dict:
-    """Load a collection from JSON or generated TypeScript."""
-    text = path.read_text(encoding="utf-8")
-    stripped = text.strip()
-    if stripped.startswith("{"):
-        return json.loads(stripped)
+    """Load a collection from JSON, generated, or hand-authored TypeScript."""
+    text = _strip_comments(path.read_text(encoding="utf-8")).strip()
+    if text.startswith("{"):
+        return json.loads(text)
 
-    match = _TS_COLLECTION_RE.search(stripped)
-    if not match:
-        raise ValueError(f"{path} is not JSON or generated defineMsdmdCollection TypeScript")
-    return json.loads(match.group("payload"))
+    payload = _extract_payload(text, path)
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        return json.loads(_object_literal_to_json(payload))
 
 
 def _node_id(value: str) -> str:
@@ -91,4 +206,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# ratios: loc_comments=63:8 imports_exports=5:3 calls_definitions=40:5
+# ratios: loc_comments=167:13 imports_exports=5:3 calls_definitions=70:8
