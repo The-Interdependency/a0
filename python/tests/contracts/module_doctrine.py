@@ -50,7 +50,7 @@ def _load_doc_parser():
     )
     parser_module = ast.Module(body=[parser_node], type_ignores=[])
     ast.fix_missing_locations(parser_module)
-    namespace: dict = {}
+    namespace: dict = {"re": re}
     exec(compile(parser_module, str(_INIT), "exec"), namespace)
     return namespace["_parse_doc_block"]
 
