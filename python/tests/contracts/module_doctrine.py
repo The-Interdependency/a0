@@ -1,4 +1,4 @@
-# 56:12 0:0 0:0
+# 100:24 0:0 0:0
 # DOC module: tests.contracts.module_doctrine
 # DOC label: Module doctrine adherence
 # DOC description: Enforces the a0p module doctrine for python/routes/*.py:
@@ -6,8 +6,19 @@
 # description, tier, role — each exactly once) with role drawn from the
 # allowed set, opens/closes with the # N:M annotation, and — when it
 # defines a module-level APIRouter — is registered in ALL_ROUTERS.
+# DOC role: contract
+# === CHECKS ===
+# id: check_routes_doc_annotation_metrics
+#   proves: routes_doc_annotation_metrics
+#   call: self::test_doc_annotation_metrics_parse
+#   requires: python3
+#   timeout: 20
+#   mutates: none
+#   cleanup: none
+# === END CHECKS ===
 from __future__ import annotations
 
+import ast
 import re
 import pathlib
 
@@ -27,6 +38,21 @@ _ROUTER_DEF = re.compile(r"^router\s*[:=]")
 
 def _route_files() -> list[pathlib.Path]:
     return [p for p in sorted(_ROUTES_DIR.glob("*.py")) if p.name != "__init__.py"]
+
+
+def _load_doc_parser():
+    """Load the real parser function without importing service-backed routes."""
+    tree = ast.parse(_INIT.read_text(encoding="utf-8"), filename=str(_INIT))
+    parser_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_parse_doc_block"
+    )
+    parser_module = ast.Module(body=[parser_node], type_ignores=[])
+    ast.fix_missing_locations(parser_module)
+    namespace: dict = {}
+    exec(compile(parser_module, str(_INIT), "exec"), namespace)
+    return namespace["_parse_doc_block"]
 
 
 def test_route_doc_blocks_are_complete() -> None:
@@ -49,6 +75,43 @@ def test_route_doc_blocks_are_complete() -> None:
         if role_val is not None and role_val not in _ALLOWED_ROLES:
             problems.append(f"{p.name}: role '{role_val}' not in allowed set")
     assert not problems, "\n  " + "\n  ".join(problems)
+
+
+def test_doc_annotation_metrics_parse() -> None:
+    """Legacy and full annotations expose exactly the available metrics."""
+    _parse_doc_block = _load_doc_parser()
+
+    doc_block = "\n".join([
+        "# DOC module: parser_contract",
+        "# DOC label: Parser Contract",
+        "# DOC description: Annotation parser fixture.",
+        "# DOC tier: free",
+        "# DOC role: contract",
+    ])
+
+    legacy = _parse_doc_block(f"# 12:3\n{doc_block}\n# 12:3")
+    assert legacy is not None
+    assert legacy["code_lines"] == 12
+    assert legacy["comment_lines"] == 3
+    for key in ("consumed_count", "declared_count", "fan_in", "fan_out"):
+        assert key not in legacy
+
+    full = _parse_doc_block(f"# 12:3 4:5 6:7\n{doc_block}\n# 12:3 4:5 6:7")
+    assert full is not None
+    assert {
+        key: full[key]
+        for key in (
+            "code_lines", "comment_lines", "consumed_count",
+            "declared_count", "fan_in", "fan_out",
+        )
+    } == {
+        "code_lines": 12,
+        "comment_lines": 3,
+        "consumed_count": 4,
+        "declared_count": 5,
+        "fan_in": 6,
+        "fan_out": 7,
+    }
 
 
 def test_route_files_are_annotated() -> None:
@@ -78,4 +141,4 @@ def test_router_defining_files_are_registered() -> None:
             if p.stem not in imported:
                 problems.append(f"{p.name}: defines a router but is not imported in __init__.py")
     assert not problems, "\n  " + "\n  ".join(problems)
-# 56:12 0:0 0:0
+# 100:24 0:0 0:0

@@ -1,4 +1,4 @@
-# 166:41 0:0 0:31
+# 177:47 0:0 0:31
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -149,12 +149,24 @@ def _parse_doc_block(text: str) -> dict | None:
     if not doc["notes"]:
         doc.pop("notes")
 
-    # Pull code:comment ratio from first-line annotation if present
+    # Pull available metrics from the first-line annotation. Accept both the
+    # legacy N:M form and the transitional/full N:M C:D I:O forms.
     first = text.splitlines()[0].strip() if text.splitlines() else ""
-    m = re.match(r'^#\s*(\d+):(\d+)\s*$', first)
+    m = re.fullmatch(
+        r"#\s*(\d+):(\d+)"
+        r"(?:\s+(\d+):(\d+))?"
+        r"(?:\s+(\d+):(\d+))?\s*",
+        first,
+    )
     if m:
         doc["code_lines"] = int(m.group(1))
         doc["comment_lines"] = int(m.group(2))
+        if m.group(3) is not None:
+            doc["consumed_count"] = int(m.group(3))
+            doc["declared_count"] = int(m.group(4))
+        if m.group(5) is not None:
+            doc["fan_in"] = int(m.group(5))
+            doc["fan_out"] = int(m.group(6))
 
     return doc
 
@@ -207,6 +219,11 @@ def collect_doc_meta() -> list[dict]:
 #   class: correctness
 #   call:  python.tests.contracts.module_doctrine.test_route_doc_blocks_are_complete
 #
+# id: routes_doc_annotation_metrics
+#   given: a route file begins with a legacy N:M or full N:M C:D I:O annotation
+#   then:  collect_doc_meta exposes every available metric as an integer
+#   class: correctness
+#
 # id: routes_files_annotated
 #   given: every python/routes/*.py file (excluding __init__.py)
 #   then:  its first and last non-blank lines are # N:M annotation comments
@@ -221,4 +238,4 @@ def collect_doc_meta() -> list[dict]:
 # === END CONTRACTS ===
 # 171:16
 
-# 166:41 0:0 0:31
+# 177:47 0:0 0:31
