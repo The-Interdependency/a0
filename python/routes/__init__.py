@@ -1,4 +1,4 @@
-# 177:47 0:0 0:31
+# 180:46 0:0 0:32
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -31,6 +31,7 @@ from .transcripts import router as transcripts_router
 from .models import router as models_router
 from .instances_api import router as instances_router
 from .module_graph import router as module_graph_router
+from .runtime_readiness import router as runtime_readiness_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -66,6 +67,7 @@ ALL_ROUTERS = [
     models_router,
     instances_router,
     module_graph_router,
+    runtime_readiness_router,
 ]
 
 
@@ -185,6 +187,7 @@ def collect_doc_meta() -> list[dict]:
         "_admin_gate.py", "forge_archetypes.py", "billing_helpers.py",
         "transcripts.py",
         "module_graph.py",
+        "runtime_readiness.py",
     ]
     results: list[dict] = []
     for fname in route_files:
@@ -236,6 +239,4 @@ def collect_doc_meta() -> list[dict]:
 #   class: correctness
 #   call:  python.tests.contracts.module_doctrine.test_router_defining_files_are_registered
 # === END CONTRACTS ===
-# 171:16
-
-# 177:47 0:0 0:31
+# 180:46 0:0 0:32
