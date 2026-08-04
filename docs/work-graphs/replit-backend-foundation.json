@@ -1,7 +1,7 @@
 {
   "schema": "the-interdependency.stack-manifest",
   "version": "1.0.0",
-  "work_graph_sha256": "1bc19eb9adc221e027d010c83185c2655682b615ff54b995796aa5874cf92963",
+  "work_graph_sha256": "9d471c972dbd85145a13a2aa0cc4986f3c4f49df351916d68b5a76ffde768f45",
   "repositories": [
     {
       "repository": "The-Interdependency/a0",
@@ -30,7 +30,6 @@
     "agent_scope": "cross-repository-work-graph",
     "hmmm": [
       "exact released PTCNA package version; foundation pins the source commit until a release is selected",
-      "canonical interpretation of the trailing ptcna token in a0(zfae)ptcna",
       "Replit production instance-count and worker-leadership policy"
     ]
   }
