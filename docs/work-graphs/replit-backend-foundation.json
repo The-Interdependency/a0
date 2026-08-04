@@ -1,0 +1,37 @@
+{
+  "schema": "the-interdependency.stack-manifest",
+  "version": "1.0.0",
+  "work_graph_sha256": "1bc19eb9adc221e027d010c83185c2655682b615ff54b995796aa5874cf92963",
+  "repositories": [
+    {
+      "repository": "The-Interdependency/a0",
+      "commit": "57c41681db1769198a42f92878bb839939928f26",
+      "authority": "application runtime, user-facing agent service, persistence schema, and Replit deployment source",
+      "relation": "edit workspace and consumer of PTCNA"
+    },
+    {
+      "repository": "The-Interdependency/ptcna",
+      "commit": "4509d33419aa25e6a9cfef415055e378b8f37edc",
+      "authority": "canonical four-layer PTCNA architecture and neural fork/absorb/converge primitives",
+      "relation": "runtime-state producer consumed through an a0 adapter"
+    },
+    {
+      "repository": "The-Interdependency/skill-lib",
+      "commit": "2b24be24947223b86440f59f1bd9766130f9cc11",
+      "authority": "organization build, boundary, agent-instantiation, loop, and cross-repository workflow doctrine",
+      "relation": "build-doctrine and validation source"
+    }
+  ],
+  "boundaries": {
+    "authority_transfer": false,
+    "proof_status_transfer": false,
+    "measurement_status_transfer": false,
+    "semantic_mapping": "declared mapping",
+    "agent_scope": "cross-repository-work-graph",
+    "hmmm": [
+      "exact released PTCNA package version; foundation pins the source commit until a release is selected",
+      "canonical interpretation of the trailing ptcna token in a0(zfae)ptcna",
+      "Replit production instance-count and worker-leadership policy"
+    ]
+  }
+}
