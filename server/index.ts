@@ -1,9 +1,10 @@
-// 213:32 0:1 0:3
+// 274:32 0:1 0:3
 import "./types.d.ts";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { spawn, type ChildProcess } from "child_process";
+import type { Server } from "http";
 import express from "express";
 import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import {
@@ -41,22 +42,88 @@ if (!_ENV_INTERNAL_SECRET) {
 const INTERNAL_SECRET =
   _ENV_INTERNAL_SECRET ?? `dev-${crypto.randomBytes(24).toString("hex")}`;
 
+let pythonProcess: ChildProcess | null = null;
+let httpServer: Server | null = null;
+let shuttingDown = false;
+
+function terminateDeployment(exitCode: number, reason: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.error(reason);
+
+  const child = pythonProcess;
+  let childClosed = !child || child.exitCode !== null;
+  let serverClosed = !httpServer;
+
+  const forceExit = setTimeout(() => {
+    if (child && child.exitCode === null && !child.killed) {
+      child.kill("SIGKILL");
+    }
+    process.exit(exitCode);
+  }, 5_000);
+  forceExit.unref();
+
+  const finish = () => {
+    if (!childClosed || !serverClosed) return;
+    clearTimeout(forceExit);
+    process.exit(exitCode);
+  };
+
+  if (child && !childClosed) {
+    child.once("close", () => {
+      childClosed = true;
+      finish();
+    });
+    child.kill("SIGTERM");
+  }
+
+  if (httpServer) {
+    httpServer.close(() => {
+      serverClosed = true;
+      finish();
+    });
+  }
+
+  finish();
+}
+
 function spawnPython(): ChildProcess {
+  if (pythonProcess && pythonProcess.exitCode === null && !pythonProcess.killed) {
+    return pythonProcess;
+  }
+
   const proc = spawn(
     "uvicorn",
     ["python.main:app", "--host", "0.0.0.0", "--port", "8001"],
-    { stdio: "inherit", env: { ...process.env } }
+    { stdio: "inherit", env: { ...process.env } },
   );
-  proc.on("error", (err) => console.error("[python] failed to start uvicorn:", err.message));
-  proc.on("exit", (code, signal) => {
-    if (code !== 0 && signal !== "SIGTERM") {
-      console.error(`[python] uvicorn exited (code=${code} signal=${signal}) — restarting in 3 s`);
-      setTimeout(spawnPython, 3_000);
+  pythonProcess = proc;
+
+  proc.once("error", (err) => {
+    terminateDeployment(
+      1,
+      `[python] failed to start uvicorn: ${err.message}`,
+    );
+  });
+  proc.once("exit", (code, signal) => {
+    if (pythonProcess === proc) pythonProcess = null;
+    if (!shuttingDown) {
+      terminateDeployment(
+        1,
+        `[python] uvicorn exited (code=${code} signal=${signal}); terminating the deployment unit`,
+      );
     }
   });
   console.log("[python] uvicorn started (pid=" + proc.pid + ")");
   return proc;
 }
+
+process.once("SIGTERM", () =>
+  terminateDeployment(0, "[express] SIGTERM received; shutting down"),
+);
+process.once("SIGINT", () =>
+  terminateDeployment(0, "[express] SIGINT received; shutting down"),
+);
 
 if (IS_PROD) {
   spawnPython();
@@ -78,11 +145,13 @@ app.use((req, res, next) => {
 
 async function waitForPython(maxWaitMs = 120_000): Promise<void> {
   if (!IS_PROD) return;
-  console.log("[express] waiting for Python backend to be ready...");
+  console.log("[express] waiting for Python dependencies to be ready...");
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
     try {
-      const r = await fetch(`${PYTHON_URL}/api/health`);
+      const r = await fetch(`${PYTHON_URL}/api/v1/runtime/ready`, {
+        headers: { "x-a0p-internal": INTERNAL_SECRET },
+      });
       if (r.ok) {
         console.log("[express] Python backend ready — accepting connections");
         return;
@@ -90,10 +159,10 @@ async function waitForPython(maxWaitMs = 120_000): Promise<void> {
     } catch {}
     await new Promise((r) => setTimeout(r, 2_000));
   }
-  console.warn("[express] Python backend not ready after 120 s — continuing anyway");
+  throw new Error("Python backend did not become ready within 120 seconds");
 }
 
-(async () => {
+void (async () => {
   await waitForPython();
   await setupAuth(app);
   registerAuthRoutes(app);
@@ -206,7 +275,7 @@ async function waitForPython(maxWaitMs = 120_000): Promise<void> {
             .json({ error: "Python backend unavailable" });
         },
       },
-    })
+    }),
   );
 
   if (IS_PROD) {
@@ -250,16 +319,19 @@ async function waitForPython(maxWaitMs = 120_000): Promise<void> {
               .send("Frontend build server unavailable");
           },
         },
-      })
+      }),
     );
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer = app.listen(PORT, "0.0.0.0", () => {
     console.log(
-      `[express] Auth + proxy server on port ${PORT} (${IS_PROD ? "production" : "development"})`
+      `[express] Auth + proxy server on port ${PORT} (${IS_PROD ? "production" : "development"})`,
     );
   });
-})();
+})().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  terminateDeployment(1, `[express] startup failed: ${message}`);
+});
 
 export default app;
-// 213:32 0:1 0:3
+// 274:32 0:1 0:3
