@@ -1,9 +1,50 @@
-# 100:20 0:0 2:1
+# 100:56 0:0 2:1
 """Contracts protecting python/routes/chat.py.
 
-Source-of-truth declarations live in the CONTRACTS block of chat.py;
-this file implements the assertions.
+Source-of-truth declarations live in the CONTRACTS blocks of chat.py and
+storage/core.py; this file owns the executable evidence.
 """
+# === CHECKS ===
+# id: check_storage_create_owner_isolation
+#   proves: storage_create_owner_isolation
+#   call: self::test_create_owner_isolation
+#   requires: python3, running_test_server, postgres
+#   timeout: 30
+#   mutates: db
+#   cleanup: explicit_conversation_delete
+#
+# id: check_storage_anonymous_owner_null
+#   proves: storage_anonymous_owner_null
+#   call: self::test_create_anonymous_owner_null
+#   requires: python3, running_test_server, postgres
+#   timeout: 30
+#   mutates: db
+#   cleanup: explicit_database_delete
+#
+# id: check_chat_get_other_owner_404
+#   proves: chat_get_other_owner_404
+#   call: self::test_get_other_owner_404
+#   requires: python3, running_test_server, postgres
+#   timeout: 30
+#   mutates: db
+#   cleanup: explicit_conversation_delete
+#
+# id: check_chat_delete_other_owner_404
+#   proves: chat_delete_other_owner_404
+#   call: self::test_delete_other_owner_404
+#   requires: python3, running_test_server, postgres
+#   timeout: 30
+#   mutates: db
+#   cleanup: explicit_conversation_delete
+#
+# id: check_chat_unknown_body_model_400
+#   proves: chat_unknown_body_model_400
+#   call: self::test_unknown_body_model_400
+#   requires: python3, running_test_server, postgres
+#   timeout: 30
+#   mutates: db
+#   cleanup: explicit_conversation_delete
+# === END CHECKS ===
 from __future__ import annotations
 from . import client, new_uid, db_delete_conv
 
@@ -135,4 +176,4 @@ async def test_unknown_body_model_400() -> None:
             )
         finally:
             await _delete_conv(c, conv["id"], uid)
-# 100:20 0:0 2:1
+# 100:56 0:0 2:1
