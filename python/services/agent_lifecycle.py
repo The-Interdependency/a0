@@ -1,4 +1,4 @@
-# 91:75 0:0 5:2
+# 91:73 0:0 5:2
 # N:M
 """Canonical in-memory sub-agent registry (Task #122).
 
@@ -28,14 +28,12 @@ Each meta entry tracks `parent_run_id` and `run_id` so:
 #          services.agent_lifecycle._sub_agents (re-export shim
 #          guarantees a single canonical registry)
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_registry_is_singleton
 #
 # id: agent_lifecycle_count_live_for_parent_filters
 #   given: two registry entries under different parent_run_ids
 #   then:  count_live_for_parent returns 1 for each parent and 0 for an
 #          unrelated parent — the concurrent-live cap depends on this
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_count_live_for_parent_filters
 # === END CONTRACTS ===
 """
 from __future__ import annotations
@@ -53,7 +51,7 @@ from __future__ import annotations
 #   network_boundary: none
 #   user_data_boundary: none
 #   admin_only: false
-#   tests: hmmm
+#   tests: python/tests/contracts/spawn_executor_checks.py
 #   rollout: default_enabled
 #   rollback: Revert this file; registry is in-memory only and rebuilt on process boot.
 #   requires: a0_engine_pcna, a0_engine_merge
@@ -188,4 +186,4 @@ def registry_snapshot() -> list[dict]:
         for name, (_e, meta) in items
     ]
 # N:M
-# 91:75 0:0 5:2
+# 91:73 0:0 5:2

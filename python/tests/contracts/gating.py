@@ -1,4 +1,4 @@
-# 129:49 0:0 0:0
+# 129:80 0:0 0:0
 """Gating contract — enforces the two-tier write-access model.
 
 Doctrine: every write route (POST/PATCH/PUT/DELETE) under python/routes/
@@ -25,6 +25,39 @@ Routes failing both are ungated mutation surfaces — adding such a route
 fails this contract loudly. This is exactly the trip-wire the user asked
 for after the "two tiers, owner vs everyone" reframe.
 """
+# === CHECKS ===
+# id: check_gating_every_write_route
+#   proves: gating_every_write_route_is_admin_or_allowlisted
+#   call: self::test_every_write_route_is_gated_or_allowlisted
+#   requires: python3
+#   timeout: 30
+#   mutates: none
+#   cleanup: none
+#
+# id: check_gating_allowlist_real_routes
+#   proves: gating_allowlist_entries_are_real_routes
+#   call: self::test_allowlist_entries_correspond_to_real_routes
+#   requires: python3
+#   timeout: 30
+#   mutates: none
+#   cleanup: none
+#
+# id: check_gating_forbidden_files_never_allowlisted
+#   proves: gating_instrument_files_never_allowlisted
+#   call: self::test_instrument_mutation_files_are_never_allowlisted
+#   requires: python3
+#   timeout: 30
+#   mutates: none
+#   cleanup: none
+#
+# id: check_gating_forbidden_files_all_gated
+#   proves: gating_instrument_files_all_writes_gated
+#   call: self::test_instrument_mutation_files_have_all_writes_gated
+#   requires: python3
+#   timeout: 30
+#   mutates: none
+#   cleanup: none
+# === END CHECKS ===
 
 from __future__ import annotations
 
@@ -210,4 +243,4 @@ def test_instrument_mutation_files_have_all_writes_gated() -> None:
             f"\n{len(failures)} ungated write route(s) inside "
             f"instrument-mutation file(s):\n" + "\n".join(failures)
         )
-# 129:49 0:0 0:0
+# 129:80 0:0 0:0
