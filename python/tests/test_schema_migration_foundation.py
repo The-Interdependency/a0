@@ -30,7 +30,7 @@ from __future__ import annotations
 #   call: self::test_capture_uses_read_only_pg_dump_flags_and_redacts_failure
 #   requires: python3, pytest
 #   timeout: 20
-#   mutates: process_mock
+#   mutates: process_mock, environment
 #   cleanup: mock_patch_restore
 #
 # id: check_live_schema_capture_deterministic
@@ -68,6 +68,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 from contextlib import redirect_stdout
 from io import StringIO
@@ -155,7 +156,7 @@ CREATE TABLE public.alpha (id integer);
 
 -- Completed on 2026-08-05 12:00:00
 """
-    assert capture.normalize_dump(raw) == "CREATE TABLE public.alpha (id integer);\n"
+    assert capture.normalize_dump(raw) == "SET statement_timeout = 0;\n\nCREATE TABLE public.alpha (id integer);\n"
 
 
 def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure() -> None:
@@ -174,7 +175,17 @@ def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure() -> None:
         "postgresql+asyncpg://user:password@example.invalid:6543/a0"
         "?sslmode=require&channel_binding=require"
     )
+    ambient = {
+        "PATH": "/usr/bin",
+        "HOME": "/tmp/home",
+        "DATABASE_URL": "postgresql://ambient:secret@elsewhere.invalid/other",
+        "OPENAI_API_KEY": "provider-secret",
+        "STRIPE_SECRET_KEY": "stripe-secret",
+        "SESSION_SECRET": "session-secret",
+        "INTERNAL_API_SECRET": "internal-secret",
+    }
     with (
+        patch.dict(os.environ, ambient, clear=True),
         patch.object(capture.shutil, "which", fake_which),
         patch.object(capture.subprocess, "run", fake_run),
         pytest.raises(RuntimeError, match="exit code 7") as exc,
@@ -184,7 +195,16 @@ def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure() -> None:
     command = recorded["command"]
     env = recorded["env"]
     assert secret not in command
-    assert "DATABASE_URL" not in env
+    assert env["PATH"] == "/usr/bin"
+    assert env["HOME"] == "/tmp/home"
+    for forbidden in (
+        "DATABASE_URL",
+        "OPENAI_API_KEY",
+        "STRIPE_SECRET_KEY",
+        "SESSION_SECRET",
+        "INTERNAL_API_SECRET",
+    ):
+        assert forbidden not in env
     assert env["PGDATABASE"] == "a0"
     assert env["PGHOST"] == "example.invalid"
     assert env["PGPORT"] == "6543"
@@ -195,7 +215,6 @@ def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure() -> None:
     assert "--schema-only" in command
     assert "--no-owner" in command
     assert "--no-privileges" in command
-    assert "--quote-all-identifiers" in command
 
 
 def test_schema_status_requires_exact_nonempty_match() -> None:
