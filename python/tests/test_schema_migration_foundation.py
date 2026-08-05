@@ -1,4 +1,4 @@
-# 134:72 0:0 0:0
+# 145:78 0:0 0:0
 """Migration-foundation contract checks.
 
 Filename exception: pytest imports test modules by Python module name, so the
@@ -18,7 +18,7 @@ from __future__ import annotations
 #   cleanup: none
 #
 # id: check_schema_inventory_mutation_sites
-#   proves: schema_inventory_reports_mutation_sites, schema_inventory_check_fails_on_unreviewed_mutation_site
+#   proves: schema_inventory_reports_mutation_sites, schema_inventory_check_fails_on_unreviewed_mutation_site, schema_inventory_excludes_environment_vendor_trees
 #   call: self::test_inventory_detects_and_checks_mutation_sites
 #   requires: python3, pytest
 #   timeout: 20
@@ -26,7 +26,7 @@ from __future__ import annotations
 #   cleanup: temporary_directory
 #
 # id: check_live_schema_capture_read_only
-#   proves: live_schema_capture_is_read_only, live_schema_capture_redacts_connection
+#   proves: live_schema_capture_is_read_only, live_schema_capture_redacts_connection, live_schema_capture_decomposes_postgres_url
 #   call: self::test_capture_uses_read_only_pg_dump_flags_and_redacts_failure
 #   requires: python3, pytest
 #   timeout: 20
@@ -119,6 +119,8 @@ def test_inventory_detects_and_checks_mutation_sites() -> None:
         (root / "shared").mkdir()
         (root / "python").mkdir()
         (root / "server").mkdir()
+        (root / ".cache" / "vendor").mkdir(parents=True)
+        (root / ".pythonlibs" / "site-packages").mkdir(parents=True)
         (root / "shared" / "schema.ts").write_text(
             'export const alpha = pgTable("alpha", {});', encoding="utf-8"
         )
@@ -127,12 +129,18 @@ def test_inventory_detects_and_checks_mutation_sites() -> None:
         )
         ddl = "CREATE " + "TABLE IF NOT EXISTS gamma (id INTEGER);"
         (root / "server" / "new_boot.ts").write_text(ddl, encoding="utf-8")
+        vendor_ddl = "CREATE " + "TABLE vendor_noise (id INTEGER);"
+        (root / ".cache" / "vendor" / "noise.py").write_text(vendor_ddl, encoding="utf-8")
+        (root / ".pythonlibs" / "site-packages" / "noise.py").write_text(
+            vendor_ddl, encoding="utf-8"
+        )
 
         report = inventory.collect_inventory(root)
         assert report["authorities"]["drizzle"] == ["alpha"]
         assert report["authorities"]["sqlalchemy"] == ["beta"]
         assert report["authorities"]["executable_sql"] == ["gamma"]
         assert inventory._unreviewed_sites(report) == ["server/new_boot.ts"]
+        assert all("vendor" not in item["path"] for item in report["runtime_mutation_sites"])
 
 
 def test_normalize_dump_removes_volatile_lines() -> None:
@@ -159,7 +167,10 @@ def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure() -> None:
         recorded["env"] = kwargs["env"]
         return subprocess.CompletedProcess(command, 7, stdout="", stderr="secret-url")
 
-    secret = "postgresql://user:password@example.invalid/a0"
+    secret = (
+        "postgresql+asyncpg://user:password@example.invalid:6543/a0"
+        "?sslmode=require&channel_binding=require"
+    )
     with (
         patch.object(capture.shutil, "which", fake_which),
         patch.object(capture.subprocess, "run", fake_run),
@@ -168,9 +179,16 @@ def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure() -> None:
         capture.capture_schema(secret)
     assert secret not in str(exc.value)
     command = recorded["command"]
+    env = recorded["env"]
     assert secret not in command
-    assert recorded["env"]["PGDATABASE"] == secret
-    assert "DATABASE_URL" not in recorded["env"]
+    assert "DATABASE_URL" not in env
+    assert env["PGDATABASE"] == "a0"
+    assert env["PGHOST"] == "example.invalid"
+    assert env["PGPORT"] == "6543"
+    assert env["PGUSER"] == "user"
+    assert env["PGPASSWORD"] == "password"
+    assert env["PGSSLMODE"] == "require"
+    assert env["PGCHANNELBINDING"] == "require"
     assert "--schema-only" in command
     assert "--no-owner" in command
     assert "--no-privileges" in command
@@ -214,4 +232,4 @@ def test_alembic_configuration_loads_without_database() -> None:
     assert "autogenerate is disabled" in env_text
     assert 'url.set(drivername="postgresql+psycopg2")' in env_text
     assert "transactional_ddl=True" in env_text
-# 134:72 0:0 0:0
+# 145:78 0:0 0:0
