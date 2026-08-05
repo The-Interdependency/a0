@@ -1,4 +1,4 @@
-# 180:47 0:0 0:32
+# 180:46 0:0 0:32
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -226,7 +226,6 @@ def collect_doc_meta() -> list[dict]:
 #   given: a route file begins with a legacy N:M or full N:M C:D I:O annotation
 #   then:  collect_doc_meta exposes every available metric as an integer
 #   class: correctness
-#   call:  python.tests.contracts.module_doctrine.test_doc_annotation_metrics_parse
 #
 # id: routes_files_annotated
 #   given: every python/routes/*.py file (excluding __init__.py)
@@ -240,4 +239,4 @@ def collect_doc_meta() -> list[dict]:
 #   class: correctness
 #   call:  python.tests.contracts.module_doctrine.test_router_defining_files_are_registered
 # === END CONTRACTS ===
-# 180:47 0:0 0:32
+# 180:46 0:0 0:32
