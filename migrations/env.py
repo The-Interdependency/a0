@@ -67,8 +67,13 @@ def _database_url() -> str:
     if not raw:
         raise RuntimeError("DATABASE_URL must be set for Alembic")
     url = make_url(raw)
-    if url.drivername in {"postgres", "postgresql", "postgresql+asyncpg"}:
-        url = url.set(drivername="postgresql+psycopg")
+    if url.drivername in {
+        "postgres",
+        "postgresql",
+        "postgresql+asyncpg",
+        "postgresql+psycopg",
+    }:
+        url = url.set(drivername="postgresql+psycopg2")
     return url.render_as_string(hide_password=False)
 
 
