@@ -1,12 +1,15 @@
-# 151:89 0:0 0:0
-"""Capture a deterministic, schema-only PostgreSQL baseline with pg_dump.
+# 108:130 0:0 0:0
+"""Capture the live PostgreSQL schema without reading table data.
 
 Usage:
-    python scripts/sche_capt_live_v0.0.0alpha.py --output migrations/sql/lega_schm_base_v0.0.0alpha.sql
+    python scripts/sche_capt_live_v0.0.0alpha.py \
+        --output migrations/sql/lega_schm_base_v0.0.0alpha.sql
 
-The command reads DATABASE_URL, invokes pg_dump in schema-only mode, removes
-volatile dump headers and environment SET statements, and writes an adjacent
-SHA-256 file. It never executes SQL against the database.
+`pg_dump --schema-only` performs a read-only catalog export. The connection URL
+is decomposed into child-only libpq environment variables so it never appears
+in the process argument list. The pg_dump child receives only those libpq
+fields and a small process-environment allowlist; provider, Stripe, session,
+and unrelated deployment secrets never cross the capture boundary.
 """
 from __future__ import annotations
 
@@ -14,34 +17,34 @@ from __future__ import annotations
 # id: a0_live_schema_capture
 #   module_name: live_schema_capture
 #   module_kind: script
-#   summary: Captures and normalizes the live PostgreSQL schema as reviewable baseline evidence without mutating the database.
+#   summary: Captures deterministic schema-only PostgreSQL SQL and SHA-256 evidence without reading table rows or exposing the connection URL in process arguments.
 #   owner: Erin Spencer
-#   public_surface: command line SQL and SHA-256 output
-#   internal_surface: capture_schema, normalize_dump, libpq_environment
-#   auth_boundary: none
+#   public_surface: command line schema SQL and adjacent SHA-256 evidence
+#   internal_surface: capture_schema, normalize_dump, _connection_env
+#   auth_boundary: admin
 #   storage_boundary: read
 #   network_boundary: internal
 #   user_data_boundary: none
-#   admin_only: false
+#   admin_only: true
 #   tests: python/tests/test_schema_migration_foundation.py
-#   rollout: explicit operator command against a backed-up archive-shaped database
-#   rollback: delete generated files; capture changes no database state
+#   rollout: invoked manually after backup identity and client/server versions are recorded
+#   rollback: delete generated capture artifacts; database state is unchanged
 #   requires: a0_schema_inventory
 #   since: 2026-08-05
-#   unresolved: multi-host PostgreSQL URLs are not yet supported
+#   unresolved: live capture has not yet been run against the archive-shaped production database
 # === END MODULE_BUILD ===
 
 # === BOUNDARIES ===
-# id: live_schema_capture_boundary
-#   summary: Decomposes database credentials into child-only libpq environment variables, reads catalog metadata through pg_dump, and never emits the connection URL.
-#   auth_boundary: read
+# id: live_schema_capture_database_boundary
+#   summary: Connects to PostgreSQL through pg_dump in schema-only mode; writes local SQL and digest artifacts and executes no SQL.
+#   auth_boundary: admin
 #   storage_boundary: read
 #   network_boundary: internal
 #   user_data_boundary: none
 #   admin_only: true
 #   pii: none
 #   secrets: read
-#   side_effects: writes only explicit local SQL and digest files
+#   side_effects: local capture files only
 #   review_required: database-owner
 #   owner: database-owner
 #   since: 2026-08-05
@@ -49,26 +52,26 @@ from __future__ import annotations
 
 # === CONTRACTS ===
 # id: live_schema_capture_is_read_only
-#   given: DATABASE_URL and an output path
-#   then: pg_dump is invoked with schema-only, no-owner, and no-privileges flags and no SQL is executed against the database
+#   given: a valid PostgreSQL DATABASE_URL
+#   then: pg_dump is invoked with --schema-only, --no-owner, --no-privileges and no data-export option; no SQL is executed
 #   class: safety
 #   since: 2026-08-05
 #
-# id: live_schema_capture_is_deterministic
-#   given: equivalent pg_dump schema output with differing volatile headers or SET statements
-#   then: normalize_dump produces byte-identical SQL ending with one newline
-#   class: reproducibility
-#   since: 2026-08-05
-#
 # id: live_schema_capture_redacts_connection
-#   given: pg_dump fails
-#   then: the raised error names the failure class and exit code without including DATABASE_URL, password, argv credentials, or pg_dump stderr
+#   given: DATABASE_URL contains user, password, host and query parameters plus unrelated deployment secrets
+#   then: the URL is absent from argv/output, only required libpq fields and allowlisted process variables reach the child, and failures expose only the pg_dump exit code
 #   class: security
 #   since: 2026-08-05
 #
+# id: live_schema_capture_is_deterministic
+#   given: equivalent pg_dump schema output with volatile header/completion lines
+#   then: normalized SQL and its SHA-256 digest are stable
+#   class: correctness
+#   since: 2026-08-05
+#
 # id: live_schema_capture_decomposes_postgres_url
-#   given: a PostgreSQL URL containing host, port, database, user, password, and supported libpq query options
-#   then: the child receives corresponding PG* environment variables while argv contains no connection string
+#   given: a PostgreSQL URL with explicit host, port, credentials, database, sslmode, and channel_binding
+#   then: the child receives equivalent PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE, PGSSLMODE, and PGCHANNELBINDING values without the URL appearing in argv
 #   class: correctness
 #   since: 2026-08-05
 # === END CONTRACTS ===
@@ -76,144 +79,134 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Mapping
+from urllib.parse import parse_qs, unquote, urlparse
 
-from sqlalchemy.engine import make_url
-
-_VOLATILE_PREFIXES = (
-    "-- Dumped from database version",
-    "-- Dumped by pg_dump version",
-    "-- Started on ",
-    "-- Completed on ",
-    "SET statement_timeout",
-    "SET lock_timeout",
-    "SET idle_in_transaction_session_timeout",
-    "SET transaction_timeout",
-    "SET client_encoding",
-    "SET standard_conforming_strings",
-    "SELECT pg_catalog.set_config",
-    "SET check_function_bodies",
-    "SET xmloption",
-    "SET client_min_messages",
-    "SET row_security",
+_VOLATILE_LINE = re.compile(
+    r"^-- (?:Dumped from database version|Dumped by pg_dump version|Started on|Completed on).*$",
+    re.MULTILINE,
 )
-_QUERY_TO_ENV = {
-    "sslmode": "PGSSLMODE",
-    "sslrootcert": "PGSSLROOTCERT",
-    "sslcert": "PGSSLCERT",
-    "sslkey": "PGSSLKEY",
-    "channel_binding": "PGCHANNELBINDING",
-    "target_session_attrs": "PGTARGETSESSIONATTRS",
-    "connect_timeout": "PGCONNECT_TIMEOUT",
-    "options": "PGOPTIONS",
-    "application_name": "PGAPPNAME",
-}
+_PASSTHROUGH_ENV = (
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "SYSTEMROOT",
+)
 
 
 def normalize_dump(raw: str) -> str:
-    kept: list[str] = []
-    blank = False
-    for line in raw.replace("\r\n", "\n").split("\n"):
-        stripped = line.strip()
-        if any(stripped.startswith(prefix) for prefix in _VOLATILE_PREFIXES):
+    text = raw.replace("\r\n", "\n")
+    text = _VOLATILE_LINE.sub("", text)
+    lines = [line.rstrip() for line in text.splitlines()]
+    while lines and not lines[0]:
+        lines.pop(0)
+    while lines and not lines[-1]:
+        lines.pop()
+    compact: list[str] = []
+    previous_blank = False
+    for line in lines:
+        blank = not line
+        if blank and previous_blank:
             continue
-        if stripped in {"--", ""}:
-            if kept and not blank:
-                kept.append("")
-                blank = True
-            continue
-        kept.append(line.rstrip())
-        blank = False
-    while kept and kept[-1] == "":
-        kept.pop()
-    return "\n".join(kept) + "\n"
+        compact.append(line)
+        previous_blank = blank
+    return "\n".join(compact) + "\n"
 
 
-def libpq_environment(
-    database_url: str,
-    base: Mapping[str, str] | None = None,
-) -> dict[str, str]:
-    """Convert one PostgreSQL URL into child-only libpq environment fields."""
-    url = make_url(database_url)
-    if not url.drivername.startswith("postgresql") and url.drivername != "postgres":
-        raise ValueError("DATABASE_URL must use PostgreSQL")
-    if not url.database:
-        raise ValueError("DATABASE_URL must name a database")
+def _connection_env(database_url: str) -> dict[str, str]:
+    parsed = urlparse(database_url)
+    if parsed.scheme not in {"postgres", "postgresql", "postgresql+asyncpg", "postgresql+psycopg2"}:
+        raise ValueError("DATABASE_URL must be PostgreSQL")
+    if not parsed.hostname or not parsed.path.lstrip("/"):
+        raise ValueError("DATABASE_URL must include host and database name")
 
-    child_env = dict(base or os.environ)
-    for key in list(child_env):
-        if key == "DATABASE_URL" or key.startswith("PG"):
-            child_env.pop(key, None)
+    env = {
+        key: os.environ[key]
+        for key in _PASSTHROUGH_ENV
+        if os.environ.get(key)
+    }
+    env.update({
+        "PGHOST": parsed.hostname,
+        "PGPORT": str(parsed.port or 5432),
+        "PGDATABASE": unquote(parsed.path.lstrip("/")),
+    })
+    if parsed.username is not None:
+        env["PGUSER"] = unquote(parsed.username)
+    if parsed.password is not None:
+        env["PGPASSWORD"] = unquote(parsed.password)
 
-    child_env["PGDATABASE"] = url.database
-    if url.host:
-        child_env["PGHOST"] = url.host
-    if url.port is not None:
-        child_env["PGPORT"] = str(url.port)
-    if url.username:
-        child_env["PGUSER"] = url.username
-    if url.password is not None:
-        child_env["PGPASSWORD"] = url.password
-
-    for query_key, env_key in _QUERY_TO_ENV.items():
-        value = url.query.get(query_key)
-        if value is not None:
-            child_env[env_key] = str(value)
-    return child_env
+    query = parse_qs(parsed.query, keep_blank_values=False)
+    if query.get("sslmode"):
+        env["PGSSLMODE"] = query["sslmode"][-1]
+    if query.get("channel_binding"):
+        env["PGCHANNELBINDING"] = query["channel_binding"][-1]
+    return env
 
 
-def capture_schema(database_url: str, pg_dump: str = "pg_dump") -> str:
-    executable = shutil.which(pg_dump)
-    if not executable:
-        raise RuntimeError("pg_dump executable not found")
+def capture_schema(database_url: str) -> str:
+    pg_dump = shutil.which("pg_dump")
+    if not pg_dump:
+        raise RuntimeError("pg_dump is required for live schema capture")
     command = [
-        executable,
+        pg_dump,
         "--schema-only",
         "--no-owner",
         "--no-privileges",
         "--no-comments",
         "--quote-all-identifiers",
     ]
-    completed = subprocess.run(
+    result = subprocess.run(
         command,
-        capture_output=True,
+        env=_connection_env(database_url),
         text=True,
+        capture_output=True,
         check=False,
-        env=libpq_environment(database_url),
     )
-    if completed.returncode != 0:
-        raise RuntimeError(f"pg_dump failed with exit code {completed.returncode}")
-    return normalize_dump(completed.stdout)
-
-
-def write_capture(output: Path, sql: str) -> str:
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(sql, encoding="utf-8")
-    digest = hashlib.sha256(sql.encode("utf-8")).hexdigest()
-    output.with_suffix(output.suffix + ".sha256").write_text(
-        f"{digest}  {output.name}\n", encoding="utf-8"
-    )
-    return digest
+    if result.returncode != 0:
+        raise RuntimeError(f"pg_dump schema capture failed with exit code {result.returncode}")
+    normalized = normalize_dump(result.stdout)
+    if not normalized.strip():
+        raise RuntimeError("pg_dump returned an empty schema")
+    return normalized
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--pg-dump", default="pg_dump")
     args = parser.parse_args()
 
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
-        raise SystemExit("DATABASE_URL must be set")
-    sql = capture_schema(database_url, args.pg_dump)
-    digest = write_capture(args.output, sql)
-    print(f"captured schema sha256={digest} path={args.output}")
+        print("DATABASE_URL must be set")
+        return 2
+
+    try:
+        sql = capture_schema(database_url)
+    except Exception as exc:
+        print(f"schema capture failed: {type(exc).__name__}: {exc}")
+        return 3
+
+    output = args.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(sql, encoding="utf-8")
+    digest = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+    digest_path = output.with_suffix(output.suffix + ".sha256")
+    digest_path.write_text(f"{digest}  {output.name}\n", encoding="utf-8")
+    print(f"captured schema: {output}")
+    print(f"sha256: {digest}")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# 151:89 0:0 0:0
+# 108:130 0:0 0:0
