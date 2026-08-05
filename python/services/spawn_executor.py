@@ -1,4 +1,4 @@
-# 175:151 0:0 2:7
+# 175:139 0:0 2:7
 # N:M
 """spawn_executor — execute the rows that sub_agent_spawn writes.
 
@@ -34,26 +34,22 @@ Sub-module layout (add behaviour there, not here):
 #   then:  two concurrent _claim_one_pending() calls succeed once and
 #          return None once; the row's status is 'executing' afterwards
 #   class: idempotency
-#   call:  python.tests.contracts.spawn_executor.test_claim_atomic
 #
 # id: spawn_executor_skips_non_running
 #   given: an agent_runs row with status='completed' (or 'failed', 'merged')
 #   then:  _claim_one_pending() does not return it
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_skips_non_running
 #
 # id: spawn_executor_marks_failed_on_exception
 #   given: a claimed row whose providers list resolves to an unknown id
 #   then:  _execute_one raises no exception, the row's final status is
 #          'failed', and an 'error' event was logged for the run_id
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_marks_failed_on_exception
 #
 # id: spawn_executor_resolve_provider_rejects_empty
 #   given: an empty list or malformed providers value
 #   then:  _resolve_provider raises ValueError (no silent default-to-active)
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_resolve_provider_rejects_empty
 #
 # id: spawn_executor_snapshot_pcna_shape
 #   given: a primary-shaped PCNAEngine instance
@@ -61,27 +57,23 @@ Sub-module layout (add behaviour there, not here):
 #          (phi, psi, omega, theta_circles); types and ordering are
 #          stable so log consumers can subtract before/after dicts
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_snapshot_pcna_shape
 #
 # id: spawn_executor_merge_helpers_tolerate_no_pcna
 #   given: a missing primary PCNA (cold-start or test bootstrap)
 #   then:  _try_get_primary_pcna returns None and _retire_fork_quietly
 #          returns without raising
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_merge_helpers_tolerate_no_pcna
 #
 # id: spawn_executor_heartbeat_advances
 #   given: an 'executing' agent_runs row and the _heartbeat_loop running
 #   then:  last_heartbeat_at strictly advances after a few interval ticks
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_heartbeat_advances
 #
 # id: spawn_executor_stale_sweep_marks_worker_lost
 #   given: an 'executing' row with last_heartbeat_at older than 2× the
 #          heartbeat interval, plus a fresh row with a current heartbeat
 #   then:  _reap_stale_claims marks ONLY the stale row; fresh row untouched
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_stale_sweep_marks_worker_lost
 #
 # id: spawn_executor_retry_once_on_transient
 #   given: a row with retry_policy='once_on_transient', retry_count=0,
@@ -89,27 +81,23 @@ Sub-module layout (add behaviour there, not here):
 #   then:  _maybe_schedule_retry returns True, row goes back to 'running'
 #          with retry_count=1; a second failure does NOT retry (one-shot cap)
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_retry_once_on_transient
 #
 # id: spawn_executor_retry_default_none
 #   given: retry_policy='none' OR a non-transient exception under
 #          retry_policy='once_on_transient'
 #   then:  _maybe_schedule_retry returns False
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_retry_default_none
 #
 # id: spawn_executor_concurrent_live_cap
 #   given: 20 live registry entries under a single parent_run_id
 #   then:  check_can_spawn raises SpawnCapExceeded with cap='concurrent_live'
 #   class: security
-#   call:  python.tests.contracts.spawn_executor.test_concurrent_live_cap
 #
 # id: spawn_executor_no_orphan_invariant
 #   given: a registry entry whose run_id has no DB row, AND a DB
 #          'executing' row owned by THIS WORKER_ID with no registry entry
 #   then:  check_no_orphan_invariant flags both as orphans and reports ok=False
 #   class: correctness
-#   call:  python.tests.contracts.spawn_executor.test_no_orphan_invariant
 # === END CONTRACTS ===
 """
 from __future__ import annotations
@@ -354,4 +342,4 @@ async def _poll_loop() -> None:
 def inflight_count() -> int:
     """Introspection helper — returns the number of in-flight execution tasks."""
     return len(_inflight)
-# 175:151 0:0 2:7
+# 175:139 0:0 2:7

@@ -1,4 +1,4 @@
-# 158:51 0:0 0:0
+# 158:61 0:0 0:0
 """Strict static gating audit — every write endpoint in python/routes/
 must call a recognised auth helper (admin / ownership / per-user / API
 key resolution / HMAC verification) inside the handler body or signature,
@@ -14,6 +14,15 @@ gating that the static scanner cannot see (HMAC signature inside Stripe
 webhook handler, INTERNAL_API_SECRET header check, or no per-user state
 to gate). Each entry carries a justification.
 """
+# === CHECKS ===
+# id: check_routes_write_endpoints_gated
+#   proves: routes_write_endpoints_gated
+#   call: self::test_every_write_route_is_gated
+#   requires: python3
+#   timeout: 30
+#   mutates: none
+#   cleanup: none
+# === END CHECKS ===
 from __future__ import annotations
 import ast
 from pathlib import Path
@@ -233,4 +242,4 @@ def test_every_write_route_is_gated() -> None:
     assert not stale, (
         f"stale ALLOWLIST entries (route no longer exists): {stale}"
     )
-# 158:51 0:0 0:0
+# 158:61 0:0 0:0

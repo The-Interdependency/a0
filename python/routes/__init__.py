@@ -1,4 +1,4 @@
-# 177:47 0:0 0:31
+# 180:42 0:0 0:32
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -31,6 +31,7 @@ from .transcripts import router as transcripts_router
 from .models import router as models_router
 from .instances_api import router as instances_router
 from .module_graph import router as module_graph_router
+from .runtime_readiness import router as runtime_readiness_router
 
 ALL_ROUTERS = [
     chat_router,
@@ -66,6 +67,7 @@ ALL_ROUTERS = [
     models_router,
     instances_router,
     module_graph_router,
+    runtime_readiness_router,
 ]
 
 
@@ -131,7 +133,6 @@ def _parse_doc_block(text: str) -> dict | None:
     if "module" not in doc or "label" not in doc:
         return None
 
-    # Parse endpoint strings into structured dicts
     parsed: list[dict] = []
     for ep in doc["endpoints"]:
         if "|" in ep:
@@ -149,8 +150,6 @@ def _parse_doc_block(text: str) -> dict | None:
     if not doc["notes"]:
         doc.pop("notes")
 
-    # Pull available metrics from the first-line annotation. Accept both the
-    # legacy N:M form and the transitional/full N:M C:D I:O forms.
     first = text.splitlines()[0].strip() if text.splitlines() else ""
     m = re.fullmatch(
         r"#\s*(\d+):(\d+)"
@@ -183,8 +182,7 @@ def collect_doc_meta() -> list[dict]:
         "sigma_api.py", "editable_schema.py", "cli.py", "forge.py",
         "artifacts.py", "instances_api.py", "guest.py", "admin.py",
         "_admin_gate.py", "forge_archetypes.py", "billing_helpers.py",
-        "transcripts.py",
-        "module_graph.py",
+        "transcripts.py", "module_graph.py", "runtime_readiness.py",
     ]
     results: list[dict] = []
     for fname in route_files:
@@ -210,14 +208,12 @@ def collect_doc_meta() -> list[dict]:
 #          the explicit ALLOWLIST in route_gating.py with a justification.
 #          Stale ALLOWLIST entries (route no longer exists) also fail.
 #   class: security
-#   call:  python.tests.contracts.route_gating.test_every_write_route_is_gated
 #
 # id: routes_doc_blocks_complete
 #   given: every python/routes/*.py file (excluding __init__.py)
 #   then:  it declares # DOC module/label/description/tier/role exactly
 #          once each, with role drawn from the allowed doctrine set
 #   class: correctness
-#   call:  python.tests.contracts.module_doctrine.test_route_doc_blocks_are_complete
 #
 # id: routes_doc_annotation_metrics
 #   given: a route file begins with a legacy N:M or full N:M C:D I:O annotation
@@ -228,14 +224,10 @@ def collect_doc_meta() -> list[dict]:
 #   given: every python/routes/*.py file (excluding __init__.py)
 #   then:  its first and last non-blank lines are # N:M annotation comments
 #   class: correctness
-#   call:  python.tests.contracts.module_doctrine.test_route_files_are_annotated
 #
 # id: routes_routers_registered
 #   given: every python/routes/*.py file that defines a module-level router
 #   then:  it is imported and added to ALL_ROUTERS in __init__.py
 #   class: correctness
-#   call:  python.tests.contracts.module_doctrine.test_router_defining_files_are_registered
 # === END CONTRACTS ===
-# 171:16
-
-# 177:47 0:0 0:31
+# 180:42 0:0 0:32

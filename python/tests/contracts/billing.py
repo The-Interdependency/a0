@@ -1,4 +1,4 @@
-# 23:16 0:0 2:0
+# 23:24 0:0 2:0
 """Contracts protecting python/routes/billing.py.
 
 The idempotency contract is proved by calling ``_process_event_idempotent``
@@ -7,6 +7,15 @@ Stripe signature verification, because Express auto-injects
 ``x-a0p-internal`` on every proxied request and any such surface would
 be remotely exploitable through the proxy.
 """
+# === CHECKS ===
+# id: check_billing_webhook_replay_idempotent
+#   proves: billing_webhook_replay_idempotent
+#   call: self::test_webhook_replay_is_idempotent
+#   requires: python3, postgres
+#   timeout: 30
+#   mutates: db
+#   cleanup: unique_test_event_is_inert
+# === END CHECKS ===
 from __future__ import annotations
 import time
 import uuid
@@ -44,4 +53,4 @@ async def test_webhook_replay_is_idempotent() -> None:
         f"replay must report duplicate=true; got {r2!r} — "
         f"processed_stripe_events claim is broken"
     )
-# 23:16 0:0 2:0
+# 23:24 0:0 2:0

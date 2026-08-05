@@ -1,4 +1,4 @@
-# 100:24 0:0 0:0
+# 100:52 0:0 0:0
 # DOC module: tests.contracts.module_doctrine
 # DOC label: Module doctrine adherence
 # DOC description: Enforces the a0p module doctrine for python/routes/*.py:
@@ -8,9 +8,33 @@
 # defines a module-level APIRouter — is registered in ALL_ROUTERS.
 # DOC role: contract
 # === CHECKS ===
+# id: check_routes_doc_blocks_complete
+#   proves: routes_doc_blocks_complete
+#   call: self::test_route_doc_blocks_are_complete
+#   requires: python3
+#   timeout: 20
+#   mutates: none
+#   cleanup: none
+#
 # id: check_routes_doc_annotation_metrics
 #   proves: routes_doc_annotation_metrics
 #   call: self::test_doc_annotation_metrics_parse
+#   requires: python3
+#   timeout: 20
+#   mutates: none
+#   cleanup: none
+#
+# id: check_routes_files_annotated
+#   proves: routes_files_annotated
+#   call: self::test_route_files_are_annotated
+#   requires: python3
+#   timeout: 20
+#   mutates: none
+#   cleanup: none
+#
+# id: check_routes_routers_registered
+#   proves: routes_routers_registered
+#   call: self::test_router_defining_files_are_registered
 #   requires: python3
 #   timeout: 20
 #   mutates: none
@@ -141,4 +165,4 @@ def test_router_defining_files_are_registered() -> None:
             if p.stem not in imported:
                 problems.append(f"{p.name}: defines a router but is not imported in __init__.py")
     assert not problems, "\n  " + "\n  ".join(problems)
-# 100:24 0:0 0:0
+# 100:52 0:0 0:0
