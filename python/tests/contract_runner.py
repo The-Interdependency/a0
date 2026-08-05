@@ -1,15 +1,15 @@
-# 251:113 0:0 0:0
+# 222:107 0:0 0:0
 """Contract/check graph auditor and executor — see test-build/SKILL.md.
 
-Source modules own `CONTRACTS`; test modules own executable `CHECKS`. The
-runner audits the graph without importing test modules, then executes each
-resolved check with its declared timeout. Legacy source-side `call:` fields are
-accepted only as a visible migration adapter for untouched modules.
+Source modules own behavioral `CONTRACTS`; test modules own executable
+`CHECKS`. The runner audits the declaration graph without importing test
+modules, then executes only a closed graph under each check's declared timeout.
+Source-side `call:` fields are rejected: test topology belongs to CHECKS.
 
 Usage:
     python -m python.tests.contract_runner
 
-Exit 0 only when the declaration graph closes and every executed check passes.
+Exit 0 only when the graph closes and every executed check passes.
 """
 # === MODULE_BUILD ===
 # id: a0_contract_graph_runner
@@ -29,12 +29,12 @@ Exit 0 only when the declaration graph closes and every executed check passes.
 #   rollback: restore the prior runner only with an explicit test-build doctrine exception
 #   requires: msdmd universal parser, test-build doctrine
 #   since: 2026-08-05
-#   unresolved: legacy source-call adapter remains until every existing contract has a CHECKS witness
+#   unresolved: none
 # === END MODULE_BUILD ===
 
 # === CONTRACTS ===
 # id: contract_graph_rejects_incomplete_linkage
-#   given: duplicate ids, missing required fields, unknown proves targets, contracts without witnesses, or calls that do not resolve by AST
+#   given: duplicate ids, missing required fields, source-owned call topology, unknown proves targets, contracts without witnesses, or calls that do not resolve by AST
 #   then: audit_graph reports visible gaps and the main runner executes no checks
 #   class: correctness
 #   since: 2026-08-05
@@ -59,8 +59,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-PYTHON_ROOT = ROOT / "python"
-TEST_ROOT = PYTHON_ROOT / "tests"
+TEST_ROOT = ROOT / "python" / "tests"
 PARSER_PATH = ROOT / ".agents" / "skills" / "msdmd" / "parsers" / "universal.py"
 SOURCE_SKIP = {
     ".git", ".venv", "venv", "node_modules", "dist", "build", "target",
@@ -73,7 +72,6 @@ SOURCE_SKIP = {
 class Declaration:
     path: Path
     fields: dict[str, str]
-    legacy: bool = False
 
     @property
     def id(self) -> str:
@@ -137,9 +135,8 @@ def _source_declarations() -> tuple[list[Declaration], list[Path]]:
         for path, entries in annotated
         for entry in entries
     ]
-    # The runner is test infrastructure under python/tests, which is skipped
-    # by the source walk. Its own behavior obligations are still source-owned,
-    # so include this one infrastructure module explicitly.
+    # The runner is test infrastructure under python/tests, which is skipped by
+    # the source walk. Its own behavior obligations are still source-owned.
     runner_path = Path(__file__).resolve()
     declarations.extend(
         Declaration(path=runner_path, fields=dict(entry))
@@ -165,24 +162,6 @@ def _split_ids(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def _legacy_check(contract: Declaration) -> Declaration | None:
-    call = contract.fields.get("call")
-    if not call:
-        return None
-    return Declaration(
-        path=contract.path,
-        legacy=True,
-        fields={
-            "id": f"legacy_check_{contract.id}",
-            "proves": contract.id,
-            "call": call,
-            "timeout": "30",
-            "mutates": "hmmm",
-            "cleanup": "hmmm",
-        },
-    )
-
-
 def audit_graph(
     contracts: list[Declaration],
     checks: list[Declaration],
@@ -195,16 +174,20 @@ def audit_graph(
         if contract.id in contract_by_id:
             gaps.append(f"duplicate contract id: {contract.id}")
         contract_by_id[contract.id] = contract
-        for field in ("given", "then"):
+        for field in ("given", "then", "class"):
             if not contract.fields.get(field):
                 gaps.append(f"contract {contract.id} missing {field}")
+        if contract.fields.get("call"):
+            gaps.append(
+                f"contract {contract.id} owns deprecated call topology; move it to CHECKS"
+            )
 
     check_by_id: dict[str, Declaration] = {}
     for check in checks:
         if check.id in check_by_id:
             gaps.append(f"duplicate check id: {check.id}")
         check_by_id[check.id] = check
-        for field in ("proves", "call", "mutates", "cleanup"):
+        for field in ("proves", "call", "requires", "timeout", "mutates", "cleanup"):
             if not check.fields.get(field):
                 gaps.append(f"check {check.id} missing {field}")
 
@@ -216,36 +199,24 @@ def audit_graph(
             else:
                 proving[contract_id].append(check)
 
-    effective_checks = list(checks)
     for contract in contracts:
         if contract.fields.get("deprecated"):
             warnings.append(f"deprecated contract skipped: {contract.id}")
             continue
-        if proving.get(contract.id):
-            if contract.fields.get("call"):
-                warnings.append(
-                    f"source call is deprecated and ignored where CHECKS exist: {contract.id}"
-                )
-            continue
-        legacy = _legacy_check(contract)
-        if legacy is None:
+        if not proving.get(contract.id):
             gaps.append(f"contract has no CHECKS witness: {contract.id}")
-            continue
-        effective_checks.append(legacy)
-        proving[contract.id].append(legacy)
-        warnings.append(f"legacy source call adapter: {contract.id}")
 
-    for check in effective_checks:
+    for check in checks:
         try:
             _resolve_call_no_exec(check)
         except Exception as exc:
             gaps.append(f"check {check.id} call does not resolve: {exc}")
 
-    return effective_checks, gaps, warnings
+    return list(checks), gaps, warnings
 
 
 async def _execute_check(check: Declaration) -> dict[str, Any]:
-    timeout_raw = check.fields.get("timeout", "30")
+    timeout_raw = check.fields.get("timeout", "")
     try:
         timeout = float(timeout_raw)
         if timeout <= 0:
@@ -321,11 +292,10 @@ async def main() -> int:
         result = await _execute_check(check)
         results.append(result)
         symbol = {"PASS": "✓", "FAIL": "✗", "ERROR": "!"}[result["status"]]
-        legacy = " [legacy]" if check.legacy else ""
         tail = ""
         if result["status"] != "PASS":
             tail = f"\n    └─ {str(result['error']).splitlines()[0]}"
-        print(f"  {symbol} {check.id:<48s} ({_rel(check.path)}){legacy}{tail}")
+        print(f"  {symbol} {check.id:<48s} ({_rel(check.path)}){tail}")
 
     counts = Counter(result["status"] for result in results)
     classes = Counter(
@@ -342,12 +312,9 @@ async def main() -> int:
             print(f"  · {_rel(path)}")
         if len(uncovered_modules) > 20:
             print(f"  · … and {len(uncovered_modules) - 20} more")
-    legacy_count = sum(1 for check in effective_checks if check.legacy)
-    if legacy_count:
-        print(f"\nhmmm: {legacy_count} contract(s) still use the legacy source-call adapter")
     return 0 if counts["FAIL"] + counts["ERROR"] == 0 else 1
 
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
-# 251:113 0:0 0:0
+# 222:107 0:0 0:0
