@@ -1,4 +1,4 @@
-# 94:67 0:0 0:0
+# 98:67 0:0 0:0
 """Report whether the configured PostgreSQL database is at Alembic head.
 
 Usage:
@@ -103,8 +103,13 @@ def build_status(expected: Iterable[str], current: Iterable[str]) -> dict:
 
 def _sync_url(raw: str) -> str:
     url = make_url(raw)
-    if url.drivername in {"postgres", "postgresql", "postgresql+asyncpg"}:
-        url = url.set(drivername="postgresql+psycopg")
+    if url.drivername in {
+        "postgres",
+        "postgresql",
+        "postgresql+asyncpg",
+        "postgresql+psycopg",
+    }:
+        url = url.set(drivername="postgresql+psycopg2")
     return url.render_as_string(hide_password=False)
 
 
@@ -137,4 +142,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# 94:67 0:0 0:0
+# 98:67 0:0 0:0
