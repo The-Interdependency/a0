@@ -1,4 +1,4 @@
-# 233:73 0:0 0:0
+# 251:113 0:0 0:0
 """Contract/check graph auditor and executor — see test-build/SKILL.md.
 
 Source modules own `CONTRACTS`; test modules own executable `CHECKS`. The
@@ -11,6 +11,40 @@ Usage:
 
 Exit 0 only when the declaration graph closes and every executed check passes.
 """
+# === MODULE_BUILD ===
+# id: a0_contract_graph_runner
+#   module_name: contract_graph_runner
+#   module_kind: instrument
+#   summary: Audits source-owned CONTRACTS against test-owned CHECKS without executing imports, then runs only a closed evidence graph under declared timeouts.
+#   owner: Erin Spencer
+#   public_surface: python -m python.tests.contract_runner
+#   internal_surface: Declaration, audit_graph, _resolve_call_no_exec, _execute_check
+#   auth_boundary: none
+#   storage_boundary: read
+#   network_boundary: none
+#   user_data_boundary: none
+#   admin_only: false
+#   tests: python/tests/test_contract_runner.py
+#   rollout: repository contract gate
+#   rollback: restore the prior runner only with an explicit test-build doctrine exception
+#   requires: msdmd universal parser, test-build doctrine
+#   since: 2026-08-05
+#   unresolved: legacy source-call adapter remains until every existing contract has a CHECKS witness
+# === END MODULE_BUILD ===
+
+# === CONTRACTS ===
+# id: contract_graph_rejects_incomplete_linkage
+#   given: duplicate ids, missing required fields, unknown proves targets, contracts without witnesses, or calls that do not resolve by AST
+#   then: audit_graph reports visible gaps and the main runner executes no checks
+#   class: correctness
+#   since: 2026-08-05
+#
+# id: contract_graph_enforces_declared_timeout
+#   given: an executable CHECK whose call exceeds its positive timeout
+#   then: _execute_check terminates the wait and reports ERROR rather than hanging or passing
+#   class: safety
+#   since: 2026-08-05
+# === END CONTRACTS ===
 from __future__ import annotations
 
 import ast
@@ -31,7 +65,7 @@ PARSER_PATH = ROOT / ".agents" / "skills" / "msdmd" / "parsers" / "universal.py"
 SOURCE_SKIP = {
     ".git", ".venv", "venv", "node_modules", "dist", "build", "target",
     "__pycache__", ".pytest_cache", ".mypy_cache", ".tox", ".agents",
-    "tests", "attached_assets",
+    "tests", "attached_assets", "skill-lib",
 }
 
 
@@ -103,6 +137,14 @@ def _source_declarations() -> tuple[list[Declaration], list[Path]]:
         for path, entries in annotated
         for entry in entries
     ]
+    # The runner is test infrastructure under python/tests, which is skipped
+    # by the source walk. Its own behavior obligations are still source-owned,
+    # so include this one infrastructure module explicitly.
+    runner_path = Path(__file__).resolve()
+    declarations.extend(
+        Declaration(path=runner_path, fields=dict(entry))
+        for entry in PARSER.parse_file(runner_path, "CONTRACTS")
+    )
     return declarations, gaps
 
 
@@ -308,4 +350,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
-# 233:73 0:0 0:0
+# 251:113 0:0 0:0
