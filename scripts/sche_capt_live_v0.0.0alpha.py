@@ -123,14 +123,18 @@ def capture_schema(database_url: str, pg_dump: str = "pg_dump") -> str:
         "--no-privileges",
         "--no-comments",
         "--quote-all-identifiers",
-        database_url,
     ]
+    child_env = os.environ.copy()
+    child_env.pop("DATABASE_URL", None)
+    # libpq accepts a full connection string in PGDATABASE. Keeping it out of
+    # argv prevents credentials from appearing in process listings or logs.
+    child_env["PGDATABASE"] = database_url
     completed = subprocess.run(
         command,
         capture_output=True,
         text=True,
         check=False,
-        env=os.environ.copy(),
+        env=child_env,
     )
     if completed.returncode != 0:
         raise RuntimeError(f"pg_dump failed with exit code {completed.returncode}")
