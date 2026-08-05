@@ -1,4 +1,4 @@
-# 61:55 0:0 1:2
+# 61:57 0:0 1:2
 from __future__ import annotations
 
 import asyncio
@@ -48,13 +48,13 @@ from typing import Any
 #   given: deployment configuration, PostgreSQL, and the heartbeat service are probed
 #   then: ready is true if and only if every declared dependency reports ok
 #   class: correctness
-#   since: 2026-08-04
+#   call: python.tests.test_runtime_readiness.test_readiness_requires_all_dependencies
 #
 # id: runtime_readiness_redacts_sensitive_values
 #   given: configuration is missing or an internal dependency probe fails
 #   then: the report contains dependency names and exception types but no secret values, database details, exception messages, provider credentials, or user data
 #   class: security
-#   since: 2026-08-04
+#   call: python.tests.test_runtime_readiness.test_readiness_reports_missing_config_without_values
 # === END CONTRACTS ===
 
 REQUIRED_CONFIG = (
@@ -134,4 +134,4 @@ async def build_readiness_report(timeout_s: float = 2.0) -> dict[str, Any]:
         "checks": checks,
         "latency_ms": round((time.perf_counter() - started) * 1000, 1),
     }
-# 61:55 0:0 1:2
+# 61:57 0:0 1:2
