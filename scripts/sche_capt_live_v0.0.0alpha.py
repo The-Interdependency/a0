@@ -1,4 +1,4 @@
-# 118:75 0:0 0:0
+# 151:89 0:0 0:0
 """Capture a deterministic, schema-only PostgreSQL baseline with pg_dump.
 
 Usage:
@@ -17,7 +17,7 @@ from __future__ import annotations
 #   summary: Captures and normalizes the live PostgreSQL schema as reviewable baseline evidence without mutating the database.
 #   owner: Erin Spencer
 #   public_surface: command line SQL and SHA-256 output
-#   internal_surface: capture_schema, normalize_dump
+#   internal_surface: capture_schema, normalize_dump, libpq_environment
 #   auth_boundary: none
 #   storage_boundary: read
 #   network_boundary: internal
@@ -28,12 +28,12 @@ from __future__ import annotations
 #   rollback: delete generated files; capture changes no database state
 #   requires: a0_schema_inventory
 #   since: 2026-08-05
-#   unresolved: pg_dump major-version compatibility is verified at capture time, not inferred
+#   unresolved: multi-host PostgreSQL URLs are not yet supported
 # === END MODULE_BUILD ===
 
 # === BOUNDARIES ===
 # id: live_schema_capture_boundary
-#   summary: Uses database credentials only to read PostgreSQL catalog metadata through pg_dump and never emits the connection URL.
+#   summary: Decomposes database credentials into child-only libpq environment variables, reads catalog metadata through pg_dump, and never emits the connection URL.
 #   auth_boundary: read
 #   storage_boundary: read
 #   network_boundary: internal
@@ -62,8 +62,14 @@ from __future__ import annotations
 #
 # id: live_schema_capture_redacts_connection
 #   given: pg_dump fails
-#   then: the raised error names the failure class and exit code without including DATABASE_URL or pg_dump stderr
+#   then: the raised error names the failure class and exit code without including DATABASE_URL, password, argv credentials, or pg_dump stderr
 #   class: security
+#   since: 2026-08-05
+#
+# id: live_schema_capture_decomposes_postgres_url
+#   given: a PostgreSQL URL containing host, port, database, user, password, and supported libpq query options
+#   then: the child receives corresponding PG* environment variables while argv contains no connection string
+#   class: correctness
 #   since: 2026-08-05
 # === END CONTRACTS ===
 
@@ -73,6 +79,9 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Mapping
+
+from sqlalchemy.engine import make_url
 
 _VOLATILE_PREFIXES = (
     "-- Dumped from database version",
@@ -91,6 +100,17 @@ _VOLATILE_PREFIXES = (
     "SET client_min_messages",
     "SET row_security",
 )
+_QUERY_TO_ENV = {
+    "sslmode": "PGSSLMODE",
+    "sslrootcert": "PGSSLROOTCERT",
+    "sslcert": "PGSSLCERT",
+    "sslkey": "PGSSLKEY",
+    "channel_binding": "PGCHANNELBINDING",
+    "target_session_attrs": "PGTARGETSESSIONATTRS",
+    "connect_timeout": "PGCONNECT_TIMEOUT",
+    "options": "PGOPTIONS",
+    "application_name": "PGAPPNAME",
+}
 
 
 def normalize_dump(raw: str) -> str:
@@ -112,6 +132,39 @@ def normalize_dump(raw: str) -> str:
     return "\n".join(kept) + "\n"
 
 
+def libpq_environment(
+    database_url: str,
+    base: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Convert one PostgreSQL URL into child-only libpq environment fields."""
+    url = make_url(database_url)
+    if not url.drivername.startswith("postgresql") and url.drivername != "postgres":
+        raise ValueError("DATABASE_URL must use PostgreSQL")
+    if not url.database:
+        raise ValueError("DATABASE_URL must name a database")
+
+    child_env = dict(base or os.environ)
+    for key in list(child_env):
+        if key == "DATABASE_URL" or key.startswith("PG"):
+            child_env.pop(key, None)
+
+    child_env["PGDATABASE"] = url.database
+    if url.host:
+        child_env["PGHOST"] = url.host
+    if url.port is not None:
+        child_env["PGPORT"] = str(url.port)
+    if url.username:
+        child_env["PGUSER"] = url.username
+    if url.password is not None:
+        child_env["PGPASSWORD"] = url.password
+
+    for query_key, env_key in _QUERY_TO_ENV.items():
+        value = url.query.get(query_key)
+        if value is not None:
+            child_env[env_key] = str(value)
+    return child_env
+
+
 def capture_schema(database_url: str, pg_dump: str = "pg_dump") -> str:
     executable = shutil.which(pg_dump)
     if not executable:
@@ -124,17 +177,12 @@ def capture_schema(database_url: str, pg_dump: str = "pg_dump") -> str:
         "--no-comments",
         "--quote-all-identifiers",
     ]
-    child_env = os.environ.copy()
-    child_env.pop("DATABASE_URL", None)
-    # libpq accepts a full connection string in PGDATABASE. Keeping it out of
-    # argv prevents credentials from appearing in process listings or logs.
-    child_env["PGDATABASE"] = database_url
     completed = subprocess.run(
         command,
         capture_output=True,
         text=True,
         check=False,
-        env=child_env,
+        env=libpq_environment(database_url),
     )
     if completed.returncode != 0:
         raise RuntimeError(f"pg_dump failed with exit code {completed.returncode}")
@@ -168,4 +216,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# 118:75 0:0 0:0
+# 151:89 0:0 0:0
