@@ -1,4 +1,4 @@
-# 111:62 0:0 0:0
+# 134:72 0:0 0:0
 """Migration-foundation contract checks.
 
 Filename exception: pytest imports test modules by Python module name, so the
@@ -23,7 +23,7 @@ from __future__ import annotations
 #   requires: python3, pytest
 #   timeout: 20
 #   mutates: temporary_files
-#   cleanup: pytest_tmp_path
+#   cleanup: temporary_directory
 #
 # id: check_live_schema_capture_read_only
 #   proves: live_schema_capture_is_read_only, live_schema_capture_redacts_connection
@@ -31,7 +31,7 @@ from __future__ import annotations
 #   requires: python3, pytest
 #   timeout: 20
 #   mutates: process_mock
-#   cleanup: monkeypatch_restore
+#   cleanup: mock_patch_restore
 #
 # id: check_live_schema_capture_deterministic
 #   proves: live_schema_capture_is_deterministic
@@ -49,8 +49,16 @@ from __future__ import annotations
 #   mutates: none
 #   cleanup: none
 #
+# id: check_schema_migration_status_bounds_failures
+#   proves: schema_migration_status_bounds_failures
+#   call: self::test_schema_status_failure_surface_is_bounded
+#   requires: python3, pytest, alembic
+#   timeout: 20
+#   mutates: process_mock
+#   cleanup: mock_patch_restore
+#
 # id: check_alembic_control_plane_loads
-#   proves: alembic_environment_migration_boundary
+#   proves: alembic_environment_explicit_transactional_only
 #   call: self::test_alembic_configuration_loads_without_database
 #   requires: python3, pytest, alembic
 #   timeout: 20
@@ -59,8 +67,13 @@ from __future__ import annotations
 # === END CHECKS ===
 
 import importlib.util
+import json
 import subprocess
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import pytest
 from alembic.config import Config
@@ -100,24 +113,26 @@ def test_repository_inventory_exposes_legacy_drift() -> None:
     assert len(report["sha256"]) == 64
 
 
-def test_inventory_detects_and_checks_mutation_sites(tmp_path: Path) -> None:
-    (tmp_path / "shared").mkdir()
-    (tmp_path / "python").mkdir()
-    (tmp_path / "server").mkdir()
-    (tmp_path / "shared" / "schema.ts").write_text(
-        'export const alpha = pgTable("alpha", {});', encoding="utf-8"
-    )
-    (tmp_path / "python" / "models.py").write_text(
-        'class Beta:\n    __tablename__ = "beta"\n', encoding="utf-8"
-    )
-    ddl = "CREATE " + "TABLE IF NOT EXISTS gamma (id INTEGER);"
-    (tmp_path / "server" / "new_boot.ts").write_text(ddl, encoding="utf-8")
+def test_inventory_detects_and_checks_mutation_sites() -> None:
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        (root / "shared").mkdir()
+        (root / "python").mkdir()
+        (root / "server").mkdir()
+        (root / "shared" / "schema.ts").write_text(
+            'export const alpha = pgTable("alpha", {});', encoding="utf-8"
+        )
+        (root / "python" / "models.py").write_text(
+            'class Beta:\n    __tablename__ = "beta"\n', encoding="utf-8"
+        )
+        ddl = "CREATE " + "TABLE IF NOT EXISTS gamma (id INTEGER);"
+        (root / "server" / "new_boot.ts").write_text(ddl, encoding="utf-8")
 
-    report = inventory.collect_inventory(tmp_path)
-    assert report["authorities"]["drizzle"] == ["alpha"]
-    assert report["authorities"]["sqlalchemy"] == ["beta"]
-    assert report["authorities"]["executable_sql"] == ["gamma"]
-    assert inventory._unreviewed_sites(report) == ["server/new_boot.ts"]
+        report = inventory.collect_inventory(root)
+        assert report["authorities"]["drizzle"] == ["alpha"]
+        assert report["authorities"]["sqlalchemy"] == ["beta"]
+        assert report["authorities"]["executable_sql"] == ["gamma"]
+        assert inventory._unreviewed_sites(report) == ["server/new_boot.ts"]
 
 
 def test_normalize_dump_removes_volatile_lines() -> None:
@@ -132,7 +147,7 @@ CREATE TABLE public.alpha (id integer);
     assert capture.normalize_dump(raw) == "CREATE TABLE public.alpha (id integer);\n"
 
 
-def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure(monkeypatch) -> None:
+def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure() -> None:
     recorded: dict = {}
 
     def fake_which(name: str) -> str:
@@ -144,10 +159,12 @@ def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure(monkeypatch) -
         recorded["env"] = kwargs["env"]
         return subprocess.CompletedProcess(command, 7, stdout="", stderr="secret-url")
 
-    monkeypatch.setattr(capture.shutil, "which", fake_which)
-    monkeypatch.setattr(capture.subprocess, "run", fake_run)
     secret = "postgresql://user:password@example.invalid/a0"
-    with pytest.raises(RuntimeError, match="exit code 7") as exc:
+    with (
+        patch.object(capture.shutil, "which", fake_which),
+        patch.object(capture.subprocess, "run", fake_run),
+        pytest.raises(RuntimeError, match="exit code 7") as exc,
+    ):
         capture.capture_schema(secret)
     assert secret not in str(exc.value)
     command = recorded["command"]
@@ -165,6 +182,25 @@ def test_schema_status_requires_exact_nonempty_match() -> None:
     assert status.build_status(["head"], [])["at_head"] is False
     assert status.build_status(["head"], ["head"])["at_head"] is True
     assert status.build_status(["a", "b"], ["a"])["at_head"] is False
+    converted = status._sync_url("postgresql+asyncpg://user:pass@localhost/a0")
+    assert converted.startswith("postgresql+psycopg2://")
+
+
+def test_schema_status_failure_surface_is_bounded() -> None:
+    secret = "postgresql://user:password@example.invalid/a0"
+    output = StringIO()
+    with (
+        patch.object(status, "expected_heads", side_effect=RuntimeError(secret)),
+        redirect_stdout(output),
+    ):
+        result = status.main()
+    rendered = output.getvalue()
+    assert result == 4
+    assert secret not in rendered
+    assert json.loads(rendered) == {
+        "status": "probe_failed",
+        "error_type": "RuntimeError",
+    }
 
 
 def test_alembic_configuration_loads_without_database() -> None:
@@ -176,4 +212,6 @@ def test_alembic_configuration_loads_without_database() -> None:
     env_text = (ROOT / "migrations" / "env.py").read_text(encoding="utf-8")
     assert "target_metadata = None" in env_text
     assert "autogenerate is disabled" in env_text
-# 111:62 0:0 0:0
+    assert 'url.set(drivername="postgresql+psycopg2")' in env_text
+    assert "transactional_ddl=True" in env_text
+# 134:72 0:0 0:0
