@@ -1,4 +1,4 @@
-# 74:48 0:0 0:0
+# 79:50 0:0 0:0
 """Negative and timeout evidence for the CONTRACTS/CHECKS graph runner.
 
 This conventional pytest filename is also the executable target imported by
@@ -30,16 +30,16 @@ from pathlib import Path
 from python.tests import contract_runner as runner
 
 
-def _contract(identifier: str) -> runner.Declaration:
-    return runner.Declaration(
-        path=Path(__file__),
-        fields={
-            "id": identifier,
-            "given": "a synthetic declaration graph",
-            "then": "the graph satisfies its stated obligation",
-            "class": "correctness",
-        },
-    )
+def _contract(identifier: str, *, source_call: str | None = None) -> runner.Declaration:
+    fields = {
+        "id": identifier,
+        "given": "a synthetic declaration graph",
+        "then": "the graph satisfies its stated obligation",
+        "class": "correctness",
+    }
+    if source_call is not None:
+        fields["call"] = source_call
+    return runner.Declaration(path=Path(__file__), fields=fields)
 
 
 def _check(
@@ -55,6 +55,7 @@ def _check(
             "id": identifier,
             "proves": proves,
             "call": call,
+            "requires": "python3",
             "timeout": timeout,
             "mutates": "none",
             "cleanup": "none",
@@ -64,6 +65,10 @@ def _check(
 
 def test_audit_graph_rejects_incomplete_linkage() -> None:
     orphan = _contract("synthetic_orphan_contract")
+    source_owned_call = _contract(
+        "synthetic_source_call_contract",
+        source_call="python.tests.test_contract_runner.test_audit_graph_rejects_incomplete_linkage",
+    )
     unknown = _check(
         "synthetic_unknown_check",
         "synthetic_missing_contract",
@@ -76,12 +81,13 @@ def test_audit_graph_rejects_incomplete_linkage() -> None:
     )
 
     _effective, gaps, _warnings = runner.audit_graph(
-        [orphan],
+        [orphan, source_owned_call],
         [unknown, unresolved],
     )
 
     assert any("claims unknown contract" in gap for gap in gaps)
     assert any("call does not resolve" in gap for gap in gaps)
+    assert any("owns deprecated call topology" in gap for gap in gaps)
 
 
 async def _slow_contract_probe() -> None:
@@ -98,4 +104,4 @@ async def test_execute_check_enforces_timeout() -> None:
     result = await runner._execute_check(check)
     assert result["status"] == "ERROR"
     assert "TimeoutError" in str(result["error"])
-# 74:48 0:0 0:0
+# 79:50 0:0 0:0
