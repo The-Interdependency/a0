@@ -1,4 +1,4 @@
-# 393:56 0:0 4:2
+# 393:54 0:0 4:2
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from sqlalchemy import select, update, delete, func, desc, asc, or_
@@ -497,7 +497,6 @@ class _CoreStorage:
 #   then:  stored row.user_id == "legit"; smuggled value is dropped by
 #          _CONV_ALLOWED_FIELDS
 #   class: security
-#   call:  python.tests.contracts.chat.test_create_owner_isolation
 #
 # id: storage_anonymous_owner_null
 #   given: POST /api/v1/conversations with no x-user-id header
@@ -505,6 +504,5 @@ class _CoreStorage:
 #          None when caller is unauthenticated; nothing leaks into the
 #          owner field from the request body)
 #   class: security
-#   call:  python.tests.contracts.chat.test_create_anonymous_owner_null
 # === END CONTRACTS ===
-# 393:56 0:0 4:2
+# 393:54 0:0 4:2

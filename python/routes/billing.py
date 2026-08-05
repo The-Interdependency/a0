@@ -1,4 +1,4 @@
-# 418:312 5:7 2:4
+# 418:311 5:7 2:4
 import os
 import stripe
 from urllib.parse import urlparse
@@ -857,6 +857,5 @@ async def explainer_checkout(request: Request):
 #          most once per event id (processed_stripe_events claim is
 #          atomic)
 #   class: idempotency
-#   call:  python.tests.contracts.billing.test_webhook_replay_is_idempotent
 # === END CONTRACTS ===
-# 418:312 5:7 2:4
+# 418:311 5:7 2:4

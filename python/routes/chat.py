@@ -1,4 +1,4 @@
-# 637:187 2:7 2:16
+# 637:184 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -889,13 +889,11 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   given: GET /api/v1/conversations/{id} with x-user-id != row.user_id
 #   then:  404 (existence non-disclosure, never 403 or 200)
 #   class: security
-#   call:  python.tests.contracts.chat.test_get_other_owner_404
 #
 # id: chat_delete_other_owner_404
 #   given: DELETE /api/v1/conversations/{id} with x-user-id != row.user_id
 #   then:  404; the row remains intact for the real owner
 #   class: security
-#   call:  python.tests.contracts.chat.test_delete_other_owner_404
 #
 # id: chat_unknown_body_model_400
 #   given: POST /api/v1/conversations/{id}/messages with body.model that
@@ -904,6 +902,5 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #          active_provider — server-side sources still fall back, only
 #          user input is strict)
 #   class: correctness
-#   call:  python.tests.contracts.chat.test_unknown_body_model_400
 # === END CONTRACTS ===
-# 637:187 2:7 2:16
+# 637:184 2:7 2:16

@@ -1,4 +1,4 @@
-# 258:220 0:0 2:5
+# 258:214 0:0 2:5
 """EDCMbone scoring report → 200-400 word human explanation with cited
 quoted spans from the transcript. Owner-only, idempotent per report
 (UNIQUE on report_id), strict-JSON output, refund-on-failure.
@@ -491,7 +491,6 @@ def _credits_view(row: Dict[str, Any]) -> Dict[str, Any]:
 #   then:  a second explain_report() call returns the cached row, does NOT
 #          consume a credit, and does NOT call the model
 #   class: idempotency
-#   call:  python.tests.contracts.transcripts_explainer.test_idempotent_no_double_charge
 #
 # id: explainer_decrements_free_first
 #   given: a user with free_remaining=1, paid_remaining=3
@@ -499,21 +498,18 @@ def _credits_view(row: Dict[str, Any]) -> Dict[str, Any]:
 #          drops to 0; the next call returns 'paid' and paid_remaining
 #          drops to 2
 #   class: pricing
-#   call:  python.tests.contracts.transcripts_explainer.test_decrements_free_then_paid
 #
 # id: explainer_402_when_no_credits
 #   given: a user with free_remaining=0, paid_remaining=0
 #   then:  consume_explanation_credit returns None (route layer converts
 #          this to HTTP 402 with a checkout link)
 #   class: pricing
-#   call:  python.tests.contracts.transcripts_explainer.test_no_credits_returns_none
 #
 # id: explainer_refund_restores_balance
 #   given: a credit was consumed (bucket='paid'), then the model failed
 #   then:  refund_explanation_credit('paid') restores paid_remaining to
 #          its pre-consumption value
 #   class: failure_recovery
-#   call:  python.tests.contracts.transcripts_explainer.test_refund_after_failure
 #
 # id: explainer_rejects_fabricated_citations
 #   given: model output contains citations whose quoted spans do not
@@ -523,7 +519,6 @@ def _credits_view(row: Dict[str, Any]) -> Dict[str, Any]:
 #          runs in explain_report() — fabricated citations are never
 #          persisted or sold to the user
 #   class: correctness
-#   call:  python.tests.contracts.transcripts_explainer.test_rejects_fabricated_citations
 #
 # id: explainer_call_surfaces_in_learning_summary
 #   given: an explainer_call event is emitted by the explainer service
@@ -531,6 +526,5 @@ def _credits_view(row: Dict[str, Any]) -> Dict[str, Any]:
 #          to 'custom') AND the same aggregation learning_summary uses
 #          rolls it up by provider in the paid_explainer section
 #   class: correctness
-#   call:  python.tests.contracts.transcripts_explainer.test_explainer_call_surfaces_in_learning_summary
 # === END CONTRACTS ===
-# 258:220 0:0 2:5
+# 258:214 0:0 2:5

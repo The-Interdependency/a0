@@ -7,7 +7,7 @@ only CHECKS topology.
 """
 # === CHECKS ===
 # id: check_transcript_explainer_free_before_paid
-#   proves: transcript_explainer_credits_free_before_paid
+#   proves: explainer_decrements_free_first
 #   call: python.tests.contracts.transcripts_explainer.test_decrements_free_then_paid
 #   requires: python3, postgres
 #   timeout: 60
@@ -15,7 +15,7 @@ only CHECKS topology.
 #   cleanup: explicit_uuid_scoped_delete
 #
 # id: check_transcript_explainer_empty_balance
-#   proves: transcript_explainer_402_when_empty
+#   proves: explainer_402_when_no_credits
 #   call: python.tests.contracts.transcripts_explainer.test_no_credits_returns_none
 #   requires: python3, postgres
 #   timeout: 60
@@ -23,7 +23,7 @@ only CHECKS topology.
 #   cleanup: explicit_uuid_scoped_delete
 #
 # id: check_transcript_explainer_refund
-#   proves: transcript_explainer_refund_on_model_failure
+#   proves: explainer_refund_restores_balance
 #   call: python.tests.contracts.transcripts_explainer.test_refund_after_failure
 #   requires: python3, postgres
 #   timeout: 60
@@ -31,7 +31,7 @@ only CHECKS topology.
 #   cleanup: explicit_uuid_scoped_delete
 #
 # id: check_transcript_explainer_idempotent_report
-#   proves: transcript_explainer_idempotent_per_report
+#   proves: explainer_explanation_is_idempotent
 #   call: python.tests.contracts.transcripts_explainer.test_idempotent_no_double_charge
 #   requires: python3, postgres
 #   timeout: 60
@@ -39,7 +39,7 @@ only CHECKS topology.
 #   cleanup: explicit_report_and_upload_delete
 #
 # id: check_transcript_explainer_citation_integrity
-#   proves: transcript_explainer_rejects_fabricated_citations
+#   proves: explainer_rejects_fabricated_citations
 #   call: python.tests.contracts.transcripts_explainer.test_rejects_fabricated_citations
 #   requires: python3
 #   timeout: 30
@@ -47,7 +47,7 @@ only CHECKS topology.
 #   cleanup: none
 #
 # id: check_transcript_explainer_learning_summary
-#   proves: transcript_explainer_call_visible_in_learning_summary
+#   proves: explainer_call_surfaces_in_learning_summary
 #   call: python.tests.contracts.transcripts_explainer.test_explainer_call_surfaces_in_learning_summary
 #   requires: python3, postgres
 #   timeout: 60

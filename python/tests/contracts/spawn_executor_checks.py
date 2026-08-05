@@ -47,7 +47,7 @@ the CHECKS topology required by skill-lib test-build doctrine.
 #   cleanup: explicit_run_delete
 #
 # id: check_spawn_executor_rejects_empty_provider
-#   proves: spawn_executor_rejects_empty_provider
+#   proves: spawn_executor_resolve_provider_rejects_empty
 #   call: python.tests.contracts.spawn_executor.test_resolve_provider_rejects_empty
 #   requires: python3
 #   timeout: 30
@@ -55,7 +55,7 @@ the CHECKS topology required by skill-lib test-build doctrine.
 #   cleanup: none
 #
 # id: check_spawn_executor_snapshot_shape
-#   proves: spawn_executor_pcna_snapshot_shape
+#   proves: spawn_executor_snapshot_pcna_shape
 #   call: python.tests.contracts.spawn_executor.test_snapshot_pcna_shape
 #   requires: python3
 #   timeout: 30
@@ -63,7 +63,7 @@ the CHECKS topology required by skill-lib test-build doctrine.
 #   cleanup: ephemeral_object_release
 #
 # id: check_spawn_executor_degraded_merge_helpers
-#   proves: spawn_executor_merge_helpers_degrade_cleanly
+#   proves: spawn_executor_merge_helpers_tolerate_no_pcna
 #   call: python.tests.contracts.spawn_executor.test_merge_helpers_tolerate_no_pcna
 #   requires: python3
 #   timeout: 30
