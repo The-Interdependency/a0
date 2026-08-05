@@ -10,26 +10,6 @@ packages = ["cargo", "libiconv", "libxcrypt", "openssl", "pkg-config", "rustc"]
 localPort = 5000
 externalPort = 80
 
-[[ports]]
-localPort = 5001
-externalPort = 3001
-
-[[ports]]
-localPort = 5002
-externalPort = 4200
-
-[[ports]]
-localPort = 5904
-externalPort = 3000
-
-[[ports]]
-localPort = 8000
-externalPort = 8000
-
-[[ports]]
-localPort = 8001
-externalPort = 3002
-
 [env]
 PORT = "5000"
 
