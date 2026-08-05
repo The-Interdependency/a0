@@ -248,7 +248,7 @@ def test_alembic_configuration_loads_without_database() -> None:
     config = Config(str(config_path))
     script = ScriptDirectory.from_config(config)
     assert Path(script.dir).resolve() == (ROOT / "migrations").resolve()
-    assert script.get_heads() == []
+    assert script.get_heads() == ["lega_schm_base_v0_0_0alpha"]
     env_text = (ROOT / "migrations" / "env.py").read_text(encoding="utf-8")
     assert "target_metadata = None" in env_text
     assert "autogenerate is disabled" in env_text
