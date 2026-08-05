@@ -1,4 +1,4 @@
-# 25:89 0:0 0:0
+# 25:85 0:0 0:0
 """Canonical access-control helpers for a0p.
 
 Two-tier write-access model — owner (Erin + invitees with `role == 'admin'`)
@@ -104,7 +104,6 @@ def require_owner_of(request: Request, resource_user_id: str | None) -> str:
 #          on the explicit allowlist in
 #          python/services/gating_allowlist.py
 #   class: security
-#   call:  python.tests.contracts.gating.test_every_write_route_is_gated_or_allowlisted
 #
 # id: gating_allowlist_entries_are_real_routes
 #   given: every entry in OWNER_OR_PUBLIC_WRITES
@@ -112,7 +111,6 @@ def require_owner_of(request: Request, resource_user_id: str | None) -> str:
 #          @router.{method}(path) in the codebase (no stale entries
 #          pointing at deleted/renamed routes)
 #   class: security
-#   call:  python.tests.contracts.gating.test_allowlist_entries_correspond_to_real_routes
 #
 # id: gating_instrument_files_never_allowlisted
 #   given: FORBIDDEN_ALLOWLIST_FILES (agents.py, bandits.py, edcm.py,
@@ -120,7 +118,6 @@ def require_owner_of(request: Request, resource_user_id: str | None) -> str:
 #   then:  no entry in OWNER_OR_PUBLIC_WRITES references any of these files
 #          — instrument-mutation routes must be owner-gated, never allowlisted
 #   class: security
-#   call:  python.tests.contracts.gating.test_instrument_mutation_files_are_never_allowlisted
 #
 # id: gating_instrument_files_all_writes_gated
 #   given: every @router.{post,patch,put,delete} inside a
@@ -129,6 +126,5 @@ def require_owner_of(request: Request, resource_user_id: str | None) -> str:
 #          recognized gate). File-scoped sharper failure than the global
 #          contract — pinpoints instrument files that regress.
 #   class: security
-#   call:  python.tests.contracts.gating.test_instrument_mutation_files_have_all_writes_gated
 # === END CONTRACTS ===
-# 25:89 0:0 0:0
+# 25:85 0:0 0:0
