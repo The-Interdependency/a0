@@ -1,4 +1,4 @@
-# 166:89 0:0 0:0
+# 179:96 0:0 0:0
 """Inventory a0 schema declarations and schema-mutating runtime paths.
 
 Usage:
@@ -57,7 +57,7 @@ from __future__ import annotations
 #   since: 2026-08-05
 #
 # id: schema_inventory_reports_mutation_sites
-#   given: a source file contains CREATE TABLE, ALTER TABLE, CREATE INDEX, DROP TABLE, createTableIfMissing, or db:push
+#   given: a first-party source file contains CREATE TABLE, ALTER TABLE, CREATE INDEX, DROP TABLE, createTableIfMissing, or db:push
 #   then: the file and mutation kinds appear in runtime_mutation_sites
 #   class: correctness
 #   since: 2026-08-05
@@ -65,6 +65,12 @@ from __future__ import annotations
 # id: schema_inventory_check_fails_on_unreviewed_mutation_site
 #   given: --check and a schema-mutating path exists outside the reviewed legacy allowlist or migrations directory
 #   then: the process exits nonzero and names the unreviewed path
+#   class: safety
+#   since: 2026-08-05
+#
+# id: schema_inventory_excludes_environment_vendor_trees
+#   given: Replit or Python dependency trees such as .cache, .pythonlibs, node_modules, or site-packages contain schema-like text
+#   then: inventory walks only declared first-party source roots and none of those vendor paths appear in authorities or mutation sites
 #   class: safety
 #   since: 2026-08-05
 # === END CONTRACTS ===
@@ -76,8 +82,15 @@ import re
 from pathlib import Path
 from typing import Iterable
 
-SOURCE_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".mjs", ".sh", ".sql"}
-SKIP_PARTS = {".git", "node_modules", "dist", "__pycache__", ".pytest_cache", ".agents", "attached_assets"}
+SOURCE_ROOTS = ("python", "server", "scripts", "shared", "client", "script", ".github")
+SOURCE_SUFFIXES = {
+    ".py", ".ts", ".tsx", ".js", ".mjs", ".sh", ".sql", ".yml", ".yaml",
+}
+SKIP_PARTS = {
+    ".git", ".cache", ".pythonlibs", ".local", ".upm", ".nix", ".direnv",
+    "node_modules", "site-packages", "dist", "build", "target", "__pycache__",
+    ".pytest_cache", ".agents", "attached_assets",
+}
 NON_RUNTIME_MUTATION_PATHS = {
     "scripts/sche_invt_repo_v0.0.0alpha.py",
     "scripts/sche_capt_live_v0.0.0alpha.py",
@@ -109,12 +122,19 @@ _MUTATION_PATTERNS = {
 
 
 def _source_files(root: Path) -> Iterable[Path]:
-    for path in root.rglob("*"):
-        if not path.is_file() or path.suffix not in SOURCE_SUFFIXES:
+    """Yield first-party source files only; never walk the whole Replit tree."""
+    for source_root in SOURCE_ROOTS:
+        base = root / source_root
+        if not base.exists():
             continue
-        if any(part in SKIP_PARTS for part in path.parts):
-            continue
-        yield path
+        candidates = [base] if base.is_file() else base.rglob("*")
+        for path in candidates:
+            if not path.is_file() or path.suffix not in SOURCE_SUFFIXES:
+                continue
+            relative_parts = path.relative_to(root).parts
+            if any(part in SKIP_PARTS for part in relative_parts):
+                continue
+            yield path
 
 
 def parse_drizzle_tables(text: str) -> set[str]:
@@ -235,4 +255,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# 166:89 0:0 0:0
+# 179:96 0:0 0:0
