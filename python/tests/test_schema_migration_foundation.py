@@ -141,6 +141,7 @@ def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure(monkeypatch) -
 
     def fake_run(command, **kwargs):
         recorded["command"] = command
+        recorded["env"] = kwargs["env"]
         return subprocess.CompletedProcess(command, 7, stdout="", stderr="secret-url")
 
     monkeypatch.setattr(capture.shutil, "which", fake_which)
@@ -150,6 +151,9 @@ def test_capture_uses_read_only_pg_dump_flags_and_redacts_failure(monkeypatch) -
         capture.capture_schema(secret)
     assert secret not in str(exc.value)
     command = recorded["command"]
+    assert secret not in command
+    assert recorded["env"]["PGDATABASE"] == secret
+    assert "DATABASE_URL" not in recorded["env"]
     assert "--schema-only" in command
     assert "--no-owner" in command
     assert "--no-privileges" in command
