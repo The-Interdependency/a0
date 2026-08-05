@@ -1,4 +1,4 @@
-# 59:60 0:0 0:0
+# 59:68 0:0 0:0
 """Alembic environment for a0's PostgreSQL schema.
 
 `env.py` is an Alembic-mandated filename and therefore a documented exception
@@ -44,6 +44,14 @@ from __future__ import annotations
 #   owner: database-owner
 #   since: 2026-08-05
 # === END BOUNDARIES ===
+
+# === CONTRACTS ===
+# id: alembic_environment_explicit_transactional_only
+#   given: a migration command runs while the legacy schema has no complete metadata authority
+#   then: Alembic uses transactional PostgreSQL DDL and refuses autogeneration rather than inferring a partial schema
+#   class: safety
+#   since: 2026-08-05
+# === END CONTRACTS ===
 
 import os
 from logging.config import fileConfig
@@ -126,4 +134,4 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-# 59:60 0:0 0:0
+# 59:68 0:0 0:0
