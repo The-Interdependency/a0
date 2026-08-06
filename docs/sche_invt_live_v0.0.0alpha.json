@@ -1,0 +1,233 @@
+{
+  "authorities": {
+    "drizzle": [
+      "a0p_events",
+      "a0p_settings",
+      "admin_emails",
+      "agent_instances",
+      "agent_logs",
+      "agent_matches",
+      "agent_runs",
+      "approval_scopes",
+      "artifacts",
+      "automation_tasks",
+      "bandit_arms",
+      "bandit_correlations",
+      "byok_keys",
+      "challenge_responses",
+      "command_history",
+      "conversations",
+      "cost_metrics",
+      "custom_tools",
+      "deals",
+      "discovery_drafts",
+      "edcm_metric_snapshots",
+      "edcm_snapshots",
+      "fleet_benchmark_runs",
+      "fleet_benchmarks",
+      "fleet_contestant_runs",
+      "fleet_contestants",
+      "fleet_judgments",
+      "founders",
+      "generated_images",
+      "guest_token_usage",
+      "heartbeat_logs",
+      "heartbeat_tasks",
+      "memory_projections",
+      "memory_seeds",
+      "memory_tensor_snapshots",
+      "message_attachments",
+      "messages",
+      "processed_stripe_events",
+      "prompt_contexts",
+      "recovery_attempts",
+      "sessions",
+      "settings",
+      "system_toggles",
+      "tool_results",
+      "transcript_messages",
+      "transcript_reports",
+      "transcript_sources",
+      "transcript_uploads",
+      "users",
+      "ws_modules"
+    ],
+    "executable_sql": [
+      "agent_logs",
+      "agent_runs",
+      "approval_scopes",
+      "bandit_arms",
+      "explanation_credits",
+      "fleet_benchmark_runs",
+      "fleet_benchmarks",
+      "fleet_contestant_runs",
+      "fleet_contestants",
+      "fleet_judgments",
+      "instance_chat_archives",
+      "instance_chats",
+      "instance_memory",
+      "instance_tasks",
+      "model_instances",
+      "processed_stripe_events",
+      "recovery_attempts",
+      "security_probes",
+      "settings",
+      "transcript_explanations",
+      "transcript_messages",
+      "transcript_uploads"
+    ],
+    "sqlalchemy": [
+      "a0p_events",
+      "approval_scopes",
+      "automation_tasks",
+      "byok_keys",
+      "command_history",
+      "conversations",
+      "cost_metrics",
+      "custom_tools",
+      "deals",
+      "edcm_metric_snapshots",
+      "edcm_snapshots",
+      "explanation_credits",
+      "founders",
+      "generated_images",
+      "heartbeat_logs",
+      "heartbeat_tasks",
+      "memory_projections",
+      "memory_seeds",
+      "memory_tensor_snapshots",
+      "message_attachments",
+      "messages",
+      "prompt_contexts",
+      "sessions",
+      "system_toggles",
+      "tool_results",
+      "transcript_explanations",
+      "transcript_messages",
+      "transcript_reports",
+      "transcript_sources",
+      "transcript_uploads",
+      "users"
+    ]
+  },
+  "drift": {
+    "drizzle_only": [
+      "a0p_settings",
+      "admin_emails",
+      "agent_instances",
+      "agent_matches",
+      "artifacts",
+      "bandit_correlations",
+      "challenge_responses",
+      "discovery_drafts",
+      "guest_token_usage",
+      "ws_modules"
+    ],
+    "executable_sql_only": [
+      "instance_chat_archives",
+      "instance_chats",
+      "instance_memory",
+      "instance_tasks",
+      "model_instances",
+      "security_probes"
+    ],
+    "missing_from_drizzle": [
+      "explanation_credits",
+      "instance_chat_archives",
+      "instance_chats",
+      "instance_memory",
+      "instance_tasks",
+      "model_instances",
+      "security_probes",
+      "transcript_explanations"
+    ],
+    "missing_from_sqlalchemy": [
+      "a0p_settings",
+      "admin_emails",
+      "agent_instances",
+      "agent_logs",
+      "agent_matches",
+      "agent_runs",
+      "artifacts",
+      "bandit_arms",
+      "bandit_correlations",
+      "challenge_responses",
+      "discovery_drafts",
+      "fleet_benchmark_runs",
+      "fleet_benchmarks",
+      "fleet_contestant_runs",
+      "fleet_contestants",
+      "fleet_judgments",
+      "guest_token_usage",
+      "instance_chat_archives",
+      "instance_chats",
+      "instance_memory",
+      "instance_tasks",
+      "model_instances",
+      "processed_stripe_events",
+      "recovery_attempts",
+      "security_probes",
+      "settings",
+      "ws_modules"
+    ],
+    "sqlalchemy_only": []
+  },
+  "hmmm": [
+    "dynamic SQL assembled without a literal mutation token may require manual review",
+    "table presence does not prove column, default, constraint, index, or type equivalence"
+  ],
+  "reviewed_legacy_mutation_paths": [
+    ".github/workflows/deploy.yml",
+    "package.json",
+    "python/main.py",
+    "python/routes/billing.py",
+    "scripts/post-merge.sh",
+    "server/auth/setup.ts"
+  ],
+  "runtime_mutation_sites": [
+    {
+      "kinds": [
+        "drizzle_push"
+      ],
+      "path": ".github/workflows/deploy.yml"
+    },
+    {
+      "kinds": [
+        "drizzle_push"
+      ],
+      "path": "package.json"
+    },
+    {
+      "kinds": [
+        "alter_table",
+        "create_index",
+        "create_table"
+      ],
+      "path": "python/main.py"
+    },
+    {
+      "kinds": [
+        "create_table"
+      ],
+      "path": "python/routes/billing.py"
+    },
+    {
+      "kinds": [
+        "create_table",
+        "drizzle_push"
+      ],
+      "path": "scripts/post-merge.sh"
+    },
+    {
+      "kinds": [
+        "connect_pg_create",
+        "create_index",
+        "create_table"
+      ],
+      "path": "server/auth/setup.ts"
+    }
+  ],
+  "schema": "a0.schema-inventory",
+  "sha256": "48572272b40c79c92fa6b6cbcd743ffe70efcc79df41418eeffa543827cb39b2",
+  "version": "1.0.0"
+}
