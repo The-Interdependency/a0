@@ -1,0 +1,28 @@
+{
+  "schema": "a0.schema-test-baseline",
+  "version": "1.0.0",
+  "commit": "d9d0a1f260622567457a088ccc298036a4173f5c",
+  "server_version": "16.10",
+  "capture_sha256": "a37c91fda92ada79003e55c4c8a28b9d193d37ae84f427768423bc608b3a134a",
+  "revision_id": "lega_schm_base_v0_0_0alpha",
+  "gate_a": {
+    "table_count": 87,
+    "revision_applied": "lega_schm_base_v0_0_0alpha",
+    "empty_apply": true,
+    "second_upgrade_noop": true
+  },
+  "gate_b": {
+    "seeded_tables": [
+      "public.agent_runs",
+      "public.bandit_correlations",
+      "public.edcm_snapshots",
+      "public.memory_projections",
+      "public.memory_tensor_snapshots",
+      "public.users"
+    ],
+    "table_count": 87,
+    "row_preservation": true,
+    "stamp_preservation": true
+  },
+  "cleanup": true
+}
