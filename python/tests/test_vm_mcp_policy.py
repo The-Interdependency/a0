@@ -1,3 +1,11 @@
+"""Contract checks for the VM MCP policy layer.
+
+Usage guidance:
+    PYTHONPATH=. pytest -q python/tests/test_vm_mcp_policy.py
+
+These checks intentionally avoid importing the MCP SDK so the confinement and
+execution policy can be tested independently of transport/runtime setup.
+"""
 from __future__ import annotations
 
 from pathlib import Path
