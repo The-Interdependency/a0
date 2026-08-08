@@ -1,3 +1,14 @@
+"""Streamable-HTTP MCP server for controlled access to the a0 VM.
+
+Usage guidance:
+    A0_MCP_ROOT=/srv/a0/workspaces A0_MCP_SHELL_ENABLED=0 \
+        python -m python.vm_mcp
+
+The server binds only to ``127.0.0.1`` and exposes ``/mcp``. Connect it through
+a private MCP tunnel/client. Test the read-only tools first; enable
+``shell_exec`` only by setting ``A0_MCP_SHELL_ENABLED=1`` in the systemd
+override described in ``docs/VM_MCP.md``.
+"""
 from __future__ import annotations
 
 import os
@@ -30,7 +41,7 @@ from python.vm_mcp_policy import (
 #   rollout: systemd_service_plus_secure_mcp_tunnel
 #   rollback: stop_and_disable_a0-vm-mcp.service_and_remove_tunnel_app
 #   feature_flag: A0_MCP_SHELL_ENABLED
-#   unresolved: secure_mcp_tunnel_endpoint_registration, chatgpt_write_capability_availability
+#   unresolved: secure_mcp_tunnel_endpoint_registration, chatgpt_write_capability_availability, a0_msdmd_collection_point_absent
 # === END MODULE_BUILD ===
 
 # === CONTRACTS ===
