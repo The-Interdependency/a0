@@ -7,12 +7,12 @@ Wants=network-online.target
 Type=simple
 User=a0mcp
 Group=a0mcp
-WorkingDirectory=/srv/a0
+WorkingDirectory=/opt/a0-vm-mcp
 Environment=A0_MCP_ROOT=/srv/a0/workspaces
 Environment=A0_MCP_PORT=8765
 Environment=A0_MCP_SHELL_ENABLED=0
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/srv/a0/.venv/bin/python -m python.vm_mcp
+ExecStart=/opt/a0-vm-mcp/.venv/bin/python -m python.vm_mcp
 Restart=on-failure
 RestartSec=2
 UMask=0077
@@ -32,6 +32,7 @@ LockPersonality=true
 CapabilityBoundingSet=
 AmbientCapabilities=
 ReadWritePaths=/srv/a0/workspaces
+InaccessiblePaths=-/run/docker.sock -/var/run/docker.sock
 IPAddressDeny=169.254.169.254
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
