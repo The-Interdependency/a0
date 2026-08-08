@@ -1,0 +1,3 @@
+# VM-only control-plane dependency. Keep separate from a0's application uv.lock.
+# v2 is required because python/vm_mcp.py uses MCPServer, not the removed v1 FastMCP API.
+mcp>=2,<3
