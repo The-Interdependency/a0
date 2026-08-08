@@ -26,7 +26,6 @@ dependencies = [
     "interdependent-lib @ git+https://github.com/The-Interdependency/interdependent-lib.git@main",
     "itsdangerous>=2.2.0",
     "mako>=1.3.11",
-    "mcp>=2,<3",
     "numpy>=2.4.3",
     "openai>=2.0.0",
     "openai-agents>=0.15.0",
