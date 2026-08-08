@@ -1,3 +1,14 @@
+"""Policy primitives for the a0 VM MCP control plane.
+
+Usage guidance:
+- Build configuration with ``VmMcpConfig.from_env()``.
+- Use ``list_directory`` and ``read_text`` only through the MCP wrapper.
+- ``run_shell`` is a write-capable primitive and remains disabled unless
+  ``A0_MCP_SHELL_ENABLED=1`` is explicitly present.
+- The filesystem root and process limits are security boundaries; do not bypass
+  ``resolve_under_root`` or replace the sanitized subprocess environment with
+  ``os.environ.copy()``.
+"""
 from __future__ import annotations
 
 import os
