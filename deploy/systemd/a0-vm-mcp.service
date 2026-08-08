@@ -1,0 +1,39 @@
+[Unit]
+Description=a0 VM MCP control plane
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=a0mcp
+Group=a0mcp
+WorkingDirectory=/srv/a0
+Environment=A0_MCP_ROOT=/srv/a0/workspaces
+Environment=A0_MCP_PORT=8765
+Environment=A0_MCP_SHELL_ENABLED=0
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/srv/a0/.venv/bin/python -m python.vm_mcp
+Restart=on-failure
+RestartSec=2
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/srv/a0/workspaces
+IPAddressDeny=169.254.169.254
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
