@@ -34,6 +34,7 @@ a0-vm-mcp.service  (User=a0mcp)
 - Access to the Google Compute Engine metadata address `169.254.169.254` is denied by systemd.
 - Shell subprocesses receive a small sanitized environment rather than inheriting arbitrary MCP service environment variables.
 - Output and runtime are bounded. Defaults are 256 KiB per output stream and 120 seconds.
+- The MCP SDK is a VM-service dependency in `deploy/vm-mcp-requirements.txt`; it is intentionally not inserted into a0's existing application `uv.lock`.
 
 ## VM installation
 
@@ -47,6 +48,7 @@ cd /srv/a0
 python3 -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -e .
+.venv/bin/pip install -r deploy/vm-mcp-requirements.txt
 
 sudo install -m 0644 deploy/systemd/a0-vm-mcp.service /etc/systemd/system/a0-vm-mcp.service
 sudo systemctl daemon-reload
