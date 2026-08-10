@@ -1,0 +1,167 @@
+{
+  "schema": "the-interdependency.repository-plan-report",
+  "version": "1.0.0",
+  "repository": "The-Interdependency/a0",
+  "contract": {
+    "repository": "The-Interdependency/skill-lib",
+    "path": "interdependent-work-graph/repository-plan-report.schema.json",
+    "version": "1.0.0",
+    "blob_sha": "9b347b2dff7692054b571602f30ee6d00c2e7265"
+  },
+  "source": {
+    "branch": "main",
+    "commit": "1f331b45d1c22a4548e21ddcb6110d43b2e6460a",
+    "generated_at": "2026-08-07",
+    "note": "This report describes the cited a0 main commit. The report commit is coordination metadata and does not change runtime, privacy, deployment, agent, or upstream mathematical authority."
+  },
+  "authority": {
+    "owns": [
+      "a0 application runtime and deployed research-instrument behavior",
+      "durable agent definitions, runtime-instance identities, run lineage, semantic-memory persistence, and owner-scoped service contracts",
+      "a0(zfae) system-primary composition and platform-side privacy/projection/disclosure policy",
+      "provider routing, tool execution, application interfaces, persistence adapters, and deployment integration",
+      "resource-to-need matching workflow and consent-mediated disclosure behavior implemented by the platform"
+    ],
+    "does_not_own": [
+      "ZFAE conceptual ontology beyond the runtime integration contract",
+      "PTCNA algebra or canonical tensor-state semantics",
+      "PCEA cryptographic/privacy primitive semantics",
+      "UCNS mathematical representation or proof status",
+      "EDCM empirical measurement validity",
+      "METAPAT semantic canon",
+      "skill-lib organization-wide build and cross-repository workflow doctrine"
+    ],
+    "non_transfer": [
+      "a provider model is an energy provider and does not become the agent identity",
+      "PTCNA state merge does not authorize semantic-memory merge",
+      "global system-primary read authority does not imply disclosure authority",
+      "runtime integration does not transfer theorem, semantic, measurement, or empirical status from producer repositories",
+      "published EULA language is not a substitute for executable privacy enforcement and tests"
+    ]
+  },
+  "portfolio_role": {
+    "summary": "Provide the user-facing and machine-facing runtime where persistent agents, bounded model providers, tools, memory, privacy, provenance, spawn/merge execution, and resource-to-need matching are composed without absorbing the authority of the mathematical, semantic, measurement, or privacy primitives it consumes.",
+    "upstream_contract": "a0 consumes exact upstream package or source identities through adapters and keeps their authority separate from application state.",
+    "downstream_contract": "a0 exposes audited agent runs, scoped memory projections, user interfaces, APIs, and deployment behavior governed by platform-owned identity, privacy, consent, and provenance contracts.",
+    "reports_to": {
+      "repository": "The-Interdependency/skill-lib",
+      "skill": "interdependent-work-graph",
+      "relation": "repo-owned runtime, agent, memory, privacy, and deployment-plan input; no authority transfer"
+    }
+  },
+  "status": {
+    "state": "active runtime migration and backend implementation",
+    "current_claim": "Owner semantics for the durable agent foundation and a0(zfae)+PTCNA primary composition are settled; implementation and release evidence remain in progress.",
+    "latest_main_milestone": {
+      "commit": "1f331b45d1c22a4548e21ddcb6110d43b2e6460a",
+      "description": "reconciled the reviewed migration baseline onto main"
+    },
+    "deployed_identity": "a0p is the deployed research-instrument instance; a0 is the project/runtime/repository"
+  },
+  "delivered": [
+    {
+      "surface": "persistent ZFAE primary-agent runtime",
+      "status": "implemented research-instrument surface",
+      "boundary": "large language models supply bounded computation and are not the persistent agent identity"
+    },
+    {
+      "surface": "three-process web runtime",
+      "status": "Express public boundary, Python/FastAPI orchestration, and React/Vite console are implemented",
+      "boundary": "deployment mechanics do not establish upstream cognitive or measurement claims"
+    },
+    {
+      "surface": "cognitive engine integration",
+      "status": "PCNA/PTCA, Sigma, Zeta, EDCM, bandit routing, and heartbeat services are integrated in the application runtime",
+      "boundary": "a0 integration does not make local copies authoritative over producer repositories"
+    },
+    {
+      "surface": "durable agent foundation decision",
+      "status": "owner semantics settled for AgentDefinition -> AgentInstance -> PTCNA state + memory branch + AgentRun lineage",
+      "boundary": "configuration, tensor state, semantic memory, artifacts, and audit events remain separate merge channels"
+    },
+    {
+      "surface": "system-primary memory authority and mediated matching contract",
+      "status": "backend semantics specified",
+      "boundary": "knowledge does not imply disclosure authority; public release requires executable enforcement and matching user-facing disclosure"
+    }
+  ],
+  "active_frontier": [
+    "complete the durable backend implementation against the settled CRUD definition, instance, run, PTCNA-state, and semantic-memory separation",
+    "establish adapter equivalence to canonical PTCNA rather than preserving a second application-owned algebra",
+    "implement and test Guardian/PCEA minimum-necessary memory projection and disclosure auditing around a0(zfae)",
+    "complete consent-scoped resource-to-need matching and introduction flows",
+    "keep provider routing, tools, agent lifecycle, and memory behavior auditable while deployment infrastructure evolves"
+  ],
+  "next_actions": [
+    {
+      "action": "finish the backend persistence and API implementation for AgentDefinition, AgentInstance, AgentRun, semantic memory, and PTCNA snapshots",
+      "owner": "The-Interdependency/a0",
+      "dependency": "settled backend-foundation contract"
+    },
+    {
+      "action": "prove adapter equivalence against the canonical PTCNA producer and remove any remaining shadow algebra",
+      "owner": "The-Interdependency/a0 + The-Interdependency/ptcna",
+      "dependency": "exact producer identity and adapter fixtures"
+    },
+    {
+      "action": "implement privacy projection, cross-owner access audit, consent, export, correction, retention, redaction, and deletion gates before claiming the published privacy contract",
+      "owner": "The-Interdependency/a0",
+      "dependency": "Guardian/PCEA integration and executable policy tests"
+    },
+    {
+      "action": "separate deployment-host migration from application canon so hosting can change without changing agent or memory semantics",
+      "owner": "The-Interdependency/a0",
+      "dependency": "deployment target and operational runbook"
+    }
+  ],
+  "blocked": [
+    "public release of the full system-primary memory contract is blocked until executable privacy boundaries and matching tests exist",
+    "canonical PTCNA runtime-state claims are blocked on exact adapter equivalence rather than a0-local reimplementation"
+  ],
+  "cross_repository_relations": [
+    {
+      "repository": "The-Interdependency/zfae",
+      "relation": "conceptual inference-event authority whose runtime realization is integrated by a0",
+      "authority_transfer": false
+    },
+    {
+      "repository": "The-Interdependency/ptcna",
+      "relation": "canonical persistent runtime-state producer consumed through an a0 adapter",
+      "authority_transfer": false
+    },
+    {
+      "repository": "The-Interdependency/pcea",
+      "relation": "Guardian privacy primitive provider for projection and inference-state boundaries",
+      "authority_transfer": false
+    },
+    {
+      "repository": "The-Interdependency/edcm",
+      "relation": "separate measurement authority consumed by a0 runtime surfaces",
+      "authority_transfer": false,
+      "measurement_status_transfer": false
+    },
+    {
+      "repository": "The-Interdependency/skill-lib",
+      "relation": "build, boundary, agent-instantiation, and cross-repository workflow doctrine",
+      "authority_transfer": false
+    }
+  ],
+  "machine_entrypoints": {
+    "repo_report": "docs/work-graphs/repository-plan-report.json",
+    "system_overview": "README.md",
+    "backend_foundation": "docs/replit-backend-foundation.md",
+    "backend_work_graph": "docs/work-graphs/replit-backend-foundation.json",
+    "legacy_frozen_spec": "spec.md",
+    "runtime_root": "python/",
+    "frontend_root": "client/"
+  },
+  "hmmm": [
+    "final production hosting target and migration runbook after the current Replit-oriented foundation",
+    "complete PTCNA adapter-equivalence evidence and removal boundary for application-local algebra",
+    "complete executable Guardian/PCEA projection policy around global system-primary memory read authority",
+    "final EULA and interface language after actual privacy controls are implemented",
+    "production retention, redaction, deletion, and consent-expiry defaults",
+    "resource-to-need matching safety policy and field-level minimum-necessary disclosure rules",
+    "worker leadership and instance-count policy for production deployment"
+  ]
+}
