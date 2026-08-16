@@ -1,5 +1,14 @@
 # a0p — a research instrument
 
+> **DEPRECATED integrated runtime profile (2026-08-16).** Do not deploy this
+> checkout. Its dependency graph relied on archived `edcmbone`, moving org
+> branch refs, and a failed current convergence prerequisite. Those default
+> dependency edges have been removed. The source remains historical evidence;
+> [`a0-betatest`](https://github.com/The-Interdependency/a0-betatest) is the
+> supported replacement for the bounded reset, route, and typed-absence
+> contracts it currently implements. It is not asserted to be feature-equivalent.
+> See [`DEPRECATION.md`](DEPRECATION.md).
+
 **a0p is a research instrument, not a product.** It is the deployed instance of `a0` (this codebase) running publicly at [replit.interdependentway.org](https://replit.interdependentway.org). It explores agent / energy-provider / PCNA dynamics in the open. Anyone may read and use it. Code-altering access is restricted to the owner and a small set of explicitly-invited collaborators. The instrument is funded by donations; it does not solicit subscribers.
 
 > **Naming:** `a0` = the project / runtime / repository (used in contributor-facing material). `a0p` = the deployed instance of `a0` (used in user-facing UI copy and billing). The thing you build is `a0`; the thing that runs is `a0p`.
@@ -68,6 +77,10 @@ The only productized service is the **EDCMbone transcript explainer** — a one-
 ---
 
 ## Local Development
+
+The commands below are historical and do not define a supported deployment.
+The deprecated integrated runtime intentionally remains fail-closed until each
+missing producer has a tested current adapter.
 
 **Prerequisites:** Node.js 20+, Python 3.12+, PostgreSQL
 
