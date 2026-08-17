@@ -37,7 +37,7 @@ Resolution:
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; Zeta runs non-blocking after responses and can be disabled without affecting inference.
-#   requires: a0_engine_pcna, a0_service_edcm
+#   requires: a0_platonic_ptcna_state, a0_service_edcm
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===

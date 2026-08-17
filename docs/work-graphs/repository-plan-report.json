@@ -53,7 +53,7 @@
   },
   "status": {
     "state": "active implementation; promised a0 delivery remains incomplete",
-    "current_claim": "PlatonicAgent now subsumes the presently legible a0 agent semantics as distinct executable regions; the region map is intentionally open, existing non-collapse boundaries are preserved, and durable runtime implementation/release evidence remains incomplete.",
+    "current_claim": "PlatonicAgent subsumes the presently legible a0 agent semantics as distinct executable regions. Its PTCNA runtime-state region now consumes the exact UCNS/PTCNA pair, persists producer state and routing receipts, and recovers them across restart with tamper rejection. Other durable regions and the critical usefulness evaluation remain incomplete.",
     "latest_main_milestone": {
       "commit": "7251f0f9fba5265ebeb8dbfe8ff4dc5826dfe62c",
       "description": "subsumed existing a0 agent semantics into PlatonicAgent regions"
@@ -65,6 +65,11 @@
       "surface": "Platonic Agent whole-agent object and subsumption map",
       "status": "implemented provisional architecture surface with executable dimensions, semantic regions, projections, and focused witnesses",
       "boundary": "the current dimension and region sets are open and not claimed exhaustive or empirically validated"
+    },
+    {
+      "surface": "exact PTCNA runtime-state realization",
+      "status": "producer-backed target/fallback runtime, UCNS receipt, Platonic projection, checkpoint/restart, and tamper rejection implemented",
+      "boundary": "integration proves construction only; geometry, efficacy, and production privacy remain unresolved"
     },
     {
       "surface": "persistent ZFAE primary-agent runtime",
@@ -94,7 +99,7 @@
   ],
   "active_frontier": [
     "realize the PlatonicAgent definition, instance, run, semantic-memory, and runtime-state regions in the durable backend without creating a competing agent ontology",
-    "establish adapter equivalence to canonical PTCNA and remove remaining application-owned shadow algebra only after equivalence evidence",
+    "evaluate the exact canonical PTCNA integration without reintroducing application-owned shadow algebra",
     "implement and test Guardian/PCEA minimum-necessary projection, cross-owner memory access audit, disclosure, export, correction, retention, redaction, and deletion behavior",
     "complete consent-scoped resource-to-need matching and introduction flows",
     "continue recovering existing and newly legible agent semantics into PlatonicAgent regions without treating the current map as exhaustive",
@@ -112,9 +117,9 @@
       "dependency": "durable schema and migration cutover"
     },
     {
-      "action": "prove adapter equivalence against canonical PTCNA and route the PlatonicAgent runtime-state region through that adapter",
+      "action": "run the frozen representative usefulness evaluation against the exact canonical PTCNA and explicit fallback paths",
       "owner": "The-Interdependency/a0 + The-Interdependency/ptcna",
-      "dependency": "exact producer identity and cross-repository equivalence fixtures"
+      "dependency": "merged exact producer identities and restart/tamper fixtures"
     },
     {
       "action": "implement the privacy-projection region as executable Guardian/PCEA projection, cross-owner audit, consent, disclosure, retention, redaction, deletion, and export controls",

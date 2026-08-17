@@ -10,7 +10,7 @@ Modules divide into Category 1 (frame-independent) and Category 2 (frame-depende
 | Module | Responsibility | Status |
 |--------|----------------|--------|
 | `coherence_primes.py` | Sequence registry: `nth(k)`, `is_coherence_prime(n)`, `sequence_up_to(limit)`. Recursive definition fully pinned (see below). | ✅ implemented |
-| `encoder.py` | `text_to_ucns(text) → List[UCNSObject|None]`. Tokenize + per-token closed_tokens lookup. Open-class tokens emit `None`. | ✅ implemented (runtime blocked on edcmbone #46) |
+| `encoder.py` | Archived lexical encoder skeleton; no current UCNS mapping authority. | ⛔ fail-closed |
 | `pool.py` | UCNS object intern table. Encode-once-refer-many. Frame-independent. | ✅ implemented |
 | `disk_flip.py` | `disk_flip(obj) → UCNSObject`. Provisional: swap n_dec/n_min. Spec law not yet verified against multiplication rule. | ✅ implemented (provisional) |
 | `theta_gate.py` | `gate(obj, capability) → UCNSObject`. Class-only view when capability ungrouped; full object when granted. | ✅ implemented (taxonomy pending) |
@@ -84,4 +84,4 @@ Enforced nominally in `orchestrator.py::_check_compatibility` — becomes execut
 7. **Canonical UCNSObject key**: `pool._key` breaks at recursive anchor payload depth > 0.
 8. **Capability taxonomy**: `theta_gate` allowlist not yet defined.
 9. **Entry-to-UCNSObject mapping**: `encoder._entry_to_ucns` provisional.
-10. **edcmbone import path**: pip-install vs vendored (blocked on edcmbone issue #46).
+10. **Lexical mapping**: a lawful mapping into the current producer-owned UCNS API remains unresolved.

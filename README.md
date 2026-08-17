@@ -31,13 +31,18 @@ Browser → Express (:5000) → [proxy /api/*] → Python/FastAPI (:8001)
 
 | Component | Role |
 |-----------|------|
-| **PCNA** (`python/engine/pcna.py`) | Six-ring inference pipeline: Φ (Phi), Ψ (Psi), Ω (Omega), Θ (Theta), Memory-L (N=19), Memory-S (N=17) |
-| **PTCA** (`python/engine/ptca_core.py`) | Prime-ring tensor context — shape `[N, 4, 7, 7]` across node/dim/phase/heptagram axes |
+| **PTCNA state** (`python/engine/ptcna_state.py`) | Exact producer-backed neural/circle/seed/core runtime, UCNS candidate receipt, explicit fallback routing, and durable Platonic-Agent restart state |
 | **Sigma** (`python/engine/sigma.py`) | Filesystem substrate encoder; companion to the Ψ ring |
 | **Zeta** (`python/engine/zeta.py`) | Memory injection layer — LT→prompt cache, ST→after cache, sub-agent→volatile |
 | **EDCM** (`python/services/edcm.py`) | Behavioral directive scoring (CM, DA, DRIFT, DVG, INT, TBF) |
 | **Bandits** (`python/services/bandit.py`) | UCB1 multi-armed bandit for tool / model / routing selection |
 | **Heartbeat** (`python/services/heartbeat.py`) | 30-second tick: PCNA propagation, memory checkpoints, sub-agent cleanup |
+
+a0 pins `interdependent-lib@918025e525910eaa3f20141aeb3956f137b248bf`,
+which publishes PTCNA `c5fa9a599498f19c8345f2790a0636542dfbc6a1`
+with UCNS `b7b6f35cce69c273860923489a1c8b5372d14eb0`. The local
+PCNA/PTCA/merge algebra has been removed. Integration proves construction, not
+usefulness, continuous seven-fold geometry, efficacy, or production privacy.
 
 ### Metadata-Driven Console
 

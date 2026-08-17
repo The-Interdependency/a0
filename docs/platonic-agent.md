@@ -200,7 +200,11 @@ Tarot is the reverse methodological probe, not an a0 runtime dependency and not 
 
 `python/agents/platonic_regions.py` owns the current mapping of pre-existing a0 semantics into the Platonic Agent. Keeping this map separate from the core object prevents the present implementation inventory from being mistaken for the maximal object's final shape.
 
-No storage schema, runtime lifecycle, ZFAE execution, provider routing, privacy policy, PTCNA behavior, or merge operation is changed by this subsumption slice.
+The later PTCNA integration slice now realizes the `ptcna_runtime_state` region
+through `python.engine.PTCNAState`. It consumes the exact pair published by
+interdependent-lib, persists producer tensors plus receipt/routing state, and
+rejects tampering before restart recovery. Semantic memory and inference remain
+separate regions and separate authorities.
 
 ## Usage guidance
 
@@ -235,5 +239,6 @@ Passing these contracts establishes only that the software representation preser
 - What already-existing a0 semantics remain unmapped into the current region set?
 - Is every property or region itself best represented as a UCNS object, and if so, under what semantic authorization?
 - What is the exact durable serialization/realization contract for each region?
+- The PTCNA region now has one tested durable contract; other regions remain open.
 - Which region memberships are universal to agency versus contingent on an a0 realization?
 - Which transformations preserve one agent, create a fork, or terminate identity?

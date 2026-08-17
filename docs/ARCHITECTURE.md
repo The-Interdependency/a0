@@ -8,7 +8,7 @@
 - `python/main.py` — FastAPI app, mounts all routers, `/api/v1/ui/structure`, heartbeat lifespan
 - `python/database.py` — Async SQLAlchemy (asyncpg), sync engine for migrations
 - `python/models.py` — SQLAlchemy ORM models for all tables
-- `python/engine/pcna.py` — PCNA six-ring engine (53-node topology)
+- `python/engine/ptcna_state.py` — durable a0 adapter over exact canonical PTCNA and its UCNS receipt
 - `python/logger.py` — JSONL append logger (core stream primitives + re-exports)
 - `python/logger_ai.py` — AI-transcript and OpenAI-event helpers (split from logger.py per 400-line doctrine)
 - `python/agents/zfae.py` — ZFAE agent definition, compose_name(), sub_agent_name()
@@ -72,7 +72,12 @@ React + Vite + TypeScript, Tailwind CSS, shadcn/ui. Fully metadata-driven consol
 
 ## Cognitive Engine Stack
 
-### PCNA Engine (`python/engine/pcna.py`)
+### PTCNA state (`python/engine/ptcna_state.py`)
+
+The target runtime and merge algebra come from exact PTCNA commit
+`c5fa9a599498f19c8345f2790a0636542dfbc6a1`. a0 owns the Platonic-Agent
+binding and atomic checkpoint/restart receipt; it owns no shadow PCNA/PTCA
+algebra.
 53-node circular topology with six rings:
 
 | Ring | N | Seed | Role |
@@ -87,7 +92,7 @@ React + Vite + TypeScript, Tailwind CSS, shadcn/ui. Fully metadata-driven consol
 Six inference steps: Project → Inject → Propagate → PTCA-seed → PTCA-circle → Coherence.
 
 ### Prime-Seed PTCA Layer (`python/engine/prime_seeds.py`)
-7 independent PTCACore instances (N=3,5,7,11,13,17,19) seeded from sigma tensor slices at boot.
+Seven independent producer-owned PTCNA ring cores (N=3,5,7,11,13,17,19) are seeded from sigma tensor slices at boot.
 
 - **Tick** (60s heartbeat task `prime_seeds_tick`): all 7 propagate 5 steps; N=17→memory_s unconditionally; N=19→memory_l when zeta bandit `"lt_promote"` arm decides (coherence_edge + positive avg_reward or first-explore)
 - **Persistence**: N=19 (LT) tensor serialized to DB key `prime_seed_lt_v1` on every promotion; restored at startup via `load_lt_checkpoint()`. N=17 (ST) is volatile — regenerates from sigma on each boot.
@@ -130,14 +135,14 @@ Six named role slots that an admin can assign model instances to. Slot assignmen
 | `practice` | Shadow / calibration. Runs in parallel with conduct for comparison and bandit scoring. |
 | `record` | Structured logging. Responsible for note-taking, output formatting, and record-keeping. |
 | `derive` | Synthesis. Post-turn derivation, PCNA reward signals, and aggregate analysis. |
-| `edcmbone` | Transcript analysis. Called for EDCMbone scoring and explanation generation. |
+| `edcm` | Transcript analysis. Called for EDCM scoring and explanation generation. |
 
 **Contract:**
 - At most one instance per slot at any time (enforced by `instances_api.py` PATCH endpoint).
-- `VALID_SLOTS = {"conduct","perform","practice","record","derive","edcmbone"}` is the allowlist.
+- `VALID_SLOTS = {"conduct","perform","practice","record","derive","edcm"}` is the allowlist.
 - Slot is stored as `agent_instances.role_slot` (nullable text column).
 - Inference code resolves a slot by querying `SELECT … FROM model_instances WHERE role_slot=:slot LIMIT 1`; caller falls back to any available instance when slot is empty.
-- Slots are **not yet wired** into main inference routing (as of 2026-05-14) — `edcmbone` is the only slot with live routing, in `edcmbone_explainer.py`. Wiring `conduct`, `perform`, `practice`, `record`, `derive` into `inference.py` is the next milestone.
+- Slots are wired into inference routing. EDCM explanation uses its dedicated lookup in `edcm_explainer.py`.
 
 **UI:** `client/src/components/AgentsTab.tsx` — Party Slots section; admin-only assign/unassign controls.
 

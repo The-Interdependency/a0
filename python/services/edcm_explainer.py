@@ -8,8 +8,8 @@ Pricing: 3 free per user lifetime, then $50 = pack of 3.
 from __future__ import annotations
 
 # === MODULE_BUILD ===
-# id: a0_service_edcmbone_explainer
-#   module_name: edcmbone_explainer
+# id: a0_service_edcm_explainer
+#   module_name: edcm_explainer
 #   module_kind: service
 #   summary: Turns an EDCMbone scoring report into a 200-400 word human explanation with cited transcript spans via an LLM — owner-gated, idempotent per report, strict-JSON, with credit metering and refund-on-failure.
 #   owner: Erin Spencer
@@ -118,7 +118,7 @@ def _build_user_prompt(report: Dict[str, Any], messages: List[Dict[str, Any]]) -
         "risk_fixation": report.get("risk_fixation", 0),
         "correction_fidelity": report.get("correction_fidelity", 0),
         "directives_fired": report.get("directives_fired") or [],
-        "edcmbone_version": report.get("edcmbone_version"),
+        "edcm_version": report.get("edcm_version"),
         "message_count": report.get("message_count", len(messages)),
     }
     rendered_rounds = "\n\n".join(_format_round(m) for m in messages)
@@ -284,7 +284,7 @@ async def _record_cost_metric(
                 "INSERT INTO cost_metrics "
                 "(user_id, model, prompt_tokens, completion_tokens, "
                 " cache_tokens, estimated_cost, stage) "
-                "VALUES (:uid, :model, :pt, :ct, 0, :usd, 'edcmbone_explainer')"
+                "VALUES (:uid, :model, :pt, :ct, 0, :usd, 'edcm_explainer')"
             ),
             {
                 "uid": user_id, "model": model_id,
@@ -310,7 +310,7 @@ async def _emit_provider_log(
     try:
         get_run_logger().emit("explainer_call", {
             "provider": EXPLAINER_PROVIDER_ID,
-            "source": "edcmbone_explainer",
+            "source": "edcm_explainer",
             "user_id": user_id,
             "report_id": report_id,
             "model": model_id,
@@ -320,7 +320,7 @@ async def _emit_provider_log(
         })
     except Exception as _err:
         # Logging is observability, never the user-facing concern.
-        print(f"[edcmbone_explainer] log emit failed: {_err}")
+        print(f"[edcm_explainer] log emit failed: {_err}")
 
 
 class InsufficientCredits(Exception):
@@ -341,7 +341,7 @@ class PromptTooLarge(Exception):
 async def explain_report(
     *, report_id: int, user_id: str,
 ) -> Dict[str, Any]:
-    """Explain one EDCMbone report. Owner-only — the report is fetched
+    """Explain one EDCM report. Owner-only — the report is fetched
     via the storage helper that joins through transcript_uploads.user_id,
     so a non-owner gets a 404 from the route before this is called.
 
@@ -392,14 +392,14 @@ async def explain_report(
         credits = await storage.get_or_seed_explanation_credits(user_id)
         raise InsufficientCredits(_credits_view(credits))
 
-    # Resolve provider: prefer the model assigned to the edcmbone slot if one exists.
+    # Resolve provider: prefer the model assigned to the EDCM slot if one exists.
     resolved_provider_id = EXPLAINER_PROVIDER_ID
     try:
         async with get_session() as _slot_sess:
             _slot_row = (await _slot_sess.execute(
                 _sa_text(
                     "SELECT model_id FROM model_instances "
-                    "WHERE role_slot='edcmbone' LIMIT 1"
+                    "WHERE role_slot='edcm' LIMIT 1"
                 )
             )).first()
             if _slot_row:

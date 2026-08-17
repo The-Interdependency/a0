@@ -1,3 +1,4 @@
+# 16:3
 """Regression tests for python/engine/ucns_kit/encoder.py compilation."""
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ ENCODER_PATH = (
 
 
 def test_encoder_py_compile_succeeds(tmp_path: Path) -> None:
-    """encoder.py compiles without requiring edcmbone imports to resolve."""
+    """The archived encoder compiles without retired placement imports."""
     py_compile.compile(
         str(ENCODER_PATH),
         cfile=str(tmp_path / "encoder.pyc"),
@@ -25,3 +26,4 @@ def test_entry_to_ucns_has_single_return_call() -> None:
     entry_to_ucns = text[text.index("def _entry_to_ucns") :]
 
     assert entry_to_ucns.count("return UCNSObject(") == 1
+# 16:3

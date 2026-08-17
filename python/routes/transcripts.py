@@ -314,7 +314,7 @@ async def get_report_explanation(request: Request, report_id: int):
 
 @router.post("/reports/{report_id}/explain")
 async def explain_report_endpoint(request: Request, report_id: int):
-    """Generate (or fetch the cached) EDCMbone explanation.
+    """Generate (or fetch the cached) EDCM explanation.
 
     Owner-only. Decrements one credit (free first, then paid) on first
     generation; subsequent calls are cached and free. 402 when no credits
@@ -327,7 +327,7 @@ async def explain_report_endpoint(request: Request, report_id: int):
     if not parent:
         raise HTTPException(status_code=404, detail="report not found")
 
-    from ..services.edcmbone_explainer import (
+    from ..services.edcm_explainer import (
         explain_report, InsufficientCredits, PromptTooLarge,
     )
     try:

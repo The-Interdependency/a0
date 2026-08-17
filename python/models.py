@@ -1,4 +1,4 @@
-# 358:23 0:0 5:0
+# 358:22 0:0 5:0
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float, DateTime, JSON,
     ARRAY, ForeignKey, UniqueConstraint, Index, text
@@ -142,8 +142,7 @@ class EdcmSnapshot(Base):
 
 
 # Task #112 — BanditArm model removed; the bandit_arms table is dropped
-# at lifespan startup. Live arm state lives on PCNAEngine.bandit_state;
-# the audit log is the BanditPull model below.
+# at lifespan startup. The audit log is the BanditPull model below.
 
 
 class CustomTool(Base):
@@ -289,7 +288,7 @@ class TranscriptReport(Base):
     risk_loop = Column(Float, server_default="0")
     risk_fixation = Column(Float, server_default="0")
     correction_fidelity = Column(Float, server_default="0")
-    edcmbone_version = Column(String(40))
+    edcm_version = Column(String(40))
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
 
@@ -448,4 +447,4 @@ class GeneratedImage(Base):
     featured = Column(Boolean, nullable=False, server_default=text("false"))
     tags = Column(JSONB, server_default=text("'[]'::jsonb"))
     skill_origin = Column(Text)
-# 358:23 0:0 5:0
+# 358:22 0:0 5:0

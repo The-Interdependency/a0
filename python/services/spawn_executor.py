@@ -52,7 +52,7 @@ Sub-module layout (add behaviour there, not here):
 #   class: correctness
 #
 # id: spawn_executor_snapshot_pcna_shape
-#   given: a primary-shaped PCNAEngine instance
+#   given: a primary-shaped PTCNAState instance
 #   then:  _snapshot_pcna returns the four delta-tracked floats/ints
 #          (phi, psi, omega, theta_circles); types and ordering are
 #          stable so log consumers can subtract before/after dicts

@@ -15,7 +15,7 @@
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; stop the heartbeat task to disable periodic ticks.
-#   requires: a0_engine_pcna
+#   requires: a0_platonic_ptcna_state
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===

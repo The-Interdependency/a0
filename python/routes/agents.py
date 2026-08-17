@@ -11,7 +11,7 @@ from ..agents.zfae import (
     is_deprecated, DEPRECATED_NAMES,
 )
 from ..services.energy_registry import active_provider, BUILTIN_PROVIDERS
-from ..engine import PCNAEngine, InstanceMerge
+from ..engine import PTCNAState, PTCNAStateMerge
 from ..services.agent_lifecycle import (
     # Task #122 — re-export the canonical registry from agent_lifecycle so
     # there is exactly one in-memory `_sub_agents` per process. The dict
@@ -73,7 +73,7 @@ class SpawnRequest(BaseModel):
     provider: Optional[str] = None
 
 
-async def ensure_primary_agent(pcna: PCNAEngine):
+async def ensure_primary_agent(pcna: PTCNAState):
     from ..database import get_session
     from sqlalchemy import text
 

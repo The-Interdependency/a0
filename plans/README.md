@@ -29,7 +29,7 @@ These plan files cover the currently visible canonical repositories under `The-I
 - `a0`
 - `ai-tiw`
 - `aimmh`
-- `edcmbone`
+- `edcm`
 - `pcna`
 - `pcea`
 - `ptca`

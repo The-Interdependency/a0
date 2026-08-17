@@ -1,6 +1,6 @@
 # 141:62 0:0 4:4
 """
-PrimeSeedLayer — 7 independent PTCACore instances seeded from sigma tensor slices.
+PrimeSeedLayer — 7 producer RingCore instances seeded from sigma tensor slices.
 
 PRIME_SEEDS = [3, 5, 7, 11, 13, 17, 19]
 
@@ -20,7 +20,7 @@ Injection context (for zeta prompt composition):
 # id: a0_engine_prime_seeds
 #   module_name: prime_seeds
 #   module_kind: engine
-#   summary: PrimeSeedLayer — seven PTCACore instances (primes 3..19) seeded from sigma tensor slices, propagated each heartbeat tick and merged/promoted into pcna memory rings.
+#   summary: PrimeSeedLayer — seven canonical PTCNA RingCore instances seeded from sigma tensor slices, propagated each heartbeat tick and merged/promoted into PTCNA memory rings.
 #   owner: Erin Spencer
 #   public_surface: PrimeSeedLayer, get_prime_seeds
 #   internal_surface: _t2b64, _b64t
@@ -32,7 +32,7 @@ Injection context (for zeta prompt composition):
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; long-term seed is restored from checkpoint, short-term reseeds on next tick.
-#   requires: a0_engine_ptca_core, a0_engine_pcna
+#   requires: pcna_ring_core, a0_platonic_ptcna_state
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===
@@ -41,7 +41,7 @@ import base64
 import io
 import time
 import numpy as np
-from .ptca_core import PTCACore
+from ptcna.neural.ring_core import RingCore
 
 _LT_CHECKPOINT_KEY = "prime_seed_lt_v1"
 
@@ -64,8 +64,8 @@ class PrimeSeedLayer:
     """Seven independent prime-seed PTCA cores, tick-driven by the heartbeat."""
 
     def __init__(self) -> None:
-        self.cores: dict[int, PTCACore] = {
-            n: PTCACore(
+        self.cores: dict[int, RingCore] = {
+            n: RingCore(
                 name=f"seed_{n}",
                 symbol=f"S{n}",
                 role="prime_seed",

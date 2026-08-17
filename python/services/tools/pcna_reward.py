@@ -1,4 +1,4 @@
-# 47:28 0:0 0:2
+# 49:28 0:0 0:2
 """pcna_reward — apply a reward signal to the PCNA engine."""
 
 # === MODULE_BUILD ===
@@ -17,7 +17,7 @@
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; removes the pcna_reward tool from the registry.
-#   requires: a0_engine_pcna
+#   requires: a0_platonic_ptcna_state
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===
@@ -72,7 +72,9 @@ async def handle(score: float = 0.0, reason: str = "", **_) -> str:
     caller = get_caller_provider()
     target = get_pcna()
     routed_to = f"primary (caller={caller})" if caller else "primary"
-    target.reward(winner="agent", outcome=score)
+    if target.last_winner is None:
+        raise RuntimeError("pcna_reward requires a prior attributed inference")
+    target.reward(winner=target.last_winner, outcome=score)
     return json.dumps({
         "applied_score": score,
         "reason": reason or "not specified",
@@ -80,4 +82,4 @@ async def handle(score: float = 0.0, reason: str = "", **_) -> str:
         "last_coherence": round(target.last_coherence, 4),
         "routed_to": routed_to,
     })
-# 47:28 0:0 0:2
+# 49:28 0:0 0:2

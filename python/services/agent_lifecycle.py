@@ -2,7 +2,7 @@
 # N:M
 """Canonical in-memory sub-agent registry (Task #122).
 
-Owns the `_sub_agents` dict that maps a sub-agent name → (PCNAEngine, meta).
+Owns the `_sub_agents` dict that maps a sub-agent name → (PTCNAState, meta).
 Both `routes/agents.py` (the HTTP spawn/merge endpoints) and
 `services/spawn_executor.py` (the queue worker) now go through these
 helpers so we can prove there is exactly one live registry per process.
@@ -42,7 +42,7 @@ from __future__ import annotations
 # id: a0_service_agent_lifecycle
 #   module_name: agent_lifecycle
 #   module_kind: service
-#   summary: Canonical in-memory sub-agent registry — owns the single _sub_agents dict (name → PCNAEngine + meta) and the lock-guarded spawn/merge/list/count helpers shared by routes/agents.py and the spawn executor.
+#   summary: Canonical in-memory sub-agent registry — owns the single _sub_agents dict (name → PTCNAState + meta) and the lock-guarded spawn/merge/list/count helpers shared by routes/agents.py and the spawn executor.
 #   owner: Erin Spencer
 #   public_surface: spawn_sub_agent, merge_sub_agent, list_sub_agents, get_sub_agent_engine, count_live_for_parent, registry_snapshot
 #   internal_surface: none
@@ -54,7 +54,7 @@ from __future__ import annotations
 #   tests: python/tests/contracts/spawn_executor_checks.py
 #   rollout: default_enabled
 #   rollback: Revert this file; registry is in-memory only and rebuilt on process boot.
-#   requires: a0_engine_pcna, a0_engine_merge
+#   requires: a0_platonic_ptcna_state
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===
@@ -64,14 +64,14 @@ import time
 from typing import Optional
 
 from ..agents.zfae import sub_agent_name
-from ..engine import PCNAEngine, InstanceMerge
+from ..engine import PTCNAState, PTCNAStateMerge
 _lock = threading.Lock()
-_sub_agents: dict[str, tuple[PCNAEngine, dict]] = {}
+_sub_agents: dict[str, tuple[PTCNAState, dict]] = {}
 _counter = 0
 
 
 def spawn_sub_agent(
-    parent: PCNAEngine,
+    parent: PTCNAState,
     provider: str | None = None,
     *,
     parent_run_id: Optional[str] = None,
@@ -89,7 +89,7 @@ def spawn_sub_agent(
     /agents/spawn admin endpoint (which has no run row) keeps working.
     """
     global _counter
-    child, fork_result = InstanceMerge.fork(parent)
+    child, fork_result = PTCNAStateMerge.fork(parent)
     p = provider
     with _lock:
         _counter += 1
@@ -113,14 +113,14 @@ def spawn_sub_agent(
     }
 
 
-def merge_sub_agent(parent: PCNAEngine, name: str) -> dict:
+def merge_sub_agent(parent: PTCNAState, name: str) -> dict:
     """Pop the named child off the registry and absorb it into `parent`."""
     with _lock:
         entry = _sub_agents.pop(name, None)
     if entry is None:
         return {"error": "sub-agent not found", "name": name}
     child, meta = entry
-    result = InstanceMerge.absorb(parent, child)
+    result = PTCNAStateMerge.absorb(parent, child)
     result["retired_agent"] = name
     result["uptime_s"] = round(time.time() - meta["spawned_at"], 1)
     return result
@@ -146,7 +146,7 @@ def list_sub_agents() -> list[dict]:
     return out
 
 
-def get_sub_agent_engine(name: str) -> PCNAEngine | None:
+def get_sub_agent_engine(name: str) -> PTCNAState | None:
     with _lock:
         entry = _sub_agents.get(name)
     return entry[0] if entry else None

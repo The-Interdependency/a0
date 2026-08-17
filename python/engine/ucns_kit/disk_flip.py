@@ -44,7 +44,7 @@ def disk_flip(obj) -> object:
     """
     if not _EDCMBONE_AVAILABLE:
         raise RuntimeError(
-            "edcmbone not importable. Resolve edcmbone issue #46."
+            "retired local UCNS placement is unavailable"
         )
     return UCNSObject(
         n_dec=obj.n_min,

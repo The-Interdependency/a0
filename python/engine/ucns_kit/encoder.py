@@ -1,10 +1,9 @@
-# 36:35
+# 35:34
 """
 text_to_ucns — tokenize text; map closed-class tokens to UCNSObject.
 Open-class tokens emit None; caller decides handling.
 
-hmmm: edcmbone import path not resolved — pip-install vs vendored.
-      Blocked on edcmbone issue #46 (ucns_v04 must be on sys.path).
+hmmm: this archived lexical encoder has no mapping into the current UCNS API.
       Function raises RuntimeError at call time until resolved.
 """
 from __future__ import annotations
@@ -13,7 +12,7 @@ from __future__ import annotations
 # id: a0_engine_ucns_kit_encoder
 #   module_name: encoder
 #   module_kind: engine
-#   summary: text_to_ucns — tokenizes text and maps closed-class tokens to UCNSObjects (open-class tokens emit None); currently blocked on edcmbone import resolution.
+#   summary: archived text_to_ucns skeleton; its retired local UCNS object dependency has no current mapping
 #   owner: Erin Spencer
 #   public_surface: text_to_ucns
 #   internal_surface: _tokenize, _entry_to_ucns
@@ -24,10 +23,10 @@ from __future__ import annotations
 #   admin_only: false
 #   tests: hmmm
 #   rollout: default_enabled
-#   rollback: Revert this file; encoder raises RuntimeError at call time until edcmbone import is resolved, so no live consumers depend on it.
+#   rollback: Revert this file; the encoder remains fail-closed and has no live consumers.
 #   requires: none
 #   since: 2026-06-02
-#   unresolved: edcmbone import path unresolved (pip-install vs vendored); blocked on edcmbone issue #46 (ucns_v04 on sys.path); raises RuntimeError at call time until resolved.
+#   unresolved: lawful lexical mapping into the current UCNS API; raises RuntimeError until resolved
 # === END MODULE_BUILD ===
 
 import re
@@ -53,8 +52,8 @@ def text_to_ucns(text: str) -> list:
     """
     if not _EDCMBONE_AVAILABLE:
         raise RuntimeError(
-            "edcmbone dependencies not importable (expected `ucns_v04` and "
-            "`closed_tokens`). Run from repo root or resolve edcmbone issue #46."
+            "retired local UCNS placement is unavailable; use the current "
+            "producer-owned UCNS API after freezing a lawful lexical mapping"
         )
     result = []
     for token in _tokenize(text):
@@ -81,4 +80,4 @@ def _entry_to_ucns(entry: dict):
         anchors_pos=(AnchorPayload(theta=Fraction(0), payload=None),),
         faces_pos=(0,),
     )
-# 36:35
+# 35:34

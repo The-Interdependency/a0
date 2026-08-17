@@ -43,7 +43,7 @@ _log = logging.getLogger("a0p.instances_api")
 
 # ── Pydantic ──────────────────────────────────────────────────────────────────
 
-VALID_SLOTS = {"conduct", "perform", "practice", "record", "derive", "edcmbone"}
+VALID_SLOTS = {"conduct", "perform", "practice", "record", "derive", "edcm"}
 
 
 class InstanceCreate(BaseModel):

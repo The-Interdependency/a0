@@ -49,7 +49,7 @@ A short implementation map for the working component layers in this repo:
 |---|---|
 | `human request` | `client/src/pages/chat.tsx`, `client/src/pages/console.tsx`, `server/index.ts` |
 | `a0 agent interface` | `client/`, `server/`, `python/routes/` |
-| `context / memory layer` | `python/engine/pcna.py`, `python/engine/zeta.py`, `python/models.py`, `python/storage/` |
+| `context / memory layer` | `python/engine/ptcna_state.py`, `python/engine/zeta.py`, `python/models.py`, `python/storage/` |
 | `planner / policy layer` | `python/services/inference.py`, `python/config/policy_loader.py`, `python/services/edcm.py` |
 | `provider routing layer` | `python/services/energy_registry.py`, `python/services/providers/`, `python/services/providers/_resolver.py` |
 | `model call(s)` | `python/services/inference.py`, `python/services/providers/` |
