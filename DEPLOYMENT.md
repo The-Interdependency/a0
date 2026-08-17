@@ -61,6 +61,13 @@ gcloud iam service-accounts keys create sa-key.json --iam-account=$SA
 Add the content of `sa-key.json` as a GitHub Actions secret named **`GCP_SA_KEY`**.  
 Also add your project ID as **`GCP_PROJECT_ID`**.
 
+After both secrets exist, add the repository Actions variable
+**`GCP_DEPLOY_ENABLED=true`**. Until that explicit opt-in exists, CI reports the
+deployment as `BLOCKED` and skips authentication, image publication, and Cloud
+Run mutation. If the opt-in exists while either secret is absent, the readiness
+gate fails and names only the missing configuration key; it never prints secret
+values.
+
 > Delete `sa-key.json` locally after uploading. Never commit it.
 
 ### 5. Store app secrets in Secret Manager

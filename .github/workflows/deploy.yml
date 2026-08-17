@@ -95,10 +95,38 @@ jobs:
             kill "$(cat /tmp/uvicorn.pid)" 2>/dev/null || true
           fi
 
+  deployment-readiness:
+    name: Google Cloud deployment readiness
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      GCP_DEPLOY_ENABLED: ${{ vars.GCP_DEPLOY_ENABLED }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+    steps:
+      - name: Validate deployment configuration without exposing credentials
+        shell: bash
+        run: |
+          if [ "$GCP_DEPLOY_ENABLED" != "true" ]; then
+            echo "::notice::BLOCKED: set repository variable GCP_DEPLOY_ENABLED=true after configuring GCP_PROJECT_ID and GCP_SA_KEY secrets."
+            exit 0
+          fi
+
+          missing=()
+          [ -n "$GCP_PROJECT_ID" ] || missing+=(GCP_PROJECT_ID)
+          [ -n "$GCP_SA_KEY" ] || missing+=(GCP_SA_KEY)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            printf -v missing_names '%s, ' "${missing[@]}"
+            echo "::error::Google Cloud deployment is enabled but required repository secret(s) are absent: ${missing_names%, }."
+            exit 1
+          fi
+
+          echo "Google Cloud deployment configuration is present; credential values remain masked."
+
   deploy:
     name: Build, push, deploy
-    needs: check-console-tabs
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check-console-tabs, deployment-readiness]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.GCP_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -112,6 +140,7 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v3.0.0
         with:
+          project_id: ${{ env.PROJECT_ID }}
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Configure Docker for Artifact Registry
