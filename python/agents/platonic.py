@@ -6,12 +6,12 @@ from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
 # === MODULE_BUILD ===
-# id: platonic_agent_envelope
+# id: platonic_agent_object
 #   module_name: platonic
 #   module_kind: schema
-#   summary: represents an open maximal agent envelope and explicit bounded projections without defining inference as agent identity
+#   summary: represents an open maximal agent object and explicit bounded projections without defining inference as agent identity
 #   owner: Erin Spencer
-#   public_surface: AgentDimension, AgentProjection, PlatonicAgentEnvelope, candidate_platonic_agent
+#   public_surface: AgentDimension, AgentProjection, PlatonicAgent, candidate_platonic_agent
 #   internal_surface: _ordered_unique
 #   auth_boundary: none
 #   storage_boundary: none
@@ -26,8 +26,8 @@ from typing import Any, Iterable, Mapping
 #
 # === CONTRACTS ===
 # id: platonic_agent_open_extension
-#   given: a declared envelope and a new non-colliding dimension
-#   then: extension returns a new envelope while preserving the original
+#   given: a declared Platonic Agent and a new non-colliding dimension
+#   then: extension returns a new object while preserving the original
 #   class: correctness
 #
 # id: platonic_agent_projection_explicit
@@ -41,7 +41,7 @@ from typing import Any, Iterable, Mapping
 #   class: boundary
 #
 # id: platonic_agent_inference_not_identity
-#   given: an envelope containing distinct identity and inference dimensions
+#   given: a Platonic Agent containing distinct identity and inference dimensions
 #   then: projecting inference alone does not implicitly select or synthesize identity
 #   class: boundary
 # === END CONTRACTS ===
@@ -61,7 +61,7 @@ def _ordered_unique(values: Iterable[str]) -> tuple[str, ...]:
 
 @dataclass(frozen=True, slots=True)
 class AgentDimension:
-    """One independently addressable dimension of the maximal agent envelope."""
+    """One independently addressable dimension of the maximal agent object."""
 
     name: str
     description: str
@@ -79,9 +79,9 @@ class AgentDimension:
 
 @dataclass(frozen=True, slots=True)
 class AgentProjection:
-    """A bounded realization request from a PlatonicAgentEnvelope."""
+    """A bounded realization request from a PlatonicAgent."""
 
-    envelope_id: str
+    platonic_agent_id: str
     bindings: Mapping[str, Any]
     selected: tuple[str, ...]
     omitted: tuple[str, ...]
@@ -95,16 +95,16 @@ class AgentProjection:
 
 
 @dataclass(frozen=True, slots=True)
-class PlatonicAgentEnvelope:
-    """Open maximal envelope; no finite dimension list is claimed exhaustive."""
+class PlatonicAgent:
+    """Open maximal agent object; no finite dimension list is claimed exhaustive."""
 
-    envelope_id: str
+    object_id: str
     dimensions: tuple[AgentDimension, ...] = ()
     hmmm: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.envelope_id:
-            raise ValueError("envelope_id is required")
+        if not self.object_id:
+            raise ValueError("object_id is required")
         names = tuple(d.name for d in self.dimensions)
         if len(names) != len(set(names)):
             raise ValueError("dimension names must be unique")
@@ -119,15 +119,15 @@ class PlatonicAgentEnvelope:
                 return dimension
         raise KeyError(name)
 
-    def extend(self, *dimensions: AgentDimension) -> "PlatonicAgentEnvelope":
+    def extend(self, *dimensions: AgentDimension) -> "PlatonicAgent":
         existing = set(self.dimension_names)
         incoming = [dimension.name for dimension in dimensions]
         collisions = existing.intersection(incoming)
         if collisions or len(incoming) != len(set(incoming)):
             names = ", ".join(sorted(collisions or {n for n in incoming if incoming.count(n) > 1}))
             raise ValueError(f"dimension already declared: {names}")
-        return PlatonicAgentEnvelope(
-            envelope_id=self.envelope_id,
+        return PlatonicAgent(
+            object_id=self.object_id,
             dimensions=self.dimensions + tuple(dimensions),
             hmmm=self.hmmm,
         )
@@ -153,7 +153,7 @@ class PlatonicAgentEnvelope:
         selected_bindings = {name: bindings[name] for name in selected_names if name in bindings}
         omitted = tuple(name for name in declared if name not in selected_names)
         return AgentProjection(
-            envelope_id=self.envelope_id,
+            platonic_agent_id=self.object_id,
             bindings=selected_bindings,
             selected=selected_names,
             omitted=omitted,
@@ -161,8 +161,8 @@ class PlatonicAgentEnvelope:
         )
 
 
-def candidate_platonic_agent() -> PlatonicAgentEnvelope:
-    """Return the current open candidate envelope; these dimensions are not exhaustive."""
+def candidate_platonic_agent() -> PlatonicAgent:
+    """Return the current open candidate object; these dimensions are not exhaustive."""
 
     dimensions = (
         AgentDimension("identity", "who or what is addressed as the agent"),
@@ -179,13 +179,13 @@ def candidate_platonic_agent() -> PlatonicAgentEnvelope:
         AgentDimension("tools", "bounded external capabilities available to an instance"),
         AgentDimension("uncertainty", "represented unresolved constraints and confidence limits"),
     )
-    return PlatonicAgentEnvelope(
-        envelope_id="a0.agent.platonic",
+    return PlatonicAgent(
+        object_id="a0.agent.platonic",
         dimensions=dimensions,
         hmmm=(
             "the dimension set is deliberately open and not claimed exhaustive",
             "whether each dimension should later be represented as a UCNS object",
-            "the exact projection contract from this envelope into durable AgentDefinition revisions",
+            "the exact projection contract from this object into durable AgentDefinition revisions",
             "which transformations preserve or fork agent identity",
         ),
     )
