@@ -10,7 +10,7 @@
   },
   "source": {
     "branch": "main",
-    "commit": "7251f0f9fba5265ebeb8dbfe8ff4dc5826dfe62c",
+    "commit": "ce48cb94457bcfc5230fa3b85014fce7cdb6b967",
     "generated_at": "2026-08-16",
     "note": "This report describes the cited a0 main commit after Platonic Agent subsumption PR #99. The report commit is coordination metadata and does not itself change runtime, persistence, privacy, deployment, or upstream producer authority."
   },
@@ -53,10 +53,10 @@
   },
   "status": {
     "state": "active implementation; promised a0 delivery remains incomplete",
-    "current_claim": "PlatonicAgent subsumes the presently legible a0 agent semantics as distinct executable regions. Its PTCNA runtime-state region now consumes the exact UCNS/PTCNA pair, persists producer state and routing receipts, and recovers them across restart with tamper rejection. Other durable regions and the critical usefulness evaluation remain incomplete.",
+    "current_claim": "PlatonicAgent subsumes the presently legible a0 agent semantics as distinct executable regions. Its PTCNA runtime-state region consumes the exact UCNS/PTCNA pair, persists producer state and routing receipts, and recovers them across restart with tamper rejection. PTCNA's frozen critical role-acquisition evaluation is now FALSIFIED for both usefulness and superiority, so any applicable a0 routing must preserve explicit fallback attribution. Other durable regions remain incomplete.",
     "latest_main_milestone": {
-      "commit": "7251f0f9fba5265ebeb8dbfe8ff4dc5826dfe62c",
-      "description": "subsumed existing a0 agent semantics into PlatonicAgent regions"
+      "commit": "ce48cb94457bcfc5230fa3b85014fce7cdb6b967",
+      "description": "made Google Cloud deployment fail closed behind explicit configuration readiness while preserving the missing-credential authority boundary"
     },
     "deployed_identity": "a0p is an existing research-instrument runtime surface; it is not evidence that the promised a0 delivery is complete"
   },
@@ -117,9 +117,9 @@
       "dependency": "durable schema and migration cutover"
     },
     {
-      "action": "run the frozen representative usefulness evaluation against the exact canonical PTCNA and explicit fallback paths",
+      "action": "consume the sealed PTCNA critical result and keep fallback routing explicit and separately attributed for the tested role-acquisition surface",
       "owner": "The-Interdependency/a0 + The-Interdependency/ptcna",
-      "dependency": "merged exact producer identities and restart/tamper fixtures"
+      "dependency": "PTCNA result merge 2e7096f7496820a947614c8d77c4028482c77606; both target usefulness and superiority are FALSIFIED for the tested scope"
     },
     {
       "action": "implement the privacy-projection region as executable Guardian/PCEA projection, cross-owner audit, consent, disclosure, retention, redaction, deletion, and export controls",
@@ -141,7 +141,8 @@
     "the promised a0 delivery is not complete while durable agent-region persistence/API integration and release evidence remain unfinished",
     "public release of the full system-primary memory contract is blocked until executable privacy boundaries and matching tests exist",
     "canonical PTCNA runtime-state claims are blocked on exact adapter equivalence rather than a0-local reimplementation",
-    "final deployment claims are blocked on resolved hosting, worker-leadership, durable-state, migration, and operational evidence"
+    "final deployment claims are blocked on resolved hosting, worker-leadership, durable-state, migration, and operational evidence",
+    "Google Cloud deployment is BLOCKED until an authorized operator sets repository variable GCP_DEPLOY_ENABLED=true and repository secrets GCP_PROJECT_ID and GCP_SA_KEY"
   ],
   "cross_repository_relations": [
     {
@@ -198,6 +199,7 @@
     "complete PTCNA adapter-equivalence evidence and removal boundary for application-local algebra",
     "complete executable Guardian/PCEA projection policy around global system-primary memory read authority",
     "final EULA and interface language after actual privacy controls are implemented",
-    "production retention, redaction, deletion, consent-expiry, worker-leadership, storage, and hosting defaults"
+    "production retention, redaction, deletion, consent-expiry, worker-leadership, storage, and hosting defaults",
+    "authorized Google Cloud project and service-account credentials; no repository configuration currently supplies GCP_DEPLOY_ENABLED, GCP_PROJECT_ID, or GCP_SA_KEY"
   ]
 }
