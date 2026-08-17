@@ -10,20 +10,20 @@
   },
   "source": {
     "branch": "main",
-    "commit": "1f331b45d1c22a4548e21ddcb6110d43b2e6460a",
-    "generated_at": "2026-08-07",
-    "note": "This report describes the cited a0 main commit. The report commit is coordination metadata and does not change runtime, privacy, deployment, agent, or upstream mathematical authority."
+    "commit": "7251f0f9fba5265ebeb8dbfe8ff4dc5826dfe62c",
+    "generated_at": "2026-08-16",
+    "note": "This report describes the cited a0 main commit after Platonic Agent subsumption PR #99. The report commit is coordination metadata and does not itself change runtime, persistence, privacy, deployment, or upstream producer authority."
   },
   "authority": {
     "owns": [
-      "a0 application runtime and deployed research-instrument behavior",
-      "durable agent definitions, runtime-instance identities, run lineage, semantic-memory persistence, and owner-scoped service contracts",
-      "a0(zfae) system-primary composition and platform-side privacy/projection/disclosure policy",
-      "provider routing, tool execution, application interfaces, persistence adapters, and deployment integration",
+      "a0 application runtime and promised agent-system delivery behavior",
+      "the Platonic Agent as a0's open maximal whole-agent object and the a0-owned mapping of existing agent semantics into distinct semantic regions",
+      "durable agent definitions, runtime-instance identities, run lineage, semantic-memory persistence, and owner-scoped service contracts as realizations within the Platonic Agent",
+      "a0-side bindings to ZFAE inference, PTCNA runtime state, PCEA/Guardian privacy projection, provider routing, tool execution, and lifecycle behavior",
       "resource-to-need matching workflow and consent-mediated disclosure behavior implemented by the platform"
     ],
     "does_not_own": [
-      "ZFAE conceptual ontology beyond the runtime integration contract",
+      "ZFAE conceptual ontology or inference-event semantics beyond a0's runtime binding",
       "PTCNA algebra or canonical tensor-state semantics",
       "PCEA cryptographic/privacy primitive semantics",
       "UCNS mathematical representation or proof status",
@@ -32,123 +32,152 @@
       "skill-lib organization-wide build and cross-repository workflow doctrine"
     ],
     "non_transfer": [
-      "a provider model is an energy provider and does not become the agent identity",
-      "PTCNA state merge does not authorize semantic-memory merge",
+      "subsuming a producer-backed semantic region into PlatonicAgent does not transfer producer authority into a0",
+      "a provider model is an energy provider relation and does not become the agent identity",
+      "PTCNA runtime state and semantic memory remain distinct regions and distinct merge-authority channels",
+      "run artifacts are not semantic memory merely because they are produced by an agent run",
       "global system-primary read authority does not imply disclosure authority",
-      "runtime integration does not transfer theorem, semantic, measurement, or empirical status from producer repositories",
+      "runtime integration does not transfer theorem, semantic, measurement, certification, or empirical status from producer repositories",
       "published EULA language is not a substitute for executable privacy enforcement and tests"
     ]
   },
   "portfolio_role": {
-    "summary": "Provide the user-facing and machine-facing runtime where persistent agents, bounded model providers, tools, memory, privacy, provenance, spawn/merge execution, and resource-to-need matching are composed without absorbing the authority of the mathematical, semantic, measurement, or privacy primitives it consumes.",
-    "upstream_contract": "a0 consumes exact upstream package or source identities through adapters and keeps their authority separate from application state.",
-    "downstream_contract": "a0 exposes audited agent runs, scoped memory projections, user interfaces, APIs, and deployment behavior governed by platform-owned identity, privacy, consent, and provenance contracts.",
+    "summary": "Deliver the a0 agent system by realizing bounded operational agents from an open Platonic Agent object while composing persistent identity, inference, runtime state, memory, tools, privacy, provenance, provider relations, lifecycle, and resource-to-need behavior without collapsing their distinctions or absorbing producer authority.",
+    "upstream_contract": "a0 consumes exact upstream producer identities through bounded region bindings/adapters and keeps their authority separate from a0-owned whole-agent semantics.",
+    "downstream_contract": "a0 exposes operational agent definitions, instances, runs, scoped memory projections, tools, audited actions, interfaces, APIs, and deployment behavior as bounded realizations of PlatonicAgent regions.",
     "reports_to": {
       "repository": "The-Interdependency/skill-lib",
       "skill": "interdependent-work-graph",
-      "relation": "repo-owned runtime, agent, memory, privacy, and deployment-plan input; no authority transfer"
+      "relation": "repo-owned whole-agent, runtime, memory, privacy, delivery, and deployment-plan input; no authority transfer"
     }
   },
   "status": {
-    "state": "active runtime migration and backend implementation",
-    "current_claim": "Owner semantics for the durable agent foundation and a0(zfae)+PTCNA primary composition are settled; implementation and release evidence remain in progress.",
+    "state": "active implementation; promised a0 delivery remains incomplete",
+    "current_claim": "PlatonicAgent now subsumes the presently legible a0 agent semantics as distinct executable regions; the region map is intentionally open, existing non-collapse boundaries are preserved, and durable runtime implementation/release evidence remains incomplete.",
     "latest_main_milestone": {
-      "commit": "1f331b45d1c22a4548e21ddcb6110d43b2e6460a",
-      "description": "reconciled the reviewed migration baseline onto main"
+      "commit": "7251f0f9fba5265ebeb8dbfe8ff4dc5826dfe62c",
+      "description": "subsumed existing a0 agent semantics into PlatonicAgent regions"
     },
-    "deployed_identity": "a0p is the deployed research-instrument instance; a0 is the project/runtime/repository"
+    "deployed_identity": "a0p is an existing research-instrument runtime surface; it is not evidence that the promised a0 delivery is complete"
   },
   "delivered": [
     {
+      "surface": "Platonic Agent whole-agent object and subsumption map",
+      "status": "implemented provisional architecture surface with executable dimensions, semantic regions, projections, and focused witnesses",
+      "boundary": "the current dimension and region sets are open and not claimed exhaustive or empirically validated"
+    },
+    {
       "surface": "persistent ZFAE primary-agent runtime",
       "status": "implemented research-instrument surface",
-      "boundary": "large language models supply bounded computation and are not the persistent agent identity"
+      "boundary": "ZFAE is bound within the inference region; it is not the whole agent and its conceptual authority remains in the ZFAE repository"
     },
     {
       "surface": "three-process web runtime",
       "status": "Express public boundary, Python/FastAPI orchestration, and React/Vite console are implemented",
-      "boundary": "deployment mechanics do not establish upstream cognitive or measurement claims"
+      "boundary": "an implemented runtime surface is not equivalent to completed a0 delivery"
     },
     {
-      "surface": "cognitive engine integration",
-      "status": "PCNA/PTCA, Sigma, Zeta, EDCM, bandit routing, and heartbeat services are integrated in the application runtime",
-      "boundary": "a0 integration does not make local copies authoritative over producer repositories"
+      "surface": "durable agent foundation semantics",
+      "status": "AgentDefinition, AgentInstance, AgentRun, semantic memory, runtime state, artifacts, provider, privacy, and spawn/merge semantics are settled enough to be mapped as distinct PlatonicAgent regions",
+      "boundary": "the present region membership may refine; distinct identities, state channels, and authority boundaries may not be silently collapsed"
     },
     {
-      "surface": "durable agent foundation decision",
-      "status": "owner semantics settled for AgentDefinition -> AgentInstance -> PTCNA state + memory branch + AgentRun lineage",
-      "boundary": "configuration, tensor state, semantic memory, artifacts, and audit events remain separate merge channels"
+      "surface": "reviewed migration foundation",
+      "status": "versioned Alembic baseline and preservation evidence exist in repository history",
+      "boundary": "live schema-authority cutover and final durable backend migration remain separate work"
     },
     {
       "surface": "system-primary memory authority and mediated matching contract",
       "status": "backend semantics specified",
-      "boundary": "knowledge does not imply disclosure authority; public release requires executable enforcement and matching user-facing disclosure"
+      "boundary": "knowledge does not imply disclosure authority; public/full release requires executable enforcement and matching user-facing disclosure"
     }
   ],
   "active_frontier": [
-    "complete the durable backend implementation against the settled CRUD definition, instance, run, PTCNA-state, and semantic-memory separation",
-    "establish adapter equivalence to canonical PTCNA rather than preserving a second application-owned algebra",
-    "implement and test Guardian/PCEA minimum-necessary memory projection and disclosure auditing around a0(zfae)",
+    "realize the PlatonicAgent definition, instance, run, semantic-memory, and runtime-state regions in the durable backend without creating a competing agent ontology",
+    "establish adapter equivalence to canonical PTCNA and remove remaining application-owned shadow algebra only after equivalence evidence",
+    "implement and test Guardian/PCEA minimum-necessary projection, cross-owner memory access audit, disclosure, export, correction, retention, redaction, and deletion behavior",
     "complete consent-scoped resource-to-need matching and introduction flows",
-    "keep provider routing, tools, agent lifecycle, and memory behavior auditable while deployment infrastructure evolves"
+    "continue recovering existing and newly legible agent semantics into PlatonicAgent regions without treating the current map as exhaustive",
+    "complete deployment, worker-leadership, storage, migration, and release evidence required for the promised a0 delivery"
   ],
   "next_actions": [
     {
-      "action": "finish the backend persistence and API implementation for AgentDefinition, AgentInstance, AgentRun, semantic memory, and PTCNA snapshots",
+      "action": "bind the durable AgentDefinition and AgentInstance persistence/API implementation explicitly to PlatonicAgent definition and instance region projections",
       "owner": "The-Interdependency/a0",
-      "dependency": "settled backend-foundation contract"
+      "dependency": "merged PlatonicAgent subsumption contract at 7251f0f9fba5265ebeb8dbfe8ff4dc5826dfe62c"
     },
     {
-      "action": "prove adapter equivalence against the canonical PTCNA producer and remove any remaining shadow algebra",
+      "action": "complete AgentRun lineage, semantic-memory events/branches, run artifacts, and PTCNA snapshot persistence while retaining their separate region and merge authorities",
+      "owner": "The-Interdependency/a0",
+      "dependency": "durable schema and migration cutover"
+    },
+    {
+      "action": "prove adapter equivalence against canonical PTCNA and route the PlatonicAgent runtime-state region through that adapter",
       "owner": "The-Interdependency/a0 + The-Interdependency/ptcna",
-      "dependency": "exact producer identity and adapter fixtures"
+      "dependency": "exact producer identity and cross-repository equivalence fixtures"
     },
     {
-      "action": "implement privacy projection, cross-owner access audit, consent, export, correction, retention, redaction, and deletion gates before claiming the published privacy contract",
+      "action": "implement the privacy-projection region as executable Guardian/PCEA projection, cross-owner audit, consent, disclosure, retention, redaction, deletion, and export controls",
       "owner": "The-Interdependency/a0",
-      "dependency": "Guardian/PCEA integration and executable policy tests"
+      "dependency": "Guardian/PCEA integration and policy tests"
     },
     {
-      "action": "separate deployment-host migration from application canon so hosting can change without changing agent or memory semantics",
+      "action": "complete resource-to-need matching as a consent-bearing bounded realization rather than a privacy bypass",
       "owner": "The-Interdependency/a0",
-      "dependency": "deployment target and operational runbook"
+      "dependency": "privacy projection and disclosure ledger"
+    },
+    {
+      "action": "close hosting, worker-leadership, snapshot storage, migration, and release gates required to truthfully call a0 delivered",
+      "owner": "The-Interdependency/a0",
+      "dependency": "durable state externalization and operational runbook"
     }
   ],
   "blocked": [
+    "the promised a0 delivery is not complete while durable agent-region persistence/API integration and release evidence remain unfinished",
     "public release of the full system-primary memory contract is blocked until executable privacy boundaries and matching tests exist",
-    "canonical PTCNA runtime-state claims are blocked on exact adapter equivalence rather than a0-local reimplementation"
+    "canonical PTCNA runtime-state claims are blocked on exact adapter equivalence rather than a0-local reimplementation",
+    "final deployment claims are blocked on resolved hosting, worker-leadership, durable-state, migration, and operational evidence"
   ],
   "cross_repository_relations": [
     {
       "repository": "The-Interdependency/zfae",
-      "relation": "conceptual inference-event authority whose runtime realization is integrated by a0",
+      "relation": "producer authority for the inference/self-awareness event bound within the PlatonicAgent inference region",
       "authority_transfer": false
     },
     {
       "repository": "The-Interdependency/ptcna",
-      "relation": "canonical persistent runtime-state producer consumed through an a0 adapter",
+      "relation": "canonical runtime-state producer consumed by the PlatonicAgent runtime-state region through an a0 adapter",
       "authority_transfer": false
     },
     {
       "repository": "The-Interdependency/pcea",
-      "relation": "Guardian privacy primitive provider for projection and inference-state boundaries",
+      "relation": "Guardian privacy primitive producer consumed by the PlatonicAgent privacy-projection region",
       "authority_transfer": false
     },
     {
       "repository": "The-Interdependency/edcm",
-      "relation": "separate measurement authority consumed by a0 runtime surfaces",
+      "relation": "separate measurement authority consumed by a0 runtime surfaces without transfer of measurement validity",
       "authority_transfer": false,
       "measurement_status_transfer": false
     },
     {
+      "repository": "The-Interdependency/metapat",
+      "relation": "semantic and boundary consultation source constraining how relations are distinguished without owning a0 agent architecture",
+      "authority_transfer": false
+    },
+    {
       "repository": "The-Interdependency/skill-lib",
-      "relation": "build, boundary, agent-instantiation, and cross-repository workflow doctrine",
+      "relation": "build, domain-claim, module, evidence, and cross-repository workflow doctrine",
       "authority_transfer": false
     }
   ],
   "machine_entrypoints": {
     "repo_report": "docs/work-graphs/repository-plan-report.json",
     "system_overview": "README.md",
+    "platonic_agent": "docs/platonic-agent.md",
+    "platonic_agent_core": "python/agents/platonic.py",
+    "platonic_agent_regions": "python/agents/platonic_regions.py",
+    "platonic_agent_work_graph": "docs/work-graphs/platonic-agent.json",
     "backend_foundation": "docs/replit-backend-foundation.md",
     "backend_work_graph": "docs/work-graphs/replit-backend-foundation.json",
     "legacy_frozen_spec": "spec.md",
@@ -156,12 +185,14 @@
     "frontend_root": "client/"
   },
   "hmmm": [
-    "final production hosting target and migration runbook after the current Replit-oriented foundation",
+    "exhaustive PlatonicAgent dimension set and semantic-region map",
+    "which region memberships are universal to agency versus contingent on a0",
+    "whether and how individual dimensions or semantic regions should receive UCNS representation",
+    "exact durable serialization/realization contract from PlatonicAgent regions into backend records",
+    "identity continuity, fork, merge, and termination criteria under transformation",
     "complete PTCNA adapter-equivalence evidence and removal boundary for application-local algebra",
     "complete executable Guardian/PCEA projection policy around global system-primary memory read authority",
     "final EULA and interface language after actual privacy controls are implemented",
-    "production retention, redaction, deletion, and consent-expiry defaults",
-    "resource-to-need matching safety policy and field-level minimum-necessary disclosure rules",
-    "worker leadership and instance-count policy for production deployment"
+    "production retention, redaction, deletion, consent-expiry, worker-leadership, storage, and hosting defaults"
   ]
 }
