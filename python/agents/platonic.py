@@ -1,4 +1,4 @@
-# 121:44 0:0 0:0
+# 120:44 0:0 0:0
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -66,7 +66,6 @@ class AgentDimension:
     name: str
     description: str
     status: str = "candidate"
-    authority: str = "a0"
     hmmm: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -190,4 +189,4 @@ def candidate_platonic_agent() -> PlatonicAgentEnvelope:
             "which transformations preserve or fork agent identity",
         ),
     )
-# 121:44 0:0 0:0
+# 120:44 0:0 0:0
