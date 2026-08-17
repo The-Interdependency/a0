@@ -10,29 +10,29 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from .database import engine
-from .engine import PCNAEngine
+from .engine import PTCNAState
 from .routes import ALL_ROUTERS, collect_ui_meta
 from .services.heartbeat import heartbeat_service
 from .agents.zfae import compose_name, ZFAE_AGENT_DEF
 from .services.energy_registry import default_provider, BUILTIN_PROVIDERS as _BP_MAIN
 
-_pcna: PCNAEngine | None = None
-_pcna_8: PCNAEngine | None = None
-_instances: dict[str, PCNAEngine] = {}
+_pcna: PTCNAState | None = None
+_pcna_8: PTCNAState | None = None
+_instances: dict[str, PTCNAState] = {}
 
 
-def get_pcna() -> PCNAEngine:
+def get_pcna() -> PTCNAState:
     global _pcna
     if _pcna is None:
-        _pcna = PCNAEngine(phases=7)
+        _pcna = PTCNAState(phases=7)
         _instances[_pcna.theta.instance_id] = _pcna
     return _pcna
 
 
-def get_pcna_8() -> PCNAEngine:
+def get_pcna_8() -> PTCNAState:
     global _pcna_8
     if _pcna_8 is None:
-        _pcna_8 = PCNAEngine(phases=8)
+        _pcna_8 = PTCNAState(phases=8)
     return _pcna_8
 
 
@@ -387,7 +387,7 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE transcript_reports ADD COLUMN IF NOT EXISTS risk_loop REAL DEFAULT 0",
             "ALTER TABLE transcript_reports ADD COLUMN IF NOT EXISTS risk_fixation REAL DEFAULT 0",
             "ALTER TABLE transcript_reports ADD COLUMN IF NOT EXISTS correction_fidelity REAL DEFAULT 0",
-            "ALTER TABLE transcript_reports ADD COLUMN IF NOT EXISTS edcmbone_version VARCHAR(40)",
+            "ALTER TABLE transcript_reports ADD COLUMN IF NOT EXISTS edcm_version VARCHAR(40)",
             "CREATE INDEX IF NOT EXISTS idx_transcript_uploads_user ON transcript_uploads(user_id, created_at DESC)",
             "CREATE INDEX IF NOT EXISTS idx_transcript_uploads_report ON transcript_uploads(report_id)",
             "CREATE INDEX IF NOT EXISTS idx_transcript_messages_report ON transcript_messages(report_id, idx)",

@@ -51,7 +51,7 @@ def gate(obj, capability: str) -> object:
     """
     if not _EDCMBONE_AVAILABLE:
         raise RuntimeError(
-            "edcmbone not importable. Resolve edcmbone issue #46."
+            "retired local UCNS placement is unavailable"
         )
     if capability in _GRANTED_CAPABILITIES:
         return obj

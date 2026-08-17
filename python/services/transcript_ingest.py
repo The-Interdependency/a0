@@ -2,7 +2,7 @@
 """Transcript ingestion — parser dispatch + persistence driver.
 
 Accepts raw bytes from an upload, auto-detects format, normalizes to a
-SPEAKER: text form edcmbone's parser handles cleanly, scores via
+SPEAKER: text form EDCM's parser handles cleanly, scores via
 compute_transcript_full, writes:
   - transcript_reports row (avgs, peak, risk, correction_fidelity, etc.)
   - transcript_messages rows (per-round drill-down)
@@ -256,7 +256,7 @@ async def ingest_upload(upload_id: int, filename: str, data: bytes) -> dict[str,
             "risk_loop": report["risk_loop"],
             "risk_fixation": report["risk_fixation"],
             "correction_fidelity": report["correction_fidelity"],
-            "edcmbone_version": report["edcmbone_version"],
+            "edcm_version": report["edcm_version"],
         })
 
         # Persist per-round messages for drill-in

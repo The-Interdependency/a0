@@ -1,4 +1,4 @@
-# 393:54 0:0 4:2
+# 393:53 0:0 4:2
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from sqlalchemy import select, update, delete, func, desc, asc, or_
@@ -457,8 +457,7 @@ class _CoreStorage:
             return [_row_to_dict(r) for r in result.scalars().all()]
 
     # Task #112 — bandit_arms storage methods removed; the table is
-    # dropped at lifespan startup. Live bandit state lives on
-    # PCNAEngine.bandit_state and is read via GET /api/v1/bandits/state.
+    # dropped at lifespan startup.
 
     async def get_custom_tools(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         async with get_session() as session:
@@ -505,4 +504,4 @@ class _CoreStorage:
 #          owner field from the request body)
 #   class: security
 # === END CONTRACTS ===
-# 393:54 0:0 4:2
+# 393:53 0:0 4:2

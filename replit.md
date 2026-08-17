@@ -80,7 +80,7 @@ PostgreSQL via SQLAlchemy (Python) and Drizzle ORM (schema management).
 
 **PCNA Engine** — 53-node six-ring pipeline: Phi, Psi, Omega, Theta, Memory-L (N=19), Memory-S (N=17).
 
-**Prime-Seed PTCA Layer** — 7 PTCACore instances (N=3…19) seeded from sigma at boot. N=17→memory_s every 60s tick; N=19→memory_l on bandit promotion (persisted to DB). LT tag injected into prompt cache prefix; ST tag injected after `## Memory` marker. Fail-safe: returns `("","")` on any error.
+**Producer PTCNA Layer** — the exactly pinned PTCNA runtime consumes the pinned UCNS 157×7×7×53 candidate receipt. a0 persists runtime and routing receipts and binds them to the Platonic Agent; target routing is default and fallback is explicit.
 
 **Party Slots** — six named role slots, each holds at most one model instance (`agent_instances.role_slot`). Allowlist enforced by `instances_api.py`.
 
@@ -91,9 +91,9 @@ PostgreSQL via SQLAlchemy (Python) and Drizzle ORM (schema management).
 | `practice` | Shadow / calibration — parallel run for bandit scoring |
 | `record` | Structured logging — note-taking and output formatting |
 | `derive` | Synthesis — post-turn PCNA reward signals and analysis |
-| `edcmbone` | Transcript analysis — EDCMbone scoring and explanation |
+| `edcm` | Transcript analysis — EDCM scoring and explanation |
 
-All six slots are wired into inference routing via `_slot_routing_info()` in `inference.py`. When a task is classified to a slot, the model_instance assigned to that slot determines both the injected instance memory and the provider that handles the call (matched via `BUILTIN_PROVIDERS` model field). `edcmbone` additionally has its own dedicated lookup in `edcmbone_explainer.py`.
+All six slots are wired into inference routing via `_slot_routing_info()` in `inference.py`. When a task is classified to a slot, the model_instance assigned to that slot determines both the injected instance memory and the provider that handles the call (matched via `BUILTIN_PROVIDERS` model field). `edcm` additionally has its own dedicated lookup in `edcm_explainer.py`.
 
 > Full slot contract + wiring milestone: `docs/ARCHITECTURE.md` → Party Slots
 

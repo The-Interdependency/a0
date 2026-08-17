@@ -1,4 +1,4 @@
-# 28:21 0:0 0:1
+# 29:21 0:0 0:1
 """memory_flush — persist active memory seeds to checkpoint."""
 
 # === MODULE_BUILD ===
@@ -17,7 +17,7 @@
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; removes the memory_flush tool from the registry.
-#   requires: a0_engine_pcna
+#   requires: a0_platonic_ptcna_state
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===
@@ -47,10 +47,11 @@ SCHEMA = {
 async def handle(**_) -> str:
     from ...main import get_pcna as _get
     pcna = _get()
-    await pcna.save_checkpoint()
+    receipt = await pcna.save_checkpoint()
     return json.dumps({
         "flushed": True,
-        "checkpoint_key": pcna._checkpoint_key,
+        "checkpoint_receipt": str(pcna.state_path),
+        "receipt_sha256": receipt["receipt_sha256"],
         "infer_count": pcna.infer_count,
     })
-# 28:21 0:0 0:1
+# 29:21 0:0 0:1

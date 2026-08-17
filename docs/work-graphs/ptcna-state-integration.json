@@ -1,0 +1,43 @@
+{
+  "schema": "the-interdependency.stack-manifest",
+  "version": "1.0.0",
+  "work_graph_sha256": "ef7cfd97609115b89653edd514354afc0e92ea2c2e1e4b6dc9346fa0630c3bd5",
+  "repositories": [
+    {
+      "repository": "The-Interdependency/ucns",
+      "commit": "b7b6f35cce69c273860923489a1c8b5372d14eb0",
+      "authority": "candidate-scoped 157x7x7x53 state and provenance receipt",
+      "relation": "producer"
+    },
+    {
+      "repository": "The-Interdependency/ptcna",
+      "commit": "c5fa9a599498f19c8345f2790a0636542dfbc6a1",
+      "authority": "target/fallback inference, state validation, and merge algebra",
+      "relation": "producer and UCNS receipt consumer"
+    },
+    {
+      "repository": "The-Interdependency/interdependent-lib",
+      "commit": "918025e525910eaa3f20141aeb3956f137b248bf",
+      "authority": "exact compatible UCNS/PTCNA pair publication",
+      "relation": "pair publisher"
+    },
+    {
+      "repository": "The-Interdependency/a0",
+      "commit": "ba630cd4dd4e892af1b7ca138bfcada608c1ffd4",
+      "authority": "Platonic Agent binding, local persistence, routing state, and restart recovery",
+      "relation": "edited consumer base"
+    }
+  ],
+  "boundaries": {
+    "authority_transfer": false,
+    "proof_status_transfer": false,
+    "measurement_status_transfer": false,
+    "semantic_mapping": "declared: producer PTCNA state is bound only to the Platonic Agent ptcna_runtime_state region",
+    "agent_scope": "cross-repository-work-graph",
+    "hmmm": [
+      "continuous seven-fold geometry",
+      "representative efficacy",
+      "production privacy"
+    ]
+  }
+}

@@ -1,9 +1,12 @@
-# 6:0 0:0 0:5
-from .ptca_core import PTCACore
-from .memory_core import MemoryCore
-from .theta import ThetaTensor
-from .pcna import PCNAEngine
-from .merge import InstanceMerge
+# 7:1
+"""a0 engine integrations; PTCNA algebra remains producer-owned."""
 
-__all__ = ["PTCACore", "MemoryCore", "ThetaTensor", "PCNAEngine", "InstanceMerge"]
-# 6:0 0:0 0:5
+from .memory_core import MemoryCore
+from .ptcna_state import PTCNAState, PTCNAStateMerge, PTCNAStateTamperError
+from .theta import ThetaTensor
+
+__all__ = [
+    "MemoryCore", "ThetaTensor", "PTCNAState", "PTCNAStateMerge",
+    "PTCNAStateTamperError",
+]
+# 7:1

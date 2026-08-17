@@ -2,6 +2,7 @@ Metadata-Version: 2.4
 Name: repl-nix-workspace
 Version: 0.1.0
 Summary: Add your description here
+License: AGPL-3.0-or-later
 Requires-Python: >=3.12
 License-File: LICENSE
 Requires-Dist: aimmh-lib>=1.1.0
@@ -10,17 +11,17 @@ Requires-Dist: alembic>=1.18.4
 Requires-Dist: anthropic>=0.97.0
 Requires-Dist: asyncpg>=0.31.0
 Requires-Dist: cryptography>=47.0.0
-Requires-Dist: edcmbone>=0.1.0
+Requires-Dist: edcm @ git+https://github.com/The-Interdependency/edcm.git@8b0f82d7017a954ef45f9a3486aed8f04333551a
 Requires-Dist: fastapi>=0.135.1
 Requires-Dist: google-genai>=1.73.1
 Requires-Dist: httpx>=0.28.1
-Requires-Dist: interdependent-lib>=0.1.0
+Requires-Dist: interdependent-lib[ptcna] @ git+https://github.com/The-Interdependency/interdependent-lib.git@918025e525910eaa3f20141aeb3956f137b248bf
 Requires-Dist: itsdangerous>=2.2.0
 Requires-Dist: mako>=1.3.11
 Requires-Dist: numpy>=2.4.3
 Requires-Dist: openai>=2.0.0
 Requires-Dist: openai-agents>=0.15.0
-Requires-Dist: pcea
+Requires-Dist: pcea @ git+https://github.com/The-Interdependency/PCEA.git@2896194d2de52ce8666ea288ec9e820d0498d119
 Requires-Dist: psycopg2-binary>=2.9.11
 Requires-Dist: pydantic>=2.12.5
 Requires-Dist: pyjwt[crypto]>=2.10.1

@@ -1,16 +1,16 @@
-# 160:54 0:0 4:0
+# 161:54 0:0 4:0
 # N:M
-"""EDCM service — delegates measurement math to edcmbone.
+"""EDCM service — delegates measurement math to the current EDCM package.
 
 Refactored from the prior in-house heuristic computation. We retain the public
 contract (METRIC_NAMES / DIRECTIVES / compute_metrics / check_directives /
 delta_between) so all upstream callers (routes, snapshots, bandit
 correlations, edcm_score tool) keep working unchanged. The actual math is
-now performed by edcmbone — bone-token density, repetition / novelty ratios,
+now performed by EDCM — token density, repetition / novelty ratios,
 energy step / fixation / loop risks, and crosswalk projections live in the
 package and are fully canon-versioned.
 
-NO silent fallback: if edcmbone fails to import or compute, we raise so
+NO silent fallback: if EDCM fails to import or compute, we raise so
 callers see the real failure rather than a placeholder.
 """
 
@@ -18,9 +18,9 @@ callers see the real failure rather than a placeholder.
 # id: a0_service_edcm
 #   module_name: edcm
 #   module_kind: service
-#   summary: EDCM behavioral-directive scoring service — delegates measurement math to edcmbone while keeping the stable contract (compute_metrics / check_directives / delta_between) that routes, snapshots, and the edcm_score tool depend on.
+#   summary: EDCM behavioral-directive scoring service — delegates measurement math to the exact current EDCM package while keeping the stable a0 projection contract.
 #   owner: Erin Spencer
-#   public_surface: compute_metrics, check_directives, delta_between, edcmbone_round, compute_transcript_full, METRIC_NAMES, DIRECTIVES
+#   public_surface: compute_metrics, check_directives, delta_between, edcm_round, compute_transcript_full, METRIC_NAMES, DIRECTIVES
 #   internal_surface: _clamp, _build_transcript, _round_text
 #   auth_boundary: none
 #   storage_boundary: none
@@ -39,16 +39,15 @@ import math
 from typing import Any
 from importlib.metadata import version as _pkg_version
 
-import edcmbone
-from edcmbone.parser import parse_transcript
-from edcmbone.metrics.compute import compute_round, tokenize
-from edcmbone.metrics.stats import (
+from edcm.measurement import parse_transcript
+from edcm.measurement.metrics.compute import compute_round, tokenize
+from edcm.measurement.metrics.stats import (
     rep_ngram_density, repetition_ratio, novelty, ttr,
     correction_fidelity,
 )
-from edcmbone.metrics import risk as _risk_mod
+from edcm.measurement.metrics import risk as _risk_mod
 
-EDCMBONE_VERSION = _pkg_version("edcmbone")
+EDCM_VERSION = _pkg_version("edcm")
 
 METRIC_NAMES = ["cm", "da", "drift", "dvg", "int_val", "tbf"]
 
@@ -76,7 +75,7 @@ def _clamp(v: float) -> float:
 
 
 def _build_transcript(responses: list[dict[str, Any]], context: str) -> str:
-    """Synthesize a turn-tagged transcript edcmbone's parser will accept."""
+    """Synthesize a turn-tagged transcript EDCM's parser will accept."""
     parts: list[str] = []
     if context:
         parts.append(f"USER: {context}")
@@ -87,9 +86,9 @@ def _build_transcript(responses: list[dict[str, Any]], context: str) -> str:
 
 
 def compute_metrics(responses: list[dict[str, Any]], context: str = "") -> dict[str, float]:
-    """Project edcmbone's RoundMetrics into our six-channel EDCM vector.
+    """Project EDCM's RoundMetrics into our six-channel EDCM vector.
 
-    Mapping (edcmbone -> a0p):
+    Mapping (EDCM -> a0):
       cm      <- mean(novelty + ttr) capped — bone token density / vocabulary spread
       da      <- 1 - repetition_ratio — answer/directive alignment proxy
       drift   <- repetition_ratio — recurrent-pattern drift proxy
@@ -103,11 +102,13 @@ def compute_metrics(responses: list[dict[str, Any]], context: str = "") -> dict[
     if not texts:
         return {m: 0.0 for m in METRIC_NAMES}
     joined = " ".join(texts)
-    rep = repetition_ratio(joined)
-    rng2 = rep_ngram_density(joined, n=2)
-    rng3 = rep_ngram_density(joined, n=3)
-    nov = novelty(joined, joined[: max(1, len(joined) // 2)])
-    div = ttr(joined)
+    tokens = list(tokenize(joined))
+    split = max(1, len(tokens) // 2)
+    rep = repetition_ratio(tokens)
+    rng2 = rep_ngram_density(tokens, n=2)
+    rng3 = rep_ngram_density(tokens, n=3)
+    nov = novelty(tokens, tokens[:split])
+    div = ttr(tokens)
     cm = _clamp((nov + div) / 2.0)
     da = _clamp(1.0 - rep)
     drift = _clamp(rep)
@@ -140,14 +141,14 @@ def delta_between(a: dict[str, float], b: dict[str, float]) -> dict[str, float]:
     return {f"delta_{m}": round(b.get(m, 0) - a.get(m, 0), 4) for m in METRIC_NAMES}
 
 
-def edcmbone_round(transcript_text: str) -> dict[str, Any]:
-    """Full edcmbone single-round metrics for advanced callers (Σ snapshots)."""
+def edcm_round(transcript_text: str) -> dict[str, Any]:
+    """Full EDCM single-round metrics for advanced callers (Σ snapshots)."""
     parsed = parse_transcript(transcript_text)
     if not parsed.rounds:
-        return {"edcmbone_version": EDCMBONE_VERSION, "rounds": 0}
+        return {"edcm_version": EDCM_VERSION, "rounds": 0}
     rm = compute_round(parsed.rounds[-1])
     return {
-        "edcmbone_version": EDCMBONE_VERSION,
+        "edcm_version": EDCM_VERSION,
         "round_index": len(parsed.rounds) - 1,
         "metrics": getattr(rm, "__dict__", {}),
     }
@@ -170,7 +171,7 @@ def _round_text(rnd: Any) -> str:
 
 
 def compute_transcript_full(text: str) -> dict[str, Any]:
-    """Whole-transcript rollup using edcmbone.
+    """Whole-transcript rollup using EDCM.
 
     Returns averages + peak + risk + correction_fidelity + per-round detail.
     Raises ValueError on empty/unparseable input — no silent fallback.
@@ -234,7 +235,7 @@ def compute_transcript_full(text: str) -> dict[str, Any]:
     ]
 
     return {
-        "edcmbone_version": EDCMBONE_VERSION,
+        "edcm_version": EDCM_VERSION,
         "message_count": n,
         **avgs,
         "peak_metric": round(peak_val, 4),
@@ -247,4 +248,4 @@ def compute_transcript_full(text: str) -> dict[str, Any]:
         "per_round": per_round,
     }
 # N:M
-# 160:54 0:0 4:0
+# 161:54 0:0 4:0

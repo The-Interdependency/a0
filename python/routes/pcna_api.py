@@ -308,8 +308,8 @@ async def list_instances():
 @router.post("/pcna/instances/spawn")
 async def spawn_instance(request: Request):
     await require_admin(request)
-    from ..engine import InstanceMerge
-    child, result = InstanceMerge.fork(_get_pcna())
+    from ..engine import PTCNAStateMerge
+    child, result = PTCNAStateMerge.fork(_get_pcna())
     _get_instances()[child.theta.instance_id] = child
     return result
 
@@ -317,11 +317,11 @@ async def spawn_instance(request: Request):
 @router.post("/pcna/instances/merge")
 async def merge_instances(req: MergeRequest, request: Request):
     await require_admin(request)
-    from ..engine import InstanceMerge
+    from ..engine import PTCNAStateMerge
     primary = _get_pcna()
     instances = _get_instances()
     if req.mode == "fork":
-        child, result = InstanceMerge.fork(primary)
+        child, result = PTCNAStateMerge.fork(primary)
         instances[child.theta.instance_id] = child
         return result
     target_id = req.target_instance_id
@@ -329,12 +329,12 @@ async def merge_instances(req: MergeRequest, request: Request):
         raise HTTPException(status_code=404, detail="target_instance_id not found")
     target = instances[target_id]
     if req.mode == "absorb":
-        result = InstanceMerge.absorb(primary, target)
+        result = PTCNAStateMerge.absorb(primary, target)
         if target_id != primary.theta.instance_id:
             del instances[target_id]
         return result
     if req.mode == "converge":
-        return InstanceMerge.converge(primary, target, alpha=req.alpha)
+        return PTCNAStateMerge.converge(primary, target, alpha=req.alpha)
     raise HTTPException(status_code=400, detail="mode must be absorb|fork|converge")
 
 

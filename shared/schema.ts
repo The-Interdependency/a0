@@ -476,7 +476,7 @@ export const transcriptReports = pgTable("transcript_reports", {
   riskLoop: real("risk_loop").default(0),
   riskFixation: real("risk_fixation").default(0),
   correctionFidelity: real("correction_fidelity").default(0),
-  edcmboneVersion: varchar("edcmbone_version", { length: 40 }),
+  edcmVersion: varchar("edcm_version", { length: 40 }),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

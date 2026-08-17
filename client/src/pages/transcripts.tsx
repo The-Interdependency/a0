@@ -60,7 +60,7 @@ type ReportRow = {
   risk_loop: number;
   risk_fixation: number;
   correction_fidelity: number;
-  edcmbone_version: string | null;
+  edcm_version: string | null;
   created_at: string | null;
 };
 
@@ -510,7 +510,7 @@ export default function TranscriptsPage() {
                   {report.source_slug || `Report ${report.id}`}
                 </h1>
                 <div className="text-xs text-muted-foreground" data-testid="text-report-meta">
-                  {report.message_count} messages · edcmbone {report.edcmbone_version ?? "—"} ·{" "}
+                  {report.message_count} messages · EDCM {report.edcm_version ?? "—"} ·{" "}
                   {report.created_at?.slice(0, 19).replace("T", " ")}
                 </div>
               </div>

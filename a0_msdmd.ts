@@ -3,6 +3,270 @@ import { defineMsdmdCollection } from "./.agents/skills/msdmd/collection";
 export default defineMsdmdCollection({
   "declarations": [
     {
+      "block": "BOUNDARIES",
+      "fields": {
+        "admin_only": "true",
+        "auth_boundary": "admin",
+        "network_boundary": "internal",
+        "owner": "database-owner",
+        "pii": "possible",
+        "review_required": "database-owner",
+        "secrets": "read",
+        "side_effects": "explicit migration commands only",
+        "since": "2026-08-05",
+        "storage_boundary": "migration",
+        "summary": "Opens the configured PostgreSQL database only for explicit Alembic commands and wraps supported DDL in transactions.",
+        "user_data_boundary": "write"
+      },
+      "file": "migrations/env.py",
+      "id": "alembic_environment_migration_boundary"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "a migration command runs while the legacy schema has no complete metadata authority",
+        "since": "2026-08-05",
+        "then": "Alembic uses transactional PostgreSQL DDL and refuses autogeneration rather than inferring a partial schema"
+      },
+      "file": "migrations/env.py",
+      "id": "alembic_environment_explicit_transactional_only"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "true",
+        "auth_boundary": "admin",
+        "internal_surface": "_database_url, run_migrations_offline, run_migrations_online",
+        "module_kind": "migration",
+        "module_name": "alembic_environment",
+        "network_boundary": "internal",
+        "owner": "Erin Spencer",
+        "public_surface": "alembic offline and online migration execution",
+        "requires": "a0_schema_inventory, a0_live_schema_capture",
+        "rollback": "remove the Alembic environment before any revision is applied",
+        "rollout": "invoked with alembic -c albm_conf_file_v0.0.0alpha.ini",
+        "since": "2026-08-05",
+        "storage_boundary": "migration",
+        "summary": "Configures transactional PostgreSQL migrations while refusing unsafe autogeneration against incomplete legacy metadata.",
+        "tests": "python/tests/test_schema_migration_foundation.py",
+        "unresolved": "complete target_metadata is intentionally absent until the captured legacy baseline is reconciled",
+        "user_data_boundary": "write"
+      },
+      "file": "migrations/env.py",
+      "id": "a0_alembic_environment"
+    },
+    {
+      "block": "BOUNDARIES",
+      "fields": {
+        "admin_only": "true",
+        "auth_boundary": "admin",
+        "network_boundary": "internal",
+        "owner": "database-owner",
+        "pii": "none",
+        "review_required": "database-owner",
+        "secrets": "none",
+        "side_effects": "creates all legacy schema objects in the target database",
+        "since": "2026-08-05",
+        "storage_boundary": "migration",
+        "summary": "Reads the committed SQL artifact, verifies its digest, and issues multi-statement DDL through the Alembic-managed connection; never reads table data, writes rows, or drops objects.",
+        "user_data_boundary": "write"
+      },
+      "file": "migrations/versions/lega_schm_base_v0.0.0alpha.py",
+      "id": "legacy_schema_baseline_revision_boundary"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "the SQL artifact on disk",
+        "since": "2026-08-05",
+        "then": "upgrade() verifies SHA-256 matches the value pinned at review time and raises RuntimeError on any mismatch before touching the database"
+      },
+      "file": "migrations/versions/lega_schm_base_v0.0.0alpha.py",
+      "id": "legacy_schema_baseline_digest_locked"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "any caller invoking downgrade()",
+        "since": "2026-08-05",
+        "then": "NotImplementedError is raised immediately and no DDL is executed"
+      },
+      "file": "migrations/versions/lega_schm_base_v0.0.0alpha.py",
+      "id": "legacy_schema_baseline_downgrade_closed"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "an empty PostgreSQL database with no prior schema",
+        "since": "2026-08-05",
+        "then": "upgrade() creates the full reviewed object set and leaves no orphan psql metacommands in the executed SQL"
+      },
+      "file": "migrations/versions/lega_schm_base_v0.0.0alpha.py",
+      "id": "legacy_schema_baseline_empty_apply"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "true",
+        "auth_boundary": "admin",
+        "internal_surface": "upgrade, downgrade, _CAPTURE_SHA256, _SQL_PATH",
+        "module_kind": "migration",
+        "module_name": "legacy_schema_baseline_revision",
+        "network_boundary": "internal",
+        "owner": "Erin Spencer",
+        "public_surface": "alembic upgrade head",
+        "requires": "a0_alembic_environment, a0_live_schema_capture, a0_schema_baseline_review",
+        "rollback": "restore-point recovery only; downgrade() is intentionally closed",
+        "rollout": "alembic upgrade head against an empty or archive-stamped database",
+        "since": "2026-08-05",
+        "storage_boundary": "migration",
+        "summary": "First Alembic revision; applies the reviewed, digest-locked pg_dump baseline to an empty database with no downgrade path.",
+        "tests": "python/tests/test_schema_baseline_revision.py",
+        "unresolved": "live apply blocked until a restore-point identifier is recorded",
+        "user_data_boundary": "write"
+      },
+      "file": "migrations/versions/lega_schm_base_v0.0.0alpha.py",
+      "id": "a0_legacy_schema_baseline_revision"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "boundary",
+        "given": "a Platonic Agent containing distinct identity and inference dimensions",
+        "then": "projecting inference alone does not implicitly select or synthesize identity"
+      },
+      "file": "python/agents/platonic.py",
+      "id": "platonic_agent_inference_not_identity"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "a declared Platonic Agent and a new non-colliding dimension",
+        "then": "extension returns a new Platonic Agent while preserving the original"
+      },
+      "file": "python/agents/platonic.py",
+      "id": "platonic_agent_open_extension"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "a projection request over declared dimensions",
+        "then": "selected, omitted, and unresolved dimensions remain explicit and ordered"
+      },
+      "file": "python/agents/platonic.py",
+      "id": "platonic_agent_projection_explicit"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "boundary",
+        "given": "a semantic region references a dimension the Platonic Agent does not declare",
+        "then": "construction fails instead of silently widening the agent ontology"
+      },
+      "file": "python/agents/platonic.py",
+      "id": "platonic_agent_region_dimensions_fail_closed"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "a declared semantic region and a partial set of bindings",
+        "then": "projection selects that region's declared dimensions and exposes every missing binding as unresolved"
+      },
+      "file": "python/agents/platonic.py",
+      "id": "platonic_agent_region_projection_explicit"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "an existing a0 agent semantic surface mapped as a non-colliding region",
+        "then": "subsumption returns a new Platonic Agent containing that region while preserving the original"
+      },
+      "file": "python/agents/platonic.py",
+      "id": "platonic_agent_region_subsumption"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "boundary",
+        "given": "a projection binding for an undeclared dimension",
+        "then": "projection raises ValueError instead of silently inventing semantics"
+      },
+      "file": "python/agents/platonic.py",
+      "id": "platonic_agent_unknown_dimension_fails_closed"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "internal_surface": "_ordered_unique",
+        "module_kind": "schema",
+        "module_name": "platonic",
+        "network_boundary": "none",
+        "owner": "Erin Spencer",
+        "public_surface": "AgentDimension, AgentSemanticRegion, AgentProjection, PlatonicAgent, candidate_platonic_agent",
+        "rollback": "remove the region map and exports; existing runtime semantics remain intact",
+        "rollout": "import-only semantic subsumption map; runtime storage, lifecycle, privacy, provider, and inference behavior remain unchanged",
+        "storage_boundary": "none",
+        "summary": "represents an open maximal agent object that subsumes existing a0 agent semantics as explicit regions and bounded projections",
+        "tests": "python/tests/test_platonic_agent.py",
+        "unresolved": "exhaustive dimension set, exhaustive region map, UCNS representation, durable realization serialization, identity continuity",
+        "user_data_boundary": "none"
+      },
+      "file": "python/agents/platonic.py",
+      "id": "platonic_agent_object"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "boundary",
+        "given": "the current subsumed a0 semantic regions",
+        "then": "PTCNA runtime state and run artifacts remain distinct from semantic memory and neither ZFAE inference nor provider relation becomes identity"
+      },
+      "file": "python/agents/platonic_regions.py",
+      "id": "platonic_agent_existing_separations_preserved"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "the settled a0 AgentDefinition, AgentInstance, AgentRun, memory, runtime-state, artifact, inference, provider, privacy, spawn/merge, and matching surfaces",
+        "then": "each surface is addressable through a declared Platonic Agent semantic region"
+      },
+      "file": "python/agents/platonic_regions.py",
+      "id": "platonic_agent_existing_surfaces_subsumed"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "internal_surface": "_REGION_HMMM",
+        "module_kind": "schema",
+        "module_name": "platonic_regions",
+        "network_boundary": "none",
+        "owner": "Erin Spencer",
+        "public_surface": "current_a0_agent_regions",
+        "rollback": "stop loading these region declarations; existing runtime surfaces remain unchanged",
+        "rollout": "consumed by candidate_platonic_agent; no runtime behavior or persistence mutation",
+        "storage_boundary": "none",
+        "summary": "maps already-settled a0 agent semantics into named regions of the Platonic Agent without collapsing their existing boundaries",
+        "tests": "python/tests/test_platonic_agent.py",
+        "unresolved": "exhaustive region set, final dimension membership per region, producer-to-region semantic adapters",
+        "user_data_boundary": "none"
+      },
+      "file": "python/agents/platonic_regions.py",
+      "id": "platonic_agent_regions"
+    },
+    {
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
@@ -25,30 +289,6 @@ export default defineMsdmdCollection({
       },
       "file": "python/engine/memory_core.py",
       "id": "a0_engine_memory_core"
-    },
-    {
-      "block": "MODULE_BUILD",
-      "fields": {
-        "admin_only": "false",
-        "auth_boundary": "none",
-        "internal_surface": "_fed_avg, _blend_core",
-        "module_kind": "engine",
-        "module_name": "merge",
-        "network_boundary": "none",
-        "owner": "Erin Spencer",
-        "public_surface": "InstanceMerge",
-        "requires": "a0_engine_theta, a0_engine_ptca_core, a0_engine_pcna",
-        "rollback": "Revert this file; merge operators are pure functions over in-memory engine state.",
-        "rollout": "default_enabled",
-        "since": "2026-06-02",
-        "storage_boundary": "none",
-        "summary": "InstanceMerge \u2014 stateless absorb/fork/converge operators for the multi-instance PCNA mesh, blending PTCACore/MemoryCore/ThetaTensor state via federated averaging.",
-        "tests": "hmmm",
-        "unresolved": "fork() time-seeds its RNG so rapid successive calls may collide.",
-        "user_data_boundary": "none"
-      },
-      "file": "python/engine/merge.py",
-      "id": "a0_engine_merge"
     },
     {
       "block": "MODULE_BUILD",
@@ -79,42 +319,18 @@ export default defineMsdmdCollection({
       "fields": {
         "admin_only": "false",
         "auth_boundary": "none",
-        "internal_surface": "_tensor_to_b64, _b64_to_tensor",
-        "module_kind": "engine",
-        "module_name": "pcna",
-        "network_boundary": "none",
-        "owner": "Erin Spencer",
-        "public_surface": "PCNAEngine",
-        "requires": "a0_engine_ptca_core, a0_engine_memory_core, a0_engine_theta",
-        "rollback": "Revert this file; engine is reconstructed from checkpoint on next boot.",
-        "rollout": "default_enabled",
-        "since": "2026-06-02",
-        "storage_boundary": "write",
-        "summary": "Six-ring PCNA inference pipeline (Phi/Psi/Omega/Theta/Memory-L/Memory-S) running Project\u2192Inject\u2192Propagate\u2192PTCA-seed\u2192PCTA-circle\u2192Coherence plus reward backprop.",
-        "tests": "hmmm",
-        "unresolved": "none",
-        "user_data_boundary": "read"
-      },
-      "file": "python/engine/pcna.py",
-      "id": "a0_engine_pcna"
-    },
-    {
-      "block": "MODULE_BUILD",
-      "fields": {
-        "admin_only": "false",
-        "auth_boundary": "none",
         "internal_surface": "_t2b64, _b64t",
         "module_kind": "engine",
         "module_name": "prime_seeds",
         "network_boundary": "none",
         "owner": "Erin Spencer",
         "public_surface": "PrimeSeedLayer, get_prime_seeds",
-        "requires": "a0_engine_ptca_core, a0_engine_pcna",
+        "requires": "pcna_ring_core, a0_platonic_ptcna_state",
         "rollback": "Revert this file; long-term seed is restored from checkpoint, short-term reseeds on next tick.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
         "storage_boundary": "write",
-        "summary": "PrimeSeedLayer \u2014 seven PTCACore instances (primes 3..19) seeded from sigma tensor slices, propagated each heartbeat tick and merged/promoted into pcna memory rings.",
+        "summary": "PrimeSeedLayer \u2014 seven canonical PTCNA RingCore instances seeded from sigma tensor slices, propagated each heartbeat tick and merged/promoted into PTCNA memory rings.",
         "tests": "hmmm",
         "unresolved": "none",
         "user_data_boundary": "none"
@@ -123,28 +339,95 @@ export default defineMsdmdCollection({
       "id": "a0_engine_prime_seeds"
     },
     {
+      "block": "BOUNDARIES",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "network_boundary": "none",
+        "owner": "Erin Spencer",
+        "pii": "caller inputs are not persisted; only numerical state, counters, routing identities, and digests are stored",
+        "secrets": "none",
+        "since": "2026-08-17",
+        "storage_boundary": "read, write",
+        "summary": "atomically writes and reads local PTCNA numerical state plus non-secret routing and producer receipts",
+        "user_data_boundary": "write"
+      },
+      "file": "python/engine/ptcna_state.py",
+      "id": "a0_ptcna_persistence_boundary"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "the active PTCNA state is projected into the Platonic Agent",
+        "then": "all declared ptcna_runtime_state dimensions are explicitly bound without collapsing memory or inference regions"
+      },
+      "file": "python/engine/ptcna_state.py",
+      "id": "a0_ptcna_binds_platonic_region"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "producer tensors, counters, receipts, and routing state are saved then loaded into a fresh adapter",
+        "then": "the fresh adapter recovers the exact persisted identities and numerical state"
+      },
+      "file": "python/engine/ptcna_state.py",
+      "id": "a0_ptcna_restart_round_trip"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "target, requested fallback, or explicitly enabled failover inference",
+        "then": "the producer receipt and durable routing state identify the requested and actual backend"
+      },
+      "file": "python/engine/ptcna_state.py",
+      "id": "a0_ptcna_routing_is_explicit"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "either state blob or authority-bearing receipt is modified",
+        "then": "reload raises PTCNAStateTamperError before applying any persisted state"
+      },
+      "file": "python/engine/ptcna_state.py",
+      "id": "a0_ptcna_tamper_fails_closed"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "evidence",
+        "given": "PTCNAState is constructed",
+        "then": "the installed interdependent-lib pair validates before producer runtime construction"
+      },
+      "file": "python/engine/ptcna_state.py",
+      "id": "a0_ptcna_uses_exact_pair"
+    },
+    {
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
         "auth_boundary": "none",
-        "internal_surface": "_adj_distances",
-        "module_kind": "engine",
-        "module_name": "ptca_core",
+        "internal_surface": "_canonical_bytes, _state_arrays, _restore_arrays",
+        "module_kind": "adapter",
+        "module_name": "ptcna_state",
         "network_boundary": "none",
         "owner": "Erin Spencer",
-        "public_surface": "PTCACore",
-        "requires": "none",
-        "rollback": "Revert this file; pure-compute tensor primitive, rebuilt in-memory.",
-        "rollout": "default_enabled",
-        "since": "2026-06-02",
-        "storage_boundary": "none",
-        "summary": "PTCACore \u2014 parameterized prime-ring tensor base with heptagram propagation and coherence scoring; the substrate for the Phi/Psi/Omega rings.",
-        "tests": "hmmm",
-        "unresolved": "none",
-        "user_data_boundary": "none"
+        "public_surface": "PTCNAState, PTCNAStateTamperError, PTCNAStateMerge",
+        "requires": "interdependent_lib_ptcna_pair, ptcna_runtime_boundary, platonic_agent_object",
+        "rollback": "reinstall the prior a0 release; producer checkpoint files remain isolated by schema",
+        "rollout": "replaces local PCNA/PTCA algebra after exact producer-pair validation",
+        "since": "2026-08-17",
+        "storage_boundary": "read, write",
+        "summary": "binds the exact UCNS/PTCNA pair into the Platonic Agent and durably persists producer state, receipts, and explicit routing history",
+        "tests": "python/tests/test_ptcna_state.py",
+        "unresolved": "continuous seven-fold geometry, representative efficacy, production privacy",
+        "user_data_boundary": "write"
       },
-      "file": "python/engine/ptca_core.py",
-      "id": "a0_engine_ptca_core"
+      "file": "python/engine/ptcna_state.py",
+      "id": "a0_platonic_ptcna_state"
     },
     {
       "block": "MODULE_BUILD",
@@ -278,13 +561,13 @@ export default defineMsdmdCollection({
         "owner": "Erin Spencer",
         "public_surface": "text_to_ucns",
         "requires": "none",
-        "rollback": "Revert this file; encoder raises RuntimeError at call time until edcmbone import is resolved, so no live consumers depend on it.",
+        "rollback": "Revert this file; the encoder remains fail-closed and has no live consumers.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
         "storage_boundary": "none",
-        "summary": "text_to_ucns \u2014 tokenizes text and maps closed-class tokens to UCNSObjects (open-class tokens emit None); currently blocked on edcmbone import resolution.",
+        "summary": "archived text_to_ucns skeleton; its retired local UCNS object dependency has no current mapping",
         "tests": "hmmm",
-        "unresolved": "edcmbone import path unresolved (pip-install vs vendored); blocked on edcmbone issue #46 (ucns_v04 on sys.path); raises RuntimeError at call time until resolved.",
+        "unresolved": "lawful lexical mapping into the current UCNS API; raises RuntimeError until resolved",
         "user_data_boundary": "read"
       },
       "file": "python/engine/ucns_kit/encoder.py",
@@ -397,7 +680,7 @@ export default defineMsdmdCollection({
         "network_boundary": "none",
         "owner": "Erin Spencer",
         "public_surface": "ZetaEngine",
-        "requires": "a0_engine_pcna, a0_service_edcm",
+        "requires": "a0_platonic_ptcna_state, a0_service_edcm",
         "rollback": "Revert this file; Zeta runs non-blocking after responses and can be disabled without affecting inference.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
@@ -413,7 +696,16 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.module_doctrine.test_route_doc_blocks_are_complete",
+        "class": "correctness",
+        "given": "a route file begins with a legacy N:M or full N:M C:D I:O annotation",
+        "then": "collect_doc_meta exposes every available metric as an integer"
+      },
+      "file": "python/routes/__init__.py",
+      "id": "routes_doc_annotation_metrics"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
         "class": "correctness",
         "given": "every python/routes/*.py file (excluding __init__.py)",
         "then": "it declares # DOC module/label/description/tier/role exactly"
@@ -424,7 +716,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.module_doctrine.test_route_files_are_annotated",
         "class": "correctness",
         "given": "every python/routes/*.py file (excluding __init__.py)",
         "then": "its first and last non-blank lines are # N:M annotation comments"
@@ -435,7 +726,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.module_doctrine.test_router_defining_files_are_registered",
         "class": "correctness",
         "given": "every python/routes/*.py file that defines a module-level router",
         "then": "it is imported and added to ALL_ROUTERS in __init__.py"
@@ -446,7 +736,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.route_gating.test_every_write_route_is_gated",
         "class": "security",
         "given": "every @router.{post,patch,delete,put} handler in",
         "then": "the handler body must reference at least one gating sentinel"
@@ -457,7 +746,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.billing.test_webhook_replay_is_idempotent",
         "class": "idempotency",
         "given": "same Stripe event id POSTed twice to the webhook (via the",
         "then": "first call returns {received: True}; replay returns"
@@ -468,7 +756,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.chat.test_delete_other_owner_404",
         "class": "security",
         "given": "DELETE /api/v1/conversations/{id} with x-user-id != row.user_id",
         "then": "404; the row remains intact for the real owner"
@@ -479,7 +766,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.chat.test_get_other_owner_404",
         "class": "security",
         "given": "GET /api/v1/conversations/{id} with x-user-id != row.user_id",
         "then": "404 (existence non-disclosure, never 403 or 200)"
@@ -490,13 +776,55 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.chat.test_unknown_body_model_400",
         "class": "correctness",
         "given": "POST /api/v1/conversations/{id}/messages with body.model that",
         "then": "400 with a detail naming the unknown id (no silent fallback to"
       },
       "file": "python/routes/chat.py",
       "id": "chat_unknown_body_model_400"
+    },
+    {
+      "block": "BOUNDARIES",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "network_boundary": "internal",
+        "owner": "platform-runtime",
+        "pii": "none",
+        "review_required": "platform-runtime",
+        "secrets": "none",
+        "side_effects": "none",
+        "since": "2026-08-04",
+        "storage_boundary": "read",
+        "summary": "Returns process and dependency health without exposing secrets, provider details, or user data.",
+        "user_data_boundary": "none"
+      },
+      "file": "python/routes/runtime_readiness.py",
+      "id": "runtime_readiness_route_boundary"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "internal_surface": "live, ready",
+        "module_kind": "route",
+        "module_name": "runtime_readiness_route",
+        "network_boundary": "internal",
+        "owner": "Erin Spencer",
+        "public_surface": "GET /api/v1/runtime/live, GET /api/v1/runtime/ready",
+        "requires": "a0_runtime_readiness",
+        "rollback": "unregister the router",
+        "rollout": "registered in python.routes.ALL_ROUTERS",
+        "since": "2026-08-04",
+        "storage_boundary": "read",
+        "summary": "Exposes liveness and dependency-aware readiness for the complete a0 deployment unit.",
+        "tests": "python.tests.test_runtime_readiness",
+        "unresolved": "Replit health-check path configuration",
+        "user_data_boundary": "none"
+      },
+      "file": "python/routes/runtime_readiness.py",
+      "id": "a0_runtime_readiness_route"
     },
     {
       "block": "MODULE_BUILD",
@@ -525,7 +853,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_count_live_for_parent_filters",
         "class": "correctness",
         "given": "two registry entries under different parent_run_ids",
         "then": "count_live_for_parent returns 1 for each parent and 0 for an"
@@ -536,7 +863,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_registry_is_singleton",
         "class": "correctness",
         "given": "a fresh process boot",
         "then": "routes.agents._sub_agents is the SAME object as"
@@ -555,13 +881,13 @@ export default defineMsdmdCollection({
         "network_boundary": "none",
         "owner": "Erin Spencer",
         "public_surface": "spawn_sub_agent, merge_sub_agent, list_sub_agents, get_sub_agent_engine, count_live_for_parent, registry_snapshot",
-        "requires": "a0_engine_pcna, a0_engine_merge",
+        "requires": "a0_platonic_ptcna_state",
         "rollback": "Revert this file; registry is in-memory only and rebuilt on process boot.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
         "storage_boundary": "none",
-        "summary": "Canonical in-memory sub-agent registry \u2014 owns the single _sub_agents dict (name \u2192 PCNAEngine + meta) and the lock-guarded spawn/merge/list/count helpers shared by routes/agents.py and the spawn executor.",
-        "tests": "hmmm",
+        "summary": "Canonical in-memory sub-agent registry \u2014 owns the single _sub_agents dict (name \u2192 PTCNAState + meta) and the lock-guarded spawn/merge/list/count helpers shared by routes/agents.py and the spawn executor.",
+        "tests": "python/tests/contracts/spawn_executor_checks.py",
         "unresolved": "none",
         "user_data_boundary": "none"
       },
@@ -698,13 +1024,13 @@ export default defineMsdmdCollection({
         "module_name": "edcm",
         "network_boundary": "none",
         "owner": "Erin Spencer",
-        "public_surface": "compute_metrics, check_directives, delta_between, edcmbone_round, compute_transcript_full, METRIC_NAMES, DIRECTIVES",
+        "public_surface": "compute_metrics, check_directives, delta_between, edcm_round, compute_transcript_full, METRIC_NAMES, DIRECTIVES",
         "requires": "none",
         "rollback": "Revert this file; raises rather than falling back, so callers see real failures.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
         "storage_boundary": "none",
-        "summary": "EDCM behavioral-directive scoring service \u2014 delegates measurement math to edcmbone while keeping the stable contract (compute_metrics / check_directives / delta_between) that routes, snapshots, and the edcm_score tool depend on.",
+        "summary": "EDCM behavioral-directive scoring service \u2014 delegates measurement math to the exact current EDCM package while keeping the stable a0 projection contract.",
         "tests": "tests/test_edcm_uses_package.py",
         "unresolved": "none",
         "user_data_boundary": "read"
@@ -715,67 +1041,61 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.transcripts_explainer.test_no_credits_returns_none",
         "class": "pricing",
         "given": "a user with free_remaining=0, paid_remaining=0",
         "then": "consume_explanation_credit returns None (route layer converts"
       },
-      "file": "python/services/edcmbone_explainer.py",
+      "file": "python/services/edcm_explainer.py",
       "id": "explainer_402_when_no_credits"
     },
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.transcripts_explainer.test_explainer_call_surfaces_in_learning_summary",
         "class": "correctness",
         "given": "an explainer_call event is emitted by the explainer service",
         "then": "it persists with event='explainer_call' (not silently rewritten"
       },
-      "file": "python/services/edcmbone_explainer.py",
+      "file": "python/services/edcm_explainer.py",
       "id": "explainer_call_surfaces_in_learning_summary"
     },
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.transcripts_explainer.test_decrements_free_then_paid",
         "class": "pricing",
         "given": "a user with free_remaining=1, paid_remaining=3",
         "then": "consume_explanation_credit returns 'free' and free_remaining"
       },
-      "file": "python/services/edcmbone_explainer.py",
+      "file": "python/services/edcm_explainer.py",
       "id": "explainer_decrements_free_first"
     },
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.transcripts_explainer.test_idempotent_no_double_charge",
         "class": "idempotency",
         "given": "an explanation already exists for (report_id, user_id)",
         "then": "a second explain_report() call returns the cached row, does NOT"
       },
-      "file": "python/services/edcmbone_explainer.py",
+      "file": "python/services/edcm_explainer.py",
       "id": "explainer_explanation_is_idempotent"
     },
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.transcripts_explainer.test_refund_after_failure",
         "class": "failure_recovery",
         "given": "a credit was consumed (bucket='paid'), then the model failed",
         "then": "refund_explanation_credit('paid') restores paid_remaining to"
       },
-      "file": "python/services/edcmbone_explainer.py",
+      "file": "python/services/edcm_explainer.py",
       "id": "explainer_refund_restores_balance"
     },
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.transcripts_explainer.test_rejects_fabricated_citations",
         "class": "correctness",
         "given": "model output contains citations whose quoted spans do not",
         "then": "_parse_explainer_output drops the fabricated quotes and, if"
       },
-      "file": "python/services/edcmbone_explainer.py",
+      "file": "python/services/edcm_explainer.py",
       "id": "explainer_rejects_fabricated_citations"
     },
     {
@@ -785,7 +1105,7 @@ export default defineMsdmdCollection({
         "auth_boundary": "resource ownership \u2014 raises PermissionError when report_id is not owned by user_id",
         "internal_surface": "_format_round, _build_user_prompt, _strip_json_fences, _normalize_for_match, _quote_appears_in_transcript, _parse_explainer_output, _compute_cost_cents, _record_cost_metric, _emit_provider_log, _credits_view",
         "module_kind": "service",
-        "module_name": "edcmbone_explainer",
+        "module_name": "edcm_explainer",
         "network_boundary": "external",
         "owner": "Erin Spencer",
         "public_surface": "explain_report, InsufficientCredits, PromptTooLarge",
@@ -799,8 +1119,8 @@ export default defineMsdmdCollection({
         "unresolved": "none",
         "user_data_boundary": "write"
       },
-      "file": "python/services/edcmbone_explainer.py",
-      "id": "a0_service_edcmbone_explainer"
+      "file": "python/services/edcm_explainer.py",
+      "id": "a0_service_edcm_explainer"
     },
     {
       "block": "MODULE_BUILD",
@@ -853,7 +1173,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.gating.test_allowlist_entries_correspond_to_real_routes",
         "class": "security",
         "given": "every entry in OWNER_OR_PUBLIC_WRITES",
         "then": "the (file, method, path) corresponds to a real"
@@ -864,7 +1183,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.gating.test_every_write_route_is_gated_or_allowlisted",
         "class": "security",
         "given": "every @router.{post,patch,put,delete} in python/routes/",
         "then": "the handler body within ~80 lines either calls a recognized"
@@ -875,7 +1193,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.gating.test_instrument_mutation_files_have_all_writes_gated",
         "class": "security",
         "given": "every @router.{post,patch,put,delete} inside a",
         "then": "the handler body visibly calls require_admin (or another"
@@ -886,7 +1203,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.gating.test_instrument_mutation_files_are_never_allowlisted",
         "class": "security",
         "given": "FORBIDDEN_ALLOWLIST_FILES (agents.py, bandits.py, edcm.py,",
         "then": "no entry in OWNER_OR_PUBLIC_WRITES references any of these files"
@@ -977,7 +1293,7 @@ export default defineMsdmdCollection({
         "network_boundary": "internal",
         "owner": "Erin Spencer",
         "public_surface": "HeartbeatService",
-        "requires": "a0_engine_pcna",
+        "requires": "a0_platonic_ptcna_state",
         "rollback": "Revert this file; stop the heartbeat task to disable periodic ticks.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
@@ -1351,6 +1667,71 @@ export default defineMsdmdCollection({
       "id": "a0_service_run_logger"
     },
     {
+      "block": "BOUNDARIES",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "network_boundary": "internal",
+        "owner": "platform-runtime",
+        "pii": "none",
+        "review_required": "platform-runtime",
+        "secrets": "read",
+        "side_effects": "none",
+        "since": "2026-08-04",
+        "storage_boundary": "read",
+        "summary": "Reads deployment configuration, probes PostgreSQL, and reads heartbeat status without returning secrets or user data.",
+        "user_data_boundary": "none"
+      },
+      "file": "python/services/runtime_readiness.py",
+      "id": "runtime_readiness_dependency_probe"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "security",
+        "given": "configuration is missing or an internal dependency probe fails",
+        "since": "2026-08-04",
+        "then": "the report contains dependency names and exception types but no secret values, database details, exception messages, provider credentials, or user data"
+      },
+      "file": "python/services/runtime_readiness.py",
+      "id": "runtime_readiness_redacts_sensitive_values"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "deployment configuration, PostgreSQL, and the heartbeat service are probed",
+        "since": "2026-08-04",
+        "then": "ready is true if and only if every declared dependency reports ok"
+      },
+      "file": "python/services/runtime_readiness.py",
+      "id": "runtime_readiness_requires_every_dependency"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "internal_surface": "_check_database, _check_heartbeat, _check_required_config",
+        "module_kind": "service",
+        "module_name": "runtime_readiness",
+        "network_boundary": "internal",
+        "owner": "Erin Spencer",
+        "public_surface": "build_readiness_report",
+        "requires": "a0_service_heartbeat",
+        "rollback": "unregister the readiness route and remove this service",
+        "rollout": "consumed by the runtime readiness route",
+        "since": "2026-08-04",
+        "storage_boundary": "read",
+        "summary": "Produces dependency-aware readiness reports for the complete a0 deployment unit without mutating runtime state.",
+        "tests": "python.tests.test_runtime_readiness",
+        "unresolved": "worker-leader lease is not yet part of readiness",
+        "user_data_boundary": "none"
+      },
+      "file": "python/services/runtime_readiness.py",
+      "id": "a0_runtime_readiness"
+    },
+    {
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
@@ -1425,7 +1806,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_claim_atomic",
         "class": "idempotency",
         "given": "a single 'running' agent_runs row exists",
         "then": "two concurrent _claim_one_pending() calls succeed once and"
@@ -1436,7 +1816,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_concurrent_live_cap",
         "class": "security",
         "given": "20 live registry entries under a single parent_run_id",
         "then": "check_can_spawn raises SpawnCapExceeded with cap='concurrent_live'"
@@ -1447,7 +1826,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_heartbeat_advances",
         "class": "correctness",
         "given": "an 'executing' agent_runs row and the _heartbeat_loop running",
         "then": "last_heartbeat_at strictly advances after a few interval ticks"
@@ -1458,7 +1836,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_marks_failed_on_exception",
         "class": "correctness",
         "given": "a claimed row whose providers list resolves to an unknown id",
         "then": "_execute_one raises no exception, the row's final status is"
@@ -1469,7 +1846,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_merge_helpers_tolerate_no_pcna",
         "class": "correctness",
         "given": "a missing primary PCNA (cold-start or test bootstrap)",
         "then": "_try_get_primary_pcna returns None and _retire_fork_quietly"
@@ -1480,7 +1856,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_no_orphan_invariant",
         "class": "correctness",
         "given": "a registry entry whose run_id has no DB row, AND a DB",
         "then": "check_no_orphan_invariant flags both as orphans and reports ok=False"
@@ -1491,7 +1866,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_resolve_provider_rejects_empty",
         "class": "correctness",
         "given": "an empty list or malformed providers value",
         "then": "_resolve_provider raises ValueError (no silent default-to-active)"
@@ -1502,7 +1876,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_retry_default_none",
         "class": "correctness",
         "given": "retry_policy='none' OR a non-transient exception under",
         "then": "_maybe_schedule_retry returns False"
@@ -1513,7 +1886,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_retry_once_on_transient",
         "class": "correctness",
         "given": "a row with retry_policy='once_on_transient', retry_count=0,",
         "then": "_maybe_schedule_retry returns True, row goes back to 'running'"
@@ -1524,7 +1896,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_skips_non_running",
         "class": "correctness",
         "given": "an agent_runs row with status='completed' (or 'failed', 'merged')",
         "then": "_claim_one_pending() does not return it"
@@ -1535,9 +1906,8 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_snapshot_pcna_shape",
         "class": "correctness",
-        "given": "a primary-shaped PCNAEngine instance",
+        "given": "a primary-shaped PTCNAState instance",
         "then": "_snapshot_pcna returns the four delta-tracked floats/ints"
       },
       "file": "python/services/spawn_executor.py",
@@ -1546,7 +1916,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.spawn_executor.test_stale_sweep_marks_worker_lost",
         "class": "correctness",
         "given": "an 'executing' row with last_heartbeat_at older than 2\u00d7 the",
         "then": "_reap_stale_claims marks ONLY the stale row; fresh row untouched"
@@ -1781,12 +2150,12 @@ export default defineMsdmdCollection({
         "network_boundary": "none",
         "owner": "Erin Spencer",
         "public_surface": "SCHEMA, handle",
-        "requires": "a0_service_edcm, a0_engine_pcna",
+        "requires": "a0_service_edcm, a0_platonic_ptcna_state",
         "rollback": "Revert this file; removes the edcm_score tool from the registry.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
         "storage_boundary": "none",
-        "summary": "edcm_score tool \u2014 returns the current EDCM ring coherence metrics (edcmbone-backed) for the active PCNA engine.",
+        "summary": "edcm_score tool \u2014 returns current metrics from the exact EDCM package for the active PTCNA engine.",
         "tests": "hmmm",
         "unresolved": "none",
         "user_data_boundary": "none"
@@ -1901,7 +2270,7 @@ export default defineMsdmdCollection({
         "network_boundary": "none",
         "owner": "Erin Spencer",
         "public_surface": "SCHEMA, handle",
-        "requires": "a0_engine_pcna",
+        "requires": "a0_platonic_ptcna_state",
         "rollback": "Revert this file; removes the memory_flush tool from the registry.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
@@ -1925,7 +2294,7 @@ export default defineMsdmdCollection({
         "network_boundary": "none",
         "owner": "Erin Spencer",
         "public_surface": "SCHEMA, handle",
-        "requires": "a0_engine_pcna",
+        "requires": "a0_platonic_ptcna_state",
         "rollback": "Revert this file; removes the pcna_infer tool from the registry.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
@@ -1949,7 +2318,7 @@ export default defineMsdmdCollection({
         "network_boundary": "none",
         "owner": "Erin Spencer",
         "public_surface": "SCHEMA, handle",
-        "requires": "a0_engine_pcna",
+        "requires": "a0_platonic_ptcna_state",
         "rollback": "Revert this file; removes the pcna_reward tool from the registry.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
@@ -2181,7 +2550,6 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.chat.test_create_anonymous_owner_null",
         "class": "security",
         "given": "POST /api/v1/conversations with no x-user-id header",
         "then": "row lands with user_id=NULL (owner_user_id kwarg defaults to"
@@ -2192,253 +2560,3599 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
-        "call": "python.tests.contracts.chat.test_create_owner_isolation",
         "class": "security",
         "given": "create_conversation called via POST /api/v1/conversations with",
         "then": "stored row.user_id == \"legit\"; smuggled value is dropped by"
       },
       "file": "python/storage/core.py",
       "id": "storage_create_owner_isolation"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "an executable CHECK whose call exceeds its positive timeout",
+        "since": "2026-08-05",
+        "then": "_execute_check terminates the wait and reports ERROR rather than hanging or passing"
+      },
+      "file": "python/tests/contract_runner.py",
+      "id": "contract_graph_enforces_declared_timeout"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "duplicate ids, missing required fields, source-owned call topology, unknown proves targets, contracts without witnesses, or calls that do not resolve by AST",
+        "since": "2026-08-05",
+        "then": "audit_graph reports visible gaps and the main runner executes no checks"
+      },
+      "file": "python/tests/contract_runner.py",
+      "id": "contract_graph_rejects_incomplete_linkage"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "internal_surface": "Declaration, audit_graph, _resolve_call_no_exec, _execute_check",
+        "module_kind": "instrument",
+        "module_name": "contract_graph_runner",
+        "network_boundary": "none",
+        "owner": "Erin Spencer",
+        "public_surface": "python -m python.tests.contract_runner",
+        "requires": "msdmd universal parser, test-build doctrine",
+        "rollback": "restore the prior runner only with an explicit test-build doctrine exception",
+        "rollout": "repository contract gate",
+        "since": "2026-08-05",
+        "storage_boundary": "read",
+        "summary": "Audits source-owned CONTRACTS against test-owned CHECKS without executing imports, then runs only a closed evidence graph under declared timeouts.",
+        "tests": "python/tests/test_contract_runner.py",
+        "unresolved": "none",
+        "user_data_boundary": "none"
+      },
+      "file": "python/tests/contract_runner.py",
+      "id": "a0_contract_graph_runner"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_webhook_replay_is_idempotent",
+        "cleanup": "unique_test_event_is_inert",
+        "mutates": "db",
+        "proves": "billing_webhook_replay_idempotent",
+        "requires": "python3, postgres",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/billing.py",
+      "id": "check_billing_webhook_replay_idempotent"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_delete_other_owner_404",
+        "cleanup": "explicit_conversation_delete",
+        "mutates": "db",
+        "proves": "chat_delete_other_owner_404",
+        "requires": "python3, running_test_server, postgres",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/chat.py",
+      "id": "check_chat_delete_other_owner_404"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_get_other_owner_404",
+        "cleanup": "explicit_conversation_delete",
+        "mutates": "db",
+        "proves": "chat_get_other_owner_404",
+        "requires": "python3, running_test_server, postgres",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/chat.py",
+      "id": "check_chat_get_other_owner_404"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_unknown_body_model_400",
+        "cleanup": "explicit_conversation_delete",
+        "mutates": "db",
+        "proves": "chat_unknown_body_model_400",
+        "requires": "python3, running_test_server, postgres",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/chat.py",
+      "id": "check_chat_unknown_body_model_400"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_create_anonymous_owner_null",
+        "cleanup": "explicit_database_delete",
+        "mutates": "db",
+        "proves": "storage_anonymous_owner_null",
+        "requires": "python3, running_test_server, postgres",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/chat.py",
+      "id": "check_storage_anonymous_owner_null"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_create_owner_isolation",
+        "cleanup": "explicit_conversation_delete",
+        "mutates": "db",
+        "proves": "storage_create_owner_isolation",
+        "requires": "python3, running_test_server, postgres",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/chat.py",
+      "id": "check_storage_create_owner_isolation"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_allowlist_entries_correspond_to_real_routes",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "gating_allowlist_entries_are_real_routes",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/gating.py",
+      "id": "check_gating_allowlist_real_routes"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_every_write_route_is_gated_or_allowlisted",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "gating_every_write_route_is_admin_or_allowlisted",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/gating.py",
+      "id": "check_gating_every_write_route"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_instrument_mutation_files_have_all_writes_gated",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "gating_instrument_files_all_writes_gated",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/gating.py",
+      "id": "check_gating_forbidden_files_all_gated"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_instrument_mutation_files_are_never_allowlisted",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "gating_instrument_files_never_allowlisted",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/gating.py",
+      "id": "check_gating_forbidden_files_never_allowlisted"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_doc_annotation_metrics_parse",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "routes_doc_annotation_metrics",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/contracts/module_doctrine.py",
+      "id": "check_routes_doc_annotation_metrics"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_route_doc_blocks_are_complete",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "routes_doc_blocks_complete",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/contracts/module_doctrine.py",
+      "id": "check_routes_doc_blocks_complete"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_route_files_are_annotated",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "routes_files_annotated",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/contracts/module_doctrine.py",
+      "id": "check_routes_files_annotated"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_router_defining_files_are_registered",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "routes_routers_registered",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/contracts/module_doctrine.py",
+      "id": "check_routes_routers_registered"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_every_write_route_is_gated",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "routes_write_endpoints_gated",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/route_gating.py",
+      "id": "check_routes_write_endpoints_gated"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_count_live_for_parent_filters",
+        "cleanup": "explicit_registry_pop",
+        "mutates": "process_registry",
+        "proves": "agent_lifecycle_count_live_for_parent_filters",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_agent_lifecycle_parent_filter"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_registry_is_singleton",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "agent_lifecycle_registry_is_singleton",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_agent_lifecycle_registry_singleton"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_claim_atomic",
+        "cleanup": "explicit_run_delete",
+        "mutates": "db",
+        "proves": "spawn_executor_claim_atomic",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_claim_atomic"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_concurrent_live_cap",
+        "cleanup": "explicit_registry_pop",
+        "mutates": "process_registry, db_read",
+        "proves": "spawn_executor_concurrent_live_cap",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_concurrent_live_cap"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_merge_helpers_tolerate_no_pcna",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "spawn_executor_merge_helpers_tolerate_no_pcna",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_degraded_merge_helpers"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_heartbeat_advances",
+        "cleanup": "explicit_run_delete",
+        "mutates": "db",
+        "proves": "spawn_executor_heartbeat_advances",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_heartbeat_advances"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_marks_failed_on_exception",
+        "cleanup": "explicit_run_delete",
+        "mutates": "db",
+        "proves": "spawn_executor_marks_failed_on_exception",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_marks_failed"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_no_orphan_invariant",
+        "cleanup": "explicit_registry_pop, explicit_run_delete",
+        "mutates": "process_registry, db",
+        "proves": "spawn_executor_no_orphan_invariant",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_no_orphan"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_resolve_provider_rejects_empty",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "spawn_executor_resolve_provider_rejects_empty",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_rejects_empty_provider"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_retry_default_none",
+        "cleanup": "explicit_run_delete",
+        "mutates": "db",
+        "proves": "spawn_executor_retry_default_none",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_retry_default_none"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_retry_once_on_transient",
+        "cleanup": "explicit_run_delete",
+        "mutates": "db",
+        "proves": "spawn_executor_retry_once_on_transient",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_retry_once"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_skips_non_running",
+        "cleanup": "explicit_run_delete",
+        "mutates": "db",
+        "proves": "spawn_executor_skips_non_running",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_skips_non_running"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_snapshot_pcna_shape",
+        "cleanup": "ephemeral_object_release",
+        "mutates": "process_memory",
+        "proves": "spawn_executor_snapshot_pcna_shape",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_snapshot_shape"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.spawn_executor.test_stale_sweep_marks_worker_lost",
+        "cleanup": "explicit_run_delete",
+        "mutates": "db",
+        "proves": "spawn_executor_stale_sweep_marks_worker_lost",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/spawn_executor_checks.py",
+      "id": "check_spawn_executor_stale_sweep"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.transcripts_explainer.test_rejects_fabricated_citations",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "explainer_rejects_fabricated_citations",
+        "requires": "python3",
+        "timeout": "30"
+      },
+      "file": "python/tests/contracts/transcripts_explainer_checks.py",
+      "id": "check_transcript_explainer_citation_integrity"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.transcripts_explainer.test_no_credits_returns_none",
+        "cleanup": "explicit_uuid_scoped_delete",
+        "mutates": "db",
+        "proves": "explainer_402_when_no_credits",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/transcripts_explainer_checks.py",
+      "id": "check_transcript_explainer_empty_balance"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.transcripts_explainer.test_decrements_free_then_paid",
+        "cleanup": "explicit_uuid_scoped_delete",
+        "mutates": "db",
+        "proves": "explainer_decrements_free_first",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/transcripts_explainer_checks.py",
+      "id": "check_transcript_explainer_free_before_paid"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.transcripts_explainer.test_idempotent_no_double_charge",
+        "cleanup": "explicit_report_and_upload_delete",
+        "mutates": "db",
+        "proves": "explainer_explanation_is_idempotent",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/transcripts_explainer_checks.py",
+      "id": "check_transcript_explainer_idempotent_report"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.transcripts_explainer.test_explainer_call_surfaces_in_learning_summary",
+        "cleanup": "explicit_provider_scoped_delete",
+        "mutates": "db, process_log_buffer",
+        "proves": "explainer_call_surfaces_in_learning_summary",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/transcripts_explainer_checks.py",
+      "id": "check_transcript_explainer_learning_summary"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "python.tests.contracts.transcripts_explainer.test_refund_after_failure",
+        "cleanup": "explicit_uuid_scoped_delete",
+        "mutates": "db",
+        "proves": "explainer_refund_restores_balance",
+        "requires": "python3, postgres",
+        "timeout": "60"
+      },
+      "file": "python/tests/contracts/transcripts_explainer_checks.py",
+      "id": "check_transcript_explainer_refund"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_execute_check_enforces_timeout",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "contract_graph_enforces_declared_timeout",
+        "requires": "python3",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_contract_runner.py",
+      "id": "check_contract_graph_enforces_declared_timeout"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_audit_graph_rejects_incomplete_linkage",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "contract_graph_rejects_incomplete_linkage",
+        "requires": "python3",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_contract_runner.py",
+      "id": "check_contract_graph_rejects_incomplete_linkage"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_subsumption_preserves_existing_noncollapse_boundaries",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "platonic_agent_existing_separations_preserved",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_platonic_agent.py",
+      "id": "check_platonic_agent_existing_separations_preserved"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_existing_agent_semantic_surfaces_have_regions",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "platonic_agent_existing_surfaces_subsumed",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_platonic_agent.py",
+      "id": "check_platonic_agent_existing_surfaces_subsumed"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_inference_projection_does_not_create_identity",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "platonic_agent_inference_not_identity",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_platonic_agent.py",
+      "id": "check_platonic_agent_inference_not_identity"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_extension_preserves_original_agent",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "platonic_agent_open_extension",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_platonic_agent.py",
+      "id": "check_platonic_agent_open_extension"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_projection_exposes_selected_omitted_and_unresolved",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "platonic_agent_projection_explicit",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_platonic_agent.py",
+      "id": "check_platonic_agent_projection_explicit"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_region_cannot_reference_undeclared_dimension",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "platonic_agent_region_dimensions_fail_closed",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_platonic_agent.py",
+      "id": "check_platonic_agent_region_dimensions_fail_closed"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_region_projection_exposes_incomplete_realization",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "platonic_agent_region_projection_explicit",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_platonic_agent.py",
+      "id": "check_platonic_agent_region_projection_explicit"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_region_subsumption_preserves_original_agent",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "platonic_agent_region_subsumption",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_platonic_agent.py",
+      "id": "check_platonic_agent_region_subsumption"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_unknown_dimension_fails_closed",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "platonic_agent_unknown_dimension_fails_closed",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_platonic_agent.py",
+      "id": "check_platonic_agent_unknown_dimension_fails_closed"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_target_uses_exact_pair_by_default",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "a0_ptcna_uses_exact_pair",
+        "requires": "python3, numpy, interdependent-lib, ptcna, ucns",
+        "timeout": "30"
+      },
+      "file": "python/tests/test_ptcna_state.py",
+      "id": "check_a0_ptcna_exact_pair"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_fallback_is_explicit_and_separately_attributed",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "a0_ptcna_routing_is_explicit",
+        "requires": "python3, numpy, interdependent-lib, ptcna, ucns",
+        "timeout": "30"
+      },
+      "file": "python/tests/test_ptcna_state.py",
+      "id": "check_a0_ptcna_explicit_routing"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_state_binds_only_declared_platonic_region",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "a0_ptcna_binds_platonic_region",
+        "requires": "python3, numpy, interdependent-lib, ptcna, ucns",
+        "timeout": "30"
+      },
+      "file": "python/tests/test_ptcna_state.py",
+      "id": "check_a0_ptcna_platonic_binding"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_checkpoint_restart_recovers_state_and_routing",
+        "cleanup": "tempdir_teardown",
+        "mutates": "filesystem",
+        "proves": "a0_ptcna_restart_round_trip",
+        "requires": "python3, numpy, interdependent-lib, ptcna, ucns",
+        "timeout": "30"
+      },
+      "file": "python/tests/test_ptcna_state.py",
+      "id": "check_a0_ptcna_restart"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_checkpoint_tamper_is_rejected",
+        "cleanup": "tempdir_teardown",
+        "mutates": "filesystem",
+        "proves": "a0_ptcna_tamper_fails_closed",
+        "requires": "python3, numpy, interdependent-lib, ptcna, ucns",
+        "timeout": "30"
+      },
+      "file": "python/tests/test_ptcna_state.py",
+      "id": "check_a0_ptcna_tamper"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_readiness_requires_all_dependencies",
+        "cleanup": "patch_dict_restore",
+        "mutates": "environment",
+        "proves": "runtime_readiness_requires_every_dependency",
+        "requires": "python3, pytest",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_runtime_readiness.py",
+      "id": "check_runtime_readiness_all_dependencies"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_readiness_fails_closed_when_database_probe_fails",
+        "cleanup": "patch_dict_restore",
+        "mutates": "environment",
+        "proves": "runtime_readiness_requires_every_dependency, runtime_readiness_redacts_sensitive_values",
+        "requires": "python3, pytest",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_runtime_readiness.py",
+      "id": "check_runtime_readiness_database_fail_closed"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_readiness_reports_missing_config_without_values",
+        "cleanup": "patch_dict_restore",
+        "mutates": "environment",
+        "proves": "runtime_readiness_redacts_sensitive_values",
+        "requires": "python3, pytest",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_runtime_readiness.py",
+      "id": "check_runtime_readiness_redacts_configuration_values"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_review_requires_matching_digest",
+        "cleanup": "pytest_tmp_path",
+        "mutates": "temporary_files",
+        "proves": "schema_baseline_review_requires_matching_digest",
+        "requires": "python3, pytest",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_baseline_review.py",
+      "id": "check_schema_baseline_review_digest"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_review_reports_objects_and_preserves_drift",
+        "cleanup": "pytest_tmp_path",
+        "mutates": "temporary_files",
+        "proves": "schema_baseline_review_reports_object_inventory, schema_baseline_review_preserves_drift",
+        "requires": "python3, pytest",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_baseline_review.py",
+      "id": "check_schema_baseline_review_inventory"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_review_rejects_unsafe_statement_classes",
+        "cleanup": "pytest_tmp_path",
+        "mutates": "temporary_files",
+        "proves": "schema_baseline_review_rejects_data_and_authority_statements",
+        "requires": "python3, pytest",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_baseline_review.py",
+      "id": "check_schema_baseline_review_safety"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_evidence_cleanup_confirmed",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "schema_baseline_harness_always_cleans_up",
+        "requires": "python3, pytest",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_schema_baseline_revision.py",
+      "id": "check_baseline_harness_cleanup_evidence"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_gate_a_evidence_confirms_pass",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "schema_baseline_harness_gate_a_empty_apply",
+        "requires": "python3, pytest",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_schema_baseline_revision.py",
+      "id": "check_baseline_harness_gate_a_evidence"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_gate_b_evidence_confirms_pass",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "schema_baseline_harness_gate_b_stamp_preservation",
+        "requires": "python3, pytest",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_schema_baseline_revision.py",
+      "id": "check_baseline_harness_gate_b_evidence"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_harness_refuses_non_loopback_url",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "schema_baseline_harness_refuses_non_disposable",
+        "requires": "python3, pytest",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_schema_baseline_revision.py",
+      "id": "check_baseline_harness_refuses_non_disposable"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_harness_refuses_without_allow_flag",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "schema_baseline_harness_refuses_non_disposable",
+        "requires": "python3, pytest",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_schema_baseline_revision.py",
+      "id": "check_baseline_harness_refuses_without_flag"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_upgrade_raises_on_digest_mismatch",
+        "cleanup": "monkeypatch",
+        "mutates": "temporary_files",
+        "proves": "legacy_schema_baseline_digest_locked",
+        "requires": "python3, pytest",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_baseline_revision.py",
+      "id": "check_baseline_revision_digest_locked"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_downgrade_raises_not_implemented",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "legacy_schema_baseline_downgrade_closed",
+        "requires": "python3, pytest",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_schema_baseline_revision.py",
+      "id": "check_baseline_revision_downgrade_closed"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_upgrade_strips_psql_metacommands",
+        "cleanup": "monkeypatch",
+        "mutates": "temporary_files",
+        "proves": "legacy_schema_baseline_empty_apply",
+        "requires": "python3, pytest",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_baseline_revision.py",
+      "id": "check_baseline_revision_metacommand_filter"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_sql_path_constant_resolves_to_committed_file",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "legacy_schema_baseline_digest_locked",
+        "requires": "python3, pytest",
+        "timeout": "10"
+      },
+      "file": "python/tests/test_schema_baseline_revision.py",
+      "id": "check_baseline_revision_sql_path_resolvable"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_alembic_configuration_loads_without_database",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "alembic_environment_explicit_transactional_only",
+        "requires": "python3, pytest, alembic",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_migration_foundation.py",
+      "id": "check_alembic_control_plane_loads"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_normalize_dump_removes_volatile_lines",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "live_schema_capture_is_deterministic",
+        "requires": "python3, pytest",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_migration_foundation.py",
+      "id": "check_live_schema_capture_deterministic"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_capture_uses_read_only_pg_dump_flags_and_redacts_failure",
+        "cleanup": "mock_patch_restore",
+        "mutates": "process_mock, environment",
+        "proves": "live_schema_capture_is_read_only, live_schema_capture_redacts_connection, live_schema_capture_decomposes_postgres_url",
+        "requires": "python3, pytest",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_migration_foundation.py",
+      "id": "check_live_schema_capture_read_only"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_inventory_detects_and_checks_mutation_sites",
+        "cleanup": "temporary_directory",
+        "mutates": "temporary_files",
+        "proves": "schema_inventory_reports_mutation_sites, schema_inventory_check_fails_on_unreviewed_mutation_site, schema_inventory_excludes_environment_vendor_trees",
+        "requires": "python3, pytest",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_migration_foundation.py",
+      "id": "check_schema_inventory_mutation_sites"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_repository_inventory_exposes_legacy_drift",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "schema_inventory_reports_three_authorities",
+        "requires": "python3, pytest",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_migration_foundation.py",
+      "id": "check_schema_inventory_three_authorities"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_schema_status_failure_surface_is_bounded",
+        "cleanup": "mock_patch_restore",
+        "mutates": "process_mock",
+        "proves": "schema_migration_status_bounds_failures",
+        "requires": "python3, pytest, alembic",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_migration_foundation.py",
+      "id": "check_schema_migration_status_bounds_failures"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::test_schema_status_requires_exact_nonempty_match",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "schema_migration_status_exact_set_match",
+        "requires": "python3, pytest, alembic",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_schema_migration_foundation.py",
+      "id": "check_schema_migration_status_exact_match"
+    },
+    {
+      "block": "BOUNDARIES",
+      "fields": {
+        "admin_only": "true",
+        "auth_boundary": "admin",
+        "network_boundary": "internal",
+        "owner": "database-owner",
+        "pii": "none",
+        "review_required": "database-owner",
+        "secrets": "read",
+        "side_effects": "local capture files only",
+        "since": "2026-08-05",
+        "storage_boundary": "read",
+        "summary": "Connects to PostgreSQL through pg_dump in schema-only mode; writes local SQL and digest artifacts and executes no SQL.",
+        "user_data_boundary": "none"
+      },
+      "file": "scripts/sche_capt_live_v0.0.0alpha.py",
+      "id": "live_schema_capture_database_boundary"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "a PostgreSQL URL with explicit host, port, credentials, database, sslmode, and channel_binding",
+        "since": "2026-08-05",
+        "then": "the child receives equivalent PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE, PGSSLMODE, and PGCHANNELBINDING values without the URL appearing in argv"
+      },
+      "file": "scripts/sche_capt_live_v0.0.0alpha.py",
+      "id": "live_schema_capture_decomposes_postgres_url"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "equivalent pg_dump schema output with volatile header/completion lines",
+        "since": "2026-08-05",
+        "then": "normalized SQL and its SHA-256 digest are stable"
+      },
+      "file": "scripts/sche_capt_live_v0.0.0alpha.py",
+      "id": "live_schema_capture_is_deterministic"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "a valid PostgreSQL DATABASE_URL",
+        "since": "2026-08-05",
+        "then": "pg_dump is invoked with --schema-only, --no-owner, --no-privileges and no data-export option; no SQL is executed"
+      },
+      "file": "scripts/sche_capt_live_v0.0.0alpha.py",
+      "id": "live_schema_capture_is_read_only"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "security",
+        "given": "DATABASE_URL contains user, password, host and query parameters plus unrelated deployment secrets",
+        "since": "2026-08-05",
+        "then": "the URL is absent from argv/output, only required libpq fields and allowlisted process variables reach the child, and failures expose only the pg_dump exit code"
+      },
+      "file": "scripts/sche_capt_live_v0.0.0alpha.py",
+      "id": "live_schema_capture_redacts_connection"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "true",
+        "auth_boundary": "admin",
+        "internal_surface": "capture_schema, normalize_dump, _connection_env",
+        "module_kind": "script",
+        "module_name": "live_schema_capture",
+        "network_boundary": "internal",
+        "owner": "Erin Spencer",
+        "public_surface": "command line schema SQL and adjacent SHA-256 evidence",
+        "requires": "a0_schema_inventory",
+        "rollback": "delete generated capture artifacts; database state is unchanged",
+        "rollout": "invoked manually after backup identity and client/server versions are recorded",
+        "since": "2026-08-05",
+        "storage_boundary": "read",
+        "summary": "Captures deterministic schema-only PostgreSQL SQL and SHA-256 evidence without reading table rows or exposing the connection URL in process arguments.",
+        "tests": "python/tests/test_schema_migration_foundation.py",
+        "unresolved": "live capture has not yet been run against the archive-shaped production database",
+        "user_data_boundary": "none"
+      },
+      "file": "scripts/sche_capt_live_v0.0.0alpha.py",
+      "id": "a0_live_schema_capture"
+    },
+    {
+      "block": "BOUNDARIES",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "network_boundary": "none",
+        "owner": "platform-runtime",
+        "pii": "none",
+        "review_required": "platform-runtime",
+        "secrets": "none",
+        "side_effects": "writes only the explicitly requested report file",
+        "since": "2026-08-05",
+        "storage_boundary": "read",
+        "summary": "Reads repository text and reports schema declarations without opening a database or executing source.",
+        "user_data_boundary": "none"
+      },
+      "file": "scripts/sche_invt_repo_v0.0.0alpha.py",
+      "id": "schema_inventory_read_only_boundary"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "--check and a schema-mutating path exists outside the reviewed legacy allowlist or migrations directory",
+        "since": "2026-08-05",
+        "then": "the process exits nonzero and names the unreviewed path"
+      },
+      "file": "scripts/sche_invt_repo_v0.0.0alpha.py",
+      "id": "schema_inventory_check_fails_on_unreviewed_mutation_site"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "Replit or Python dependency trees such as .cache, .pythonlibs, node_modules, or site-packages contain schema-like text",
+        "since": "2026-08-05",
+        "then": "inventory walks only declared first-party source roots and none of those vendor paths appear in authorities or mutation sites"
+      },
+      "file": "scripts/sche_invt_repo_v0.0.0alpha.py",
+      "id": "schema_inventory_excludes_environment_vendor_trees"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "a first-party source file contains CREATE TABLE, ALTER TABLE, CREATE INDEX, DROP TABLE, createTableIfMissing, or db:push",
+        "since": "2026-08-05",
+        "then": "the file and mutation kinds appear in runtime_mutation_sites"
+      },
+      "file": "scripts/sche_invt_repo_v0.0.0alpha.py",
+      "id": "schema_inventory_reports_mutation_sites"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "Drizzle declarations, SQLAlchemy models, and executable SQL exist in the repository",
+        "since": "2026-08-05",
+        "then": "the report lists each authority separately and exposes pairwise and runtime-only table drift"
+      },
+      "file": "scripts/sche_invt_repo_v0.0.0alpha.py",
+      "id": "schema_inventory_reports_three_authorities"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "internal_surface": "collect_inventory, parse_drizzle_tables, parse_sqlalchemy_tables, parse_sql_mutations",
+        "module_kind": "script",
+        "module_name": "schema_inventory",
+        "network_boundary": "none",
+        "owner": "Erin Spencer",
+        "public_surface": "command line JSON report",
+        "requires": "none",
+        "rollback": "remove this script; it mutates no source or database state",
+        "rollout": "invoked explicitly and by the migration-foundation gate",
+        "since": "2026-08-05",
+        "storage_boundary": "read",
+        "summary": "Inventories table declarations and schema-mutating code paths across the three legacy schema authorities.",
+        "tests": "python/tests/test_schema_migration_foundation.py",
+        "unresolved": "parser is intentionally syntactic and does not interpret dynamically assembled SQL",
+        "user_data_boundary": "none"
+      },
+      "file": "scripts/sche_invt_repo_v0.0.0alpha.py",
+      "id": "a0_schema_inventory"
+    },
+    {
+      "block": "BOUNDARIES",
+      "fields": {
+        "admin_only": "true",
+        "auth_boundary": "read",
+        "network_boundary": "internal",
+        "owner": "database-owner",
+        "pii": "none",
+        "review_required": "database-owner",
+        "secrets": "read",
+        "side_effects": "none",
+        "since": "2026-08-05",
+        "storage_boundary": "read",
+        "summary": "Reads only Alembic revision metadata and reports revision identifiers without exposing the database URL or exception messages.",
+        "user_data_boundary": "none"
+      },
+      "file": "scripts/sche_migr_stat_v0.0.0alpha.py",
+      "id": "schema_migration_status_boundary"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "security",
+        "given": "configuration or database probing fails",
+        "since": "2026-08-05",
+        "then": "the report contains only an error type and never a database URL, password, host, or exception message"
+      },
+      "file": "scripts/sche_migr_stat_v0.0.0alpha.py",
+      "id": "schema_migration_status_bounds_failures"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "repository heads and database current revisions",
+        "since": "2026-08-05",
+        "then": "at_head is true only when both non-empty revision sets are exactly equal"
+      },
+      "file": "scripts/sche_migr_stat_v0.0.0alpha.py",
+      "id": "schema_migration_status_exact_set_match"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "true",
+        "auth_boundary": "read",
+        "internal_surface": "expected_heads, current_heads, build_status",
+        "module_kind": "script",
+        "module_name": "schema_migration_status",
+        "network_boundary": "internal",
+        "owner": "Erin Spencer",
+        "public_surface": "command line JSON status and exit code",
+        "requires": "a0_alembic_environment",
+        "rollback": "remove this script; it mutates no database state",
+        "rollout": "release gate and later runtime readiness dependency",
+        "since": "2026-08-05",
+        "storage_boundary": "read",
+        "summary": "Compares the database Alembic revision set with the repository heads and emits a bounded machine-readable status.",
+        "tests": "python/tests/test_schema_migration_foundation.py",
+        "unresolved": "runtime readiness integration follows the reviewed baseline revision",
+        "user_data_boundary": "none"
+      },
+      "file": "scripts/sche_migr_stat_v0.0.0alpha.py",
+      "id": "a0_schema_migration_status"
+    },
+    {
+      "block": "BOUNDARIES",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "network_boundary": "none",
+        "owner": "database-owner",
+        "pii": "none",
+        "review_required": "database-owner",
+        "secrets": "none",
+        "side_effects": "writes only an explicitly requested local JSON report",
+        "since": "2026-08-05",
+        "storage_boundary": "read",
+        "summary": "Reads captured SQL, digest evidence, and optional inventory JSON without executing SQL, opening a database, or exposing credentials.",
+        "user_data_boundary": "none"
+      },
+      "file": "scripts/sche_revw_base_v0.0.0alpha.py",
+      "id": "schema_baseline_review_read_only_boundary"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "provenance",
+        "given": "optional source inventory and captured live tables differ",
+        "since": "2026-08-05",
+        "then": "live_only and source_only tables remain visible and do not silently fail or disappear"
+      },
+      "file": "scripts/sche_revw_base_v0.0.0alpha.py",
+      "id": "schema_baseline_review_preserves_drift"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "security",
+        "given": "captured SQL contains data movement, role/database creation, ownership, privileges, psql connection commands, or a database URL",
+        "since": "2026-08-05",
+        "then": "review fails and names only the unsafe statement class, not captured secret text"
+      },
+      "file": "scripts/sche_revw_base_v0.0.0alpha.py",
+      "id": "schema_baseline_review_rejects_data_and_authority_statements"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "safe schema-only PostgreSQL SQL",
+        "since": "2026-08-05",
+        "then": "tables, sequences, indexes, types, extensions, functions, triggers, and constraints are reported deterministically"
+      },
+      "file": "scripts/sche_revw_base_v0.0.0alpha.py",
+      "id": "schema_baseline_review_reports_object_inventory"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "integrity",
+        "given": "captured SQL and adjacent or explicit SHA-256 evidence",
+        "since": "2026-08-05",
+        "then": "review succeeds only when the evidence digest exactly matches the SQL bytes"
+      },
+      "file": "scripts/sche_revw_base_v0.0.0alpha.py",
+      "id": "schema_baseline_review_requires_matching_digest"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "internal_surface": "review_capture, parse_objects, verify_digest, reject_unsafe_sql",
+        "module_kind": "script",
+        "module_name": "schema_baseline_review",
+        "network_boundary": "none",
+        "owner": "Erin Spencer",
+        "public_surface": "command line JSON review report",
+        "requires": "a0_schema_inventory, a0_live_schema_capture",
+        "rollback": "remove this script; it mutates no repository or database state",
+        "rollout": "required after schema capture and before a baseline revision is authored",
+        "since": "2026-08-05",
+        "storage_boundary": "read",
+        "summary": "Verifies captured schema integrity and safety, inventories PostgreSQL objects, and exposes live-versus-source drift before baseline revision authoring.",
+        "tests": "python/tests/test_schema_baseline_review.py",
+        "unresolved": "semantic equivalence of columns, constraints, defaults, and functions still requires PostgreSQL apply-and-compare fixtures",
+        "user_data_boundary": "none"
+      },
+      "file": "scripts/sche_revw_base_v0.0.0alpha.py",
+      "id": "a0_schema_baseline_review"
+    },
+    {
+      "block": "BOUNDARIES",
+      "fields": {
+        "admin_only": "true",
+        "auth_boundary": "admin",
+        "network_boundary": "loopback-only",
+        "owner": "database-owner",
+        "pii": "none",
+        "review_required": "database-owner",
+        "secrets": "isolated",
+        "side_effects": "creates and always drops disposable databases; writes evidence JSON",
+        "since": "2026-08-05",
+        "storage_boundary": "migration",
+        "summary": "Connects only to loopback URLs explicitly supplied by the operator; creates and drops unique-named disposable databases; DATABASE_URL is overridden with the disposable URL for each Alembic call; production secrets are never passed to Alembic or psycopg2.",
+        "user_data_boundary": "none"
+      },
+      "file": "scripts/sche_test_base_v0.0.0alpha.py",
+      "id": "schema_baseline_test_harness_boundary"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "any gate outcome including exceptions",
+        "since": "2026-08-05",
+        "then": "every disposable database created by this harness is dropped before the process exits"
+      },
+      "file": "scripts/sche_test_base_v0.0.0alpha.py",
+      "id": "schema_baseline_harness_always_cleans_up"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "an empty disposable PostgreSQL database and the baseline revision",
+        "since": "2026-08-05",
+        "then": "alembic upgrade head creates all reviewed objects, alembic_version contains the baseline revision id, and a second upgrade head is a no-op"
+      },
+      "file": "scripts/sche_test_base_v0.0.0alpha.py",
+      "id": "schema_baseline_harness_gate_a_empty_apply"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "a disposable database with the raw schema applied and at least one table seeded via DEFAULT VALUES",
+        "since": "2026-08-05",
+        "then": "alembic stamp head + upgrade head leaves every pre-stamp table row count unchanged"
+      },
+      "file": "scripts/sche_test_base_v0.0.0alpha.py",
+      "id": "schema_baseline_harness_gate_b_stamp_preservation"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "--admin-url resolves to a non-loopback host or --allow-disposable is absent",
+        "since": "2026-08-05",
+        "then": "the harness exits with an error before creating any database"
+      },
+      "file": "scripts/sche_test_base_v0.0.0alpha.py",
+      "id": "schema_baseline_harness_refuses_non_disposable"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "true",
+        "auth_boundary": "admin",
+        "internal_surface": "gate_a, gate_b, _refuse_if_not_disposable, _connect, _run_alembic",
+        "module_kind": "script",
+        "module_name": "schema_baseline_test_harness",
+        "network_boundary": "loopback-only",
+        "owner": "Erin Spencer",
+        "public_surface": "command line evidence JSON",
+        "requires": "a0_legacy_schema_baseline_revision, a0_alembic_environment",
+        "rollback": "script always drops every database it creates; no cleanup required",
+        "rollout": "manual, against a freshly initialized local PostgreSQL 16 cluster only",
+        "since": "2026-08-05",
+        "storage_boundary": "migration",
+        "summary": "Disposable-only PostgreSQL harness proving empty-apply, second-upgrade no-op, and archive-stamp row-preservation for the legacy schema baseline revision.",
+        "tests": "python/tests/test_schema_baseline_revision.py",
+        "unresolved": "archive-shaped fixture uses live-capture SQL; fixture not yet compared across PG versions",
+        "user_data_boundary": "none"
+      },
+      "file": "scripts/sche_test_base_v0.0.0alpha.py",
+      "id": "a0_schema_baseline_test_harness"
     }
   ],
   "edges": [
     {
-      "from": "agent_lifecycle_count_live_for_parent_filters",
+      "from": "a0_ptcna_persistence_boundary",
+      "kind": "owns",
+      "source_block": "BOUNDARIES",
+      "source_id": "a0_ptcna_persistence_boundary",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "alembic_environment_migration_boundary",
+      "kind": "owns",
+      "source_block": "BOUNDARIES",
+      "source_id": "alembic_environment_migration_boundary",
+      "to": "database-owner"
+    },
+    {
+      "from": "legacy_schema_baseline_revision_boundary",
+      "kind": "owns",
+      "source_block": "BOUNDARIES",
+      "source_id": "legacy_schema_baseline_revision_boundary",
+      "to": "database-owner"
+    },
+    {
+      "from": "live_schema_capture_database_boundary",
+      "kind": "owns",
+      "source_block": "BOUNDARIES",
+      "source_id": "live_schema_capture_database_boundary",
+      "to": "database-owner"
+    },
+    {
+      "from": "runtime_readiness_dependency_probe",
+      "kind": "owns",
+      "source_block": "BOUNDARIES",
+      "source_id": "runtime_readiness_dependency_probe",
+      "to": "platform-runtime"
+    },
+    {
+      "from": "runtime_readiness_route_boundary",
+      "kind": "owns",
+      "source_block": "BOUNDARIES",
+      "source_id": "runtime_readiness_route_boundary",
+      "to": "platform-runtime"
+    },
+    {
+      "from": "schema_baseline_review_read_only_boundary",
+      "kind": "owns",
+      "source_block": "BOUNDARIES",
+      "source_id": "schema_baseline_review_read_only_boundary",
+      "to": "database-owner"
+    },
+    {
+      "from": "schema_baseline_test_harness_boundary",
+      "kind": "owns",
+      "source_block": "BOUNDARIES",
+      "source_id": "schema_baseline_test_harness_boundary",
+      "to": "database-owner"
+    },
+    {
+      "from": "schema_inventory_read_only_boundary",
+      "kind": "owns",
+      "source_block": "BOUNDARIES",
+      "source_id": "schema_inventory_read_only_boundary",
+      "to": "platform-runtime"
+    },
+    {
+      "from": "schema_migration_status_boundary",
+      "kind": "owns",
+      "source_block": "BOUNDARIES",
+      "source_id": "schema_migration_status_boundary",
+      "to": "database-owner"
+    },
+    {
+      "from": "check_a0_ptcna_exact_pair",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "agent_lifecycle_count_live_for_parent_filters",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_exact_pair",
+      "to": "self::test_target_uses_exact_pair_by_default"
+    },
+    {
+      "from": "check_a0_ptcna_exact_pair",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_exact_pair",
+      "to": "a0_ptcna_uses_exact_pair"
+    },
+    {
+      "from": "check_a0_ptcna_exact_pair",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_exact_pair",
+      "to": "interdependent-lib"
+    },
+    {
+      "from": "check_a0_ptcna_exact_pair",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_exact_pair",
+      "to": "numpy"
+    },
+    {
+      "from": "check_a0_ptcna_exact_pair",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_exact_pair",
+      "to": "ptcna"
+    },
+    {
+      "from": "check_a0_ptcna_exact_pair",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_exact_pair",
+      "to": "python3"
+    },
+    {
+      "from": "check_a0_ptcna_exact_pair",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_exact_pair",
+      "to": "ucns"
+    },
+    {
+      "from": "check_a0_ptcna_explicit_routing",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_explicit_routing",
+      "to": "self::test_fallback_is_explicit_and_separately_attributed"
+    },
+    {
+      "from": "check_a0_ptcna_explicit_routing",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_explicit_routing",
+      "to": "a0_ptcna_routing_is_explicit"
+    },
+    {
+      "from": "check_a0_ptcna_explicit_routing",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_explicit_routing",
+      "to": "interdependent-lib"
+    },
+    {
+      "from": "check_a0_ptcna_explicit_routing",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_explicit_routing",
+      "to": "numpy"
+    },
+    {
+      "from": "check_a0_ptcna_explicit_routing",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_explicit_routing",
+      "to": "ptcna"
+    },
+    {
+      "from": "check_a0_ptcna_explicit_routing",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_explicit_routing",
+      "to": "python3"
+    },
+    {
+      "from": "check_a0_ptcna_explicit_routing",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_explicit_routing",
+      "to": "ucns"
+    },
+    {
+      "from": "check_a0_ptcna_platonic_binding",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_platonic_binding",
+      "to": "self::test_state_binds_only_declared_platonic_region"
+    },
+    {
+      "from": "check_a0_ptcna_platonic_binding",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_platonic_binding",
+      "to": "a0_ptcna_binds_platonic_region"
+    },
+    {
+      "from": "check_a0_ptcna_platonic_binding",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_platonic_binding",
+      "to": "interdependent-lib"
+    },
+    {
+      "from": "check_a0_ptcna_platonic_binding",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_platonic_binding",
+      "to": "numpy"
+    },
+    {
+      "from": "check_a0_ptcna_platonic_binding",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_platonic_binding",
+      "to": "ptcna"
+    },
+    {
+      "from": "check_a0_ptcna_platonic_binding",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_platonic_binding",
+      "to": "python3"
+    },
+    {
+      "from": "check_a0_ptcna_platonic_binding",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_platonic_binding",
+      "to": "ucns"
+    },
+    {
+      "from": "check_a0_ptcna_restart",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_restart",
+      "to": "self::test_checkpoint_restart_recovers_state_and_routing"
+    },
+    {
+      "from": "check_a0_ptcna_restart",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_restart",
+      "to": "a0_ptcna_restart_round_trip"
+    },
+    {
+      "from": "check_a0_ptcna_restart",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_restart",
+      "to": "interdependent-lib"
+    },
+    {
+      "from": "check_a0_ptcna_restart",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_restart",
+      "to": "numpy"
+    },
+    {
+      "from": "check_a0_ptcna_restart",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_restart",
+      "to": "ptcna"
+    },
+    {
+      "from": "check_a0_ptcna_restart",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_restart",
+      "to": "python3"
+    },
+    {
+      "from": "check_a0_ptcna_restart",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_restart",
+      "to": "ucns"
+    },
+    {
+      "from": "check_a0_ptcna_tamper",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_tamper",
+      "to": "self::test_checkpoint_tamper_is_rejected"
+    },
+    {
+      "from": "check_a0_ptcna_tamper",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_tamper",
+      "to": "a0_ptcna_tamper_fails_closed"
+    },
+    {
+      "from": "check_a0_ptcna_tamper",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_tamper",
+      "to": "interdependent-lib"
+    },
+    {
+      "from": "check_a0_ptcna_tamper",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_tamper",
+      "to": "numpy"
+    },
+    {
+      "from": "check_a0_ptcna_tamper",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_tamper",
+      "to": "ptcna"
+    },
+    {
+      "from": "check_a0_ptcna_tamper",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_tamper",
+      "to": "python3"
+    },
+    {
+      "from": "check_a0_ptcna_tamper",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_a0_ptcna_tamper",
+      "to": "ucns"
+    },
+    {
+      "from": "check_agent_lifecycle_parent_filter",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_agent_lifecycle_parent_filter",
       "to": "python.tests.contracts.spawn_executor.test_count_live_for_parent_filters"
     },
     {
-      "from": "agent_lifecycle_registry_is_singleton",
+      "from": "check_agent_lifecycle_parent_filter",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_agent_lifecycle_parent_filter",
+      "to": "agent_lifecycle_count_live_for_parent_filters"
+    },
+    {
+      "from": "check_agent_lifecycle_parent_filter",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_agent_lifecycle_parent_filter",
+      "to": "python3"
+    },
+    {
+      "from": "check_agent_lifecycle_registry_singleton",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "agent_lifecycle_registry_is_singleton",
+      "source_block": "CHECKS",
+      "source_id": "check_agent_lifecycle_registry_singleton",
       "to": "python.tests.contracts.spawn_executor.test_registry_is_singleton"
     },
     {
-      "from": "billing_webhook_replay_idempotent",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "billing_webhook_replay_idempotent",
-      "to": "python.tests.contracts.billing.test_webhook_replay_is_idempotent"
+      "from": "check_agent_lifecycle_registry_singleton",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_agent_lifecycle_registry_singleton",
+      "to": "agent_lifecycle_registry_is_singleton"
     },
     {
-      "from": "chat_delete_other_owner_404",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "chat_delete_other_owner_404",
-      "to": "python.tests.contracts.chat.test_delete_other_owner_404"
+      "from": "check_agent_lifecycle_registry_singleton",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_agent_lifecycle_registry_singleton",
+      "to": "python3"
     },
     {
-      "from": "chat_get_other_owner_404",
+      "from": "check_alembic_control_plane_loads",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "chat_get_other_owner_404",
-      "to": "python.tests.contracts.chat.test_get_other_owner_404"
+      "source_block": "CHECKS",
+      "source_id": "check_alembic_control_plane_loads",
+      "to": "self::test_alembic_configuration_loads_without_database"
     },
     {
-      "from": "chat_unknown_body_model_400",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "chat_unknown_body_model_400",
-      "to": "python.tests.contracts.chat.test_unknown_body_model_400"
+      "from": "check_alembic_control_plane_loads",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_alembic_control_plane_loads",
+      "to": "alembic_environment_explicit_transactional_only"
     },
     {
-      "from": "explainer_402_when_no_credits",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "explainer_402_when_no_credits",
-      "to": "python.tests.contracts.transcripts_explainer.test_no_credits_returns_none"
+      "from": "check_alembic_control_plane_loads",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_alembic_control_plane_loads",
+      "to": "alembic"
     },
     {
-      "from": "explainer_call_surfaces_in_learning_summary",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "explainer_call_surfaces_in_learning_summary",
-      "to": "python.tests.contracts.transcripts_explainer.test_explainer_call_surfaces_in_learning_summary"
+      "from": "check_alembic_control_plane_loads",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_alembic_control_plane_loads",
+      "to": "pytest"
     },
     {
-      "from": "explainer_decrements_free_first",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "explainer_decrements_free_first",
-      "to": "python.tests.contracts.transcripts_explainer.test_decrements_free_then_paid"
+      "from": "check_alembic_control_plane_loads",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_alembic_control_plane_loads",
+      "to": "python3"
     },
     {
-      "from": "explainer_explanation_is_idempotent",
+      "from": "check_baseline_harness_cleanup_evidence",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "explainer_explanation_is_idempotent",
-      "to": "python.tests.contracts.transcripts_explainer.test_idempotent_no_double_charge"
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_cleanup_evidence",
+      "to": "self::test_evidence_cleanup_confirmed"
     },
     {
-      "from": "explainer_refund_restores_balance",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "explainer_refund_restores_balance",
-      "to": "python.tests.contracts.transcripts_explainer.test_refund_after_failure"
+      "from": "check_baseline_harness_cleanup_evidence",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_cleanup_evidence",
+      "to": "schema_baseline_harness_always_cleans_up"
     },
     {
-      "from": "explainer_rejects_fabricated_citations",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "explainer_rejects_fabricated_citations",
-      "to": "python.tests.contracts.transcripts_explainer.test_rejects_fabricated_citations"
+      "from": "check_baseline_harness_cleanup_evidence",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_cleanup_evidence",
+      "to": "pytest"
     },
     {
-      "from": "gating_allowlist_entries_are_real_routes",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "gating_allowlist_entries_are_real_routes",
-      "to": "python.tests.contracts.gating.test_allowlist_entries_correspond_to_real_routes"
+      "from": "check_baseline_harness_cleanup_evidence",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_cleanup_evidence",
+      "to": "python3"
     },
     {
-      "from": "gating_every_write_route_is_admin_or_allowlisted",
+      "from": "check_baseline_harness_gate_a_evidence",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "gating_every_write_route_is_admin_or_allowlisted",
-      "to": "python.tests.contracts.gating.test_every_write_route_is_gated_or_allowlisted"
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_gate_a_evidence",
+      "to": "self::test_gate_a_evidence_confirms_pass"
     },
     {
-      "from": "gating_instrument_files_all_writes_gated",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "gating_instrument_files_all_writes_gated",
-      "to": "python.tests.contracts.gating.test_instrument_mutation_files_have_all_writes_gated"
+      "from": "check_baseline_harness_gate_a_evidence",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_gate_a_evidence",
+      "to": "schema_baseline_harness_gate_a_empty_apply"
     },
     {
-      "from": "gating_instrument_files_never_allowlisted",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "gating_instrument_files_never_allowlisted",
-      "to": "python.tests.contracts.gating.test_instrument_mutation_files_are_never_allowlisted"
+      "from": "check_baseline_harness_gate_a_evidence",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_gate_a_evidence",
+      "to": "pytest"
     },
     {
-      "from": "routes_doc_blocks_complete",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "routes_doc_blocks_complete",
-      "to": "python.tests.contracts.module_doctrine.test_route_doc_blocks_are_complete"
+      "from": "check_baseline_harness_gate_a_evidence",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_gate_a_evidence",
+      "to": "python3"
     },
     {
-      "from": "routes_files_annotated",
+      "from": "check_baseline_harness_gate_b_evidence",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "routes_files_annotated",
-      "to": "python.tests.contracts.module_doctrine.test_route_files_are_annotated"
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_gate_b_evidence",
+      "to": "self::test_gate_b_evidence_confirms_pass"
     },
     {
-      "from": "routes_routers_registered",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "routes_routers_registered",
-      "to": "python.tests.contracts.module_doctrine.test_router_defining_files_are_registered"
+      "from": "check_baseline_harness_gate_b_evidence",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_gate_b_evidence",
+      "to": "schema_baseline_harness_gate_b_stamp_preservation"
     },
     {
-      "from": "routes_write_endpoints_gated",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "routes_write_endpoints_gated",
-      "to": "python.tests.contracts.route_gating.test_every_write_route_is_gated"
+      "from": "check_baseline_harness_gate_b_evidence",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_gate_b_evidence",
+      "to": "pytest"
     },
     {
-      "from": "spawn_executor_claim_atomic",
+      "from": "check_baseline_harness_gate_b_evidence",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_gate_b_evidence",
+      "to": "python3"
+    },
+    {
+      "from": "check_baseline_harness_refuses_non_disposable",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_claim_atomic",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_refuses_non_disposable",
+      "to": "self::test_harness_refuses_non_loopback_url"
+    },
+    {
+      "from": "check_baseline_harness_refuses_non_disposable",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_refuses_non_disposable",
+      "to": "schema_baseline_harness_refuses_non_disposable"
+    },
+    {
+      "from": "check_baseline_harness_refuses_non_disposable",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_refuses_non_disposable",
+      "to": "pytest"
+    },
+    {
+      "from": "check_baseline_harness_refuses_non_disposable",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_refuses_non_disposable",
+      "to": "python3"
+    },
+    {
+      "from": "check_baseline_harness_refuses_without_flag",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_refuses_without_flag",
+      "to": "self::test_harness_refuses_without_allow_flag"
+    },
+    {
+      "from": "check_baseline_harness_refuses_without_flag",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_refuses_without_flag",
+      "to": "schema_baseline_harness_refuses_non_disposable"
+    },
+    {
+      "from": "check_baseline_harness_refuses_without_flag",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_refuses_without_flag",
+      "to": "pytest"
+    },
+    {
+      "from": "check_baseline_harness_refuses_without_flag",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_harness_refuses_without_flag",
+      "to": "python3"
+    },
+    {
+      "from": "check_baseline_revision_digest_locked",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_digest_locked",
+      "to": "self::test_upgrade_raises_on_digest_mismatch"
+    },
+    {
+      "from": "check_baseline_revision_digest_locked",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_digest_locked",
+      "to": "legacy_schema_baseline_digest_locked"
+    },
+    {
+      "from": "check_baseline_revision_digest_locked",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_digest_locked",
+      "to": "pytest"
+    },
+    {
+      "from": "check_baseline_revision_digest_locked",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_digest_locked",
+      "to": "python3"
+    },
+    {
+      "from": "check_baseline_revision_downgrade_closed",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_downgrade_closed",
+      "to": "self::test_downgrade_raises_not_implemented"
+    },
+    {
+      "from": "check_baseline_revision_downgrade_closed",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_downgrade_closed",
+      "to": "legacy_schema_baseline_downgrade_closed"
+    },
+    {
+      "from": "check_baseline_revision_downgrade_closed",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_downgrade_closed",
+      "to": "pytest"
+    },
+    {
+      "from": "check_baseline_revision_downgrade_closed",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_downgrade_closed",
+      "to": "python3"
+    },
+    {
+      "from": "check_baseline_revision_metacommand_filter",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_metacommand_filter",
+      "to": "self::test_upgrade_strips_psql_metacommands"
+    },
+    {
+      "from": "check_baseline_revision_metacommand_filter",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_metacommand_filter",
+      "to": "legacy_schema_baseline_empty_apply"
+    },
+    {
+      "from": "check_baseline_revision_metacommand_filter",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_metacommand_filter",
+      "to": "pytest"
+    },
+    {
+      "from": "check_baseline_revision_metacommand_filter",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_metacommand_filter",
+      "to": "python3"
+    },
+    {
+      "from": "check_baseline_revision_sql_path_resolvable",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_sql_path_resolvable",
+      "to": "self::test_sql_path_constant_resolves_to_committed_file"
+    },
+    {
+      "from": "check_baseline_revision_sql_path_resolvable",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_sql_path_resolvable",
+      "to": "legacy_schema_baseline_digest_locked"
+    },
+    {
+      "from": "check_baseline_revision_sql_path_resolvable",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_sql_path_resolvable",
+      "to": "pytest"
+    },
+    {
+      "from": "check_baseline_revision_sql_path_resolvable",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_baseline_revision_sql_path_resolvable",
+      "to": "python3"
+    },
+    {
+      "from": "check_billing_webhook_replay_idempotent",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_billing_webhook_replay_idempotent",
+      "to": "self::test_webhook_replay_is_idempotent"
+    },
+    {
+      "from": "check_billing_webhook_replay_idempotent",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_billing_webhook_replay_idempotent",
+      "to": "billing_webhook_replay_idempotent"
+    },
+    {
+      "from": "check_billing_webhook_replay_idempotent",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_billing_webhook_replay_idempotent",
+      "to": "postgres"
+    },
+    {
+      "from": "check_billing_webhook_replay_idempotent",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_billing_webhook_replay_idempotent",
+      "to": "python3"
+    },
+    {
+      "from": "check_chat_delete_other_owner_404",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_delete_other_owner_404",
+      "to": "self::test_delete_other_owner_404"
+    },
+    {
+      "from": "check_chat_delete_other_owner_404",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_delete_other_owner_404",
+      "to": "chat_delete_other_owner_404"
+    },
+    {
+      "from": "check_chat_delete_other_owner_404",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_delete_other_owner_404",
+      "to": "postgres"
+    },
+    {
+      "from": "check_chat_delete_other_owner_404",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_delete_other_owner_404",
+      "to": "python3"
+    },
+    {
+      "from": "check_chat_delete_other_owner_404",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_delete_other_owner_404",
+      "to": "running_test_server"
+    },
+    {
+      "from": "check_chat_get_other_owner_404",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_get_other_owner_404",
+      "to": "self::test_get_other_owner_404"
+    },
+    {
+      "from": "check_chat_get_other_owner_404",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_get_other_owner_404",
+      "to": "chat_get_other_owner_404"
+    },
+    {
+      "from": "check_chat_get_other_owner_404",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_get_other_owner_404",
+      "to": "postgres"
+    },
+    {
+      "from": "check_chat_get_other_owner_404",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_get_other_owner_404",
+      "to": "python3"
+    },
+    {
+      "from": "check_chat_get_other_owner_404",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_get_other_owner_404",
+      "to": "running_test_server"
+    },
+    {
+      "from": "check_chat_unknown_body_model_400",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_unknown_body_model_400",
+      "to": "self::test_unknown_body_model_400"
+    },
+    {
+      "from": "check_chat_unknown_body_model_400",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_unknown_body_model_400",
+      "to": "chat_unknown_body_model_400"
+    },
+    {
+      "from": "check_chat_unknown_body_model_400",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_unknown_body_model_400",
+      "to": "postgres"
+    },
+    {
+      "from": "check_chat_unknown_body_model_400",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_unknown_body_model_400",
+      "to": "python3"
+    },
+    {
+      "from": "check_chat_unknown_body_model_400",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_chat_unknown_body_model_400",
+      "to": "running_test_server"
+    },
+    {
+      "from": "check_contract_graph_enforces_declared_timeout",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_contract_graph_enforces_declared_timeout",
+      "to": "self::test_execute_check_enforces_timeout"
+    },
+    {
+      "from": "check_contract_graph_enforces_declared_timeout",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_contract_graph_enforces_declared_timeout",
+      "to": "contract_graph_enforces_declared_timeout"
+    },
+    {
+      "from": "check_contract_graph_enforces_declared_timeout",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_contract_graph_enforces_declared_timeout",
+      "to": "python3"
+    },
+    {
+      "from": "check_contract_graph_rejects_incomplete_linkage",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_contract_graph_rejects_incomplete_linkage",
+      "to": "self::test_audit_graph_rejects_incomplete_linkage"
+    },
+    {
+      "from": "check_contract_graph_rejects_incomplete_linkage",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_contract_graph_rejects_incomplete_linkage",
+      "to": "contract_graph_rejects_incomplete_linkage"
+    },
+    {
+      "from": "check_contract_graph_rejects_incomplete_linkage",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_contract_graph_rejects_incomplete_linkage",
+      "to": "python3"
+    },
+    {
+      "from": "check_gating_allowlist_real_routes",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_allowlist_real_routes",
+      "to": "self::test_allowlist_entries_correspond_to_real_routes"
+    },
+    {
+      "from": "check_gating_allowlist_real_routes",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_allowlist_real_routes",
+      "to": "gating_allowlist_entries_are_real_routes"
+    },
+    {
+      "from": "check_gating_allowlist_real_routes",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_allowlist_real_routes",
+      "to": "python3"
+    },
+    {
+      "from": "check_gating_every_write_route",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_every_write_route",
+      "to": "self::test_every_write_route_is_gated_or_allowlisted"
+    },
+    {
+      "from": "check_gating_every_write_route",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_every_write_route",
+      "to": "gating_every_write_route_is_admin_or_allowlisted"
+    },
+    {
+      "from": "check_gating_every_write_route",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_every_write_route",
+      "to": "python3"
+    },
+    {
+      "from": "check_gating_forbidden_files_all_gated",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_forbidden_files_all_gated",
+      "to": "self::test_instrument_mutation_files_have_all_writes_gated"
+    },
+    {
+      "from": "check_gating_forbidden_files_all_gated",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_forbidden_files_all_gated",
+      "to": "gating_instrument_files_all_writes_gated"
+    },
+    {
+      "from": "check_gating_forbidden_files_all_gated",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_forbidden_files_all_gated",
+      "to": "python3"
+    },
+    {
+      "from": "check_gating_forbidden_files_never_allowlisted",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_forbidden_files_never_allowlisted",
+      "to": "self::test_instrument_mutation_files_are_never_allowlisted"
+    },
+    {
+      "from": "check_gating_forbidden_files_never_allowlisted",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_forbidden_files_never_allowlisted",
+      "to": "gating_instrument_files_never_allowlisted"
+    },
+    {
+      "from": "check_gating_forbidden_files_never_allowlisted",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_gating_forbidden_files_never_allowlisted",
+      "to": "python3"
+    },
+    {
+      "from": "check_live_schema_capture_deterministic",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_live_schema_capture_deterministic",
+      "to": "self::test_normalize_dump_removes_volatile_lines"
+    },
+    {
+      "from": "check_live_schema_capture_deterministic",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_live_schema_capture_deterministic",
+      "to": "live_schema_capture_is_deterministic"
+    },
+    {
+      "from": "check_live_schema_capture_deterministic",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_live_schema_capture_deterministic",
+      "to": "pytest"
+    },
+    {
+      "from": "check_live_schema_capture_deterministic",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_live_schema_capture_deterministic",
+      "to": "python3"
+    },
+    {
+      "from": "check_live_schema_capture_read_only",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_live_schema_capture_read_only",
+      "to": "self::test_capture_uses_read_only_pg_dump_flags_and_redacts_failure"
+    },
+    {
+      "from": "check_live_schema_capture_read_only",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_live_schema_capture_read_only",
+      "to": "live_schema_capture_decomposes_postgres_url"
+    },
+    {
+      "from": "check_live_schema_capture_read_only",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_live_schema_capture_read_only",
+      "to": "live_schema_capture_is_read_only"
+    },
+    {
+      "from": "check_live_schema_capture_read_only",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_live_schema_capture_read_only",
+      "to": "live_schema_capture_redacts_connection"
+    },
+    {
+      "from": "check_live_schema_capture_read_only",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_live_schema_capture_read_only",
+      "to": "pytest"
+    },
+    {
+      "from": "check_live_schema_capture_read_only",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_live_schema_capture_read_only",
+      "to": "python3"
+    },
+    {
+      "from": "check_platonic_agent_existing_separations_preserved",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_existing_separations_preserved",
+      "to": "self::test_subsumption_preserves_existing_noncollapse_boundaries"
+    },
+    {
+      "from": "check_platonic_agent_existing_separations_preserved",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_existing_separations_preserved",
+      "to": "platonic_agent_existing_separations_preserved"
+    },
+    {
+      "from": "check_platonic_agent_existing_separations_preserved",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_existing_separations_preserved",
+      "to": "python3"
+    },
+    {
+      "from": "check_platonic_agent_existing_surfaces_subsumed",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_existing_surfaces_subsumed",
+      "to": "self::test_existing_agent_semantic_surfaces_have_regions"
+    },
+    {
+      "from": "check_platonic_agent_existing_surfaces_subsumed",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_existing_surfaces_subsumed",
+      "to": "platonic_agent_existing_surfaces_subsumed"
+    },
+    {
+      "from": "check_platonic_agent_existing_surfaces_subsumed",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_existing_surfaces_subsumed",
+      "to": "python3"
+    },
+    {
+      "from": "check_platonic_agent_inference_not_identity",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_inference_not_identity",
+      "to": "self::test_inference_projection_does_not_create_identity"
+    },
+    {
+      "from": "check_platonic_agent_inference_not_identity",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_inference_not_identity",
+      "to": "platonic_agent_inference_not_identity"
+    },
+    {
+      "from": "check_platonic_agent_inference_not_identity",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_inference_not_identity",
+      "to": "python3"
+    },
+    {
+      "from": "check_platonic_agent_open_extension",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_open_extension",
+      "to": "self::test_extension_preserves_original_agent"
+    },
+    {
+      "from": "check_platonic_agent_open_extension",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_open_extension",
+      "to": "platonic_agent_open_extension"
+    },
+    {
+      "from": "check_platonic_agent_open_extension",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_open_extension",
+      "to": "python3"
+    },
+    {
+      "from": "check_platonic_agent_projection_explicit",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_projection_explicit",
+      "to": "self::test_projection_exposes_selected_omitted_and_unresolved"
+    },
+    {
+      "from": "check_platonic_agent_projection_explicit",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_projection_explicit",
+      "to": "platonic_agent_projection_explicit"
+    },
+    {
+      "from": "check_platonic_agent_projection_explicit",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_projection_explicit",
+      "to": "python3"
+    },
+    {
+      "from": "check_platonic_agent_region_dimensions_fail_closed",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_region_dimensions_fail_closed",
+      "to": "self::test_region_cannot_reference_undeclared_dimension"
+    },
+    {
+      "from": "check_platonic_agent_region_dimensions_fail_closed",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_region_dimensions_fail_closed",
+      "to": "platonic_agent_region_dimensions_fail_closed"
+    },
+    {
+      "from": "check_platonic_agent_region_dimensions_fail_closed",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_region_dimensions_fail_closed",
+      "to": "python3"
+    },
+    {
+      "from": "check_platonic_agent_region_projection_explicit",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_region_projection_explicit",
+      "to": "self::test_region_projection_exposes_incomplete_realization"
+    },
+    {
+      "from": "check_platonic_agent_region_projection_explicit",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_region_projection_explicit",
+      "to": "platonic_agent_region_projection_explicit"
+    },
+    {
+      "from": "check_platonic_agent_region_projection_explicit",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_region_projection_explicit",
+      "to": "python3"
+    },
+    {
+      "from": "check_platonic_agent_region_subsumption",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_region_subsumption",
+      "to": "self::test_region_subsumption_preserves_original_agent"
+    },
+    {
+      "from": "check_platonic_agent_region_subsumption",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_region_subsumption",
+      "to": "platonic_agent_region_subsumption"
+    },
+    {
+      "from": "check_platonic_agent_region_subsumption",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_region_subsumption",
+      "to": "python3"
+    },
+    {
+      "from": "check_platonic_agent_unknown_dimension_fails_closed",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_unknown_dimension_fails_closed",
+      "to": "self::test_unknown_dimension_fails_closed"
+    },
+    {
+      "from": "check_platonic_agent_unknown_dimension_fails_closed",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_unknown_dimension_fails_closed",
+      "to": "platonic_agent_unknown_dimension_fails_closed"
+    },
+    {
+      "from": "check_platonic_agent_unknown_dimension_fails_closed",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_platonic_agent_unknown_dimension_fails_closed",
+      "to": "python3"
+    },
+    {
+      "from": "check_routes_doc_annotation_metrics",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_doc_annotation_metrics",
+      "to": "self::test_doc_annotation_metrics_parse"
+    },
+    {
+      "from": "check_routes_doc_annotation_metrics",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_doc_annotation_metrics",
+      "to": "routes_doc_annotation_metrics"
+    },
+    {
+      "from": "check_routes_doc_annotation_metrics",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_doc_annotation_metrics",
+      "to": "python3"
+    },
+    {
+      "from": "check_routes_doc_blocks_complete",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_doc_blocks_complete",
+      "to": "self::test_route_doc_blocks_are_complete"
+    },
+    {
+      "from": "check_routes_doc_blocks_complete",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_doc_blocks_complete",
+      "to": "routes_doc_blocks_complete"
+    },
+    {
+      "from": "check_routes_doc_blocks_complete",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_doc_blocks_complete",
+      "to": "python3"
+    },
+    {
+      "from": "check_routes_files_annotated",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_files_annotated",
+      "to": "self::test_route_files_are_annotated"
+    },
+    {
+      "from": "check_routes_files_annotated",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_files_annotated",
+      "to": "routes_files_annotated"
+    },
+    {
+      "from": "check_routes_files_annotated",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_files_annotated",
+      "to": "python3"
+    },
+    {
+      "from": "check_routes_routers_registered",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_routers_registered",
+      "to": "self::test_router_defining_files_are_registered"
+    },
+    {
+      "from": "check_routes_routers_registered",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_routers_registered",
+      "to": "routes_routers_registered"
+    },
+    {
+      "from": "check_routes_routers_registered",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_routers_registered",
+      "to": "python3"
+    },
+    {
+      "from": "check_routes_write_endpoints_gated",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_write_endpoints_gated",
+      "to": "self::test_every_write_route_is_gated"
+    },
+    {
+      "from": "check_routes_write_endpoints_gated",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_write_endpoints_gated",
+      "to": "routes_write_endpoints_gated"
+    },
+    {
+      "from": "check_routes_write_endpoints_gated",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_routes_write_endpoints_gated",
+      "to": "python3"
+    },
+    {
+      "from": "check_runtime_readiness_all_dependencies",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_all_dependencies",
+      "to": "self::test_readiness_requires_all_dependencies"
+    },
+    {
+      "from": "check_runtime_readiness_all_dependencies",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_all_dependencies",
+      "to": "runtime_readiness_requires_every_dependency"
+    },
+    {
+      "from": "check_runtime_readiness_all_dependencies",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_all_dependencies",
+      "to": "pytest"
+    },
+    {
+      "from": "check_runtime_readiness_all_dependencies",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_all_dependencies",
+      "to": "python3"
+    },
+    {
+      "from": "check_runtime_readiness_database_fail_closed",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_database_fail_closed",
+      "to": "self::test_readiness_fails_closed_when_database_probe_fails"
+    },
+    {
+      "from": "check_runtime_readiness_database_fail_closed",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_database_fail_closed",
+      "to": "runtime_readiness_redacts_sensitive_values"
+    },
+    {
+      "from": "check_runtime_readiness_database_fail_closed",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_database_fail_closed",
+      "to": "runtime_readiness_requires_every_dependency"
+    },
+    {
+      "from": "check_runtime_readiness_database_fail_closed",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_database_fail_closed",
+      "to": "pytest"
+    },
+    {
+      "from": "check_runtime_readiness_database_fail_closed",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_database_fail_closed",
+      "to": "python3"
+    },
+    {
+      "from": "check_runtime_readiness_redacts_configuration_values",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_redacts_configuration_values",
+      "to": "self::test_readiness_reports_missing_config_without_values"
+    },
+    {
+      "from": "check_runtime_readiness_redacts_configuration_values",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_redacts_configuration_values",
+      "to": "runtime_readiness_redacts_sensitive_values"
+    },
+    {
+      "from": "check_runtime_readiness_redacts_configuration_values",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_redacts_configuration_values",
+      "to": "pytest"
+    },
+    {
+      "from": "check_runtime_readiness_redacts_configuration_values",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_runtime_readiness_redacts_configuration_values",
+      "to": "python3"
+    },
+    {
+      "from": "check_schema_baseline_review_digest",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_digest",
+      "to": "self::test_review_requires_matching_digest"
+    },
+    {
+      "from": "check_schema_baseline_review_digest",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_digest",
+      "to": "schema_baseline_review_requires_matching_digest"
+    },
+    {
+      "from": "check_schema_baseline_review_digest",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_digest",
+      "to": "pytest"
+    },
+    {
+      "from": "check_schema_baseline_review_digest",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_digest",
+      "to": "python3"
+    },
+    {
+      "from": "check_schema_baseline_review_inventory",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_inventory",
+      "to": "self::test_review_reports_objects_and_preserves_drift"
+    },
+    {
+      "from": "check_schema_baseline_review_inventory",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_inventory",
+      "to": "schema_baseline_review_preserves_drift"
+    },
+    {
+      "from": "check_schema_baseline_review_inventory",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_inventory",
+      "to": "schema_baseline_review_reports_object_inventory"
+    },
+    {
+      "from": "check_schema_baseline_review_inventory",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_inventory",
+      "to": "pytest"
+    },
+    {
+      "from": "check_schema_baseline_review_inventory",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_inventory",
+      "to": "python3"
+    },
+    {
+      "from": "check_schema_baseline_review_safety",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_safety",
+      "to": "self::test_review_rejects_unsafe_statement_classes"
+    },
+    {
+      "from": "check_schema_baseline_review_safety",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_safety",
+      "to": "schema_baseline_review_rejects_data_and_authority_statements"
+    },
+    {
+      "from": "check_schema_baseline_review_safety",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_safety",
+      "to": "pytest"
+    },
+    {
+      "from": "check_schema_baseline_review_safety",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_baseline_review_safety",
+      "to": "python3"
+    },
+    {
+      "from": "check_schema_inventory_mutation_sites",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_inventory_mutation_sites",
+      "to": "self::test_inventory_detects_and_checks_mutation_sites"
+    },
+    {
+      "from": "check_schema_inventory_mutation_sites",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_inventory_mutation_sites",
+      "to": "schema_inventory_check_fails_on_unreviewed_mutation_site"
+    },
+    {
+      "from": "check_schema_inventory_mutation_sites",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_inventory_mutation_sites",
+      "to": "schema_inventory_excludes_environment_vendor_trees"
+    },
+    {
+      "from": "check_schema_inventory_mutation_sites",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_inventory_mutation_sites",
+      "to": "schema_inventory_reports_mutation_sites"
+    },
+    {
+      "from": "check_schema_inventory_mutation_sites",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_inventory_mutation_sites",
+      "to": "pytest"
+    },
+    {
+      "from": "check_schema_inventory_mutation_sites",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_inventory_mutation_sites",
+      "to": "python3"
+    },
+    {
+      "from": "check_schema_inventory_three_authorities",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_inventory_three_authorities",
+      "to": "self::test_repository_inventory_exposes_legacy_drift"
+    },
+    {
+      "from": "check_schema_inventory_three_authorities",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_inventory_three_authorities",
+      "to": "schema_inventory_reports_three_authorities"
+    },
+    {
+      "from": "check_schema_inventory_three_authorities",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_inventory_three_authorities",
+      "to": "pytest"
+    },
+    {
+      "from": "check_schema_inventory_three_authorities",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_inventory_three_authorities",
+      "to": "python3"
+    },
+    {
+      "from": "check_schema_migration_status_bounds_failures",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_migration_status_bounds_failures",
+      "to": "self::test_schema_status_failure_surface_is_bounded"
+    },
+    {
+      "from": "check_schema_migration_status_bounds_failures",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_migration_status_bounds_failures",
+      "to": "schema_migration_status_bounds_failures"
+    },
+    {
+      "from": "check_schema_migration_status_bounds_failures",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_migration_status_bounds_failures",
+      "to": "alembic"
+    },
+    {
+      "from": "check_schema_migration_status_bounds_failures",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_migration_status_bounds_failures",
+      "to": "pytest"
+    },
+    {
+      "from": "check_schema_migration_status_bounds_failures",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_migration_status_bounds_failures",
+      "to": "python3"
+    },
+    {
+      "from": "check_schema_migration_status_exact_match",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_migration_status_exact_match",
+      "to": "self::test_schema_status_requires_exact_nonempty_match"
+    },
+    {
+      "from": "check_schema_migration_status_exact_match",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_migration_status_exact_match",
+      "to": "schema_migration_status_exact_set_match"
+    },
+    {
+      "from": "check_schema_migration_status_exact_match",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_migration_status_exact_match",
+      "to": "alembic"
+    },
+    {
+      "from": "check_schema_migration_status_exact_match",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_migration_status_exact_match",
+      "to": "pytest"
+    },
+    {
+      "from": "check_schema_migration_status_exact_match",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_schema_migration_status_exact_match",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_claim_atomic",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_claim_atomic",
       "to": "python.tests.contracts.spawn_executor.test_claim_atomic"
     },
     {
-      "from": "spawn_executor_concurrent_live_cap",
+      "from": "check_spawn_executor_claim_atomic",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_claim_atomic",
+      "to": "spawn_executor_claim_atomic"
+    },
+    {
+      "from": "check_spawn_executor_claim_atomic",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_claim_atomic",
+      "to": "postgres"
+    },
+    {
+      "from": "check_spawn_executor_claim_atomic",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_claim_atomic",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_concurrent_live_cap",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_concurrent_live_cap",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_concurrent_live_cap",
       "to": "python.tests.contracts.spawn_executor.test_concurrent_live_cap"
     },
     {
-      "from": "spawn_executor_heartbeat_advances",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_heartbeat_advances",
-      "to": "python.tests.contracts.spawn_executor.test_heartbeat_advances"
+      "from": "check_spawn_executor_concurrent_live_cap",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_concurrent_live_cap",
+      "to": "spawn_executor_concurrent_live_cap"
     },
     {
-      "from": "spawn_executor_marks_failed_on_exception",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_marks_failed_on_exception",
-      "to": "python.tests.contracts.spawn_executor.test_marks_failed_on_exception"
+      "from": "check_spawn_executor_concurrent_live_cap",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_concurrent_live_cap",
+      "to": "postgres"
     },
     {
-      "from": "spawn_executor_merge_helpers_tolerate_no_pcna",
+      "from": "check_spawn_executor_concurrent_live_cap",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_concurrent_live_cap",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_degraded_merge_helpers",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_merge_helpers_tolerate_no_pcna",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_degraded_merge_helpers",
       "to": "python.tests.contracts.spawn_executor.test_merge_helpers_tolerate_no_pcna"
     },
     {
-      "from": "spawn_executor_no_orphan_invariant",
+      "from": "check_spawn_executor_degraded_merge_helpers",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_degraded_merge_helpers",
+      "to": "spawn_executor_merge_helpers_tolerate_no_pcna"
+    },
+    {
+      "from": "check_spawn_executor_degraded_merge_helpers",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_degraded_merge_helpers",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_heartbeat_advances",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_no_orphan_invariant",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_heartbeat_advances",
+      "to": "python.tests.contracts.spawn_executor.test_heartbeat_advances"
+    },
+    {
+      "from": "check_spawn_executor_heartbeat_advances",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_heartbeat_advances",
+      "to": "spawn_executor_heartbeat_advances"
+    },
+    {
+      "from": "check_spawn_executor_heartbeat_advances",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_heartbeat_advances",
+      "to": "postgres"
+    },
+    {
+      "from": "check_spawn_executor_heartbeat_advances",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_heartbeat_advances",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_marks_failed",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_marks_failed",
+      "to": "python.tests.contracts.spawn_executor.test_marks_failed_on_exception"
+    },
+    {
+      "from": "check_spawn_executor_marks_failed",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_marks_failed",
+      "to": "spawn_executor_marks_failed_on_exception"
+    },
+    {
+      "from": "check_spawn_executor_marks_failed",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_marks_failed",
+      "to": "postgres"
+    },
+    {
+      "from": "check_spawn_executor_marks_failed",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_marks_failed",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_no_orphan",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_no_orphan",
       "to": "python.tests.contracts.spawn_executor.test_no_orphan_invariant"
     },
     {
-      "from": "spawn_executor_resolve_provider_rejects_empty",
+      "from": "check_spawn_executor_no_orphan",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_no_orphan",
+      "to": "spawn_executor_no_orphan_invariant"
+    },
+    {
+      "from": "check_spawn_executor_no_orphan",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_no_orphan",
+      "to": "postgres"
+    },
+    {
+      "from": "check_spawn_executor_no_orphan",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_no_orphan",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_rejects_empty_provider",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_resolve_provider_rejects_empty",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_rejects_empty_provider",
       "to": "python.tests.contracts.spawn_executor.test_resolve_provider_rejects_empty"
     },
     {
-      "from": "spawn_executor_retry_default_none",
+      "from": "check_spawn_executor_rejects_empty_provider",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_rejects_empty_provider",
+      "to": "spawn_executor_resolve_provider_rejects_empty"
+    },
+    {
+      "from": "check_spawn_executor_rejects_empty_provider",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_rejects_empty_provider",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_retry_default_none",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_retry_default_none",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_retry_default_none",
       "to": "python.tests.contracts.spawn_executor.test_retry_default_none"
     },
     {
-      "from": "spawn_executor_retry_once_on_transient",
+      "from": "check_spawn_executor_retry_default_none",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_retry_default_none",
+      "to": "spawn_executor_retry_default_none"
+    },
+    {
+      "from": "check_spawn_executor_retry_default_none",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_retry_default_none",
+      "to": "postgres"
+    },
+    {
+      "from": "check_spawn_executor_retry_default_none",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_retry_default_none",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_retry_once",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_retry_once_on_transient",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_retry_once",
       "to": "python.tests.contracts.spawn_executor.test_retry_once_on_transient"
     },
     {
-      "from": "spawn_executor_skips_non_running",
+      "from": "check_spawn_executor_retry_once",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_retry_once",
+      "to": "spawn_executor_retry_once_on_transient"
+    },
+    {
+      "from": "check_spawn_executor_retry_once",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_retry_once",
+      "to": "postgres"
+    },
+    {
+      "from": "check_spawn_executor_retry_once",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_retry_once",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_skips_non_running",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_skips_non_running",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_skips_non_running",
       "to": "python.tests.contracts.spawn_executor.test_skips_non_running"
     },
     {
-      "from": "spawn_executor_snapshot_pcna_shape",
+      "from": "check_spawn_executor_skips_non_running",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_skips_non_running",
+      "to": "spawn_executor_skips_non_running"
+    },
+    {
+      "from": "check_spawn_executor_skips_non_running",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_skips_non_running",
+      "to": "postgres"
+    },
+    {
+      "from": "check_spawn_executor_skips_non_running",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_skips_non_running",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_snapshot_shape",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_snapshot_pcna_shape",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_snapshot_shape",
       "to": "python.tests.contracts.spawn_executor.test_snapshot_pcna_shape"
     },
     {
-      "from": "spawn_executor_stale_sweep_marks_worker_lost",
+      "from": "check_spawn_executor_snapshot_shape",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_snapshot_shape",
+      "to": "spawn_executor_snapshot_pcna_shape"
+    },
+    {
+      "from": "check_spawn_executor_snapshot_shape",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_snapshot_shape",
+      "to": "python3"
+    },
+    {
+      "from": "check_spawn_executor_stale_sweep",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "spawn_executor_stale_sweep_marks_worker_lost",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_stale_sweep",
       "to": "python.tests.contracts.spawn_executor.test_stale_sweep_marks_worker_lost"
     },
     {
-      "from": "storage_anonymous_owner_null",
-      "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "storage_anonymous_owner_null",
-      "to": "python.tests.contracts.chat.test_create_anonymous_owner_null"
+      "from": "check_spawn_executor_stale_sweep",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_stale_sweep",
+      "to": "spawn_executor_stale_sweep_marks_worker_lost"
     },
     {
-      "from": "storage_create_owner_isolation",
+      "from": "check_spawn_executor_stale_sweep",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_stale_sweep",
+      "to": "postgres"
+    },
+    {
+      "from": "check_spawn_executor_stale_sweep",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_spawn_executor_stale_sweep",
+      "to": "python3"
+    },
+    {
+      "from": "check_storage_anonymous_owner_null",
       "kind": "calls",
-      "source_block": "CONTRACTS",
-      "source_id": "storage_create_owner_isolation",
-      "to": "python.tests.contracts.chat.test_create_owner_isolation"
+      "source_block": "CHECKS",
+      "source_id": "check_storage_anonymous_owner_null",
+      "to": "self::test_create_anonymous_owner_null"
+    },
+    {
+      "from": "check_storage_anonymous_owner_null",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_storage_anonymous_owner_null",
+      "to": "storage_anonymous_owner_null"
+    },
+    {
+      "from": "check_storage_anonymous_owner_null",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_storage_anonymous_owner_null",
+      "to": "postgres"
+    },
+    {
+      "from": "check_storage_anonymous_owner_null",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_storage_anonymous_owner_null",
+      "to": "python3"
+    },
+    {
+      "from": "check_storage_anonymous_owner_null",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_storage_anonymous_owner_null",
+      "to": "running_test_server"
+    },
+    {
+      "from": "check_storage_create_owner_isolation",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_storage_create_owner_isolation",
+      "to": "self::test_create_owner_isolation"
+    },
+    {
+      "from": "check_storage_create_owner_isolation",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_storage_create_owner_isolation",
+      "to": "storage_create_owner_isolation"
+    },
+    {
+      "from": "check_storage_create_owner_isolation",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_storage_create_owner_isolation",
+      "to": "postgres"
+    },
+    {
+      "from": "check_storage_create_owner_isolation",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_storage_create_owner_isolation",
+      "to": "python3"
+    },
+    {
+      "from": "check_storage_create_owner_isolation",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_storage_create_owner_isolation",
+      "to": "running_test_server"
+    },
+    {
+      "from": "check_transcript_explainer_citation_integrity",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_citation_integrity",
+      "to": "python.tests.contracts.transcripts_explainer.test_rejects_fabricated_citations"
+    },
+    {
+      "from": "check_transcript_explainer_citation_integrity",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_citation_integrity",
+      "to": "explainer_rejects_fabricated_citations"
+    },
+    {
+      "from": "check_transcript_explainer_citation_integrity",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_citation_integrity",
+      "to": "python3"
+    },
+    {
+      "from": "check_transcript_explainer_empty_balance",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_empty_balance",
+      "to": "python.tests.contracts.transcripts_explainer.test_no_credits_returns_none"
+    },
+    {
+      "from": "check_transcript_explainer_empty_balance",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_empty_balance",
+      "to": "explainer_402_when_no_credits"
+    },
+    {
+      "from": "check_transcript_explainer_empty_balance",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_empty_balance",
+      "to": "postgres"
+    },
+    {
+      "from": "check_transcript_explainer_empty_balance",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_empty_balance",
+      "to": "python3"
+    },
+    {
+      "from": "check_transcript_explainer_free_before_paid",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_free_before_paid",
+      "to": "python.tests.contracts.transcripts_explainer.test_decrements_free_then_paid"
+    },
+    {
+      "from": "check_transcript_explainer_free_before_paid",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_free_before_paid",
+      "to": "explainer_decrements_free_first"
+    },
+    {
+      "from": "check_transcript_explainer_free_before_paid",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_free_before_paid",
+      "to": "postgres"
+    },
+    {
+      "from": "check_transcript_explainer_free_before_paid",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_free_before_paid",
+      "to": "python3"
+    },
+    {
+      "from": "check_transcript_explainer_idempotent_report",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_idempotent_report",
+      "to": "python.tests.contracts.transcripts_explainer.test_idempotent_no_double_charge"
+    },
+    {
+      "from": "check_transcript_explainer_idempotent_report",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_idempotent_report",
+      "to": "explainer_explanation_is_idempotent"
+    },
+    {
+      "from": "check_transcript_explainer_idempotent_report",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_idempotent_report",
+      "to": "postgres"
+    },
+    {
+      "from": "check_transcript_explainer_idempotent_report",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_idempotent_report",
+      "to": "python3"
+    },
+    {
+      "from": "check_transcript_explainer_learning_summary",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_learning_summary",
+      "to": "python.tests.contracts.transcripts_explainer.test_explainer_call_surfaces_in_learning_summary"
+    },
+    {
+      "from": "check_transcript_explainer_learning_summary",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_learning_summary",
+      "to": "explainer_call_surfaces_in_learning_summary"
+    },
+    {
+      "from": "check_transcript_explainer_learning_summary",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_learning_summary",
+      "to": "postgres"
+    },
+    {
+      "from": "check_transcript_explainer_learning_summary",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_learning_summary",
+      "to": "python3"
+    },
+    {
+      "from": "check_transcript_explainer_refund",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_refund",
+      "to": "python.tests.contracts.transcripts_explainer.test_refund_after_failure"
+    },
+    {
+      "from": "check_transcript_explainer_refund",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_refund",
+      "to": "explainer_refund_restores_balance"
+    },
+    {
+      "from": "check_transcript_explainer_refund",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_refund",
+      "to": "postgres"
+    },
+    {
+      "from": "check_transcript_explainer_refund",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_transcript_explainer_refund",
+      "to": "python3"
+    },
+    {
+      "from": "a0_alembic_environment",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_alembic_environment",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_alembic_environment",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_alembic_environment",
+      "to": "a0_live_schema_capture"
+    },
+    {
+      "from": "a0_alembic_environment",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_alembic_environment",
+      "to": "a0_schema_inventory"
+    },
+    {
+      "from": "a0_contract_graph_runner",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_contract_graph_runner",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_contract_graph_runner",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_contract_graph_runner",
+      "to": "msdmd universal parser"
+    },
+    {
+      "from": "a0_contract_graph_runner",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_contract_graph_runner",
+      "to": "test-build doctrine"
     },
     {
       "from": "a0_engine_memory_core",
@@ -2455,34 +6169,6 @@ export default defineMsdmdCollection({
       "to": "none"
     },
     {
-      "from": "a0_engine_merge",
-      "kind": "owns",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_engine_merge",
-      "to": "Erin Spencer"
-    },
-    {
-      "from": "a0_engine_merge",
-      "kind": "requires",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_engine_merge",
-      "to": "a0_engine_pcna"
-    },
-    {
-      "from": "a0_engine_merge",
-      "kind": "requires",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_engine_merge",
-      "to": "a0_engine_ptca_core"
-    },
-    {
-      "from": "a0_engine_merge",
-      "kind": "requires",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_engine_merge",
-      "to": "a0_engine_theta"
-    },
-    {
       "from": "a0_engine_module_graph",
       "kind": "owns",
       "source_block": "MODULE_BUILD",
@@ -2497,34 +6183,6 @@ export default defineMsdmdCollection({
       "to": "none"
     },
     {
-      "from": "a0_engine_pcna",
-      "kind": "owns",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_engine_pcna",
-      "to": "Erin Spencer"
-    },
-    {
-      "from": "a0_engine_pcna",
-      "kind": "requires",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_engine_pcna",
-      "to": "a0_engine_memory_core"
-    },
-    {
-      "from": "a0_engine_pcna",
-      "kind": "requires",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_engine_pcna",
-      "to": "a0_engine_ptca_core"
-    },
-    {
-      "from": "a0_engine_pcna",
-      "kind": "requires",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_engine_pcna",
-      "to": "a0_engine_theta"
-    },
-    {
       "from": "a0_engine_prime_seeds",
       "kind": "owns",
       "source_block": "MODULE_BUILD",
@@ -2536,28 +6194,14 @@ export default defineMsdmdCollection({
       "kind": "requires",
       "source_block": "MODULE_BUILD",
       "source_id": "a0_engine_prime_seeds",
-      "to": "a0_engine_pcna"
+      "to": "a0_platonic_ptcna_state"
     },
     {
       "from": "a0_engine_prime_seeds",
       "kind": "requires",
       "source_block": "MODULE_BUILD",
       "source_id": "a0_engine_prime_seeds",
-      "to": "a0_engine_ptca_core"
-    },
-    {
-      "from": "a0_engine_ptca_core",
-      "kind": "owns",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_engine_ptca_core",
-      "to": "Erin Spencer"
-    },
-    {
-      "from": "a0_engine_ptca_core",
-      "kind": "requires",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_engine_ptca_core",
-      "to": "none"
+      "to": "pcna_ring_core"
     },
     {
       "from": "a0_engine_sigma",
@@ -2711,7 +6355,7 @@ export default defineMsdmdCollection({
       "kind": "requires",
       "source_block": "MODULE_BUILD",
       "source_id": "a0_engine_zeta",
-      "to": "a0_engine_pcna"
+      "to": "a0_platonic_ptcna_state"
     },
     {
       "from": "a0_engine_zeta",
@@ -2719,6 +6363,174 @@ export default defineMsdmdCollection({
       "source_block": "MODULE_BUILD",
       "source_id": "a0_engine_zeta",
       "to": "a0_service_edcm"
+    },
+    {
+      "from": "a0_legacy_schema_baseline_revision",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_legacy_schema_baseline_revision",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_legacy_schema_baseline_revision",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_legacy_schema_baseline_revision",
+      "to": "a0_alembic_environment"
+    },
+    {
+      "from": "a0_legacy_schema_baseline_revision",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_legacy_schema_baseline_revision",
+      "to": "a0_live_schema_capture"
+    },
+    {
+      "from": "a0_legacy_schema_baseline_revision",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_legacy_schema_baseline_revision",
+      "to": "a0_schema_baseline_review"
+    },
+    {
+      "from": "a0_live_schema_capture",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_live_schema_capture",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_live_schema_capture",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_live_schema_capture",
+      "to": "a0_schema_inventory"
+    },
+    {
+      "from": "a0_platonic_ptcna_state",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_platonic_ptcna_state",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_platonic_ptcna_state",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_platonic_ptcna_state",
+      "to": "interdependent_lib_ptcna_pair"
+    },
+    {
+      "from": "a0_platonic_ptcna_state",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_platonic_ptcna_state",
+      "to": "platonic_agent_object"
+    },
+    {
+      "from": "a0_platonic_ptcna_state",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_platonic_ptcna_state",
+      "to": "ptcna_runtime_boundary"
+    },
+    {
+      "from": "a0_runtime_readiness",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_runtime_readiness",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_runtime_readiness",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_runtime_readiness",
+      "to": "a0_service_heartbeat"
+    },
+    {
+      "from": "a0_runtime_readiness_route",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_runtime_readiness_route",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_runtime_readiness_route",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_runtime_readiness_route",
+      "to": "a0_runtime_readiness"
+    },
+    {
+      "from": "a0_schema_baseline_review",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_schema_baseline_review",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_schema_baseline_review",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_schema_baseline_review",
+      "to": "a0_live_schema_capture"
+    },
+    {
+      "from": "a0_schema_baseline_review",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_schema_baseline_review",
+      "to": "a0_schema_inventory"
+    },
+    {
+      "from": "a0_schema_baseline_test_harness",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_schema_baseline_test_harness",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_schema_baseline_test_harness",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_schema_baseline_test_harness",
+      "to": "a0_alembic_environment"
+    },
+    {
+      "from": "a0_schema_baseline_test_harness",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_schema_baseline_test_harness",
+      "to": "a0_legacy_schema_baseline_revision"
+    },
+    {
+      "from": "a0_schema_inventory",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_schema_inventory",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_schema_inventory",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_schema_inventory",
+      "to": "none"
+    },
+    {
+      "from": "a0_schema_migration_status",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_schema_migration_status",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_schema_migration_status",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_schema_migration_status",
+      "to": "a0_alembic_environment"
     },
     {
       "from": "a0_service_agent_instance",
@@ -2753,14 +6565,7 @@ export default defineMsdmdCollection({
       "kind": "requires",
       "source_block": "MODULE_BUILD",
       "source_id": "a0_service_agent_lifecycle",
-      "to": "a0_engine_merge"
-    },
-    {
-      "from": "a0_service_agent_lifecycle",
-      "kind": "requires",
-      "source_block": "MODULE_BUILD",
-      "source_id": "a0_service_agent_lifecycle",
-      "to": "a0_engine_pcna"
+      "to": "a0_platonic_ptcna_state"
     },
     {
       "from": "a0_service_artifacts",
@@ -2854,17 +6659,17 @@ export default defineMsdmdCollection({
       "to": "none"
     },
     {
-      "from": "a0_service_edcmbone_explainer",
+      "from": "a0_service_edcm_explainer",
       "kind": "owns",
       "source_block": "MODULE_BUILD",
-      "source_id": "a0_service_edcmbone_explainer",
+      "source_id": "a0_service_edcm_explainer",
       "to": "Erin Spencer"
     },
     {
-      "from": "a0_service_edcmbone_explainer",
+      "from": "a0_service_edcm_explainer",
       "kind": "requires",
       "source_block": "MODULE_BUILD",
-      "source_id": "a0_service_edcmbone_explainer",
+      "source_id": "a0_service_edcm_explainer",
       "to": "a0_service_energy_registry"
     },
     {
@@ -2949,7 +6754,7 @@ export default defineMsdmdCollection({
       "kind": "requires",
       "source_block": "MODULE_BUILD",
       "source_id": "a0_service_heartbeat",
-      "to": "a0_engine_pcna"
+      "to": "a0_platonic_ptcna_state"
     },
     {
       "from": "a0_service_inference",
@@ -3509,7 +7314,7 @@ export default defineMsdmdCollection({
       "kind": "requires",
       "source_block": "MODULE_BUILD",
       "source_id": "a0_service_tools_edcm_score",
-      "to": "a0_engine_pcna"
+      "to": "a0_platonic_ptcna_state"
     },
     {
       "from": "a0_service_tools_edcm_score",
@@ -3586,7 +7391,7 @@ export default defineMsdmdCollection({
       "kind": "requires",
       "source_block": "MODULE_BUILD",
       "source_id": "a0_service_tools_memory_flush",
-      "to": "a0_engine_pcna"
+      "to": "a0_platonic_ptcna_state"
     },
     {
       "from": "a0_service_tools_pcna_infer",
@@ -3600,7 +7405,7 @@ export default defineMsdmdCollection({
       "kind": "requires",
       "source_block": "MODULE_BUILD",
       "source_id": "a0_service_tools_pcna_infer",
-      "to": "a0_engine_pcna"
+      "to": "a0_platonic_ptcna_state"
     },
     {
       "from": "a0_service_tools_pcna_reward",
@@ -3614,7 +7419,7 @@ export default defineMsdmdCollection({
       "kind": "requires",
       "source_block": "MODULE_BUILD",
       "source_id": "a0_service_tools_pcna_reward",
-      "to": "a0_engine_pcna"
+      "to": "a0_platonic_ptcna_state"
     },
     {
       "from": "a0_service_tools_post_tweet",
@@ -3769,9 +7574,22 @@ export default defineMsdmdCollection({
       "source_block": "MODULE_BUILD",
       "source_id": "a0_service_zeta_observe",
       "to": "none"
+    },
+    {
+      "from": "platonic_agent_object",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "platonic_agent_object",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "platonic_agent_regions",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "platonic_agent_regions",
+      "to": "Erin Spencer"
     }
   ],
   "gaps": [],
-  "repo": "a0",
-  "source_commit": "51837a6"
+  "repo": "a0"
 });

@@ -17,7 +17,7 @@
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; removes the pcna_infer tool from the registry.
-#   requires: a0_engine_pcna
+#   requires: a0_platonic_ptcna_state
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===

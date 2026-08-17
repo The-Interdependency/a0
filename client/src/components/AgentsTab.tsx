@@ -43,7 +43,7 @@ interface AgentRow {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const SLOTS = ["conduct", "perform", "practice", "record", "derive", "edcmbone"] as const;
+const SLOTS = ["conduct", "perform", "practice", "record", "derive", "edcm"] as const;
 type Slot = typeof SLOTS[number];
 
 const SLOT_META: Record<Slot, { label: string; color: string; desc: string }> = {
@@ -72,7 +72,7 @@ const SLOT_META: Record<Slot, { label: string; color: string; desc: string }> = 
     color: "border-violet-500/30 bg-violet-500/5 text-violet-400",
     desc: "Synthesis. Post-turn derivation, PCNA reward signals, and aggregate analysis.",
   },
-  edcmbone: {
+  edcm: {
     label: "EDCMbone",
     color: "border-rose-500/30 bg-rose-500/5 text-rose-400",
     desc: "Transcript analysis. Called for EDCMbone scoring and explanation generation.",

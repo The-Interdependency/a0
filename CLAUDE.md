@@ -84,7 +84,7 @@ npx playwright test tests/e2e/console-tabs.spec.ts
 | `client/src/` | React frontend: `pages/` (console, chat, fleet, archive, transcripts, billing…), `hooks/` (incl. `use-ui-structure.ts`), `components/`, `lib/` |
 | `python/` | FastAPI backend: `main.py` (app + `/api/health`), `routes/`, `services/`, `engine/`, `agents/`, `database.py`, `models.py`, `config/`, `storage/` |
 | `python/routes/` | ~35 self-declaring route modules (export `router`, `UI_META`, `DATA_SCHEMA`) registered in `python/routes/__init__.py` |
-| `python/engine/` | Cognitive engines: `pcna.py`, `sigma.py`, `zeta.py`, `theta.py`, `ptca_core.py`, `memory_core.py`, `merge.py`, `prime_seeds.py`, `ucns_kit/` |
+| `python/engine/` | Cognitive engines and adapters: `ptcna_state.py`, `sigma.py`, `zeta.py`, `theta.py`, `memory_core.py`, `prime_seeds.py`, `ucns_kit/` |
 | `python/services/` | Orchestration: `inference.py`, `heartbeat.py`, `tool_executor.py`, `edcm.py`, agent spawn/lifecycle, `providers/`, `tools/` |
 | `shared/` | `schema.ts` (Drizzle, DB source of truth), `models/auth.ts` |
 | `a0/` | Standalone `a0` Python package / Termux CLI runtime (`a0.py`, cores, adapters, connectors, guardian) — entry: `run.sh` (`python -m a0.a0`) |
@@ -136,7 +136,7 @@ Naming convention: `{name}.py` = self-contained module; `{name}_api.py` = thin d
 - `python/services/inference.py` — Orchestrates LLM calls across registered energy providers (Grok / Gemini / Claude / OpenAI-style); resolves role, normalizes reasoning effort, injects tier-specific `prompt_context`.
 - `python/services/heartbeat.py` — Periodic tick: audit snapshots, memory checkpoints, PCNA propagation, sub-agent cleanup.
 - `python/services/tool_executor.py` — Tool invocation with approval gates.
-- `python/engine/pcna.py` — Multi-ring PCNA inference pipeline (Phi/Psi/Omega/Guardian/Memory rings); Project → Inject → Propagate → PTCA-seed → PTCA-circle → Coherence.
+- `python/engine/ptcna_state.py` — durable Platonic-Agent adapter over the exactly pinned producer-owned PTCNA pipeline and UCNS receipt.
 - `python/services/edcm.py` — Behavioral directive scoring (CM, DA, DRIFT, DVG, INT, TBF); fires corrective actions and guides LLM selection.
 - `python/engine/sigma.py` — SigmaCore: encodes the workspace filesystem as a prime-ring tensor; companion to the Psi ring; has its own console tab.
 

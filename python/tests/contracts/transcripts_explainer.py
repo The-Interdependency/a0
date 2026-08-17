@@ -1,8 +1,8 @@
 # 274:71 0:0 0:4
-"""Contract tests for python.services.edcmbone_explainer.
+"""Contract tests for python.services.edcm_explainer.
 
 Each test is referenced from the CONTRACTS block at the bottom of
-python/services/edcmbone_explainer.py. Run via:
+python/services/edcm_explainer.py. Run via:
 
     python -m python.tests.contract_runner
 
@@ -18,7 +18,7 @@ import uuid
 from sqlalchemy import text as _sa_text
 
 from ...database import engine
-from ...services.edcmbone_explainer import _parse_explainer_output
+from ...services.edcm_explainer import _parse_explainer_output
 from ...storage import storage
 
 
@@ -229,7 +229,7 @@ async def test_explainer_call_surfaces_in_learning_summary() -> None:
     test_provider = f"openai-5.5-ctest-{uuid.uuid4().hex[:8]}"
     payload = {
         "provider": test_provider,
-        "source": "edcmbone_explainer",
+        "source": "edcm_explainer",
         "user_id": _new_uid(),
         "report_id": -1,
         "model": "gpt-5.5",

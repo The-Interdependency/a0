@@ -207,9 +207,9 @@ async def test_resolve_provider_rejects_empty() -> None:
 def test_snapshot_pcna_shape() -> None:
     """_snapshot_pcna returns the four delta-tracked quantities with
     stable shape so before/after dicts can be subtracted in log payloads.
-    Uses a fresh PCNAEngine to avoid depending on global state."""
-    from python.engine import PCNAEngine
-    p = PCNAEngine()
+    Uses a fresh PTCNAState to avoid depending on global state."""
+    from python.engine import PTCNAState
+    p = PTCNAState()
     snap = _snapshot_pcna(p)
     expected = {"phi", "psi", "omega", "theta_circles"}
     assert set(snap.keys()) == expected, (
@@ -282,14 +282,14 @@ def test_count_live_for_parent_filters() -> None:
     minimal placeholder PCNA stand-ins so this test does not depend on
     a real primary."""
     from python.services import agent_lifecycle as _life
-    from python.engine import PCNAEngine
+    from python.engine import PTCNAState
 
     parent_a = f"test-cap-parent-A-{uuid.uuid4().hex[:8]}"
     parent_b = f"test-cap-parent-B-{uuid.uuid4().hex[:8]}"
     parent_z = f"test-cap-parent-Z-{uuid.uuid4().hex[:8]}"
     name_a = f"test-cap-child-A-{uuid.uuid4().hex[:8]}"
     name_b = f"test-cap-child-B-{uuid.uuid4().hex[:8]}"
-    e_a, e_b = PCNAEngine(), PCNAEngine()
+    e_a, e_b = PTCNAState(), PTCNAState()
     import time as _t
     with _life._lock:
         _life._sub_agents[name_a] = (e_a, {
@@ -512,7 +512,7 @@ async def test_concurrent_live_cap() -> None:
     from python.services.spawn_caps import (
         check_can_spawn, SpawnCapExceeded, _DEFAULT_CONCURRENT_LIVE,
     )
-    from python.engine import PCNAEngine
+    from python.engine import PTCNAState
     import time as _t
 
     parent_run_id = f"test-cl-cap-{uuid.uuid4().hex[:8]}"
@@ -524,7 +524,7 @@ async def test_concurrent_live_cap() -> None:
         for i in range(20):
             n = f"test-cl-{i}-{uuid.uuid4().hex[:6]}"
             with _life._lock:
-                _life._sub_agents[n] = (PCNAEngine(), {
+                _life._sub_agents[n] = (PTCNAState(), {
                     "name": n, "provider": "test",
                     "spawned_at": _t.time(),
                     "parent_id": "x",
@@ -562,14 +562,14 @@ async def test_no_orphan_invariant() -> None:
        (b) a DB 'executing' row owned by THIS worker with no registry entry
     Clean state (no test rows) reports ok=True."""
     from python.services import agent_lifecycle as _life
-    from python.engine import PCNAEngine
+    from python.engine import PTCNAState
     import time as _t
 
     # (a) registry-orphan: registry entry with a run_id that has no row
     orphan_run_id = f"test-orphan-{uuid.uuid4()}"
     orphan_name = f"test-orphan-name-{uuid.uuid4().hex[:8]}"
     with _life._lock:
-        _life._sub_agents[orphan_name] = (PCNAEngine(), {
+        _life._sub_agents[orphan_name] = (PTCNAState(), {
             "name": orphan_name, "provider": "test",
             "spawned_at": _t.time(),
             "parent_id": "x",

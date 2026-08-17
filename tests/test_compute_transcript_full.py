@@ -21,7 +21,7 @@ Assistant: Both are computed pairwise across adjacent rounds.
 def test_compute_transcript_full_returns_canonical_shape():
     out = edcm_svc.compute_transcript_full(SAMPLE)
     assert isinstance(out, dict)
-    assert out["edcmbone_version"] == edcm_svc.EDCMBONE_VERSION
+    assert out["edcm_version"] == edcm_svc.EDCM_VERSION
     assert out["message_count"] >= 1
     # Averages renamed: avg_int_val -> avg_int (storage column name)
     assert "avg_int" in out
@@ -48,5 +48,5 @@ def test_compute_transcript_full_single_message_returns_one_round():
     # is "raise only on empty / zero-round input, never silently zero out."
     out = edcm_svc.compute_transcript_full("x")
     assert out["message_count"] == 1
-    assert out["edcmbone_version"] == edcm_svc.EDCMBONE_VERSION
+    assert out["edcm_version"] == edcm_svc.EDCM_VERSION
 # 9:32 0:0 0:0
