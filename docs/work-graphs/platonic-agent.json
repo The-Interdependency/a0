@@ -1,25 +1,25 @@
 {
   "schema": "the-interdependency.stack-manifest",
   "version": "1.0.0",
-  "work_graph_sha256": "235fd139f0ce70ecb70d554030082021f35ccfc64b436d2783c4962b32bcd9b1",
+  "work_graph_sha256": "782ac8735d26117f2341094c0d2d0cae03bee0c7975d83da81db90870740b95e",
   "repositories": [
     {
       "repository": "The-Interdependency/a0",
-      "commit": "866d3aabf61838855045c846242be61f9b3a86de",
-      "authority": "application agent-definition architecture and executable Platonic Agent projection contract",
-      "relation": "owner and runtime consumer"
+      "commit": "6251f43e2c7580eeda6c45754116e0080542f589",
+      "authority": "application agent architecture, Platonic Agent subsumption model, runtime integration, persistence, privacy, provider, and lifecycle semantics",
+      "relation": "owner of the whole-agent object and consumer of bounded producer semantics"
     },
     {
       "repository": "The-Interdependency/zfae",
-      "commit": "f2bba4dea0c5cc5e5563650963545fe3d25702e9",
-      "authority": "conceptual specification of the inference/self-awareness event used by a0",
-      "relation": "bounded subproblem authority; not owner of agent identity"
+      "commit": "8f321c660d2a550f4cabbaf2de58e4363ed6c181",
+      "authority": "conceptual specification of the inference/self-awareness event used within the Platonic Agent inference region",
+      "relation": "bounded subproblem authority; not owner of whole-agent identity or other regions"
     },
     {
       "repository": "The-Interdependency/metapat",
       "commit": "53315e30c54aba881a5b48cbf395890e83ab05c5",
       "authority": "current distinction, boundary, relation, transformation, and domain-restraint doctrine",
-      "relation": "conceptual constraint consulted before architecture commitment"
+      "relation": "conceptual constraint on subsumption without ownership transfer"
     },
     {
       "repository": "The-Interdependency/skill-lib",
@@ -32,13 +32,14 @@
     "authority_transfer": false,
     "proof_status_transfer": false,
     "measurement_status_transfer": false,
-    "semantic_mapping": "declared: Platonic Agent contains an inference dimension; ZFAE explores one candidate realization/event within that dimension",
+    "semantic_mapping": "declared: existing a0 agent semantics are subsumed as named regions of PlatonicAgent; runtime surfaces preserve their distinctions; ZFAE, PTCNA, and PCEA retain producer authority for their bounded semantics",
     "agent_scope": "cross-repository-work-graph",
     "hmmm": [
       "exhaustive Platonic Agent dimension set",
-      "whether each agent dimension should be represented as a UCNS object",
-      "exact projection from the maximal envelope into durable AgentDefinition revisions",
-      "maximal form of the inference/self-awareness event"
+      "exhaustive semantic-region map",
+      "whether each dimension or region should be represented as a UCNS object",
+      "exact serialization of region projections into durable runtime records",
+      "identity continuity, fork, and termination under transformation"
     ]
   }
 }
