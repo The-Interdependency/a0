@@ -1,0 +1,44 @@
+{
+  "schema": "the-interdependency.stack-manifest",
+  "version": "1.0.0",
+  "work_graph_sha256": "235fd139f0ce70ecb70d554030082021f35ccfc64b436d2783c4962b32bcd9b1",
+  "repositories": [
+    {
+      "repository": "The-Interdependency/a0",
+      "commit": "866d3aabf61838855045c846242be61f9b3a86de",
+      "authority": "application agent-definition architecture and executable Platonic Agent projection contract",
+      "relation": "owner and runtime consumer"
+    },
+    {
+      "repository": "The-Interdependency/zfae",
+      "commit": "f2bba4dea0c5cc5e5563650963545fe3d25702e9",
+      "authority": "conceptual specification of the inference/self-awareness event used by a0",
+      "relation": "bounded subproblem authority; not owner of agent identity"
+    },
+    {
+      "repository": "The-Interdependency/metapat",
+      "commit": "53315e30c54aba881a5b48cbf395890e83ab05c5",
+      "authority": "current distinction, boundary, relation, transformation, and domain-restraint doctrine",
+      "relation": "conceptual constraint consulted before architecture commitment"
+    },
+    {
+      "repository": "The-Interdependency/skill-lib",
+      "commit": "b4234ca29529f56526541df8deb58c2c19570792",
+      "authority": "organization build, domain-claim, module, canon, and cross-repository workflow doctrine",
+      "relation": "build and evidence discipline"
+    }
+  ],
+  "boundaries": {
+    "authority_transfer": false,
+    "proof_status_transfer": false,
+    "measurement_status_transfer": false,
+    "semantic_mapping": "declared: Platonic Agent contains an inference dimension; ZFAE explores one candidate realization/event within that dimension",
+    "agent_scope": "cross-repository-work-graph",
+    "hmmm": [
+      "exhaustive Platonic Agent dimension set",
+      "whether each agent dimension should be represented as a UCNS object",
+      "exact projection from the maximal envelope into durable AgentDefinition revisions",
+      "maximal form of the inference/self-awareness event"
+    ]
+  }
+}
