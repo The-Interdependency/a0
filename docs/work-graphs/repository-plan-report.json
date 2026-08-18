@@ -10,21 +10,21 @@
   },
   "source": {
     "branch": "main",
-    "commit": "ce48cb94457bcfc5230fa3b85014fce7cdb6b967",
-    "generated_at": "2026-08-16",
-    "note": "This report describes the cited a0 main commit after Platonic Agent subsumption PR #99. The report commit is coordination metadata and does not itself change runtime, persistence, privacy, deployment, or upstream producer authority."
+    "commit": "fa889c6d2e3bd3fe32b78e3cb1daed81d26198f1",
+    "generated_at": "2026-08-17",
+    "note": "This report describes the cited a0 main commit plus the current repo-owned plan. The 2026-08-17 PTCNA correction reclassifies a0's existing PTCNA region as a historical pre-audit scaffold integration and blocks intended PTCNA integration until UCNS produces neural-audit-derived construction evidence. The report commit itself does not change runtime, persistence, privacy, deployment, or upstream producer authority."
   },
   "authority": {
     "owns": [
       "a0 application runtime and promised agent-system delivery behavior",
       "the Platonic Agent as a0's open maximal whole-agent object and the a0-owned mapping of existing agent semantics into distinct semantic regions",
       "durable agent definitions, runtime-instance identities, run lineage, semantic-memory persistence, and owner-scoped service contracts as realizations within the Platonic Agent",
-      "a0-side bindings to ZFAE inference, PTCNA runtime state, PCEA/Guardian privacy projection, provider routing, tool execution, and lifecycle behavior",
+      "a0-side bindings to ZFAE inference, historical PTCNA scaffold state, PCEA/Guardian privacy projection, provider routing, tool execution, and lifecycle behavior",
       "resource-to-need matching workflow and consent-mediated disclosure behavior implemented by the platform"
     ],
     "does_not_own": [
       "ZFAE conceptual ontology or inference-event semantics beyond a0's runtime binding",
-      "PTCNA algebra or canonical tensor-state semantics",
+      "PTCNA architecture, UCNS neural-audit evidence, or future audit-derived tensor-state semantics",
       "PCEA cryptographic/privacy primitive semantics",
       "UCNS mathematical representation or proof status",
       "EDCM empirical measurement validity",
@@ -34,7 +34,9 @@
     "non_transfer": [
       "subsuming a producer-backed semantic region into PlatonicAgent does not transfer producer authority into a0",
       "a provider model is an energy provider relation and does not become the agent identity",
-      "PTCNA runtime state and semantic memory remain distinct regions and distinct merge-authority channels",
+      "historical PTCNA scaffold state and semantic memory remain distinct regions and distinct merge-authority channels",
+      "the existing PTCNA scaffold region is not the intended PTCNA merely because a0 can persist and restore it",
+      "the sealed PTCNA scaffold falsification does not establish failure or success of a future audit-derived PTCNA",
       "run artifacts are not semantic memory merely because they are produced by an agent run",
       "global system-primary read authority does not imply disclosure authority",
       "runtime integration does not transfer theorem, semantic, measurement, certification, or empirical status from producer repositories",
@@ -43,7 +45,7 @@
   },
   "portfolio_role": {
     "summary": "Deliver the a0 agent system by realizing bounded operational agents from an open Platonic Agent object while composing persistent identity, inference, runtime state, memory, tools, privacy, provenance, provider relations, lifecycle, and resource-to-need behavior without collapsing their distinctions or absorbing producer authority.",
-    "upstream_contract": "a0 consumes exact upstream producer identities through bounded region bindings/adapters and keeps their authority separate from a0-owned whole-agent semantics.",
+    "upstream_contract": "a0 consumes exact upstream producer identities through bounded region bindings/adapters and keeps their authority separate from a0-owned whole-agent semantics. Intended PTCNA remains unavailable until its UCNS neural-audit prerequisite is satisfied upstream.",
     "downstream_contract": "a0 exposes operational agent definitions, instances, runs, scoped memory projections, tools, audited actions, interfaces, APIs, and deployment behavior as bounded realizations of PlatonicAgent regions.",
     "reports_to": {
       "repository": "The-Interdependency/skill-lib",
@@ -53,10 +55,10 @@
   },
   "status": {
     "state": "active implementation; promised a0 delivery remains incomplete",
-    "current_claim": "PlatonicAgent subsumes the presently legible a0 agent semantics as distinct executable regions. Its PTCNA runtime-state region consumes the exact UCNS/PTCNA pair, persists producer state and routing receipts, and recovers them across restart with tamper rejection. PTCNA's frozen critical role-acquisition evaluation is now FALSIFIED for both usefulness and superiority, so any applicable a0 routing must preserve explicit fallback attribution. Other durable regions remain incomplete.",
+    "current_claim": "PlatonicAgent subsumes the presently legible a0 agent semantics as distinct executable regions. a0 can persist and restore the exact historical PTCNA scaffold state and routing receipts, but that region is now explicitly historical: the intended PTCNA has not been built and is BLOCKED until UCNS audits a functioning conventional neural network and PTCNA derives a new candidate from that evidence. The sealed scaffold role-acquisition result remains FALSIFIED for both usefulness and superiority on its exact tested scope. Other durable a0 regions remain incomplete.",
     "latest_main_milestone": {
-      "commit": "ce48cb94457bcfc5230fa3b85014fce7cdb6b967",
-      "description": "made Google Cloud deployment fail closed behind explicit configuration readiness while preserving the missing-credential authority boundary"
+      "commit": "fa889c6d2e3bd3fe32b78e3cb1daed81d26198f1",
+      "description": "refreshed the repo-owned portfolio report to current main before the PTCNA prerequisite correction"
     },
     "deployed_identity": "a0p is an existing research-instrument runtime surface; it is not evidence that the promised a0 delivery is complete"
   },
@@ -67,9 +69,9 @@
       "boundary": "the current dimension and region sets are open and not claimed exhaustive or empirically validated"
     },
     {
-      "surface": "exact PTCNA runtime-state realization",
-      "status": "producer-backed target/fallback runtime, UCNS receipt, Platonic projection, checkpoint/restart, and tamper rejection implemented",
-      "boundary": "integration proves construction only; geometry, efficacy, and production privacy remain unresolved"
+      "surface": "historical PTCNA scaffold runtime-state realization",
+      "status": "producer-backed target/fallback scaffold state, UCNS candidate receipt, Platonic projection, checkpoint/restart, and tamper rejection implemented",
+      "boundary": "a0 preserves this historical research state exactly; it must not be represented as the intended PTCNA, whose construction is blocked on UCNS neural-audit evidence"
     },
     {
       "surface": "persistent ZFAE primary-agent runtime",
@@ -99,7 +101,8 @@
   ],
   "active_frontier": [
     "realize the PlatonicAgent definition, instance, run, semantic-memory, and runtime-state regions in the durable backend without creating a competing agent ontology",
-    "evaluate the exact canonical PTCNA integration without reintroducing application-owned shadow algebra",
+    "preserve the existing PTCNA adapter only as a historical scaffold-state region; do not optimize, repair, or label it as canonical intended PTCNA while the UCNS neural-audit prerequisite is unmet",
+    "prepare a0 to consume a future separately identified audit-derived PTCNA producer contract without hard-coding the historical scaffold topology into a0-owned records",
     "implement and test Guardian/PCEA minimum-necessary projection, cross-owner memory access audit, disclosure, export, correction, retention, redaction, and deletion behavior",
     "complete consent-scoped resource-to-need matching and introduction flows",
     "continue recovering existing and newly legible agent semantics into PlatonicAgent regions without treating the current map as exhaustive",
@@ -112,14 +115,14 @@
       "dependency": "merged PlatonicAgent subsumption contract at 7251f0f9fba5265ebeb8dbfe8ff4dc5826dfe62c"
     },
     {
-      "action": "complete AgentRun lineage, semantic-memory events/branches, run artifacts, and PTCNA snapshot persistence while retaining their separate region and merge authorities",
+      "action": "complete AgentRun lineage, semantic-memory events/branches, run artifacts, and runtime-state persistence while retaining separate region and merge authorities; keep historical PTCNA scaffold snapshots explicitly typed as historical",
       "owner": "The-Interdependency/a0",
       "dependency": "durable schema and migration cutover"
     },
     {
-      "action": "consume the sealed PTCNA critical result and keep fallback routing explicit and separately attributed for the tested role-acquisition surface",
-      "owner": "The-Interdependency/a0 + The-Interdependency/ptcna",
-      "dependency": "PTCNA result merge 2e7096f7496820a947614c8d77c4028482c77606; both target usefulness and superiority are FALSIFIED for the tested scope"
+      "action": "consume the corrected PTCNA construction boundary: preserve the sealed scaffold result and adapter, stop treating the scaffold as canonical intended PTCNA, and wait for the future UCNS-audit-derived PTCNA producer before adding an intended PTCNA runtime-state realization",
+      "owner": "The-Interdependency/a0 + The-Interdependency/ptcna + The-Interdependency/ucns",
+      "dependency": "PTCNA docs/INTENDED_CONSTRUCTION_GATE.md and UCNS docs/PTCNA_NEURAL_AUDIT_PREREQUISITE.md"
     },
     {
       "action": "implement the privacy-projection region as executable Guardian/PCEA projection, cross-owner audit, consent, disclosure, retention, redaction, deletion, and export controls",
@@ -140,7 +143,8 @@
   "blocked": [
     "the promised a0 delivery is not complete while durable agent-region persistence/API integration and release evidence remain unfinished",
     "public release of the full system-primary memory contract is blocked until executable privacy boundaries and matching tests exist",
-    "canonical PTCNA runtime-state claims are blocked on exact adapter equivalence rather than a0-local reimplementation",
+    "an intended/canonical PTCNA runtime-state region is BLOCKED until UCNS completes the prerequisite neural audit and PTCNA publishes a separately identified architecture derived from that evidence",
+    "a0 may preserve the existing PTCNA scaffold region but is blocked from using its topology, whole-string hash input, or sealed evaluation as authority for the future PTCNA region",
     "final deployment claims are blocked on resolved hosting, worker-leadership, durable-state, migration, and operational evidence",
     "Google Cloud deployment is BLOCKED until an authorized operator sets repository variable GCP_DEPLOY_ENABLED=true and repository secrets GCP_PROJECT_ID and GCP_SA_KEY"
   ],
@@ -152,7 +156,12 @@
     },
     {
       "repository": "The-Interdependency/ptcna",
-      "relation": "canonical runtime-state producer consumed by the PlatonicAgent runtime-state region through an a0 adapter",
+      "relation": "current producer of a historical pre-audit scaffold state that a0 can preserve exactly; a future intended PTCNA region requires a new audit-derived producer identity and cannot inherit scaffold authority by default",
+      "authority_transfer": false
+    },
+    {
+      "repository": "The-Interdependency/ucns",
+      "relation": "mathematical representation authority and upstream owner of the conventional-neural-network audit prerequisite whose evidence must precede construction of intended PTCNA",
       "authority_transfer": false
     },
     {
@@ -196,7 +205,8 @@
     "whether and how individual dimensions or semantic regions should receive UCNS representation",
     "exact durable serialization/realization contract from PlatonicAgent regions into backend records",
     "identity continuity, fork, merge, and termination criteria under transformation",
-    "complete PTCNA adapter-equivalence evidence and removal boundary for application-local algebra",
+    "the exact future a0 adapter contract for an audit-derived PTCNA whose architecture is not yet known",
+    "the preservation/retirement boundary for historical PTCNA scaffold state after a future intended PTCNA exists",
     "complete executable Guardian/PCEA projection policy around global system-primary memory read authority",
     "final EULA and interface language after actual privacy controls are implemented",
     "production retention, redaction, deletion, consent-expiry, worker-leadership, storage, and hosting defaults",
