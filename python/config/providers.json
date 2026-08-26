@@ -61,7 +61,7 @@
       "supports_prompt_caching": true,
       "api_family": "responses",
       "pricing_url": "https://openai.com/api/pricing/",
-      "note": "gpt-5-mini default; cached input 90% off (automatic on >=1024 token prefixes)",
+      "note": "Energy identity a0(openai). gpt-5-mini default; cached input 90% off (automatic on >=1024 token prefixes)",
       "supports_vision": true
     },
     "gemini": {
@@ -126,7 +126,27 @@
       "supports_reasoning_effort": true,
       "supports_prompt_caching": true,
       "pricing_url": "https://docs.x.ai/docs/models",
-      "note": "Auto-cache on >=1024 token prefix; cached_tokens reported in prompt_tokens_details. Live search disabled — routes to chat completions for full ZFAE tool access.",
+      "note": "Energy identity a0(grok). Auto-cache on >=1024 token prefix; cached_tokens reported in prompt_tokens_details. Live search disabled — routes to chat completions for full ZFAE tool access.",
+      "url": "https://api.x.ai/v1/chat/completions",
+      "responses_url": "https://api.x.ai/v1/responses",
+      "supports_live_search": false,
+      "supports_vision": true
+    },
+    "xai": {
+      "id": "xai",
+      "label": "xAI (api.x.ai)",
+      "model": "grok-4-fast-reasoning",
+      "vendor": "xai",
+      "env_key": "XAI_API_KEY",
+      "cost_per_1k_input": 0.0002,
+      "cost_per_1k_output": 0.0005,
+      "cache_read_per_1k_input": 5e-05,
+      "max_tokens": 2000000,
+      "supports_streaming": true,
+      "supports_reasoning_effort": true,
+      "supports_prompt_caching": true,
+      "pricing_url": "https://docs.x.ai/docs/models",
+      "note": "Energy identity a0(xai). Same XAI_API_KEY and api.x.ai endpoint as grok.",
       "url": "https://api.x.ai/v1/chat/completions",
       "responses_url": "https://api.x.ai/v1/responses",
       "supports_live_search": false,
@@ -637,6 +657,50 @@
         "derive": "grok-4-fast-reasoning"
       }
     },
+    "xai": {
+      "speed": {
+        "record": "grok-4-fast-non-reasoning",
+        "practice": "grok-4-fast-non-reasoning",
+        "conduct": "grok-4-fast-reasoning",
+        "perform": "grok-4-fast-reasoning",
+        "derive": "grok-4-fast-non-reasoning"
+      },
+      "price": {
+        "record": "grok-4-fast-non-reasoning",
+        "practice": "grok-4-fast-non-reasoning",
+        "conduct": "grok-4-fast-non-reasoning",
+        "perform": "grok-4-fast-reasoning",
+        "derive": "grok-4-fast-non-reasoning"
+      },
+      "balance": {
+        "record": "grok-4-fast-non-reasoning",
+        "practice": "grok-4-fast-reasoning",
+        "conduct": "grok-4-fast-reasoning",
+        "perform": "grok-4-fast-reasoning",
+        "derive": "grok-4-fast-reasoning"
+      },
+      "depth": {
+        "record": "grok-4-fast-reasoning",
+        "practice": "grok-4",
+        "conduct": "grok-4",
+        "perform": "grok-4",
+        "derive": "grok-4"
+      },
+      "coding": {
+        "record": "grok-4-fast-non-reasoning",
+        "practice": "grok-code-fast-1",
+        "conduct": "grok-code-fast-1",
+        "perform": "grok-code-fast-1",
+        "derive": "grok-4-fast-reasoning"
+      },
+      "creativity": {
+        "record": "grok-4-fast-reasoning",
+        "practice": "grok-4",
+        "conduct": "grok-4",
+        "perform": "grok-4",
+        "derive": "grok-4-fast-reasoning"
+      }
+    },
     "openai-5.5": {
       "speed": {
         "record": "gpt-5.5",
@@ -725,5 +789,14 @@
         "derive": "gpt-5.5-pro"
       }
     }
+  },
+  "aliases": {
+    "x.ai": "xai",
+    "x-ai": "xai",
+    "open ai": "openai",
+    "open-ai": "openai",
+    "open si": "openai",
+    "open-si": "openai",
+    "oai": "openai"
   }
 }

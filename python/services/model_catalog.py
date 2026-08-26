@@ -1,4 +1,4 @@
-# 108:86 0:0 7:1
+# 113:86 0:0 7:1
 """model_catalog — single source of truth for "what models can this user use".
 
 Today three surfaces answer this question independently:
@@ -48,6 +48,7 @@ from typing import Any, Optional
 from .energy_registry import (
     BUILTIN_PROVIDERS,
     _PROVIDER_PRESETS,
+    resolve_provider_id,
 )
 
 # Tier ordering for min_tier comparisons. Lower index = lower tier.
@@ -68,6 +69,9 @@ def _resolve_static(model_id: str) -> Optional[tuple[str, dict]]:
     Synchronous, no DB. Used as the fast path; the async resolver falls
     back to persisted route_config when this misses.
     """
+    canonical = resolve_provider_id(model_id)
+    if canonical:
+        return canonical, BUILTIN_PROVIDERS[canonical]
     if model_id in BUILTIN_PROVIDERS:
         return model_id, BUILTIN_PROVIDERS[model_id]
     for pid, spec in BUILTIN_PROVIDERS.items():
@@ -226,4 +230,4 @@ async def list_models_for_user(user_id: Optional[str]) -> dict[str, Any]:
         })
 
     return {"user_tier": user_tier, "providers": out_providers}
-# 108:86 0:0 7:1
+# 113:86 0:0 7:1

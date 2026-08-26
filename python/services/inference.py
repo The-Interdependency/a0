@@ -1,4 +1,4 @@
-# 393:107 0:0 16:14
+# 406:107 0:0 16:14
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -38,7 +38,7 @@ from .prompt_assembly import _prepend_doctrine
 from .attachments import build_provider_messages as _build_provider_messages
 # Single source of truth for provider specs — loaded from python/config/providers.json.
 # Replaces the old hardcoded PROVIDER_ENDPOINTS dict per the no-string-literals doctrine.
-from .energy_registry import BUILTIN_PROVIDERS
+from .energy_registry import BUILTIN_PROVIDERS, resolve_provider_id
 
 _log = logging.getLogger("a0p.inference")
 
@@ -318,6 +318,7 @@ async def call_provider(
         system_prompt = (system_prompt or "") + "\n\n## Instance Memory\n" + _imem
     if _slot_provider:
         provider_id = _slot_provider
+    provider_id = resolve_provider_id(provider_id) or provider_id
     messages = _build_provider_messages(messages, provider_id)
 
     if provider_id == "openai":
@@ -574,4 +575,4 @@ async def _call_anthropic(
     )
 
 
-# 393:107 0:0 16:14
+# 406:107 0:0 16:14

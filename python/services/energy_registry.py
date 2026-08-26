@@ -1,4 +1,4 @@
-# 295:90 0:0 19:3
+# 307:94 0:0 19:3
 # === MODULE_BUILD ===
 # id: a0_service_energy_registry
 #   module_name: energy_registry
@@ -38,6 +38,11 @@ with open(_PROVIDERS_JSON_PATH, "r", encoding="utf-8") as _fh:
 
 BUILTIN_PROVIDERS: dict = _PROVIDERS_DOC["providers"]
 _PROVIDER_PRESETS: dict[str, dict] = _PROVIDERS_DOC["presets"]
+_PROVIDER_ALIASES: dict[str, str] = {
+    str(key).strip().lower(): str(value).strip()
+    for key, value in (_PROVIDERS_DOC.get("aliases") or {}).items()
+    if str(key).strip() and str(value).strip()
+}
 _PROVIDER_PRICING_URLS: dict[str, str] = {
     pid: spec.get("pricing_url", "")
     for pid, spec in BUILTIN_PROVIDERS.items()
@@ -93,6 +98,21 @@ _PROVIDER_ENABLED_TOOLS: dict[str, list] = {}
 # Preferred boot energy. Identity: a0(deepseek). Other keys may be set;
 # DeepSeek still wins when DEEPSEEK_API_KEY is present.
 _PREFERRED_DEFAULT_PROVIDER = "deepseek"
+
+
+def resolve_provider_id(name: str | None) -> str | None:
+    """Map a user/provider label to a catalog id.
+
+    Accepts catalog ids plus aliases from providers.json (x.ai → xai,
+    open si / open-ai → openai). Unknown names return None.
+    """
+    if not name:
+        return None
+    key = " ".join(str(name).strip().lower().split())
+    mapped = _PROVIDER_ALIASES.get(key, key)
+    if mapped in BUILTIN_PROVIDERS:
+        return mapped
+    return None
 
 
 def default_provider() -> str | None:
@@ -442,4 +462,4 @@ async def resolve_providers(providers: list[str] | None) -> list[str]:
         elif p in BUILTIN_PROVIDERS and p not in out:
             out.append(p)
     return out
-# 295:90 0:0 19:3
+# 307:94 0:0 19:3

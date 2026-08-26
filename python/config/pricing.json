@@ -151,6 +151,35 @@
         }
       ]
     },
+    "xai": {
+      "pricing_url": "https://docs.x.ai/docs/models",
+      "models": [
+        {
+          "id": "grok-4-fast-reasoning",
+          "context_window": 2000000,
+          "input_per_1m": 0.2,
+          "output_per_1m": 0.5,
+          "cached_input_per_1m": 0.05,
+          "supports_vision": true
+        },
+        {
+          "id": "grok-4-fast-non-reasoning",
+          "context_window": 2000000,
+          "input_per_1m": 0.2,
+          "output_per_1m": 0.5,
+          "cached_input_per_1m": 0.05,
+          "supports_vision": true
+        },
+        {
+          "id": "grok-4",
+          "context_window": 256000,
+          "input_per_1m": 3.0,
+          "output_per_1m": 15.0,
+          "cached_input_per_1m": 0.75,
+          "supports_vision": true
+        }
+      ]
+    },
     "grok": {
       "pricing_url": "https://docs.x.ai/docs/models",
       "models": [

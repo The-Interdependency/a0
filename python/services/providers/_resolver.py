@@ -1,4 +1,4 @@
-# 30:45 0:0 5:1
+# 31:45 0:0 5:1
 """resolve_model_for_role — env > spec primary.
 
 Purpose: every provider module asks one question on every call:
@@ -49,6 +49,7 @@ _PROVIDER_ENV_PREFIX: dict[str, str] = {
     "openai-5.5": "OPENAI_5_5_MODEL_",
     "openai-5.5-pro": "OPENAI_5_5_PRO_MODEL_",
     "grok": "GROK_MODEL_",
+    "xai": "XAI_MODEL_",
     "deepseek": "DEEPSEEK_MODEL_",
     "deepseek-pro": "DEEPSEEK_PRO_MODEL_",
     "gemini": "GEMINI_MODEL_",
@@ -85,4 +86,4 @@ async def resolve_model_for_role(provider_id: str, role: str) -> str:
         f"No model resolvable for provider={provider_id!r} role={role_norm!r} "
         f"(checked env {prefix or '?'}{role_norm.upper()} and providers.json primary)"
     )
-# 30:45 0:0 5:1
+# 31:45 0:0 5:1

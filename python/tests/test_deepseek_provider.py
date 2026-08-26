@@ -1,4 +1,4 @@
-# 35:1 0:0 0:0
+# 52:1 0:0 0:0
 """DeepSeek energy-option tests: catalog, default, and a0(deepseek) identity."""
 from __future__ import annotations
 
@@ -6,7 +6,11 @@ import os
 import unittest
 
 from python.agents.zfae import compose_name
-from python.services.energy_registry import BUILTIN_PROVIDERS, default_provider
+from python.services.energy_registry import (
+    BUILTIN_PROVIDERS,
+    default_provider,
+    resolve_provider_id,
+)
 
 
 class DeepSeekEnergyOptionTests(unittest.TestCase):
@@ -40,6 +44,20 @@ class DeepSeekEnergyOptionTests(unittest.TestCase):
         self.assertEqual(compose_name("deepseek"), "a0(deepseek)")
         self.assertEqual(compose_name("deepseek", model_id="deepseek-v4-flash"), "a0(deepseek)")
 
+    def test_xai_grok_openai_identities_and_aliases(self) -> None:
+        self.assertEqual(BUILTIN_PROVIDERS["xai"]["vendor"], "xai")
+        self.assertEqual(BUILTIN_PROVIDERS["xai"]["env_key"], "XAI_API_KEY")
+        self.assertEqual(BUILTIN_PROVIDERS["grok"]["env_key"], "XAI_API_KEY")
+        self.assertEqual(BUILTIN_PROVIDERS["openai"]["env_key"], "OPENAI_API_KEY")
+        self.assertEqual(resolve_provider_id("x.ai"), "xai")
+        self.assertEqual(resolve_provider_id("xai"), "xai")
+        self.assertEqual(resolve_provider_id("grok"), "grok")
+        self.assertEqual(resolve_provider_id("open si"), "openai")
+        self.assertEqual(resolve_provider_id("openai"), "openai")
+        self.assertEqual(compose_name("xai"), "a0(xai)")
+        self.assertEqual(compose_name("grok"), "a0(grok)")
+        self.assertEqual(compose_name("openai"), "a0(openai)")
+
 if __name__ == "__main__":
     unittest.main()
-# 35:1 0:0 0:0
+# 52:1 0:0 0:0
