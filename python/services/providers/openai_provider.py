@@ -38,12 +38,15 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 from typing import Optional
 
 from openai import AsyncOpenAI
 
 from ._resolver import resolve_model_for_role
+
+_log = logging.getLogger("a0p.providers.responses")
 
 
 async def call(
@@ -57,6 +60,9 @@ async def call(
     reasoning_effort: Optional[str] = "medium",
     temperature: float = 1.0,
     store: bool = False,
+    base_url: Optional[str] = None,
+    provider_name: str = "openai",
+    tools_override: Optional[list[dict]] = None,
 ) -> tuple[str, dict]:
     """Run a chat turn against OpenAI's Responses API."""
     key = api_key or os.environ.get("OPENAI_API_KEY", "").strip()
@@ -73,6 +79,9 @@ async def call(
         reasoning_effort=reasoning_effort or "medium",
         store=store,
         use_tools=use_tools,
+        base_url=base_url,
+        provider_name=provider_name,
+        tools_override=tools_override,
     )
 
 
@@ -85,6 +94,9 @@ async def _call_responses(
     reasoning_effort: str,
     store: bool,
     use_tools: bool,
+    base_url: Optional[str] = None,
+    provider_name: str = "openai",
+    tools_override: Optional[list[dict]] = None,
 ) -> tuple[str, dict]:
     """Tool loop over the OpenAI Responses API via the native SDK.
 
@@ -101,7 +113,7 @@ async def _call_responses(
         _sanitize_provider_error,
     )
 
-    set_caller_provider("openai")
+    set_caller_provider(provider_name)
 
     def _fmt_messages(msgs: list[dict]) -> list[dict]:
         out: list[dict] = []
@@ -120,7 +132,10 @@ async def _call_responses(
         return out
 
     openai_input = _fmt_messages(copy.deepcopy(input_messages))
-    oai_client = AsyncOpenAI(api_key=api_key)
+    client_kwargs: dict = {"api_key": api_key}
+    if base_url:
+        client_kwargs["base_url"] = base_url
+    oai_client = AsyncOpenAI(**client_kwargs)
     accumulated_usage: dict = {}
     prev_call_fingerprint: Optional[str] = None
 
@@ -136,21 +151,39 @@ async def _call_responses(
         if reasoning_effort and reasoning_effort != "none":
             kwargs["reasoning"] = {"effort": reasoning_effort}
         if use_tools:
-            kwargs["tools"] = get_active_responses_schemas()
+            kwargs["tools"] = (
+                tools_override
+                if tools_override is not None
+                else get_active_responses_schemas()
+            )
 
-        print(f"[oai-dbg] round={_round} input_len={len(openai_input)} roles={[m.get('role','?') for m in openai_input if isinstance(m, dict) and 'role' in m]}")
+        _log.debug(
+            "provider=%s round=%s input_len=%s roles=%s",
+            provider_name,
+            _round,
+            len(openai_input),
+            [
+                m.get("role", "?")
+                for m in openai_input
+                if isinstance(m, dict) and "role" in m
+            ],
+        )
         try:
             response = await oai_client.responses.create(**kwargs)
             data = response.model_dump()
         except Exception as exc:
-            return _sanitize_provider_error("openai", exc), accumulated_usage
+            return _sanitize_provider_error(provider_name, exc), accumulated_usage
 
         for k, v in (data.get("usage") or {}).items():
             if isinstance(v, (int, float)):
                 accumulated_usage[k] = accumulated_usage.get(k, 0) + v
 
         output_items = data.get("output") or []
-        print(f"[oai-dbg] output item types={[it.get('type') for it in output_items]}")
+        _log.debug(
+            "provider=%s output item types=%s",
+            provider_name,
+            [it.get("type") for it in output_items],
+        )
         tool_calls = [it for it in output_items if it.get("type") == "function_call"]
 
         if tool_calls:
@@ -204,7 +237,7 @@ async def _call_responses(
                         break
             except Exception:
                 pass
-            return content or "[openai: empty response]", accumulated_usage
+            return content or f"[{provider_name}: empty response]", accumulated_usage
 
         # Multi-turn rule: only function_call items in next round's input
         for item in output_items:
@@ -225,5 +258,5 @@ async def _call_responses(
                 "output": result,
             })
 
-    return "[openai: tool loop exhausted]", accumulated_usage
+    return f"[{provider_name}: tool loop exhausted]", accumulated_usage
 # 160:42 0:0 1:4

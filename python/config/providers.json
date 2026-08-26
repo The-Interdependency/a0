@@ -1,11 +1,52 @@
 {
-  "version": "2026-04-27.a0.providers.v1",
+  "version": "2026-08-26.a0.providers.v2",
   "attribution": "Externalized from energy_registry.py BUILTIN_PROVIDERS + _PROVIDER_PRESETS + _PROVIDER_PRICING_URLS so model slugs / provider IDs / capability flags live as data, not code literals (doctrine: no executable-data string literals).",
   "_doc": {
-    "providers[].* fields": "id label model vendor env_key cost_per_1k_input cost_per_1k_output cache_read_per_1k_input cache_write_per_1k_input max_tokens supports_streaming supports_prompt_caching supports_thinking supports_reasoning_effort api_family min_tier note pricing_url",
+    "providers[].* fields": "id label model vendor env_key cost_per_1k_input cost_per_1k_output cache_read_per_1k_input cache_write_per_1k_input max_tokens supports_streaming supports_prompt_caching supports_thinking supports_reasoning_effort api_family base_url min_tier note pricing_url",
     "presets": "Per-provider role-map keyed by preset name. Roles: record practice conduct perform derive (the renamed pipeline slots). Single-model providers pin every preset to their one model so the active_preset switch still has effect."
   },
   "providers": {
+    "deepseek": {
+      "id": "deepseek",
+      "label": "DeepSeek V4 Flash",
+      "model": "deepseek-v4-flash",
+      "vendor": "deepseek",
+      "env_key": "DEEPSEEK_API_KEY",
+      "cost_per_1k_input": 0.00044,
+      "cost_per_1k_output": 0.00132,
+      "cache_read_per_1k_input": 0.000014,
+      "max_tokens": 1000000,
+      "supports_streaming": false,
+      "supports_prompt_caching": true,
+      "supports_thinking": true,
+      "supports_reasoning_effort": true,
+      "supports_vision": false,
+      "api_family": "responses",
+      "base_url": "https://api.deepseek.com",
+      "pricing_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "note": "Default energy. Identity a0(deepseek). Cost fields use official peak rates; off-peak rates are lower."
+    },
+    "deepseek-pro": {
+      "id": "deepseek-pro",
+      "label": "DeepSeek V4 Pro",
+      "model": "deepseek-v4-pro",
+      "vendor": "deepseek",
+      "env_key": "DEEPSEEK_API_KEY",
+      "cost_per_1k_input": 0.00132,
+      "cost_per_1k_output": 0.00396,
+      "cache_read_per_1k_input": 0.000044,
+      "max_tokens": 1000000,
+      "supports_streaming": false,
+      "supports_prompt_caching": true,
+      "supports_thinking": true,
+      "supports_reasoning_effort": true,
+      "supports_vision": false,
+      "api_family": "responses",
+      "base_url": "https://api.deepseek.com",
+      "min_tier": "ws",
+      "pricing_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "note": "Higher-capability DeepSeek V4 option. Cost fields use official peak rates; off-peak rates are lower."
+    },
     "openai": {
       "id": "openai",
       "label": "GPT-5 mini (Responses API)",
@@ -288,6 +329,94 @@
     }
   },
   "presets": {
+    "deepseek": {
+      "speed": {
+        "record": "deepseek-v4-flash",
+        "practice": "deepseek-v4-flash",
+        "conduct": "deepseek-v4-flash",
+        "perform": "deepseek-v4-flash",
+        "derive": "deepseek-v4-flash"
+      },
+      "price": {
+        "record": "deepseek-v4-flash",
+        "practice": "deepseek-v4-flash",
+        "conduct": "deepseek-v4-flash",
+        "perform": "deepseek-v4-flash",
+        "derive": "deepseek-v4-flash"
+      },
+      "balance": {
+        "record": "deepseek-v4-flash",
+        "practice": "deepseek-v4-flash",
+        "conduct": "deepseek-v4-flash",
+        "perform": "deepseek-v4-pro",
+        "derive": "deepseek-v4-flash"
+      },
+      "depth": {
+        "record": "deepseek-v4-flash",
+        "practice": "deepseek-v4-pro",
+        "conduct": "deepseek-v4-pro",
+        "perform": "deepseek-v4-pro",
+        "derive": "deepseek-v4-pro"
+      },
+      "coding": {
+        "record": "deepseek-v4-flash",
+        "practice": "deepseek-v4-flash",
+        "conduct": "deepseek-v4-pro",
+        "perform": "deepseek-v4-pro",
+        "derive": "deepseek-v4-flash"
+      },
+      "creativity": {
+        "record": "deepseek-v4-flash",
+        "practice": "deepseek-v4-pro",
+        "conduct": "deepseek-v4-pro",
+        "perform": "deepseek-v4-pro",
+        "derive": "deepseek-v4-flash"
+      }
+    },
+    "deepseek-pro": {
+      "speed": {
+        "record": "deepseek-v4-pro",
+        "practice": "deepseek-v4-pro",
+        "conduct": "deepseek-v4-pro",
+        "perform": "deepseek-v4-pro",
+        "derive": "deepseek-v4-pro"
+      },
+      "price": {
+        "record": "deepseek-v4-pro",
+        "practice": "deepseek-v4-pro",
+        "conduct": "deepseek-v4-pro",
+        "perform": "deepseek-v4-pro",
+        "derive": "deepseek-v4-pro"
+      },
+      "balance": {
+        "record": "deepseek-v4-pro",
+        "practice": "deepseek-v4-pro",
+        "conduct": "deepseek-v4-pro",
+        "perform": "deepseek-v4-pro",
+        "derive": "deepseek-v4-pro"
+      },
+      "depth": {
+        "record": "deepseek-v4-pro",
+        "practice": "deepseek-v4-pro",
+        "conduct": "deepseek-v4-pro",
+        "perform": "deepseek-v4-pro",
+        "derive": "deepseek-v4-pro"
+      },
+      "coding": {
+        "record": "deepseek-v4-pro",
+        "practice": "deepseek-v4-pro",
+        "conduct": "deepseek-v4-pro",
+        "perform": "deepseek-v4-pro",
+        "derive": "deepseek-v4-pro"
+      },
+      "creativity": {
+        "record": "deepseek-v4-pro",
+        "practice": "deepseek-v4-pro",
+        "conduct": "deepseek-v4-pro",
+        "perform": "deepseek-v4-pro",
+        "derive": "deepseek-v4-pro"
+      }
+    },
     "openai": {
       "speed": {
         "record": "gpt-5-nano",

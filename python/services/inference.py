@@ -55,9 +55,9 @@ async def _instance_memory_block(provider_id: str) -> str:
     /api/v1/agents/instances/{id}/memory (admin). Deleting all entries and
     clearing swarm_context on the instance stops injection entirely.
     """
-    from ..database import get_session
-    from sqlalchemy import text as _sa_text
     try:
+        from ..database import get_session
+        from sqlalchemy import text as _sa_text
         spec = BUILTIN_PROVIDERS.get(provider_id, {})
         model_id = (spec.get("model") or "").strip()
         if not model_id:
@@ -107,9 +107,9 @@ async def _slot_routing_info(slot: str) -> tuple[str, "str | None"]:
     Returns ("", None) when no instance is assigned, on any error, or when
     the model_id does not match any known provider — inference is never blocked.
     """
-    from ..database import get_session
-    from sqlalchemy import text as _sa_text
     try:
+        from ..database import get_session
+        from sqlalchemy import text as _sa_text
         async with get_session() as session:
             inst = (await session.execute(_sa_text(
                 "SELECT id, model_id, swarm_context FROM model_instances "
@@ -407,6 +407,19 @@ async def call_provider(
             max_tokens=max_tokens,
             use_tools=use_tools,
             reasoning_effort=reasoning_effort,
+            progress_callback=progress_callback,
+        )
+
+    if vendor == "deepseek":
+        from .providers.deepseek_provider import call as deepseek_call
+        return await deepseek_call(
+            payload_messages,
+            api_key=api_key,
+            model_override=spec["model"],
+            max_tokens=max_tokens,
+            use_tools=use_tools,
+            reasoning_effort=reasoning_effort,
+            provider_id=provider_id,
             progress_callback=progress_callback,
         )
 

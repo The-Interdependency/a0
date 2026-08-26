@@ -73,6 +73,7 @@ def _resolve_static(model_id: str) -> Optional[tuple[str, dict]]:
     for pid, spec in BUILTIN_PROVIDERS.items():
         if spec.get("model") == model_id:
             return pid, spec
+    for pid, spec in BUILTIN_PROVIDERS.items():
         presets = _PROVIDER_PRESETS.get(pid, {})
         for role_map in presets.values():
             if isinstance(role_map, dict) and model_id in role_map.values():

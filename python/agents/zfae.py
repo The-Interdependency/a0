@@ -1,4 +1,4 @@
-# 47:14 0:0 4:0
+# 49:16 0:0 4:0
 ZFAE_AGENT_DEF = {
     "name": "a0(zeta fun alpha echo)",
     "symbol": "ZFAE",
@@ -37,12 +37,16 @@ def compose_name(
     provider: str | None = None,
     model_id: str | None = None,
 ) -> str:
-    """Return the primary agent label in a0(model)zfae format.
+    """Return the primary agent label.
 
-    Priority: model_id > provider > '?'.
+    Canonical energy form is ``a0({provider})`` — the LLM is energy, not
+    identity. Default energy is DeepSeek: ``a0(deepseek)``.
+    If only a model slug is known, keep the older ``a0({model})zfae`` form.
     """
+    if provider:
+        return f"a0({provider})"
     slot = ZFAE_AGENT_DEF["slot"]
-    tag = model_id or provider or "?"
+    tag = model_id or "?"
     return f"a0({tag}){slot}"
 
 
@@ -70,4 +74,4 @@ def is_deprecated(name: str) -> bool:
     if lower.startswith("a0(zeta fun alpha echo)"):
         return True
     return False
-# 47:14 0:0 4:0
+# 49:16 0:0 4:0

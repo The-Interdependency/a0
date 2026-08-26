@@ -1,4 +1,4 @@
-# 289:88 0:0 19:3
+# 295:90 0:0 19:3
 # === MODULE_BUILD ===
 # id: a0_service_energy_registry
 #   module_name: energy_registry
@@ -90,13 +90,22 @@ _PROVIDER_CAPABILITIES: dict[str, dict] = {}
 _PROVIDER_ENABLED_TOOLS: dict[str, list] = {}
 
 
-def default_provider() -> str | None:
-    """Return the first provider in BUILTIN_PROVIDERS whose API key env var is set.
+# Preferred boot energy. Identity: a0(deepseek). Other keys may be set;
+# DeepSeek still wins when DEEPSEEK_API_KEY is present.
+_PREFERRED_DEFAULT_PROVIDER = "deepseek"
 
-    Environment-driven only — no DB, no admin setting. Sync-safe; use only
-    for boot-time display and internal ordering. For routing decisions use
-    the async active_provider() which reads the conduct slot from the DB.
+
+def default_provider() -> str | None:
+    """Return the default energy provider whose API key env var is set.
+
+    Prefers DeepSeek (`a0(deepseek)`) when `DEEPSEEK_API_KEY` is set.
+    Otherwise the first remaining catalog entry with a live key.
+    Environment-driven only — no DB. For routing use active_provider().
     """
+    preferred = BUILTIN_PROVIDERS.get(_PREFERRED_DEFAULT_PROVIDER, {})
+    preferred_key = preferred.get("env_key", "")
+    if preferred_key and os.environ.get(preferred_key):
+        return _PREFERRED_DEFAULT_PROVIDER
     for pid, info in BUILTIN_PROVIDERS.items():
         env_key = info.get("env_key", "")
         if env_key and os.environ.get(env_key):
@@ -112,10 +121,11 @@ async def active_provider() -> str:
     Raises RuntimeError("No instantiation selected") if no conduct slot
     is assigned or the model_id cannot be resolved to a known provider.
     """
+    from sqlalchemy.exc import SQLAlchemyError
+
     try:
         from ..database import get_session
         from sqlalchemy import text as _sa_text
-        from sqlalchemy.exc import SQLAlchemyError
         async with get_session() as _sess:
             _row = (await _sess.execute(_sa_text(
                 "SELECT model_id FROM model_instances"
@@ -432,4 +442,4 @@ async def resolve_providers(providers: list[str] | None) -> list[str]:
         elif p in BUILTIN_PROVIDERS and p not in out:
             out.append(p)
     return out
-# 289:88 0:0 19:3
+# 295:90 0:0 19:3
