@@ -1,4 +1,4 @@
-// ratios: loc_comments=176:0 imports_exports=2:0 calls_definitions=53:0
+// ratios: loc_comments=hmmm imports_exports=hmmm calls_definitions=hmmm
 /**
  * Universal msdmd parser — pure Node stdlib (fs, path).
  *
@@ -9,12 +9,13 @@
  *
  * Comment marker auto-detected by file extension. The block syntax
  * itself is identical across languages; only the per-line marker
- * changes.
+ * changes. COMMENT_MARKERS is public so runners can keep their narrower
+ * language-specific execution or metric coverage separate.
  *
  * RATIOS is the one msdmd declaration that is not a fenced block — it is a
- * single comment line on a file's first and last non-blank lines. Its reader
- * (parseRatios / parseRatiosFile / ratiosPlacement) lives here too, as a
- * sanctioned extension rather than a fork.
+ * single comment line on a file's opening and closing source boundaries. A
+ * valid interpreter shebang owns literal line 1, moving opening RATIOS to
+ * literal line 2. Its reader lives here as a sanctioned extension.
  *
  * Zero non-stdlib dependencies. Safe to copy verbatim into any
  * Node/Deno/Bun project that wants msdmd support.
@@ -24,12 +25,39 @@ import { join, extname } from "node:path";
 
 export type Entry = Record<string, string>;
 
-const MARKERS: Record<string, string> = {
-  ".py": "#", ".rb": "#", ".ex": "#", ".exs": "#", ".sh": "#",
-  ".ts": "//", ".tsx": "//", ".js": "//", ".jsx": "//", ".mjs": "//",
-  ".rs": "//", ".go": "//", ".java": "//", ".c": "//", ".cpp": "//",
-  ".cc": "//", ".h": "//", ".hpp": "//", ".swift": "//", ".kt": "//",
+// Keep this registry entry-for-entry equivalent to universal.py; tests fail if
+// either parser gains or loses an extension alone.
+export const COMMENT_MARKERS: Record<string, string> = {
+  ".py": "#", ".pyw": "#", ".pyi": "#",
+  ".rb": "#", ".rake": "#", ".gemspec": "#",
+  ".ex": "#", ".exs": "#",
+  ".sh": "#", ".bash": "#", ".zsh": "#", ".fish": "#",
+  ".pl": "#", ".pm": "#", ".t": "#",
+  ".r": "#", ".jl": "#",
+  ".ps1": "#", ".psm1": "#", ".tcl": "#",
+  ".raku": "#", ".rakumod": "#",
+  ".ts": "//", ".tsx": "//", ".mts": "//", ".cts": "//",
+  ".js": "//", ".jsx": "//", ".mjs": "//", ".cjs": "//",
+  ".rs": "//", ".go": "//", ".java": "//",
+  ".c": "//", ".cc": "//", ".cp": "//", ".cpp": "//",
+  ".cxx": "//", ".c+": "//", ".c++": "//",
+  ".h": "//", ".hh": "//", ".hp": "//", ".hpp": "//",
+  ".hxx": "//", ".h+": "//", ".h++": "//",
+  ".tcc": "//", ".ipp": "//", ".inl": "//",
+  ".swift": "//", ".kt": "//", ".kts": "//", ".cs": "//",
+  ".mm": "//", ".scala": "//", ".dart": "//", ".zig": "//",
+  ".groovy": "//", ".gradle": "//", ".php": "//",
   ".sql": "--", ".lua": "--", ".hs": "--",
+  ".adb": "--", ".ads": "--", ".vhd": "--", ".vhdl": "--",
+  ".lean": "--",
+  ".erl": "%", ".hrl": "%", ".prolog": "%",
+  ".clj": ";", ".cljs": ";", ".cljc": ";", ".bb": ";",
+  ".lisp": ";", ".lsp": ";", ".cl": ";",
+  ".scm": ";", ".ss": ";", ".rkt": ";",
+  ".f": "!", ".for": "!", ".f90": "!", ".f95": "!",
+  ".f03": "!", ".f08": "!",
+  ".vb": "'", ".vbs": "'",
+  ".cob": "*>", ".cbl": "*>",
 };
 
 const DEFAULT_SKIP = new Set([
@@ -43,7 +71,7 @@ function escapeRegex(s: string): string {
 }
 
 export function markerFor(path: string): string | null {
-  return MARKERS[extname(path).toLowerCase()] ?? null;
+  return COMMENT_MARKERS[extname(path).toLowerCase()] ?? null;
 }
 
 export function parseText(
@@ -104,7 +132,7 @@ export function walkTree(
 ): { annotated: Array<[string, Entry[]]>; untested: string[] } {
   const skip = opts.skip ?? DEFAULT_SKIP;
   const extensions =
-    opts.extensions ?? new Set(Object.keys(MARKERS));
+    opts.extensions ?? new Set(Object.keys(COMMENT_MARKERS));
 
   const annotated: Array<[string, Entry[]]> = [];
   const untested: string[] = [];
@@ -145,8 +173,9 @@ export function walkTree(
 
 // --- RATIOS single-line declaration (msdmd extension) --------------------
 // Unlike every other declaration, RATIOS is not fenced. It is a single
-// comment line carrying the three canonical ratios, placed on the file's
-// first and last non-blank lines:
+// comment line carrying the three canonical ratios at the opening source
+// boundary and last non-blank line. A valid line-1 shebang moves the opening
+// boundary to literal line 2:
 //   <marker> ratios: loc_comments=N:M imports_exports=N:M calls_definitions=N:M
 export const RATIO_IDS = ["loc_comments", "imports_exports", "calls_definitions"] as const;
 
@@ -184,13 +213,22 @@ export function ratiosPlacement(text: string, marker: string = "#"): [boolean, b
   const lineRe = ratiosLineRe(marker);
   const lines = text.split("\n");
   if (lines.length === 0) return [false, false];
-  const firstOk = lineRe.test(lines[0].replace(/\s+$/, ""));
+  const hasShebang = lines[0].startsWith("#!") && lines[0].slice(2).trim().length > 0;
+  const openingIndex = hasShebang ? 1 : 0;
+  const openingOk =
+    lines.length > openingIndex &&
+    lineRe.test(lines[openingIndex].replace(/\s+$/, ""));
+  const displacedShebang =
+    openingIndex === 0 &&
+    lines.length > 1 &&
+    lines[1].startsWith("#!") &&
+    lines[1].slice(2).trim().length > 0;
   let lastOk = false;
   for (let i = lines.length - 1; i >= 0; i--) {
     if (lines[i].trim() === "") continue;
     lastOk = lineRe.test(lines[i].replace(/\s+$/, ""));
     break;
   }
-  return [firstOk, lastOk];
+  return [openingOk && !displacedShebang, lastOk];
 }
-// ratios: loc_comments=176:0 imports_exports=2:0 calls_definitions=53:0
+// ratios: loc_comments=hmmm imports_exports=hmmm calls_definitions=hmmm

@@ -1,18 +1,15 @@
-# Repo-local agent skills
+# Local agent skills
 
-This repo consumes The Interdependency organization skill library.
+This directory contains repo-local copies of canonical skills from
+`The-Interdependency/skill-lib`.
 
-Canonical source:
-- Preferred: `The-Interdependency/skill-lib`
-- Temporary source: `The-Interdependency/a0/skill-lib`
+Source commit: `c14ee9d500579a4b5d6821f62c9d82ca96e73608`
 
-Source commit: `The-Interdependency/skill-lib` @ `a0cb6285e37734609b4b487ae4a2e44c6108d2b8` (verbatim sync).
+Repo-local copies are not the source of truth. Edit `skill-lib` first,
+then propagate from the canonical source.
 
 Installed skills:
-- `msdmd/` — Module Self-Declared Metadata Markdown
-- `test-build/` — test contract metadata blocks
-- `meta-module-build/` — metadata-first module scaffolding
 
-Agents working in this repo should read `meta-module-build/SKILL.md` before
-creating new modules, routes, services, schemas, adapters, workers, engines,
-UI panels, migrations, or experiments.
+- `meta-module-build/`
+- `msdmd/`
+- `test-build/`
