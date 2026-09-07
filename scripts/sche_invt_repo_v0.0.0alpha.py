@@ -1,4 +1,4 @@
-# 180:96 0:0 0:0
+# 154:70 0:0 0:0
 """Inventory a0 schema declarations and schema-mutating runtime paths.
 
 Usage:
@@ -256,4 +256,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# 180:96 0:0 0:0
+# 154:70 0:0 0:0

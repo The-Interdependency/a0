@@ -21,3 +21,5 @@ playwright-report/
 
 # Local secrets
 .env
+.venv/
+.state/

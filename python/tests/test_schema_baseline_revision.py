@@ -1,4 +1,4 @@
-# 116:80 0:0 0:0
+# 87:80 0:0 0:0
 """Contract checks for the legacy schema baseline revision.
 
 Unit tests never touch a database. Integration gates (Gate A / Gate B)
@@ -200,4 +200,4 @@ def test_gate_b_evidence_confirms_pass() -> None:
 def test_evidence_cleanup_confirmed() -> None:
     data = _evidence()
     assert data["cleanup"] is True
-# 116:80 0:0 0:0
+# 87:80 0:0 0:0

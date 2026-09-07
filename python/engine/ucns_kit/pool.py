@@ -1,4 +1,4 @@
-# 20:30
+# 20:30 0:0 3:1
 """UCNSPool — intern table for UCNSObject. Encode-once-refer-many."""
 from __future__ import annotations
 
@@ -57,4 +57,4 @@ class UCNSPool:
         # Using (n_dec, n_min, anchors_pos, faces_pos) pending review;
         # breaks when anchor payloads are recursive UCNSObjects (depth > 0).
         return (obj.n_dec, obj.n_min, obj.anchors_pos, obj.faces_pos)
-# 20:30
+# 20:30 0:0 3:1

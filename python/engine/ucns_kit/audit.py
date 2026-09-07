@@ -1,4 +1,4 @@
-# 32:28
+# 32:28 0:0 3:1
 """
 UCNSAuditLog — append-only audit log keyed by UCNSObject identity.
 S9-sentinel-compatible record format. In-memory only in v0.
@@ -72,4 +72,4 @@ class UCNSAuditLog:
 
     def __len__(self) -> int:
         return len(self._records)
-# 32:28
+# 32:28 0:0 3:1

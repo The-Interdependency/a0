@@ -32,7 +32,9 @@ def get_pcna() -> PTCNAState:
 def get_pcna_8() -> PTCNAState:
     global _pcna_8
     if _pcna_8 is None:
-        _pcna_8 = PTCNAState(phases=8)
+        # Distinct checkpoint pair: p7 and p8 must never share one file, or
+        # the next boot sees a phase-count mismatch and refuses to start.
+        _pcna_8 = PTCNAState(phases=8, state_path=".state/platonic-ptcna-8.json")
     return _pcna_8
 
 

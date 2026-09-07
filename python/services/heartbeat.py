@@ -1,4 +1,4 @@
-# 67:247 0:0 1:5
+# 67:247 0:0 2:5
 # === MODULE_BUILD ===
 # id: a0_service_heartbeat
 #   module_name: heartbeat
@@ -357,4 +357,4 @@ class HeartbeatService:
 
 
 heartbeat_service = HeartbeatService()
-# 67:247 0:0 1:5
+# 67:247 0:0 2:5

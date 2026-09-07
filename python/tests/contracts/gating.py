@@ -1,4 +1,4 @@
-# 129:80 0:0 0:0
+# 129:82 0:0 0:0
 """Gating contract — enforces the two-tier write-access model.
 
 Doctrine: every write route (POST/PATCH/PUT/DELETE) under python/routes/
@@ -243,4 +243,4 @@ def test_instrument_mutation_files_have_all_writes_gated() -> None:
             f"\n{len(failures)} ungated write route(s) inside "
             f"instrument-mutation file(s):\n" + "\n".join(failures)
         )
-# 129:80 0:0 0:0
+# 129:82 0:0 0:0

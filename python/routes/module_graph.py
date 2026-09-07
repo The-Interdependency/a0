@@ -1,4 +1,4 @@
-# 76:7 0:0 0:0
+# 76:7 0:2 1:1
 # DOC module: module_graph
 # DOC label: ⬡ Module Graph
 # DOC description: Live MODULE_BUILD coverage of the workspace. Walks the source tree, parses MODULE_BUILD manifests, and surfaces typed modules plus unstamped files as visible coverage gaps. Read-only; the data layer for the filesystem module visualizer.
@@ -91,4 +91,4 @@ async def module_graph_state():
 async def module_graph_nodes():
     from ..engine.module_graph import scan
     return {"nodes": scan()["nodes"]}
-# 76:7 0:0 0:0
+# 76:7 0:2 1:1

@@ -1,4 +1,4 @@
-# 69:42
+# 69:42 0:0 0:0
 """Evidence for the Platonic Agent's exact PTCNA runtime-state binding."""
 from __future__ import annotations
 
@@ -127,4 +127,4 @@ def test_state_binds_only_declared_platonic_region() -> None:
     assert "memory" not in projection.selected
     assert "inference" not in projection.selected
     directory.cleanup()
-# 69:42
+# 69:42 0:0 0:0

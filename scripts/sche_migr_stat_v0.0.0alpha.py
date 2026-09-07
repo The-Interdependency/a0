@@ -1,4 +1,4 @@
-# 98:67 0:0 0:0
+# 65:57 0:0 0:0
 """Report whether the configured PostgreSQL database is at Alembic head.
 
 Usage:
@@ -142,4 +142,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# 98:67 0:0 0:0
+# 65:57 0:0 0:0

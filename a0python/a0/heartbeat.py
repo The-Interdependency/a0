@@ -1,4 +1,4 @@
-# 49:9 0:0 1:2
+# 49:9 0:0 2:2
 """Heartbeat — maintenance-only cycle.
 
 Heartbeat may NOT:
@@ -76,4 +76,4 @@ class Heartbeat:
 
     def modify_safety_policy(self, *args, **kwargs) -> None:
         raise HeartbeatViolationError("Heartbeat may not modify safety policy.")
-# 49:9 0:0 1:2
+# 49:9 0:0 2:2

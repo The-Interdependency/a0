@@ -1,4 +1,4 @@
-# 71:29 0:0 2:0
+# 71:29 0:0 1:0
 """
 MemoryCore — parameterized memory ring.
 Each instance self-declares: n, seed, role.
@@ -115,4 +115,4 @@ class MemoryCore:
             "write_count": self.write_count,
             "flush_count": self.flush_count,
         }
-# 71:29 0:0 2:0
+# 71:29 0:0 1:0

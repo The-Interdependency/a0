@@ -1,4 +1,4 @@
-# 1:75 0:0 0:0
+# 0:54 0:0 0:0
 """Test-owned evidence graph for the EDCMbone transcript explainer.
 
 The executable functions remain in `transcripts_explainer.py`, where every
@@ -54,4 +54,4 @@ only CHECKS topology.
 #   mutates: db, process_log_buffer
 #   cleanup: explicit_provider_scoped_delete
 # === END CHECKS ===
-# 1:75 0:0 0:0
+# 0:54 0:0 0:0

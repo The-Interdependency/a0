@@ -1,4 +1,4 @@
-# 79:50 0:0 0:0
+# 68:22 0:0 0:0
 """Negative and timeout evidence for the CONTRACTS/CHECKS graph runner.
 
 This conventional pytest filename is also the executable target imported by
@@ -104,4 +104,4 @@ async def test_execute_check_enforces_timeout() -> None:
     result = await runner._execute_check(check)
     assert result["status"] == "ERROR"
     assert "TimeoutError" in str(result["error"])
-# 79:50 0:0 0:0
+# 68:22 0:0 0:0

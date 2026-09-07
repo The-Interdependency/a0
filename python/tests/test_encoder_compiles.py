@@ -1,4 +1,4 @@
-# 16:3
+# 16:3 0:0 0:0
 """Regression tests for python/engine/ucns_kit/encoder.py compilation."""
 from __future__ import annotations
 
@@ -26,4 +26,4 @@ def test_entry_to_ucns_has_single_return_call() -> None:
     entry_to_ucns = text[text.index("def _entry_to_ucns") :]
 
     assert entry_to_ucns.count("return UCNSObject(") == 1
-# 16:3
+# 16:3 0:0 0:0

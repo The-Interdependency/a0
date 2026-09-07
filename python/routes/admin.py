@@ -1,4 +1,4 @@
-# 77:8 0:0 1:1
+# 77:8 2:3 1:1
 # DOC module: admin
 # DOC label: Admin Email Allowlist
 # DOC description: Admin-only endpoints for listing, adding, and removing admin email allowlist entries.
@@ -101,4 +101,4 @@ async def remove_admin_email(request: Request, email: str):
         if result.rowcount == 0:
             return JSONResponse(status_code=404, content={"error": "Not found"})
     return {"ok": True, "email": target}
-# 77:8 0:0 1:1
+# 77:8 2:3 1:1

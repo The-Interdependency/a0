@@ -1,4 +1,4 @@
-# 1:165 0:0 0:0
+# 0:118 0:0 0:0
 """Test-owned evidence graph for agent lifecycle and spawn execution.
 
 The executable functions remain in `spawn_executor.py`, where their UUID-scoped
@@ -118,4 +118,4 @@ the CHECKS topology required by skill-lib test-build doctrine.
 #   mutates: process_registry, db
 #   cleanup: explicit_registry_pop, explicit_run_delete
 # === END CHECKS ===
-# 1:165 0:0 0:0
+# 0:118 0:0 0:0

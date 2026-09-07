@@ -1,4 +1,4 @@
-# 7:1
+# 7:1 0:0 0:3
 """a0 engine integrations; PTCNA algebra remains producer-owned."""
 
 from .memory_core import MemoryCore
@@ -9,4 +9,4 @@ __all__ = [
     "MemoryCore", "ThetaTensor", "PTCNAState", "PTCNAStateMerge",
     "PTCNAStateTamperError",
 ]
-# 7:1
+# 7:1 0:0 0:3

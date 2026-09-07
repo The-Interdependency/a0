@@ -1,4 +1,4 @@
-# 158:61 0:0 0:0
+# 158:60 0:0 0:0
 """Strict static gating audit — every write endpoint in python/routes/
 must call a recognised auth helper (admin / ownership / per-user / API
 key resolution / HMAC verification) inside the handler body or signature,
@@ -242,4 +242,4 @@ def test_every_write_route_is_gated() -> None:
     assert not stale, (
         f"stale ALLOWLIST entries (route no longer exists): {stale}"
     )
-# 158:61 0:0 0:0
+# 158:60 0:0 0:0

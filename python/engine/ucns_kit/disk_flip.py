@@ -1,4 +1,4 @@
-# 17:30
+# 17:30 0:0 1:0
 """
 disk_flip — provisional dual operation on UCNSObject.
 
@@ -52,4 +52,4 @@ def disk_flip(obj) -> object:
         anchors_pos=obj.anchors_pos,
         faces_pos=obj.faces_pos,
     )
-# 17:30
+# 17:30 0:0 1:0

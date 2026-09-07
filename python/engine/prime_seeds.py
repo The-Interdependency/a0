@@ -1,4 +1,4 @@
-# 141:62 0:0 4:4
+# 141:62 0:0 4:3
 """
 PrimeSeedLayer — 7 producer RingCore instances seeded from sigma tensor slices.
 
@@ -240,4 +240,4 @@ _prime_seeds = PrimeSeedLayer()
 
 def get_prime_seeds() -> PrimeSeedLayer:
     return _prime_seeds
-# 141:62 0:0 4:4
+# 141:62 0:0 4:3

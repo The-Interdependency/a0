@@ -1,4 +1,4 @@
-# 180:42 0:0 0:32
+# 180:39 0:0 0:33
 from .chat import router as chat_router
 from .agents import router as agents_router
 from .memory import router as memory_router
@@ -183,6 +183,8 @@ def collect_doc_meta() -> list[dict]:
         "artifacts.py", "instances_api.py", "guest.py", "admin.py",
         "_admin_gate.py", "forge_archetypes.py", "billing_helpers.py",
         "transcripts.py", "module_graph.py", "runtime_readiness.py",
+        "fleet.py", "focus.py", "founders.py", "liminals.py",
+        "models.py", "orch_progress.py", "preferences.py", "runs.py",
     ]
     results: list[dict] = []
     for fname in route_files:
@@ -230,4 +232,4 @@ def collect_doc_meta() -> list[dict]:
 #   then:  it is imported and added to ALL_ROUTERS in __init__.py
 #   class: correctness
 # === END CONTRACTS ===
-# 180:42 0:0 0:32
+# 180:39 0:0 0:33

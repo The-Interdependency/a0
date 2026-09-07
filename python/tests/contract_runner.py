@@ -1,4 +1,4 @@
-# 222:107 0:0 0:0
+# 227:44 0:0 0:0
 """Contract/check graph auditor and executor — see test-build/SKILL.md.
 
 Source modules own behavioral `CONTRACTS`; test modules own executable
@@ -317,4 +317,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
-# 222:107 0:0 0:0
+# 227:44 0:0 0:0

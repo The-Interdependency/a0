@@ -1,4 +1,4 @@
-# 100:52 0:0 0:0
+# 100:48 0:0 0:0
 # DOC module: tests.contracts.module_doctrine
 # DOC label: Module doctrine adherence
 # DOC description: Enforces the a0p module doctrine for python/routes/*.py:
@@ -165,4 +165,4 @@ def test_router_defining_files_are_registered() -> None:
             if p.stem not in imported:
                 problems.append(f"{p.name}: defines a router but is not imported in __init__.py")
     assert not problems, "\n  " + "\n  ".join(problems)
-# 100:52 0:0 0:0
+# 100:48 0:0 0:0

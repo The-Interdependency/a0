@@ -1,4 +1,4 @@
-# 174:35 0:0 0:0
+# 174:35 0:0 2:0
 """
 module_graph — live MODULE_BUILD coverage scanner for the a0p workspace.
 
@@ -234,4 +234,4 @@ def scan(force: bool = False) -> dict:
         _CACHE = _compute()
         _CACHE_AT = now
     return _CACHE
-# 174:35 0:0 0:0
+# 174:35 0:0 2:0

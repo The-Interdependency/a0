@@ -1,4 +1,4 @@
-# 20:34
+# 20:34 0:0 1:0
 """
 theta_gate — capability-gated view of a UCNSObject.
 
@@ -61,4 +61,4 @@ def gate(obj, capability: str) -> object:
         anchors_pos=(),
         faces_pos=(),
     )
-# 20:34
+# 20:34 0:0 1:0

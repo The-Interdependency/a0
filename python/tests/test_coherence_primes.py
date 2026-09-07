@@ -1,4 +1,4 @@
-# 31:7
+# 31:7 0:0 0:0
 """Unit tests for python/engine/ucns_kit/coherence_primes.py."""
 from __future__ import annotations
 
@@ -55,4 +55,4 @@ def test_nth_invalid_k_raises(cp) -> None:
     """nth(k) raises ValueError for k < 1."""
     with pytest.raises(ValueError):
         cp.nth(0)
-# 31:7
+# 31:7 0:0 0:0

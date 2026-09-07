@@ -1,4 +1,4 @@
-// 198:20 31:2 31:3
+// 198:20 30:2 30:3
 import { db, pool } from "../db";
 import { users, challengeResponses, guestTokenUsage } from "@shared/models/auth";
 import { eq, and, gte } from "drizzle-orm";
@@ -234,4 +234,4 @@ export async function incrementGuestTokensAtomic(
   }
   return { accepted: true, tokensUsed: updated.tokensUsed };
 }
-// 198:20 31:2 31:3
+// 198:20 30:2 30:3

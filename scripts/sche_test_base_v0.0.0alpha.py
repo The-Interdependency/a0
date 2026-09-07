@@ -1,4 +1,4 @@
-# 207:127 0:0 0:0
+# 235:85 0:0 0:0
 """Disposable-only harness for the legacy schema baseline migration.
 
 Usage (requires a running local PostgreSQL 16 cluster):
@@ -370,4 +370,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# 207:127 0:0 0:0
+# 235:85 0:0 0:0

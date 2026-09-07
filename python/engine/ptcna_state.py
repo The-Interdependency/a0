@@ -1,3 +1,4 @@
+# 221:76 0:0 1:1
 """a0-owned durable adapter over the exact producer-owned PTCNA runtime.
 
 Usage::
@@ -332,3 +333,4 @@ class PTCNAStateMerge:
 
 
 __all__ = ["PTCNAState", "PTCNAStateMerge", "PTCNAStateTamperError"]
+# 221:76 0:0 1:1

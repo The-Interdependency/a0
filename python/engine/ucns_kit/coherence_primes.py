@@ -1,4 +1,4 @@
-# 68:35
+# 68:35 0:0 1:0
 """
 Coherence-prime sequence. Definition fully pinned.
 
@@ -121,4 +121,4 @@ def nth(k: int) -> int:
         _build_up_to(target)
         target *= 4
     return _CACHE[k - 1]
-# 68:35
+# 68:35 0:0 1:0

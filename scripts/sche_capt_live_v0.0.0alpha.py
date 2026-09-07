@@ -1,4 +1,4 @@
-# 108:130 0:0 0:0
+# 118:70 0:0 0:0
 """Capture the live PostgreSQL schema without reading table data.
 
 Usage:
@@ -209,4 +209,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# 108:130 0:0 0:0
+# 118:70 0:0 0:0

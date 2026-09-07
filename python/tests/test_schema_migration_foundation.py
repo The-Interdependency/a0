@@ -1,4 +1,4 @@
-# 148:78 0:0 0:0
+# 75:151 0:0 0:0
 """Migration-foundation contract checks.
 
 Filename exception: pytest imports test modules by Python module name, so the
@@ -254,4 +254,4 @@ def test_alembic_configuration_loads_without_database() -> None:
     assert "autogenerate is disabled" in env_text
     assert 'url.set(drivername="postgresql+psycopg2")' in env_text
     assert "transactional_ddl=True" in env_text
-# 148:78 0:0 0:0
+# 75:151 0:0 0:0

@@ -1,4 +1,4 @@
-# 35:34
+# 35:34 0:0 2:0
 """
 text_to_ucns — tokenize text; map closed-class tokens to UCNSObject.
 Open-class tokens emit None; caller decides handling.
@@ -80,4 +80,4 @@ def _entry_to_ucns(entry: dict):
         anchors_pos=(AnchorPayload(theta=Fraction(0), payload=None),),
         faces_pos=(0,),
     )
-# 35:34
+# 35:34 0:0 2:0

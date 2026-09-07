@@ -1,4 +1,4 @@
-# 59:68 0:0 0:0
+# 66:51 0:0 1:0
 """Alembic environment for a0's PostgreSQL schema.
 
 `env.py` is an Alembic-mandated filename and therefore a documented exception
@@ -134,4 +134,4 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-# 59:68 0:0 0:0
+# 66:51 0:0 1:0

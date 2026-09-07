@@ -1,4 +1,4 @@
-# 24:33
+# 24:33 0:0 1:0
 """UCNS-kit protocol interfaces. No implementations — frame-independent contracts."""
 from __future__ import annotations
 
@@ -78,4 +78,4 @@ class Serializer(Protocol):
 
     def from_bytes(self, data: bytes):
         pass
-# 24:33
+# 24:33 0:0 1:0

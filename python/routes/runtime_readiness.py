@@ -1,4 +1,4 @@
-# 18:43 0:2 1:1
+# 18:43 1:2 1:1
 from fastapi import APIRouter, HTTPException
 
 from ..services.runtime_readiness import build_readiness_report
@@ -70,4 +70,4 @@ async def ready() -> dict:
     if not report["ready"]:
         raise HTTPException(status_code=503, detail=report)
     return report
-# 18:43 0:2 1:1
+# 18:43 1:2 1:1

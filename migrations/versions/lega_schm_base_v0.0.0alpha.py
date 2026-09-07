@@ -1,4 +1,4 @@
-# 76:57 0:0 0:0
+# 39:74 0:0 0:0
 """Apply the reviewed legacy schema baseline.
 
 This is the first Alembic revision for a0. It applies the full pg_dump
@@ -126,4 +126,4 @@ def downgrade() -> None:
         "downgrade() is disabled for the legacy schema baseline revision. "
         "Restore from a restore point to revert."
     )
-# 76:57 0:0 0:0
+# 39:74 0:0 0:0

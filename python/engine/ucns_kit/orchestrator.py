@@ -1,4 +1,4 @@
-# 37:39
+# 37:39 0:0 1:1
 """
 Orchestrator — six-step UCNS-kit pipeline.
 
@@ -87,4 +87,4 @@ class Orchestrator:
         # hmmm: Frame C × R2 invalid (no anchors to promote in primary state).
         # Nominal until Frame/Reward implementations are identifiable by type.
         pass
-# 37:39
+# 37:39 0:0 1:1
