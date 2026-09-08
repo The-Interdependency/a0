@@ -100,7 +100,7 @@ async def call(
     from ..energy_registry import BUILTIN_PROVIDERS
 
     spec = BUILTIN_PROVIDERS.get("grok", {})
-    key = api_key or os.environ.get(spec.get("env_key", "XAI_API_KEY"), "").strip()
+    key = api_key or os.environ.get(spec.get("api_key_env", "XAI_API_KEY"), "").strip()
     if not key:
         raise ValueError("XAI_API_KEY not configured")
     model = model_override or await resolve_model_for_role("grok", role)

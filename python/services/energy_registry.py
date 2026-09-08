@@ -1,4 +1,4 @@
-# 289:88 0:0 19:3
+# 289:88 0:0 20:3
 # === MODULE_BUILD ===
 # id: a0_service_energy_registry
 #   module_name: energy_registry
@@ -98,8 +98,8 @@ def default_provider() -> str | None:
     the async active_provider() which reads the conduct slot from the DB.
     """
     for pid, info in BUILTIN_PROVIDERS.items():
-        env_key = info.get("env_key", "")
-        if env_key and os.environ.get(env_key):
+        api_key_env = info.get("api_key_env", "")
+        if api_key_env and os.environ.get(api_key_env):
             return pid
     return None
 
@@ -157,8 +157,8 @@ def cheap_provider() -> str | None:
     """
     for pid in _CHEAP_PROVIDER_ORDER:
         info = BUILTIN_PROVIDERS.get(pid, {})
-        env_key = info.get("env_key", "")
-        if env_key and os.environ.get(env_key):
+        api_key_env = info.get("api_key_env", "")
+        if api_key_env and os.environ.get(api_key_env):
             return pid
     return default_provider()
 
@@ -400,8 +400,8 @@ def build_model_instances() -> dict:
     from aimmh_lib import ModelInstance
     out: dict = {}
     for pid, info in BUILTIN_PROVIDERS.items():
-        env_key = info.get("env_key", "")
-        if env_key and not os.environ.get(env_key):
+        api_key_env = info.get("api_key_env", "")
+        if api_key_env and not os.environ.get(api_key_env):
             continue
         out[pid] = ModelInstance(_aimmh_call_fn, pid)
     return out
@@ -432,4 +432,4 @@ async def resolve_providers(providers: list[str] | None) -> list[str]:
         elif p in BUILTIN_PROVIDERS and p not in out:
             out.append(p)
     return out
-# 289:88 0:0 19:3
+# 289:88 0:0 20:3

@@ -15,6 +15,27 @@ env:
   REGISTRY: us-central1-docker.pkg.dev
 
 jobs:
+  provider-contracts:
+    name: Provider adapter contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Python dependencies
+        run: pip install -e . pytest pytest-asyncio
+
+      - name: Run provider contracts
+        run: pytest -q tests/test_openai_compatible_provider.py tests/test_a0_openai_compatible_adapter.py tests/test_a0_package.py python/tests/test_openai_compatible_contracts.py
+
   check-console-tabs:
     name: Console tab regression guard
     runs-on: ubuntu-latest
@@ -93,7 +114,7 @@ jobs:
 
   deploy:
     name: Build, push, deploy
-    needs: check-console-tabs
+    needs: [provider-contracts, check-console-tabs]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -152,4 +173,4 @@ jobs:
             --max-instances=10 \
             --memory=512Mi \
             --cpu=1 \
-            --set-secrets="DATABASE_URL=a0p-database-url:latest,SESSION_SECRET=a0p-session-secret:latest,XAI_API_KEY=a0p-xai-api-key:latest,STRIPE_SECRET_KEY=a0p-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=a0p-stripe-webhook-secret:latest"
+            --set-secrets="DATABASE_URL=a0p-database-url:latest,SESSION_SECRET=a0p-session-secret:latest,XAI_API_KEY=a0p-xai-api-key:latest,DEEPSEEK_API_KEY=a0p-deepseek-api-key:latest,STRIPE_SECRET_KEY=a0p-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=a0p-stripe-webhook-secret:latest"

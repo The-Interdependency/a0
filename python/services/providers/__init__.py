@@ -14,8 +14,8 @@ Each provider module exposes:
         **kwargs,
     ) -> tuple[str, dict]
 
-`role` selects the model via env > seed `route_config.model_assignments[role]`
-> provider spec primary (see _resolver.resolve_model_for_role). The
+`role` selects the model via the registry-defined environment override, then
+the provider spec primary (see _resolver.resolve_model_for_role). The
 `model_override` escape hatch is for legacy callers in inference.py that
 already know the model id and just want SDK delivery; new callers should
 pass `role` instead and let the resolver pick.

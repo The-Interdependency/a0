@@ -1,4 +1,4 @@
-# 59:5 0:0 4:8
+# 65:4 0:0 4:10
 from __future__ import annotations
 
 import os
@@ -7,6 +7,7 @@ from .contract import A0Request, A0Response, normalize_hmmm
 from .logging import log_event
 from .state import load_state, save_state
 from .model_adapter import LocalEchoAdapter
+from .provider_registry import resolve_openai_compatible_provider
 
 from .tools.edcm_tool import run_edcm
 from .tools.pdf_tool import run_pdf_extract
@@ -19,10 +20,16 @@ LOG_DIR = Path(os.environ.get("A0_LOG_DIR", _DEFAULT_LOG_DIR))
 def _select_adapter(req: A0Request):
     """Select the best available adapter for this request.
 
-    Prefers ClaudeAgentAdapter (full PTCA subagent pipeline).
-    Falls back to LocalEchoAdapter if agent mode is not requested
-    or if the SDK is unavailable.
+    An explicit A0_PROVIDER is fail-closed. Otherwise, a configured registry
+    entry marked a0_default wins, then ClaudeAgentAdapter, then LocalEcho.
     """
+    provider = resolve_openai_compatible_provider()
+    if provider:
+        from .adapters.openai_compatible_adapter import OpenAICompatibleAdapter
+
+        provider_id, spec = provider
+        return OpenAICompatibleAdapter(provider_id, spec)
+
     try:
         from .adapters.claude_agent_adapter import ClaudeAgentAdapter, _SDK_AVAILABLE
     except (ImportError, ModuleNotFoundError):
@@ -78,4 +85,4 @@ def handle(req: A0Request) -> A0Response:
         "hmmm": hmmm,
     })
     return A0Response(task_id=req.task_id, result={"text": resp.get("text", ""), "artifacts": []}, hmmm=hmmm)
-# 59:5 0:0 4:8
+# 65:4 0:0 4:10

@@ -141,27 +141,14 @@ Update `OutputEnvelope.gaming_alerts` type and the JSON schema in `io/schemas.py
 
 ## P2 — Completeness
 
-### P2-1: Implement OpenAI and Gemini adapters
+### P2-1: Implement Gemini adapter
 
-**Files:** `a0/a0/adapters/openai_adapter.py`, `a0/a0/adapters/gemini_adapter.py`
+**File:** `a0/adapters/gemini_adapter.py`
 
-**Problem:** Both files are empty. The adapter `Protocol` in `model_adapter.py` defines the interface. Until real adapters are implemented, a0 is limited to echoing input.
+**Problem:** The file is empty. The adapter `Protocol` in `model_adapter.py` defines the interface. OpenAI-compatible providers are now implemented through `openai_compatible_adapter.py`; Gemini still lacks a native standalone adapter.
 
-**Minimum viable implementation for OpenAI adapter:**
-```python
-from openai import OpenAI
-
-class OpenAIAdapter:
-    name = "openai"
-    def __init__(self, model="gpt-4o-mini"):
-        self.client = OpenAI()
-        self.model = model
-    def complete(self, messages):
-        r = self.client.chat.completions.create(model=self.model, messages=messages)
-        return {"text": r.choices[0].message.content}
-```
-
-Update `a0/router.py` to select adapters from an environment variable or config rather than always using `LocalEchoAdapter()`.
+**Minimum viable implementation:** add a Gemini `ModelAdapter`, then extend the
+registry-driven selection without reintroducing hard-coded provider branches.
 
 ---
 

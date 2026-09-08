@@ -1,9 +1,9 @@
-# 393:107 0:0 16:14
+# 406:107 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
 #   module_kind: service
-#   summary: Orchestrates LLM calls across registered energy providers (Grok/Gemini/Claude/OpenAI-style) — resolves role, normalizes reasoning effort, runs the tool loop, and injects tier-specific prompt_context.
+#   summary: Orchestrates LLM calls across registered energy providers (Grok/Gemini/Claude/OpenAI-compatible) — resolves role, normalizes reasoning effort, runs the tool loop, and injects tier-specific prompt_context.
 #   owner: Erin Spencer
 #   public_surface: call_provider
 #   internal_surface: _instance_memory_block, _slot_instance_block, _slot_routing_info, _sanitize_provider_error, _canonical_tool_calls, _gate_to_effort, _effort_to_thinking_budget, _call_openai_routed, _call_anthropic
@@ -55,9 +55,10 @@ async def _instance_memory_block(provider_id: str) -> str:
     /api/v1/agents/instances/{id}/memory (admin). Deleting all entries and
     clearing swarm_context on the instance stops injection entirely.
     """
-    from ..database import get_session
-    from sqlalchemy import text as _sa_text
     try:
+        from ..database import get_session
+        from sqlalchemy import text as _sa_text
+
         spec = BUILTIN_PROVIDERS.get(provider_id, {})
         model_id = (spec.get("model") or "").strip()
         if not model_id:
@@ -107,9 +108,10 @@ async def _slot_routing_info(slot: str) -> tuple[str, "str | None"]:
     Returns ("", None) when no instance is assigned, on any error, or when
     the model_id does not match any known provider — inference is never blocked.
     """
-    from ..database import get_session
-    from sqlalchemy import text as _sa_text
     try:
+        from ..database import get_session
+        from sqlalchemy import text as _sa_text
+
         async with get_session() as session:
             inst = (await session.execute(_sa_text(
                 "SELECT id, model_id, swarm_context FROM model_instances "
@@ -332,15 +334,15 @@ async def call_provider(
 
     # OpenAI-vendored single-model providers (openai-5.5, openai-5.5-pro and
     # any future siblings). The legacy "openai" provider above goes through
-    # role-based router; these go straight to openai_provider.call with the
-    # spec's pinned model. reasoning_effort is clamped UP to the spec's
+    # role-based router; these go through the generic compatible transport
+    # with the spec's pinned model. reasoning_effort is clamped UP to the spec's
     # min_reasoning_effort (no silent downgrade — gpt-5.5-pro returns HTTP
     # 400 on 'low', so we honor the floor verbatim, not silently swallow).
     if spec.get("vendor") == "openai":
-        api_key = os.environ.get(spec["env_key"], "")
+        api_key = os.environ.get(spec["api_key_env"], "")
         if not api_key:
             raise RuntimeError(
-                f"{provider_id} unavailable: env var {spec['env_key']} is not set. "
+                f"{provider_id} unavailable: env var {spec['api_key_env']} is not set. "
                 f"Set the API key or route the request to a configured provider."
             )
         effective_effort = (reasoning_effort or "medium").lower()
@@ -353,9 +355,10 @@ async def call_provider(
         if system_prompt:
             payload_messages.append({"role": "system", "content": system_prompt})
         payload_messages.extend(messages)
-        from .providers.openai_provider import call as openai_call
-        return await openai_call(
+        from .providers.openai_compatible_provider import call as compatible_call
+        return await compatible_call(
             payload_messages,
+            provider_id=provider_id,
             model_override=spec["model"],
             api_key=api_key,
             max_tokens=max_tokens,
@@ -363,10 +366,10 @@ async def call_provider(
             reasoning_effort=effective_effort,
         )
 
-    api_key = os.environ.get(spec["env_key"], "")
+    api_key = os.environ.get(spec["api_key_env"], "")
     if not api_key:
         raise RuntimeError(
-            f"{provider_id} unavailable: env var {spec['env_key']} is not set. "
+            f"{provider_id} unavailable: env var {spec['api_key_env']} is not set. "
             f"Set the API key or route the request to a configured provider."
         )
 
@@ -376,6 +379,19 @@ async def call_provider(
     payload_messages.extend(messages)
 
     vendor = spec.get("vendor", "")
+
+    if spec.get("adapter") == "openai-compatible":
+        from .providers.openai_compatible_provider import call as compatible_call
+        return await compatible_call(
+            payload_messages,
+            provider_id=provider_id,
+            api_key=api_key,
+            model_override=spec["model"],
+            max_tokens=max_tokens,
+            use_tools=use_tools,
+            reasoning_effort=reasoning_effort,
+            progress_callback=progress_callback,
+        )
 
     if vendor == "anthropic":
         return await _call_anthropic(
@@ -561,4 +577,4 @@ async def _call_anthropic(
     )
 
 
-# 393:107 0:0 16:14
+# 406:107 0:0 16:15

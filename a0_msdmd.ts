@@ -1,8 +1,78 @@
-// 7594:0 0:1 0:1
+// 7796:0 0:1 0:1
 import { defineMsdmdCollection } from "./.agents/skills/msdmd/collection";
 
 export default defineMsdmdCollection({
   "declarations": [
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "a compatible provider id/spec, process credential, and ModelAdapter messages",
+        "since": "2026-09-07",
+        "then": "the registry-derived client executes the configured API family and returns text/usage without credentials; missing keys and unsupported families fail closed"
+      },
+      "file": "a0/adapters/openai_compatible_adapter.py",
+      "id": "a0_openai_compatible_completion"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "internal_surface": "_normalize_effort, _response_text",
+        "module_kind": "adapter",
+        "module_name": "openai_compatible_adapter",
+        "network_boundary": "external",
+        "owner": "Erin Spencer",
+        "public_surface": "OpenAICompatibleAdapter",
+        "requires": "a0_provider_registry",
+        "rollback": "Remove this module and restore router selection to Claude/local only.",
+        "rollout": "default_enabled",
+        "since": "2026-09-07",
+        "storage_boundary": "none",
+        "summary": "Executes standalone a0 requests against any registry-defined OpenAI-compatible Responses or Chat Completions endpoint.",
+        "tests": "tests/test_a0_openai_compatible_adapter.py",
+        "unresolved": "none",
+        "user_data_boundary": "write"
+      },
+      "file": "a0/adapters/openai_compatible_adapter.py",
+      "id": "a0_adapter_openai_compatible"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "optional A0_PROVIDER, canonical provider registry data, and process credentials",
+        "since": "2026-09-07",
+        "then": "an explicit compatible provider resolves or fails closed while an unset choice may auto-select only a configured a0_default provider"
+      },
+      "file": "a0/provider_registry.py",
+      "id": "a0_provider_selection"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "internal_surface": "_is_openai_compatible",
+        "module_kind": "service",
+        "module_name": "provider_registry",
+        "network_boundary": "none",
+        "owner": "Erin Spencer",
+        "public_surface": "load_provider_registry, resolve_openai_compatible_provider",
+        "requires": "none",
+        "rollback": "Remove this module and restore router selection to Claude/local only.",
+        "rollout": "default_enabled",
+        "since": "2026-09-07",
+        "storage_boundary": "read",
+        "summary": "Resolves explicit or auto-selected OpenAI-compatible standalone a0 providers from python/config/providers.json.",
+        "tests": "tests/test_a0_openai_compatible_adapter.py",
+        "unresolved": "none",
+        "user_data_boundary": "none"
+      },
+      "file": "a0/provider_registry.py",
+      "id": "a0_provider_registry"
+    },
     {
       "block": "BOUNDARIES",
       "fields": {
@@ -1323,7 +1393,7 @@ export default defineMsdmdCollection({
         "rollout": "default_enabled",
         "since": "2026-06-02",
         "storage_boundary": "read",
-        "summary": "Orchestrates LLM calls across registered energy providers (Grok/Gemini/Claude/OpenAI-style) \u2014 resolves role, normalizes reasoning effort, runs the tool loop, and injects tier-specific prompt_context.",
+        "summary": "Orchestrates LLM calls across registered energy providers (Grok/Gemini/Claude/OpenAI-compatible) \u2014 resolves role, normalizes reasoning effort, runs the tool loop, and injects tier-specific prompt_context.",
         "tests": "hmmm",
         "unresolved": "none",
         "user_data_boundary": "write"
@@ -1548,6 +1618,41 @@ export default defineMsdmdCollection({
       "id": "a0_service_providers_gemini"
     },
     {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "a registered OpenAI-compatible provider id, messages, and optional model/key/effort overrides",
+        "since": "2026-09-07",
+        "then": "endpoint, model, credential name, API family, effort scale, and tool profile come from providers.json; missing explicit configuration fails closed and credentials do not enter error text"
+      },
+      "file": "python/services/providers/openai_compatible_provider.py",
+      "id": "openai_compatible_registry_driven"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
+        "auth_boundary": "none",
+        "internal_surface": "_call_responses, _call_chat_completions, _normalize_reasoning_effort, _response_tools",
+        "module_kind": "adapter",
+        "module_name": "openai_compatible_provider",
+        "network_boundary": "external",
+        "owner": "Erin Spencer",
+        "public_surface": "call",
+        "requires": "a0_service_providers_resolver, a0_service_tool_executor, a0_service_tool_distill, a0_service_inference, a0_service_energy_registry",
+        "rollback": "Revert this module and remove registry entries whose adapter is openai-compatible.",
+        "rollout": "default_enabled",
+        "since": "2026-09-07",
+        "storage_boundary": "none",
+        "summary": "Registry-driven OpenAI-compatible transport supporting Responses and Chat Completions with the shared repeat-safe tool loop.",
+        "tests": "tests/test_openai_compatible_provider.py",
+        "unresolved": "none",
+        "user_data_boundary": "write"
+      },
+      "file": "python/services/providers/openai_compatible_provider.py",
+      "id": "a0_service_providers_openai_compatible"
+    },
+    {
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
@@ -1558,13 +1663,13 @@ export default defineMsdmdCollection({
         "network_boundary": "external",
         "owner": "Erin Spencer",
         "public_surface": "call",
-        "requires": "a0_service_providers_resolver, a0_service_tool_executor, a0_service_tool_distill, a0_service_inference",
-        "rollback": "Revert this file; OpenAI calls revert to the prior httpx-based implementation.",
+        "requires": "a0_service_providers_openai_compatible",
+        "rollback": "Restore the former OpenAI-only Responses implementation.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
         "storage_boundary": "none",
-        "summary": "OpenAI GPT-5-family provider adapter using the Responses API via the openai SDK \u2014 exposes the standard async call(...) -> (content, usage) with the shared tool-loop contract.",
-        "tests": "hmmm",
+        "summary": "Stable OpenAI-specific call surface delegating transport behavior to the generic OpenAI-compatible adapter.",
+        "tests": "tests/test_openai_compatible_provider.py",
         "unresolved": "none",
         "user_data_boundary": "write"
       },
@@ -3094,6 +3199,19 @@ export default defineMsdmdCollection({
       },
       "file": "python/tests/test_contract_runner.py",
       "id": "check_contract_graph_rejects_incomplete_linkage"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::check_openai_compatible_registry_wiring",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "openai_compatible_registry_driven, a0_provider_selection, a0_openai_compatible_completion",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/test_openai_compatible_contracts.py",
+      "id": "check_openai_compatible_registry_wiring"
     },
     {
       "block": "CHECKS",
@@ -4952,6 +5070,41 @@ export default defineMsdmdCollection({
       "to": "python3"
     },
     {
+      "from": "check_openai_compatible_registry_wiring",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_registry_wiring",
+      "to": "self::check_openai_compatible_registry_wiring"
+    },
+    {
+      "from": "check_openai_compatible_registry_wiring",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_registry_wiring",
+      "to": "a0_openai_compatible_completion"
+    },
+    {
+      "from": "check_openai_compatible_registry_wiring",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_registry_wiring",
+      "to": "a0_provider_selection"
+    },
+    {
+      "from": "check_openai_compatible_registry_wiring",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_registry_wiring",
+      "to": "openai_compatible_registry_driven"
+    },
+    {
+      "from": "check_openai_compatible_registry_wiring",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_registry_wiring",
+      "to": "python3"
+    },
+    {
       "from": "check_platonic_agent_existing_separations_preserved",
       "kind": "calls",
       "source_block": "CHECKS",
@@ -6114,6 +6267,20 @@ export default defineMsdmdCollection({
       "to": "python3"
     },
     {
+      "from": "a0_adapter_openai_compatible",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_adapter_openai_compatible",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_adapter_openai_compatible",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_adapter_openai_compatible",
+      "to": "a0_provider_registry"
+    },
+    {
       "from": "a0_alembic_environment",
       "kind": "owns",
       "source_block": "MODULE_BUILD",
@@ -6434,6 +6601,20 @@ export default defineMsdmdCollection({
       "source_block": "MODULE_BUILD",
       "source_id": "a0_platonic_ptcna_state",
       "to": "ptcna_runtime_boundary"
+    },
+    {
+      "from": "a0_provider_registry",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_provider_registry",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_provider_registry",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_provider_registry",
+      "to": "none"
     },
     {
       "from": "a0_runtime_readiness",
@@ -6965,27 +7146,48 @@ export default defineMsdmdCollection({
       "kind": "requires",
       "source_block": "MODULE_BUILD",
       "source_id": "a0_service_providers_openai",
+      "to": "a0_service_providers_openai_compatible"
+    },
+    {
+      "from": "a0_service_providers_openai_compatible",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_service_providers_openai_compatible",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_service_providers_openai_compatible",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_service_providers_openai_compatible",
+      "to": "a0_service_energy_registry"
+    },
+    {
+      "from": "a0_service_providers_openai_compatible",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_service_providers_openai_compatible",
       "to": "a0_service_inference"
     },
     {
-      "from": "a0_service_providers_openai",
+      "from": "a0_service_providers_openai_compatible",
       "kind": "requires",
       "source_block": "MODULE_BUILD",
-      "source_id": "a0_service_providers_openai",
+      "source_id": "a0_service_providers_openai_compatible",
       "to": "a0_service_providers_resolver"
     },
     {
-      "from": "a0_service_providers_openai",
+      "from": "a0_service_providers_openai_compatible",
       "kind": "requires",
       "source_block": "MODULE_BUILD",
-      "source_id": "a0_service_providers_openai",
+      "source_id": "a0_service_providers_openai_compatible",
       "to": "a0_service_tool_distill"
     },
     {
-      "from": "a0_service_providers_openai",
+      "from": "a0_service_providers_openai_compatible",
       "kind": "requires",
       "source_block": "MODULE_BUILD",
-      "source_id": "a0_service_providers_openai",
+      "source_id": "a0_service_providers_openai_compatible",
       "to": "a0_service_tool_executor"
     },
     {
@@ -7594,4 +7796,4 @@ export default defineMsdmdCollection({
   "gaps": [],
   "repo": "a0"
 });
-// 7594:0 0:1 0:1
+// 7796:0 0:1 0:1

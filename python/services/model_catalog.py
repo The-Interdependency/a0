@@ -1,4 +1,4 @@
-# 108:86 0:0 7:1
+# 109:89 0:0 7:1
 """model_catalog — single source of truth for "what models can this user use".
 
 Today three surfaces answer this question independently:
@@ -70,9 +70,13 @@ def _resolve_static(model_id: str) -> Optional[tuple[str, dict]]:
     """
     if model_id in BUILTIN_PROVIDERS:
         return model_id, BUILTIN_PROVIDERS[model_id]
+    # Every provider's primary model is more authoritative than any optimizer
+    # preset reference. This prevents a shared preset model from being
+    # attributed to whichever provider happens to appear first in JSON.
     for pid, spec in BUILTIN_PROVIDERS.items():
         if spec.get("model") == model_id:
             return pid, spec
+    for pid, spec in BUILTIN_PROVIDERS.items():
         presets = _PROVIDER_PRESETS.get(pid, {})
         for role_map in presets.values():
             if isinstance(role_map, dict) and model_id in role_map.values():
@@ -106,11 +110,11 @@ async def resolve_model_id(model_id: str) -> tuple[str, dict]:
 async def is_provider_enabled(provider_id: str) -> bool:
     """Providers are enabled when their API key env var is present."""
     spec = BUILTIN_PROVIDERS.get(provider_id, {})
-    env_key = spec.get("env_key")
-    if not env_key:
+    api_key_env = spec.get("api_key_env")
+    if not api_key_env:
         return True
     import os
-    return bool(os.environ.get(env_key))
+    return bool(os.environ.get(api_key_env))
 
 
 async def _user_tier(user_id: Optional[str]) -> str:
@@ -160,9 +164,9 @@ async def list_models_for_user(user_id: Optional[str]) -> dict[str, Any]:
     cfgs: dict[str, dict] = {}
 
     for pid, spec in BUILTIN_PROVIDERS.items():
-        env_key = spec.get("env_key")
+        api_key_env = spec.get("api_key_env")
         import os
-        key_present = bool(env_key and os.environ.get(env_key))
+        key_present = bool(api_key_env and os.environ.get(api_key_env))
         cfg = cfgs.get(pid, {})
         enabled = cfg.get("enabled", True)
         min_tier = spec.get("min_tier")
@@ -225,4 +229,4 @@ async def list_models_for_user(user_id: Optional[str]) -> dict[str, Any]:
         })
 
     return {"user_tier": user_tier, "providers": out_providers}
-# 108:86 0:0 7:1
+# 109:89 0:0 7:1

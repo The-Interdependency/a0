@@ -1,4 +1,4 @@
-# 28:45 0:0 5:1
+# 28:46 0:0 5:1
 """resolve_model_for_role — env > spec primary.
 
 Purpose: every provider module asks one question on every call:
@@ -6,9 +6,9 @@ Purpose: every provider module asks one question on every call:
 I send to the API?" This module is the only allowed answer.
 
 Resolution order (highest precedence first):
-  1. Env var `<PROVIDER>_MODEL_<ROLE>` (uppercase, e.g. CLAUDE_MODEL_CONDUCT,
-     OPENAI_MODEL_PERFORM, GROK_MODEL_PRACTICE). Env wins so an operator can
-     pin a model without touching DB or code.
+  1. Env var derived from providers.json `model_env_prefix`, falling back to
+     the legacy built-in prefix map. Env wins so an operator can pin a model
+     without touching DB or code.
   2. Provider spec primary (`BUILTIN_PROVIDERS[provider_id]["model"]`) which
      comes from python/config/providers.json. This is the doctrine baseline.
 
@@ -67,15 +67,16 @@ async def resolve_model_for_role(provider_id: str, role: str) -> str:
                   a non-empty model id for the (provider, role) pair.
     """
     role_norm = role.lower().strip()
-    # 1. Env override
-    prefix = _PROVIDER_ENV_PREFIX.get(provider_id)
+    spec = BUILTIN_PROVIDERS.get(provider_id, {})
+    # 1. Env override. Registry data lets new compatible providers opt in
+    # without changing this module; the map remains for legacy providers.
+    prefix = spec.get("model_env_prefix") or _PROVIDER_ENV_PREFIX.get(provider_id)
     if prefix:
         env_key = f"{prefix}{role_norm.upper()}"
         val = os.environ.get(env_key, "").strip()
         if val:
             return val
     # 2. Spec primary (providers.json baseline)
-    spec = BUILTIN_PROVIDERS.get(provider_id, {})
     primary = (spec.get("model") or "").strip()
     if primary:
         return primary
@@ -83,4 +84,4 @@ async def resolve_model_for_role(provider_id: str, role: str) -> str:
         f"No model resolvable for provider={provider_id!r} role={role_norm!r} "
         f"(checked env {prefix or '?'}{role_norm.upper()} and providers.json primary)"
     )
-# 28:45 0:0 5:1
+# 28:46 0:0 5:1
