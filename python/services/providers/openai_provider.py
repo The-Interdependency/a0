@@ -9,7 +9,7 @@ from __future__ import annotations
 #   summary: Stable OpenAI-specific call surface delegating transport behavior to the generic OpenAI-compatible adapter.
 #   owner: Erin Spencer
 #   public_surface: call
-#   internal_surface: _call_responses
+#   internal_surface: none
 #   auth_boundary: none
 #   storage_boundary: none
 #   network_boundary: external
@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .openai_compatible_provider import _call_responses
 from .openai_compatible_provider import call as _compatible_call
 
 
