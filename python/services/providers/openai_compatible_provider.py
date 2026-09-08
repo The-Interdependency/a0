@@ -57,10 +57,10 @@ def _accumulate_usage(total: dict, usage: dict | None) -> None:
 
 
 def _safe_provider_error(provider_name: str, exc: BaseException, api_key: str) -> str:
-    from ..inference import _sanitize_provider_error
+    from ..inference import _safe_error_snippet
 
-    outward = _sanitize_provider_error(provider_name, exc)
-    return outward.replace(api_key, "[redacted]") if api_key else outward
+    raw = str(exc).replace(api_key, "[redacted]") if api_key else str(exc)
+    return f"[{provider_name} error: {type(exc).__name__}: {safe}]" if (safe := _safe_error_snippet(raw)) else f"[{provider_name} error: {type(exc).__name__}]"
 
 
 def _normalize_reasoning_effort(spec: dict, effort: Optional[str]) -> Optional[str]:
@@ -204,7 +204,7 @@ async def _call_responses(
         tool_calls = [item for item in output_items if item.get("type") == "function_call"]
 
         if tool_calls:
-            fingerprint = _canonical_tool_calls(tool_calls)
+            fingerprint = _canonical_tool_calls(tool_calls) or json.dumps(tool_calls, sort_keys=True, default=str)
             if fingerprint == previous_fingerprint:
                 return "[noticed repeat tool call — answering directly]", accumulated_usage
             previous_fingerprint = fingerprint
@@ -312,7 +312,7 @@ async def _call_chat_completions(
         message = (choices[0].get("message") if choices else None) or {}
         tool_calls = message.get("tool_calls") or []
         if tool_calls:
-            fingerprint = _canonical_tool_calls(tool_calls)
+            fingerprint = _canonical_tool_calls(tool_calls) or json.dumps(tool_calls, sort_keys=True, default=str)
             if fingerprint == previous_fingerprint:
                 return "[noticed repeat tool call — answering directly]", accumulated_usage
             previous_fingerprint = fingerprint
@@ -372,7 +372,7 @@ async def call(
     if not key:
         raise ValueError(f"{api_key_env} not configured")
 
-    model = model_override or await resolve_model_for_role(provider_id, role)
+    model = await resolve_model_for_role(provider_id, role) if model_override is None or model_override == spec.get("model") else model_override
     base_url = str(spec.get("base_url") or "").strip() or None
     effort = _normalize_reasoning_effort(spec, reasoning_effort)
     api_family = spec.get("api_family", "responses")
