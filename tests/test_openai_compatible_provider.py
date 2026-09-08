@@ -92,6 +92,98 @@ async def test_responses_transport_uses_registry_base_url_model_and_effort(
 
 
 @pytest.mark.asyncio
+async def test_dispatcher_primary_placeholder_still_honors_model_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python.services.providers import openai_compatible_provider as provider
+
+    captured: dict = {}
+
+    class FakeAsyncOpenAI:
+        def __init__(self, **kwargs):
+            async def create(**request):
+                captured.update(request)
+                return _Dump({
+                    "output": [{
+                        "type": "message",
+                        "content": [{"type": "output_text", "text": "override-ok"}],
+                    }],
+                    "usage": {},
+                })
+
+            self.responses = SimpleNamespace(create=create)
+
+    monkeypatch.setattr(provider, "AsyncOpenAI", FakeAsyncOpenAI)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
+    monkeypatch.setenv("DEEPSEEK_MODEL_CONDUCT", "deepseek-v4-flash-override")
+
+    content, _ = await provider.call(
+        [{"role": "user", "content": "hi"}],
+        provider_id="deepseek",
+        role="conduct",
+        model_override="deepseek-v4-flash",
+        use_tools=False,
+    )
+
+    assert content == "override-ok"
+    assert captured["model"] == "deepseek-v4-flash-override"
+
+
+@pytest.mark.asyncio
+async def test_first_responses_tool_call_executes_before_repeat_detection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python.services import tool_executor
+    from python.services.providers import openai_compatible_provider as provider
+
+    responses: list[dict] = []
+    executed: list[tuple[str, dict]] = []
+
+    class FakeAsyncOpenAI:
+        def __init__(self, **kwargs):
+            async def create(**request):
+                responses.append(request)
+                if len(responses) == 1:
+                    return _Dump({
+                        "output": [{
+                            "type": "function_call",
+                            "name": "sys.pwd",
+                            "arguments": "{}",
+                            "call_id": "call-1",
+                        }],
+                        "usage": {},
+                    })
+                return _Dump({
+                    "output": [{
+                        "type": "message",
+                        "content": [{"type": "output_text", "text": "tool-ok"}],
+                    }],
+                    "usage": {},
+                })
+
+            self.responses = SimpleNamespace(create=create)
+
+    async def fake_execute(name: str, arguments: dict) -> str:
+        executed.append((name, arguments))
+        return "pwd-ok"
+
+    monkeypatch.setattr(provider, "AsyncOpenAI", FakeAsyncOpenAI)
+    monkeypatch.setattr(provider, "_response_tools", lambda profile: [{"type": "function", "name": "sys.pwd"}])
+    monkeypatch.setattr(tool_executor, "execute_tool", fake_execute)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
+
+    content, _ = await provider.call(
+        [{"role": "user", "content": "use a tool"}],
+        provider_id="deepseek",
+        use_tools=True,
+    )
+
+    assert content == "tool-ok"
+    assert executed == [("sys.pwd", {})]
+    assert len(responses) == 2
+
+
+@pytest.mark.asyncio
 async def test_generic_transport_supports_chat_completions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -166,6 +258,58 @@ async def test_transport_redacts_configured_key_from_outward_error(
     assert "witness-secret" not in content
     assert "[redacted]" in content
     assert usage == {}
+
+
+@pytest.mark.asyncio
+async def test_transport_redacts_opaque_key_before_error_truncation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python.services.providers import openai_compatible_provider as provider
+
+    api_key = "opaque-provider-key-abcdefghijklmnopqrstuvwxyz"
+
+    class FailingAsyncOpenAI:
+        def __init__(self, **kwargs):
+            async def create(**request):
+                raise RuntimeError("x" * 180 + api_key + " tail")
+
+            self.responses = SimpleNamespace(create=create)
+
+    monkeypatch.setattr(provider, "AsyncOpenAI", FailingAsyncOpenAI)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", api_key)
+    content, _ = await provider.call(
+        [{"role": "user", "content": "hi"}],
+        provider_id="deepseek",
+        use_tools=False,
+    )
+
+    assert api_key not in content
+    assert api_key[:20] not in content
+    assert "[redacted]" in content
+
+
+@pytest.mark.asyncio
+async def test_free_catalog_does_not_surface_cross_tier_deepseek_pro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python.services import energy_registry, model_catalog
+
+    async def free_tier(user_id):
+        return "free"
+
+    async def active_provider():
+        return "deepseek"
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
+    monkeypatch.setattr(model_catalog, "_user_tier", free_tier)
+    monkeypatch.setattr(energy_registry, "active_provider", active_provider)
+
+    catalog = await model_catalog.list_models_for_user(None)
+    flash = next(item for item in catalog["providers"] if item["provider_id"] == "deepseek")
+    pro = next(item for item in catalog["providers"] if item["provider_id"] == "deepseek-pro")
+
+    assert "deepseek-v4-pro" not in {item["model_id"] for item in flash["models"]}
+    assert pro["tier_blocked"] is True
 
 
 @pytest.mark.asyncio
