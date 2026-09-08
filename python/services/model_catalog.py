@@ -205,6 +205,9 @@ async def list_models_for_user(user_id: Optional[str]) -> dict[str, Any]:
                 continue
             for mid in role_map.values():
                 if isinstance(mid, str) and mid:
+                    owner = _resolve_static(mid)
+                    if owner and owner[0] != pid and not _tier_ok(user_tier, owner[1].get("min_tier")):
+                        continue
                     e = _touch(mid)
                     if preset_name not in e["in_presets"]:
                         e["in_presets"].append(preset_name)
