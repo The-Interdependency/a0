@@ -1,4 +1,4 @@
-# 338:42 3:17 1:4
+# 344:42 3:17 1:4
 # DOC module: instances_api
 # DOC label: Model Instances
 # DOC description: CRUD for model instances (D&D party), per-instance memory, task board, and chat/archive sub-routes.
@@ -37,6 +37,7 @@ from sqlalchemy import text as _sql
 from ..database import get_session
 from ._admin_gate import require_admin
 from ..services.agent_instance import AgentInstance
+from ..services.model_catalog import resolve_model_id
 
 router = APIRouter(prefix="/api/v1", tags=["instances"])
 _log = logging.getLogger("a0p.instances_api")
@@ -173,6 +174,10 @@ async def list_instances():
         result = []
         for r in rows:
             iid = str(r["id"])
+            try:
+                provider_id, _ = await resolve_model_id(str(r["model_id"]))
+            except ValueError:
+                provider_id = None
             mem_n = (await s.execute(
                 _sql("SELECT COUNT(*) FROM instance_memory WHERE instance_id = :id"), {"id": iid}
             )).scalar() or 0
@@ -183,6 +188,7 @@ async def list_instances():
             result.append({
                 **{k: v for k, v in r.items() if k != "id"},
                 "id": iid,
+                "provider_id": provider_id,
                 "created_at": str(r["created_at"]),
                 "memory_count": int(mem_n),
                 "open_task_count": int(task_n),
@@ -454,4 +460,4 @@ async def get_archives(iid: str):
     return [{"id": str(r["id"]), "label": r["label"],
              "archived_at": str(r["archived_at"]), "merge_status": r["merge_status"]}
             for r in rows]
-# 338:42 3:17 1:4
+# 344:42 3:17 1:4

@@ -1,4 +1,4 @@
-# 82:1 0:0 0:0
+# 89:1 0:0 0:0
 """Standalone a0 selection and OpenAI-compatible adapter contracts."""
 
 from types import SimpleNamespace
@@ -81,6 +81,15 @@ def test_adapter_uses_registry_transport_and_sanitizes_failure(
     assert captured["request"]["model"] == "deepseek-v4-pro"
     assert captured["request"]["reasoning"] == {"effort": "high"}
 
+    def fail_with_secret(**request):
+        raise RuntimeError("upstream echoed test-secret")
+
+    adapter._client.responses.create = fail_with_secret
+    with pytest.raises(RuntimeError, match="deepseek-pro request failed") as caught:
+        adapter.complete([{"role": "user", "content": "fail"}])
+    assert caught.value.__cause__ is None
+    assert "test-secret" not in str(caught.value)
+
 
 def test_router_prefers_configured_generic_adapter(
     monkeypatch: pytest.MonkeyPatch,
@@ -113,4 +122,4 @@ def test_explicit_provider_missing_key_fails_closed(
 
     with pytest.raises(ValueError, match="DEEPSEEK_API_KEY not configured"):
         _select_adapter(request)
-# 82:1 0:0 0:0
+# 89:1 0:0 0:0

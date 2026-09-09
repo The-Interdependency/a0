@@ -1,4 +1,4 @@
-# 327:43 0:0 2:5
+# 329:49 0:0 2:5
 """Generic OpenAI-compatible provider transport.
 
 Provider identity, endpoint, credential name, model, API family, reasoning
@@ -38,6 +38,12 @@ from __future__ import annotations
 # id: openai_compatible_responses_preserves_reasoning_items
 #   given: a Responses tool round emits reasoning and function-call output items
 #   then: the continuation includes the complete output sequence before function-call outputs
+#   class: correctness
+#   since: 2026-09-09
+#
+# id: openai_stateless_reasoning_is_replayable
+#   given: an OpenAI Responses request enables reasoning while store is false
+#   then: reasoning.encrypted_content is requested for the stateless continuation
 #   class: correctness
 #   since: 2026-09-09
 # === END CONTRACTS ===
@@ -150,6 +156,8 @@ def _responses_kwargs(
         kwargs["store"] = store
     if reasoning_effort and reasoning_effort != "none":
         kwargs["reasoning"] = {"effort": reasoning_effort}
+        if supports_store and not store:
+            kwargs["include"] = ["reasoning.encrypted_content"]
     if tools:
         kwargs["tools"] = tools
     return kwargs
@@ -416,4 +424,4 @@ async def call(
     raise ValueError(
         f"Provider {provider_id!r} has unsupported api_family={api_family!r}"
     )
-# 327:43 0:0 2:5
+# 329:49 0:0 2:5

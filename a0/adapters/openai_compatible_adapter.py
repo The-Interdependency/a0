@@ -1,4 +1,4 @@
-# 93:29 0:0 2:0
+# 93:35 0:0 2:0
 """Synchronous standalone adapter for registry-defined OpenAI-compatible APIs."""
 from __future__ import annotations
 
@@ -29,6 +29,12 @@ from __future__ import annotations
 #   then: the registry-derived client executes the configured API family and returns text/usage without credentials; missing keys and unsupported families fail closed
 #   class: correctness
 #   since: 2026-09-07
+#
+# id: a0_openai_compatible_error_suppresses_secret_cause
+#   given: an upstream compatible-provider exception may echo its credential
+#   then: the public RuntimeError omits the original exception cause
+#   class: safety
+#   since: 2026-09-09
 # === END CONTRACTS ===
 
 import os
@@ -126,7 +132,7 @@ class OpenAICompatibleAdapter:
         except Exception as exc:
             raise RuntimeError(
                 f"{self.provider_id} request failed: {type(exc).__name__}"
-            ) from exc
+            ) from None
 
         return {
             "text": text or f"[{self.provider_id}: empty response]",
@@ -137,4 +143,4 @@ class OpenAICompatibleAdapter:
             },
             "subagents_used": [],
         }
-# 93:29 0:0 2:0
+# 93:35 0:0 2:0

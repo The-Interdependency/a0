@@ -1,4 +1,4 @@
-# 384:1 0:0 0:0
+# 391:1 0:0 0:0
 """Contract tests for registry-driven OpenAI-compatible providers."""
 
 from pathlib import Path
@@ -44,6 +44,16 @@ def test_repeat_fingerprint_excludes_volatile_transport_ids() -> None:
     }]
 
     assert _canonical_tool_calls(first) == _canonical_tool_calls(repeated)
+
+
+def test_stateless_openai_reasoning_requests_encrypted_state() -> None:
+    from python.services.providers.openai_compatible_provider import _responses_kwargs
+
+    kwargs = _responses_kwargs(
+        model="gpt-test", input_items=[], max_output_tokens=8, temperature=1.0,
+        reasoning_effort="high", store=False, supports_store=True, tools=None,
+    )
+    assert kwargs["include"] == ["reasoning.encrypted_content"]
 
 
 def test_deepseek_is_configuration_not_a_provider_specific_adapter() -> None:
@@ -481,4 +491,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             provider_id="deepseek",
             use_tools=False,
         )
-# 384:1 0:0 0:0
+# 391:1 0:0 0:0
