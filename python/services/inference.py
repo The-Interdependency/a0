@@ -40,7 +40,7 @@
 #
 # id: inference_auto_route_gates_and_reports_effective_provider
 #   given: an unpinned request is reassigned from its seed provider to a classified role-slot provider
-#   then: the effective provider is tier-gated before transport and returned in usage for billing and provenance attribution
+#   then: the role-resolved concrete model's catalog owner is tier-gated before transport and returned with that model in usage for billing and provenance attribution
 #   class: security
 #   since: 2026-09-09
 #
@@ -302,22 +302,20 @@ def _get_max_tool_rounds() -> int:
     return v if v is not None else _MAX_TOOL_ROUNDS
 
 
-def _attribute_provider(result: tuple[str, dict], provider_id: str) -> tuple[str, dict]:
+def _attribute_provider(result: tuple[str, dict], provider_id: str,
+                        model_id: Optional[str] = None) -> tuple[str, dict]:
     content, usage = result
     attributed = dict(usage or {})
     attributed["provider_id"] = provider_id
+    if model_id: attributed["model_id"] = model_id
     return content, attributed
 
 
 async def call_provider(
-    provider_id: str,
-    messages: list[dict],
-    system_prompt: Optional[str] = None,
-    max_tokens: int = 8000,
-    use_tools: bool = True,
-    user_id: Optional[str] = None,
-    skip_approval: bool = False,
-    reasoning_effort: Optional[str] = None,
+    provider_id: str, messages: list[dict],
+    system_prompt: Optional[str] = None, max_tokens: int = 8000,
+    use_tools: bool = True, user_id: Optional[str] = None,
+    skip_approval: bool = False, reasoning_effort: Optional[str] = None,
     progress_callback: Optional[Callable[[int, int], None]] = None,
     skip_manifest: bool = False,
     pin_requested_provider: bool = False, model_override: Optional[str] = None,
@@ -360,21 +358,15 @@ async def call_provider(
         system_prompt = (system_prompt or "") + "\n\n## Instance Memory\n" + _imem
     if _slot_provider:
         provider_id = _slot_provider
-        if routed_user_tier is not None:
-            from .model_catalog import _tier_ok
-            min_tier = (BUILTIN_PROVIDERS.get(provider_id) or {}).get("min_tier")
-            if not _tier_ok(routed_user_tier, min_tier):
-                raise PermissionError(
-                    f"Model requires tier {min_tier!r} or higher; caller tier is {routed_user_tier!r}"
-                )
     messages = _build_provider_messages(messages, provider_id)
 
     if provider_id == "openai":
         result = await _call_openai_routed(
             messages, system_prompt, use_tools=use_tools, user_id=user_id,
             skip_approval=skip_approval,
-            model_override=model_override if pin_requested_provider else None)
-        return _attribute_provider(result, provider_id)
+            model_override=model_override if pin_requested_provider else None,
+            routed_user_tier=routed_user_tier)
+        return _attribute_provider(result, result[1].get("provider_id", provider_id), result[1].get("model_id"))
 
     spec = BUILTIN_PROVIDERS.get(provider_id)
     if not spec:
@@ -382,6 +374,10 @@ async def call_provider(
             f"Unknown provider_id={provider_id!r} — no spec in BUILTIN_PROVIDERS. "
             f"This indicates a misrouted call; fix at the caller."
         )
+    from .model_catalog import resolve_routed_model
+    effective_provider_id, effective_model = await resolve_routed_model(
+        provider_id, _slot, pin_requested_provider=pin_requested_provider,
+        model_override=model_override, user_tier=routed_user_tier)
 
     # OpenAI-vendored single-model providers (openai-5.5, openai-5.5-pro and
     # any future siblings). The legacy "openai" provider above goes through
@@ -409,10 +405,10 @@ async def call_provider(
         from .providers import openai_compatible_provider
         result = await openai_compatible_provider.call(
             payload_messages, provider_id=provider_id, role=_slot,
-            model_override=(model_override or spec["model"]), api_key=api_key,
-            max_tokens=max_tokens, use_tools=use_tools,
-            reasoning_effort=effective_effort, pin_model_override=pin_requested_provider)
-        return _attribute_provider(result, provider_id)
+            model_override=effective_model, api_key=api_key, max_tokens=max_tokens,
+            use_tools=use_tools,
+            reasoning_effort=effective_effort, pin_model_override=True)
+        return _attribute_provider(result, effective_provider_id, effective_model)
 
     api_key = os.environ.get(spec["api_key_env"], "")
     if not api_key:
@@ -432,37 +428,34 @@ async def call_provider(
         from .providers import openai_compatible_provider
         result = await openai_compatible_provider.call(
             payload_messages, provider_id=provider_id, role=_slot,
-            api_key=api_key, model_override=(model_override or spec["model"]),
-            max_tokens=max_tokens,
+            api_key=api_key, model_override=effective_model, max_tokens=max_tokens,
             use_tools=use_tools, reasoning_effort=reasoning_effort,
-            pin_model_override=pin_requested_provider,
-            progress_callback=progress_callback)
-        return _attribute_provider(result, provider_id)
+            pin_model_override=True, progress_callback=progress_callback)
+        return _attribute_provider(result, effective_provider_id, effective_model)
 
     if vendor == "anthropic":
         result = await _call_anthropic(
-            api_key, spec["model"], payload_messages, max_tokens,
+            api_key, effective_model, payload_messages, max_tokens,
             use_tools=use_tools, reasoning_effort=reasoning_effort,
             enable_caching=spec.get("supports_prompt_caching", False))
-        return _attribute_provider(result, provider_id)
+        return _attribute_provider(result, effective_provider_id, effective_model)
 
     if vendor == "google":
         from .providers.gemini_provider import call as gemini_call
         result = await gemini_call(
-            payload_messages, api_key=api_key, model_override=spec["model"],
-            max_tokens=max_tokens, use_tools=use_tools,
-            reasoning_effort=reasoning_effort, provider_id=provider_id,
+            payload_messages, api_key=api_key, model_override=effective_model,
+            max_tokens=max_tokens, use_tools=use_tools, reasoning_effort=reasoning_effort,
+            provider_id=provider_id,
             supports_thinking=bool(spec.get("supports_thinking")))
-        return _attribute_provider(result, provider_id)
+        return _attribute_provider(result, effective_provider_id, effective_model)
 
     if vendor == "xai":
         from .providers.xai_provider import call as grok_call
         result = await grok_call(
-            payload_messages, api_key=api_key, model_override=spec["model"],
-            max_tokens=max_tokens, use_tools=use_tools,
-            reasoning_effort=reasoning_effort,
+            payload_messages, api_key=api_key, model_override=effective_model,
+            max_tokens=max_tokens, use_tools=use_tools, reasoning_effort=reasoning_effort,
             progress_callback=progress_callback)
-        return _attribute_provider(result, provider_id)
+        return _attribute_provider(result, effective_provider_id, effective_model)
 
     # No-silent-fallback doctrine: if we got here the spec exists in
     # BUILTIN_PROVIDERS but its vendor isn't wired to a call path — raise so
@@ -477,6 +470,7 @@ async def _call_openai_routed(
     messages: list[dict], system_prompt: Optional[str] = None,
     use_tools: bool = True, user_id: Optional[str] = None,
     skip_approval: bool = False, model_override: Optional[str] = None,
+    routed_user_tier: Optional[str] = None,
 ) -> tuple[str, dict]:
     """
     Route to the appropriate role via openai_router, check approval gate,
@@ -506,6 +500,9 @@ async def _call_openai_routed(
     call_cfg = make_call_config(role)
     if model_override is not None:
         call_cfg = {**call_cfg, "model": model_override}
+    from .model_catalog import routed_model_owner
+    effective_provider_id = routed_model_owner(
+        call_cfg["model"], "openai", routed_user_tier)
 
     if route_decision["requires_approval"] and not skip_approval:
         import uuid
@@ -525,6 +522,8 @@ async def _call_openai_routed(
             "gate_id": gate_id,
             "approval_packet": packet,
             "route_decision": route_decision,
+            "provider_id": effective_provider_id,
+            "model_id": call_cfg["model"],
         }
         triggered = get_triggered_actions(task_text)
         scope_hints: list[str] = []
@@ -567,6 +566,7 @@ async def _call_openai_routed(
         temperature=call_cfg["temperature"],
         store=call_cfg["store"],
         pin_model_override=model_override is not None)
+    usage.update({"provider_id": effective_provider_id, "model_id": call_cfg["model"]})
 
     input_repr = json.dumps(full_input)
     await log_openai_event(

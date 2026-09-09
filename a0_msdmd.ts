@@ -1,4 +1,4 @@
-// 8081:0 0:1 0:1
+// 8116:0 0:1 0:1
 import { defineMsdmdCollection } from "./.agents/skills/msdmd/collection";
 
 export default defineMsdmdCollection({
@@ -851,7 +851,7 @@ export default defineMsdmdCollection({
       "fields": {
         "class": "correctness",
         "given": "a provider-pinned single-model call stops at an approval gate",
-        "then": "both gate-id and scope approval replays retain that exact provider pin, including any subsequently pending gate"
+        "then": "both gate-id and scope approval replays retain that exact provider and concrete model pin, including any subsequently pending gate"
       },
       "file": "python/routes/chat.py",
       "id": "chat_approval_replay_preserves_provider_pin"
@@ -875,6 +875,16 @@ export default defineMsdmdCollection({
       },
       "file": "python/routes/chat.py",
       "id": "chat_get_other_owner_404"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "security",
+        "given": "role routing rejects the effective concrete model for the caller tier after the user message was staged",
+        "then": "the route removes its staged message and returns HTTP 403 instead of leaving a dangling turn or returning 500"
+      },
+      "file": "python/routes/chat.py",
+      "id": "chat_routed_tier_denial_is_clean_403"
     },
     {
       "block": "CONTRACTS",
@@ -1448,7 +1458,7 @@ export default defineMsdmdCollection({
         "class": "security",
         "given": "an unpinned request is reassigned from its seed provider to a classified role-slot provider",
         "since": "2026-09-09",
-        "then": "the effective provider is tier-gated before transport and returned in usage for billing and provenance attribution"
+        "then": "the role-resolved concrete model's catalog owner is tier-gated before transport and returned with that model in usage for billing and provenance attribution"
       },
       "file": "python/services/inference.py",
       "id": "inference_auto_route_gates_and_reports_effective_provider"
@@ -1570,6 +1580,17 @@ export default defineMsdmdCollection({
       "id": "a0_service_interdependent_bootstrap"
     },
     {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "security",
+        "given": "role routing resolves a concrete model that belongs to a different catalog provider than the seed provider",
+        "since": "2026-09-09",
+        "then": "entitlement and provenance use the concrete model's owning provider, while unknown routed models fail closed when a caller tier is present"
+      },
+      "file": "python/services/model_catalog.py",
+      "id": "catalog_routed_model_tier_follows_concrete_owner"
+    },
+    {
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
@@ -1579,7 +1600,7 @@ export default defineMsdmdCollection({
         "module_name": "model_catalog",
         "network_boundary": "internal",
         "owner": "Erin Spencer",
-        "public_surface": "resolve_model_id, is_provider_enabled, list_models_for_user",
+        "public_surface": "resolve_model_id, resolve_routed_model, routed_model_owner, is_provider_enabled, list_models_for_user",
         "requires": "a0_service_energy_registry",
         "rollback": "Revert this file; model availability resolution reverts to prior per-surface logic.",
         "rollout": "default_enabled",
@@ -2845,7 +2866,7 @@ export default defineMsdmdCollection({
         "call": "self::check_openai_compatible_repair_regressions",
         "cleanup": "none",
         "mutates": "none",
-        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, chat_approval_replay_preserves_provider_pin",
+        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, catalog_routed_model_tier_follows_concrete_owner, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403",
         "requires": "python3, pytest",
         "timeout": "60"
       },
@@ -5310,7 +5331,21 @@ export default defineMsdmdCollection({
       "kind": "claims_proves",
       "source_block": "CHECKS",
       "source_id": "check_openai_compatible_repair_regressions",
+      "to": "catalog_routed_model_tier_follows_concrete_owner"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
       "to": "chat_approval_replay_preserves_provider_pin"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "chat_routed_tier_denial_is_clean_403"
     },
     {
       "from": "check_openai_compatible_repair_regressions",
@@ -8081,4 +8116,4 @@ export default defineMsdmdCollection({
   "gaps": [],
   "repo": "a0"
 });
-// 8081:0 0:1 0:1
+// 8116:0 0:1 0:1

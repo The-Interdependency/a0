@@ -1,4 +1,4 @@
-# 652:189 2:7 2:16
+# 677:194 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -81,6 +81,7 @@ def _attach_cost_usd(usage: dict | None, provider_id: str | None) -> None:
             cb.get("output", 0),
             cb.get("cache_read", 0),
             cb.get("cache_write", 0),
+            model=usage.get("model_id"),
         )
         usage["cost_usd"] = round(float(cost), 6)
     except Exception as exc:
@@ -487,6 +488,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                         pin_requested_provider=bool(
                             pending.get("pin_requested_provider", False)
                         ),
+                        model_override=pending.get("model_override"),
                         routed_user_tier=tier,
                     )
                 finally:
@@ -605,6 +607,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                             pin_requested_provider=bool(
                                 pending.get("pin_requested_provider", False)
                             ),
+                            model_override=pending.get("model_override"),
                             routed_user_tier=tier,
                         )
                     finally:
@@ -621,6 +624,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                             "pin_requested_provider": bool(
                                 pending.get("pin_requested_provider", False)
                             ),
+                            "model_override": pending.get("model_override"),
                             "uid": uid,
                             # Carry the allow-list forward so subsequent replays
                             # continue to respect the original tool selection.
@@ -851,6 +855,9 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 "system_prompt": system_prompt or None,
                 "provider_id": provider_id,
                 "pin_requested_provider": provider_pin_requested,
+                "model_override": (
+                    usage.get("model_id") if provider_pin_requested else None
+                ),
                 "uid": uid,
                 # Persist the allow-list so approval replay uses the same tool set.
                 "enabled_tools": list(_conv_tools) if isinstance(_conv_tools, list) else None,
@@ -893,6 +900,24 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         }
     except HTTPException:
         raise
+    except PermissionError as exc:
+        failed_user = locals().get("user_msg")
+        if isinstance(failed_user, dict) and failed_user.get("id") is not None:
+            try:
+                async with engine.begin() as cleanup_conn:
+                    await cleanup_conn.execute(
+                        _text(
+                            "DELETE FROM messages "
+                            "WHERE id = :message_id AND conversation_id = :conversation_id"
+                        ),
+                        {"message_id": failed_user["id"], "conversation_id": conv_id},
+                    )
+            except Exception as cleanup_exc:
+                print(f"[chat] failed to clean rejected user message: {cleanup_exc}")
+        pending_entry = locals().get("pending")
+        if isinstance(pending_entry, dict) and conv_id not in _pending_gates:
+            _store_pending_gate(conv_id, pending_entry)
+        raise HTTPException(status_code=403, detail=str(exc)) from None
     except Exception as exc:
         tb = traceback.format_exc()
         print(f"[chat] send_message error: {exc}\n{tb}")
@@ -920,7 +945,12 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #
 # id: chat_approval_replay_preserves_provider_pin
 #   given: a provider-pinned single-model call stops at an approval gate
-#   then: both gate-id and scope approval replays retain that exact provider pin, including any subsequently pending gate
+#   then: both gate-id and scope approval replays retain that exact provider and concrete model pin, including any subsequently pending gate
 #   class: correctness
+#
+# id: chat_routed_tier_denial_is_clean_403
+#   given: role routing rejects the effective concrete model for the caller tier after the user message was staged
+#   then: the route removes its staged message and returns HTTP 403 instead of leaving a dangling turn or returning 500
+#   class: security
 # === END CONTRACTS ===
-# 652:189 2:7 2:16
+# 677:194 2:7 2:16

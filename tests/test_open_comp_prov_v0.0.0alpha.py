@@ -1,7 +1,8 @@
-# 325:1 0:0 0:0
+# 378:1 0:0 0:0
 """Contract tests for registry-driven OpenAI-compatible providers."""
 
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -23,6 +24,65 @@ def _clear_provider_keys(monkeypatch: pytest.MonkeyPatch) -> None:
         api_key_env = spec.get("api_key_env")
         if api_key_env:
             monkeypatch.delenv(api_key_env, raising=False)
+
+
+@pytest.mark.asyncio
+async def test_openai_approval_usage_retains_concrete_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python import logger
+    from python.services import inference, openai_router
+
+    async def no_seed(_items):
+        return None
+
+    async def no_log(**_kwargs):
+        return None
+
+    monkeypatch.setattr(logger, "seed_openai_hmmm_if_empty", no_seed)
+    monkeypatch.setattr(logger, "log_openai_event", no_log)
+    monkeypatch.setitem(
+        sys.modules,
+        "python.storage",
+        SimpleNamespace(storage=SimpleNamespace()),
+    )
+    monkeypatch.setattr(
+        openai_router,
+        "make_route_decision",
+        lambda *_args, **_kwargs: {"role": "practice", "requires_approval": True},
+    )
+    monkeypatch.setattr(
+        openai_router,
+        "make_call_config",
+        lambda _role: {
+            "model": "gpt-5.5-pro",
+            "reasoning_effort": "high",
+            "max_output_tokens": 100,
+            "temperature": 1.0,
+            "store": False,
+        },
+    )
+    monkeypatch.setattr(
+        openai_router,
+        "make_approval_packet",
+        lambda _task, gate_id: {
+            "action": "write",
+            "impact": "test",
+            "rollback": "test",
+            "gate_id": gate_id,
+        },
+    )
+    monkeypatch.setattr(openai_router, "get_triggered_actions", lambda _task: [])
+
+    _content, usage = await inference._call_openai_routed(
+        [{"role": "user", "content": "publish this"}],
+        model_override="gpt-5-mini",
+        routed_user_tier="free",
+    )
+
+    assert usage["approval_state"] == "pending"
+    assert usage["provider_id"] == "openai"
+    assert usage["model_id"] == "gpt-5-mini"
 
 
 def test_repeat_fingerprint_excludes_volatile_transport_ids() -> None:
@@ -404,4 +464,4 @@ async def test_transport_redacts_opaque_key_before_error_truncation(
     assert "[redacted]" in content
 
 
-# 325:1 0:0 0:0
+# 378:1 0:0 0:0

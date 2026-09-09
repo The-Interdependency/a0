@@ -1,4 +1,4 @@
-# 341:1 0:0 0:0
+# 396:1 0:0 0:0
 """Routing and catalog tests for registry-driven compatible providers."""
 
 import ast
@@ -53,6 +53,10 @@ def test_approval_replays_preserve_explicit_provider_pin() -> None:
         any(keyword.arg == "pin_requested_provider" for keyword in call.keywords)
         for call in replay_calls
     )
+    assert all(
+        any(keyword.arg == "model_override" for keyword in call.keywords)
+        for call in replay_calls
+    )
 
     instance_runs = [
         node
@@ -73,12 +77,23 @@ def test_approval_replays_preserve_explicit_provider_pin() -> None:
         and isinstance(node.func, ast.Name)
         and node.func.id == "_store_pending_gate"
     ]
-    assert len(pending_writes) == 2
-    for call in pending_writes:
+    declared_pending_writes = [
+        call for call in pending_writes if isinstance(call.args[1], ast.Dict)
+    ]
+    assert len(declared_pending_writes) == 2
+    for call in declared_pending_writes:
         entry = call.args[1]
-        assert isinstance(entry, ast.Dict)
         keys = {key.value for key in entry.keys if isinstance(key, ast.Constant)}
         assert "pin_requested_provider" in keys
+        assert "model_override" in keys
+
+
+def test_chat_routed_tier_denial_is_a_clean_403() -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "python/routes/chat.py").read_text(encoding="utf-8")
+    assert "except PermissionError as exc:" in source
+    assert "DELETE FROM messages " in source
+    assert "HTTPException(status_code=403, detail=str(exc))" in source
 
 
 @pytest.mark.asyncio
@@ -152,6 +167,54 @@ async def test_auto_role_route_reapplies_tier_and_reports_effective_provider(
 
     assert content == "role-routed"
     assert usage["provider_id"] == "deepseek-pro"
+
+
+@pytest.mark.asyncio
+async def test_role_model_override_uses_concrete_owner_tier_and_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python.services import inference, openai_router
+    from python.services.providers import openai_compatible_provider as provider
+
+    async def no_slot(_slot: str):
+        return "", None
+
+    async def no_memory(_provider_id: str):
+        return ""
+
+    monkeypatch.setattr(openai_router, "resolve_role", lambda _text: "practice")
+    monkeypatch.setattr(inference, "_slot_routing_info", no_slot)
+    monkeypatch.setattr(inference, "_instance_memory_block", no_memory)
+    monkeypatch.setenv("DEEPSEEK_MODEL_PRACTICE", "deepseek-v4-pro")
+
+    with pytest.raises(PermissionError, match="deepseek-v4-pro.*tier 'ws'"):
+        await inference.call_provider(
+            "deepseek",
+            [{"role": "user", "content": "practice this"}],
+            use_tools=False,
+            routed_user_tier="free",
+        )
+
+    captured: dict = {}
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
+
+    async def fake_call(messages, **kwargs):
+        captured.update(kwargs)
+        return "pro-routed", {"total_tokens": 1}
+
+    monkeypatch.setattr(provider, "call", fake_call)
+    content, usage = await inference.call_provider(
+        "deepseek",
+        [{"role": "user", "content": "practice this"}],
+        use_tools=False,
+        routed_user_tier="ws",
+    )
+
+    assert content == "pro-routed"
+    assert captured["model_override"] == "deepseek-v4-pro"
+    assert captured["pin_model_override"] is True
+    assert usage["provider_id"] == "deepseek-pro"
+    assert usage["model_id"] == "deepseek-v4-pro"
 
 
 @pytest.mark.asyncio
@@ -286,7 +349,11 @@ async def test_inference_dispatches_adapter_field_without_database(
     )
 
     assert content == "routed"
-    assert usage == {"total_tokens": 1, "provider_id": "deepseek"}
+    assert usage == {
+        "total_tokens": 1,
+        "provider_id": "deepseek",
+        "model_id": "deepseek-v4-flash",
+    }
     assert captured["provider_id"] == "deepseek"
     assert captured["model_override"] == "deepseek-v4-flash"
     assert captured["role"] == "practice"
@@ -439,4 +506,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             provider_id="deepseek",
             use_tools=False,
         )
-# 341:1 0:0 0:0
+# 396:1 0:0 0:0

@@ -1,4 +1,4 @@
-# 109:89 0:0 7:1
+# 150:98 0:0 7:1
 """model_catalog — single source of truth for "what models can this user use".
 
 Today three surfaces answer this question independently:
@@ -28,7 +28,7 @@ from __future__ import annotations
 #   module_kind: service
 #   summary: Single source of truth for "what models can this user invoke" — unifies Forge dropdown, chat chips, and subagent spawn into one tier-gated, provenance-annotated model list plus model_id resolution.
 #   owner: Erin Spencer
-#   public_surface: resolve_model_id, is_provider_enabled, list_models_for_user
+#   public_surface: resolve_model_id, resolve_routed_model, routed_model_owner, is_provider_enabled, list_models_for_user
 #   internal_surface: _tier_ok, _resolve_static, _user_tier
 #   auth_boundary: none
 #   storage_boundary: read
@@ -42,6 +42,14 @@ from __future__ import annotations
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===
+
+# === CONTRACTS ===
+# id: catalog_routed_model_tier_follows_concrete_owner
+#   given: role routing resolves a concrete model that belongs to a different catalog provider than the seed provider
+#   then: entitlement and provenance use the concrete model's owning provider, while unknown routed models fail closed when a caller tier is present
+#   class: security
+#   since: 2026-09-09
+# === END CONTRACTS ===
 
 from typing import Any, Optional
 
@@ -82,6 +90,50 @@ def _resolve_static(model_id: str) -> Optional[tuple[str, dict]]:
             if isinstance(role_map, dict) and model_id in role_map.values():
                 return pid, spec
     return None
+
+
+def routed_model_owner(
+    model_id: str,
+    fallback_provider: str,
+    user_tier: Optional[str] = None,
+) -> str:
+    """Return and optionally tier-gate the catalog owner of a concrete model."""
+    hit = _resolve_static(model_id)
+    if hit is None:
+        if user_tier is not None:
+            raise PermissionError(
+                f"Routed model {model_id!r} has no registered tier policy"
+            )
+        return fallback_provider
+    provider_id, spec = hit
+    min_tier = spec.get("min_tier")
+    if user_tier is not None and not _tier_ok(user_tier, min_tier):
+        raise PermissionError(
+            f"Model {model_id!r} requires tier {min_tier!r} or higher; "
+            f"caller tier is {user_tier!r}"
+        )
+    return provider_id
+
+
+async def resolve_routed_model(
+    provider_id: str,
+    role: str,
+    *,
+    pin_requested_provider: bool,
+    model_override: Optional[str],
+    user_tier: Optional[str],
+) -> tuple[str, str]:
+    """Resolve one transport model, then bind it to its gated catalog owner."""
+    spec = BUILTIN_PROVIDERS.get(provider_id) or {}
+    model_id = model_override or str(spec.get("model") or "").strip()
+    compatible = spec.get("adapter") == "openai-compatible" or spec.get("vendor") == "openai"
+    if not pin_requested_provider and compatible:
+        from .providers._resolver import resolve_model_for_role
+        model_id = await resolve_model_for_role(provider_id, role)
+    if not model_id:
+        raise ValueError(f"Provider {provider_id!r} has no routed model")
+    owner = routed_model_owner(model_id, provider_id, user_tier)
+    return owner, model_id
 
 
 async def resolve_model_id(model_id: str) -> tuple[str, dict]:
@@ -232,4 +284,4 @@ async def list_models_for_user(user_id: Optional[str]) -> dict[str, Any]:
         })
 
     return {"user_tier": user_tier, "providers": out_providers}
-# 109:89 0:0 7:1
+# 150:98 0:0 7:1
