@@ -54,6 +54,14 @@ from __future__ import annotations
 #   unresolved: none
 # === END MODULE_BUILD ===
 
+# === CONTRACTS ===
+# id: call_fn_resolved_model_pins_provider
+#   given: call_model resolves an explicit model id after its enabled and tier gates
+#   then: the resolved provider is pinned through inference and cannot be replaced by a prompt role slot
+#   class: correctness
+#   since: 2026-09-09
+# === END CONTRACTS ===
+
 from typing import Awaitable, Callable, Optional
 
 from .inference import call_provider
@@ -132,6 +140,7 @@ async def call_model(
         user_id=user_id,
         skip_approval=skip_approval,
         reasoning_effort=reasoning_effort,
+        pin_requested_provider=True,
     )
     return content, usage
 

@@ -520,6 +520,49 @@ async def test_fanout_bridge_pins_each_requested_provider(
 
 
 @pytest.mark.asyncio
+async def test_call_model_pins_the_explicit_model_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python.services import call_fn, inference, openai_router
+    from python.services.providers import openai_compatible_provider as provider
+
+    _clear_provider_keys(monkeypatch)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
+    monkeypatch.setattr(openai_router, "resolve_role", lambda _text: "practice")
+
+    async def conflicting_slot(_slot: str) -> tuple[str, str]:
+        return "wrong-slot-memory", "deepseek-pro"
+
+    async def selected_memory(provider_id: str) -> str:
+        assert provider_id == "deepseek"
+        return "flash-memory"
+
+    captured: dict = {}
+
+    async def fake_call(messages, **kwargs):
+        captured["messages"] = messages
+        captured.update(kwargs)
+        return "single-ok", {}
+
+    monkeypatch.setattr(inference, "_slot_routing_info", conflicting_slot)
+    monkeypatch.setattr(inference, "_instance_memory_block", selected_memory)
+    monkeypatch.setattr(provider, "call", fake_call)
+
+    content, _ = await call_fn.call_model(
+        "deepseek-v4-flash",
+        [{"role": "user", "content": "practice this"}],
+        enforce_tier=False,
+        enforce_enabled=False,
+    )
+
+    assert content == "single-ok"
+    assert captured["provider_id"] == "deepseek"
+    system_text = captured["messages"][0]["content"]
+    assert "flash-memory" in system_text
+    assert "wrong-slot-memory" not in system_text
+
+
+@pytest.mark.asyncio
 async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
