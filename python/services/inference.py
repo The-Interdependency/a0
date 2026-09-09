@@ -1,4 +1,4 @@
-# 400:141 0:0 16:15
+# 370:156 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -15,7 +15,7 @@
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; inference is the live model-call path and has no migration state.
-#   requires: a0_service_tool_executor, a0_service_prompt_assembly, a0_service_attachments, a0_service_energy_registry
+#   requires: a0_service_tool_executor, a0_service_prompt_assembly, a0_service_attachments, a0_service_energy_registry, a0_service_approval_gate
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===
@@ -47,6 +47,18 @@
 # id: inference_explicit_openai_model_is_pinned
 #   given: an explicit concrete OpenAI model resolves through the legacy openai provider branch
 #   then: the selected model reaches the compatible transport without role-policy or environment replacement
+#   class: correctness
+#   since: 2026-09-09
+#
+# id: inference_compatible_provider_approval_gate
+#   given: a tool-enabled OpenAI-compatible provider turn requests an external write without a grant
+#   then: inference returns a pending approval gate before transport or tool execution and replay may bypass only with skip_approval
+#   class: security
+#   since: 2026-09-09
+#
+# id: inference_compatible_transport_uses_effective_owner
+#   given: role routing selects a concrete model owned by a different compatible-provider catalog entry
+#   then: transport uses the owning provider's complete registry spec and identity as well as the selected model
 #   class: correctness
 #   since: 2026-09-09
 # === END CONTRACTS ===
@@ -378,6 +390,23 @@ async def call_provider(
     effective_provider_id, effective_model = await resolve_routed_model(
         provider_id, _slot, pin_requested_provider=pin_requested_provider,
         model_override=model_override, user_tier=routed_user_tier)
+    # A role-selected model can belong to a different provider entry. From
+    # this point onward transport must use that owner's complete configuration
+    # (identity, base URL, key env, capabilities), not the seed provider's.
+    provider_id = effective_provider_id
+    spec = BUILTIN_PROVIDERS[effective_provider_id]
+
+    if use_tools and (
+        spec.get("adapter") == "openai-compatible" or spec.get("vendor") == "openai"
+    ):
+        from .approval_gate import approval_gate_result
+        _, pending = await approval_gate_result(
+            messages, user_id=user_id, skip_approval=skip_approval,
+            provider_id=effective_provider_id, model_id=effective_model,
+            reasoning_effort=reasoning_effort,
+        )
+        if pending is not None:
+            return pending
 
     # OpenAI-vendored single-model providers (openai-5.5, openai-5.5-pro and
     # any future siblings). The legacy "openai" provider above goes through
@@ -479,72 +508,26 @@ async def _call_openai_routed(
     Call config (model, effort, etc.) is obtained separately via make_call_config().
     user_id is used to load pre-approved scopes so pre-authorized actions bypass the gate.
     """
-    from .openai_router import make_route_decision, make_call_config, make_approval_packet, get_triggered_actions
-    from ..logger import log_openai_event, seed_openai_hmmm_if_empty
-    from ..config.policy_loader import get_hmmm_seed_items, get_action_scope, get_scope_categories
-    from ..storage import storage
-
-    await seed_openai_hmmm_if_empty(get_hmmm_seed_items())
+    from .openai_router import make_call_config, resolve_role
+    from ..logger import log_openai_event
 
     task_text = " ".join(m.get("content", "") for m in messages if m.get("role") == "user")
 
-    pre_approved_scopes: set[str] = set()
-    if user_id:
-        try:
-            pre_approved_scopes = await storage.get_approval_scope_names(user_id)
-        except Exception as _scope_err:
-            print(f"[approval_scopes] failed to load scopes for {user_id}: {_scope_err}")
-
-    route_decision = make_route_decision(task_text, pre_approved_scopes=pre_approved_scopes)
-    role = route_decision["role"]
+    role = resolve_role(task_text)
     call_cfg = make_call_config(role)
     if model_override is not None:
         call_cfg = {**call_cfg, "model": model_override}
     from .model_catalog import routed_model_owner
     effective_provider_id = routed_model_owner(
         call_cfg["model"], "openai", routed_user_tier)
-
-    if route_decision["requires_approval"] and not skip_approval:
-        import uuid
-        gate_id = f"gate-{uuid.uuid4().hex[:8]}"
-        packet = make_approval_packet(task_text, gate_id)
-        output_repr = json.dumps(packet)
-        await log_openai_event(
-            role=role,
-            model=call_cfg["model"],
-            reasoning_effort=call_cfg["reasoning_effort"],
-            input_text=json.dumps({"task": task_text}),
-            output_text=output_repr,
-            approval_state="pending",
-        )
-        usage = {
-            "approval_state": "pending",
-            "gate_id": gate_id,
-            "approval_packet": packet,
-            "route_decision": route_decision,
-            "provider_id": effective_provider_id,
-            "model_id": call_cfg["model"],
-        }
-        triggered = get_triggered_actions(task_text)
-        scope_hints: list[str] = []
-        scope_categories = get_scope_categories()
-        seen_scopes: set[str] = set()
-        for action in triggered:
-            sc = get_action_scope(action)
-            if sc and sc not in seen_scopes and sc in scope_categories:
-                meta = scope_categories[sc]
-                scope_hints.append(f"  Pre-approve all {meta['label']}: APPROVE SCOPE {sc}")
-                seen_scopes.add(sc)
-        scope_section = "\n" + "\n".join(scope_hints) if scope_hints else ""
-        content = (
-            f"[APPROVAL REQUIRED — gate_id: {gate_id}]\n"
-            f"Action: {packet['action'][:120]}\n"
-            f"Impact: {packet['impact']}\n"
-            f"Rollback: {packet['rollback']}\n"
-            f"To approve this action: APPROVE {gate_id}"
-            f"{scope_section}"
-        )
-        return content, usage
+    from .approval_gate import approval_gate_result
+    route_decision, pending = await approval_gate_result(
+        messages, user_id=user_id, skip_approval=skip_approval,
+        provider_id=effective_provider_id, model_id=call_cfg["model"],
+        reasoning_effort=call_cfg["reasoning_effort"],
+    )
+    if pending is not None:
+        return pending
 
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
@@ -607,4 +590,4 @@ async def _call_anthropic(
         enable_caching=enable_caching)
 
 
-# 400:141 0:0 16:15
+# 370:156 0:0 16:15
