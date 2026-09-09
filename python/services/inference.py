@@ -1,4 +1,4 @@
-# 406:107 0:0 16:15
+# 400:114 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -19,21 +19,20 @@
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===
-import os
+# === CONTRACTS ===
+# id: inference_tool_repeat_fingerprint_ignores_transport_ids
+#   given: consecutive tool calls have the same function name and semantic arguments but different provider-generated ids
+#   then: _canonical_tool_calls emits the same fingerprint so the second execution is refused
+#   class: safety
+#   since: 2026-09-09
+# === END CONTRACTS ===
 import json
-import copy
-import random
-import asyncio
 import logging
-from typing import Optional, Callable, Awaitable, Any
+import os
+from typing import Callable, Optional
 import httpx
 
-from .tool_executor import (
-    TOOL_SCHEMAS_CHAT,
-    TOOL_SCHEMAS_RESPONSES,
-    execute_tool,
-    set_caller_provider,
-)
+from .tool_executor import TOOL_SCHEMAS_CHAT, TOOL_SCHEMAS_RESPONSES, execute_tool, set_caller_provider
 from .prompt_assembly import _prepend_doctrine
 from .attachments import build_provider_messages as _build_provider_messages
 # Single source of truth for provider specs — loaded from python/config/providers.json.
@@ -227,7 +226,7 @@ def _sanitize_provider_error(provider: str, exc: BaseException) -> str:
 
 
 def _canonical_tool_calls(tool_calls: list[dict]) -> str:
-    """Produce a stable string fingerprint of a list of tool calls for repeat detection."""
+    """Fingerprint semantic tool requests without volatile transport identifiers."""
     norm = []
     for tc in tool_calls:
         if "function" in tc:
@@ -244,6 +243,8 @@ def _canonical_tool_calls(tool_calls: list[dict]) -> str:
             args_str = json.dumps(args_obj, sort_keys=True, default=str)
         except Exception:
             args_str = str(args)
+        norm.append({"name": str(name), "arguments": args_str})
+    return json.dumps(norm, sort_keys=True, separators=(",", ":"))
 
 # Anthropic API version (stable; new features arrive via anthropic-beta header).
 _ANTHROPIC_VERSION = "2023-06-01"
@@ -577,4 +578,4 @@ async def _call_anthropic(
     )
 
 
-# 406:107 0:0 16:15
+# 400:114 0:0 16:15

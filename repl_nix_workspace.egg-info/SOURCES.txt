@@ -145,6 +145,7 @@ python/tests/contract_runner.py
 python/tests/test_coherence_primes.py
 python/tests/test_contract_runner.py
 python/tests/test_encoder_compiles.py
+python/tests/test_openai_compatible_contracts.py
 python/tests/test_platonic_agent.py
 python/tests/test_ptcna_state.py
 python/tests/test_runtime_readiness.py

@@ -1,4 +1,4 @@
-# 196:1 0:0 0:0
+# 369:1 0:0 0:0
 """Contract tests for registry-driven OpenAI-compatible providers."""
 
 from pathlib import Path
@@ -23,6 +23,27 @@ def _clear_provider_keys(monkeypatch: pytest.MonkeyPatch) -> None:
         api_key_env = spec.get("api_key_env")
         if api_key_env:
             monkeypatch.delenv(api_key_env, raising=False)
+
+
+def test_repeat_fingerprint_excludes_volatile_transport_ids() -> None:
+    from python.services.inference import _canonical_tool_calls
+
+    first = [{
+        "type": "function_call",
+        "name": "sys.pwd",
+        "arguments": '{"depth": 1}',
+        "call_id": "call-first",
+        "id": "item-first",
+    }]
+    repeated = [{
+        "type": "function_call",
+        "name": "sys.pwd",
+        "arguments": '{"depth":1}',
+        "call_id": "call-second",
+        "id": "item-second",
+    }]
+
+    assert _canonical_tool_calls(first) == _canonical_tool_calls(repeated)
 
 
 def test_deepseek_is_configuration_not_a_provider_specific_adapter() -> None:
@@ -179,6 +200,58 @@ async def test_first_responses_tool_call_executes_before_repeat_detection(
     )
 
     assert content == "tool-ok"
+    assert executed == [("sys.pwd", {})]
+    assert len(responses) == 2
+
+
+@pytest.mark.asyncio
+async def test_repeated_responses_tool_call_with_new_ids_executes_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python.services import tool_executor
+    from python.services.providers import openai_compatible_provider as provider
+
+    responses: list[dict] = []
+    executed: list[tuple[str, dict]] = []
+
+    class FakeAsyncOpenAI:
+        def __init__(self, **kwargs):
+            async def create(**request):
+                responses.append(request)
+                call_number = len(responses)
+                return _Dump({
+                    "output": [{
+                        "type": "function_call",
+                        "name": "sys.pwd",
+                        "arguments": "{}",
+                        "call_id": f"call-{call_number}",
+                        "id": f"item-{call_number}",
+                    }],
+                    "usage": {},
+                })
+
+            self.responses = SimpleNamespace(create=create)
+
+    async def fake_execute(name: str, arguments: dict) -> str:
+        executed.append((name, arguments))
+        return "pwd-ok"
+
+    monkeypatch.setattr(provider, "AsyncOpenAI", FakeAsyncOpenAI)
+    monkeypatch.setattr(
+        provider,
+        "_response_tools",
+        lambda profile: [{"type": "function", "name": "sys.pwd"}],
+    )
+    monkeypatch.setattr(tool_executor, "execute_tool", fake_execute)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
+
+    content, _ = await provider.call(
+        [{"role": "user", "content": "repeat a tool"}],
+        provider_id="deepseek",
+        use_tools=True,
+    )
+
+    assert content == "[noticed repeat tool call — answering directly]"
     assert executed == [("sys.pwd", {})]
     assert len(responses) == 2
 
@@ -393,4 +466,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             provider_id="deepseek",
             use_tools=False,
         )
-# 196:1 0:0 0:0
+# 369:1 0:0 0:0

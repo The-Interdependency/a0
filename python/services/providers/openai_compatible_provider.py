@@ -204,7 +204,7 @@ async def _call_responses(
         tool_calls = [item for item in output_items if item.get("type") == "function_call"]
 
         if tool_calls:
-            fingerprint = _canonical_tool_calls(tool_calls) or json.dumps(tool_calls, sort_keys=True, default=str)
+            fingerprint = _canonical_tool_calls(tool_calls)
             if fingerprint == previous_fingerprint:
                 return "[noticed repeat tool call — answering directly]", accumulated_usage
             previous_fingerprint = fingerprint
@@ -312,7 +312,7 @@ async def _call_chat_completions(
         message = (choices[0].get("message") if choices else None) or {}
         tool_calls = message.get("tool_calls") or []
         if tool_calls:
-            fingerprint = _canonical_tool_calls(tool_calls) or json.dumps(tool_calls, sort_keys=True, default=str)
+            fingerprint = _canonical_tool_calls(tool_calls)
             if fingerprint == previous_fingerprint:
                 return "[noticed repeat tool call — answering directly]", accumulated_usage
             previous_fingerprint = fingerprint
