@@ -1,4 +1,4 @@
-# 289:88 0:0 20:3
+# 291:95 0:0 20:3
 # === MODULE_BUILD ===
 # id: a0_service_energy_registry
 #   module_name: energy_registry
@@ -12,21 +12,29 @@
 #   network_boundary: internal
 #   user_data_boundary: none
 #   admin_only: false
-#   tests: hmmm
+#   tests: tests/test_open_comp_rout_v0.0.0alpha.py
 #   rollout: default_enabled
 #   rollback: Revert this file; provider catalog and pricing revert to prior JSON-backed definitions.
 #   requires: none
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===
-import logging
+
+# === CONTRACTS ===
+# id: cheap_provider_prefers_configured_low_cost_provider
+#   given: DeepSeek Flash and a more expensive fallback provider are configured while earlier cheap candidates are unavailable
+#   then: cheap_provider selects DeepSeek Flash before registry-order fallback
+#   class: correctness
+#   since: 2026-09-09
+# === END CONTRACTS ===
 import contextvars
 import json
+import logging
 import os
-logger = logging.getLogger(__name__)
-
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # Provider catalog and per-provider optimizer presets live as JSON data, not
 # code literals (doctrine: no executable-data string literals — model slugs,
@@ -145,6 +153,7 @@ _CHEAP_PROVIDER_ORDER = [
     "grok",           # grok-4-fast-reasoning $0.20/1M
     "gemini",         # gemini-2.5-flash $0.30/1M
     "openai",         # gpt-5-mini $0.25/1M
+    "deepseek",       # deepseek-v4-flash $0.44/1M
 ]
 
 
@@ -433,4 +442,4 @@ async def resolve_providers(providers: list[str] | None) -> list[str]:
         elif p in BUILTIN_PROVIDERS and p not in out:
             out.append(p)
     return out
-# 289:88 0:0 20:3
+# 291:95 0:0 20:3

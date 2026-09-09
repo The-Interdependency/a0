@@ -1,4 +1,4 @@
-// 7992:0 0:1 0:1
+// 8027:0 0:1 0:1
 import { defineMsdmdCollection } from "./.agents/skills/msdmd/collection";
 
 export default defineMsdmdCollection({
@@ -849,6 +849,16 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
+        "class": "correctness",
+        "given": "a provider-pinned single-model call stops at an approval gate",
+        "then": "both gate-id and scope approval replays retain that exact provider pin, including any subsequently pending gate"
+      },
+      "file": "python/routes/chat.py",
+      "id": "chat_approval_replay_preserves_provider_pin"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
         "class": "security",
         "given": "DELETE /api/v1/conversations/{id} with x-user-id != row.user_id",
         "then": "404; the row remains intact for the real owner"
@@ -1251,6 +1261,17 @@ export default defineMsdmdCollection({
       "id": "a0_service_editable_registry"
     },
     {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "DeepSeek Flash and a more expensive fallback provider are configured while earlier cheap candidates are unavailable",
+        "since": "2026-09-09",
+        "then": "cheap_provider selects DeepSeek Flash before registry-order fallback"
+      },
+      "file": "python/services/energy_registry.py",
+      "id": "cheap_provider_prefers_configured_low_cost_provider"
+    },
+    {
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
@@ -1267,7 +1288,7 @@ export default defineMsdmdCollection({
         "since": "2026-06-02",
         "storage_boundary": "read",
         "summary": "Energy-provider catalog and pricing/cost layer \u2014 loads provider+pricing JSON data, resolves active/default/cheap providers, and estimates per-call cost and cache breakdown from usage.",
-        "tests": "hmmm",
+        "tests": "tests/test_open_comp_rout_v0.0.0alpha.py",
         "unresolved": "none",
         "user_data_boundary": "none"
       },
@@ -2773,6 +2794,32 @@ export default defineMsdmdCollection({
       "id": "storage_create_owner_isolation"
     },
     {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::check_openai_compatible_registry_wiring",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "openai_compatible_registry_driven, a0_provider_selection, a0_openai_compatible_completion",
+        "requires": "python3",
+        "timeout": "20"
+      },
+      "file": "python/tests/chec_open_comp_cont_v0.0.0alpha.py",
+      "id": "check_openai_compatible_registry_wiring"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::check_openai_compatible_repair_regressions",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, chat_approval_replay_preserves_provider_pin",
+        "requires": "python3, pytest",
+        "timeout": "60"
+      },
+      "file": "python/tests/chec_open_comp_cont_v0.0.0alpha.py",
+      "id": "check_openai_compatible_repair_regressions"
+    },
+    {
       "block": "CONTRACTS",
       "fields": {
         "class": "safety",
@@ -3298,32 +3345,6 @@ export default defineMsdmdCollection({
       },
       "file": "python/tests/test_contract_runner.py",
       "id": "check_contract_graph_rejects_incomplete_linkage"
-    },
-    {
-      "block": "CHECKS",
-      "fields": {
-        "call": "self::check_openai_compatible_registry_wiring",
-        "cleanup": "none",
-        "mutates": "none",
-        "proves": "openai_compatible_registry_driven, a0_provider_selection, a0_openai_compatible_completion",
-        "requires": "python3",
-        "timeout": "20"
-      },
-      "file": "python/tests/test_open_comp_cont_v0.0.0alpha.py",
-      "id": "check_openai_compatible_registry_wiring"
-    },
-    {
-      "block": "CHECKS",
-      "fields": {
-        "call": "self::check_openai_compatible_repair_regressions",
-        "cleanup": "none",
-        "mutates": "none",
-        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped",
-        "requires": "python3, pytest",
-        "timeout": "60"
-      },
-      "file": "python/tests/test_open_comp_cont_v0.0.0alpha.py",
-      "id": "check_openai_compatible_repair_regressions"
     },
     {
       "block": "CHECKS",
@@ -5243,6 +5264,20 @@ export default defineMsdmdCollection({
       "source_block": "CHECKS",
       "source_id": "check_openai_compatible_repair_regressions",
       "to": "call_fn_resolved_model_pins_provider"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "chat_approval_replay_preserves_provider_pin"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "cheap_provider_prefers_configured_low_cost_provider"
     },
     {
       "from": "check_openai_compatible_repair_regressions",
@@ -7992,4 +8027,4 @@ export default defineMsdmdCollection({
   "gaps": [],
   "repo": "a0"
 });
-// 7992:0 0:1 0:1
+// 8027:0 0:1 0:1

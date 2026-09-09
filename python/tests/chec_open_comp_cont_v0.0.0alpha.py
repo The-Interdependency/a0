@@ -1,4 +1,4 @@
-# 98:19 0:0 0:0
+# 100:19 0:0 0:0
 """Executable msdmd witness for the generic provider boundary."""
 
 # === CHECKS ===
@@ -11,7 +11,7 @@
 #   cleanup: none
 #
 # id: check_openai_compatible_repair_regressions
-#   proves: a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped
+#   proves: a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, chat_approval_replay_preserves_provider_pin
 #   call: self::check_openai_compatible_repair_regressions
 #   requires: python3, pytest
 #   timeout: 60
@@ -116,6 +116,8 @@ def check_openai_compatible_repair_regressions() -> None:
         f"{routing_tests}::test_fanout_bridge_pins_each_requested_provider",
         f"{routing_tests}::test_call_model_pins_the_explicit_model_provider",
         f"{routing_tests}::test_explicit_model_pin_ignores_cross_tier_role_override",
+        f"{routing_tests}::test_cheap_provider_prefers_deepseek_before_expensive_fallback",
+        f"{routing_tests}::test_approval_replays_preserve_explicit_provider_pin",
         f"{adapter_tests}::test_adapter_uses_registry_transport_and_sanitizes_failure",
     ]
     environment = dict(os.environ)
@@ -138,4 +140,4 @@ def check_openai_compatible_repair_regressions() -> None:
 
 def test_openai_compatible_registry_wiring() -> None:
     check_openai_compatible_registry_wiring()
-# 98:19 0:0 0:0
+# 100:19 0:0 0:0

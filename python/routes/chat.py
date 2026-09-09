@@ -1,4 +1,4 @@
-# 637:184 2:7 2:16
+# 647:191 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -11,7 +11,7 @@ from ..services.inference import call_provider
 from ..services.prompt_assembly import build_system_prompt
 from ..services.bg_tasks import spawn as _spawn_bg
 
-# In-memory pending gate store: conv_id → {gate_id, history, system_prompt, provider_id, uid, ts}
+# In-memory pending gate store: conv_id → gate context, including provider pin state.
 # Used to replay a blocked action when the user grants a scope.
 # Entries are evicted after _PENDING_GATE_TTL_SECS to keep the map bounded.
 _pending_gates: dict[int, dict] = {}
@@ -483,6 +483,9 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                         system_prompt=pending["system_prompt"],
                         user_id=uid or None,
                         skip_approval=True,
+                        pin_requested_provider=bool(
+                            pending.get("pin_requested_provider", False)
+                        ),
                     )
                 finally:
                     set_approval_scope_user_id(None)
@@ -597,6 +600,9 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                             messages=pending["history"],
                             system_prompt=pending["system_prompt"],
                             user_id=uid or None,
+                            pin_requested_provider=bool(
+                                pending.get("pin_requested_provider", False)
+                            ),
                         )
                     finally:
                         set_approval_scope_user_id(None)
@@ -609,6 +615,9 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                             "history": pending["history"],
                             "system_prompt": pending["system_prompt"],
                             "provider_id": pending["provider_id"],
+                            "pin_requested_provider": bool(
+                                pending.get("pin_requested_provider", False)
+                            ),
                             "uid": uid,
                             # Carry the allow-list forward so subsequent replays
                             # continue to respect the original tool selection.
@@ -836,6 +845,9 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 "history": history,
                 "system_prompt": system_prompt or None,
                 "provider_id": provider_id,
+                # AgentInstance.run delegates to call_model, which pins the
+                # resolved model/provider after tier and enabled gates.
+                "pin_requested_provider": True,
                 "uid": uid,
                 # Persist the allow-list so approval replay uses the same tool set.
                 "enabled_tools": list(_conv_tools) if isinstance(_conv_tools, list) else None,
@@ -902,5 +914,10 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #          active_provider — server-side sources still fall back, only
 #          user input is strict)
 #   class: correctness
+#
+# id: chat_approval_replay_preserves_provider_pin
+#   given: a provider-pinned single-model call stops at an approval gate
+#   then: both gate-id and scope approval replays retain that exact provider pin, including any subsequently pending gate
+#   class: correctness
 # === END CONTRACTS ===
-# 637:184 2:7 2:16
+# 647:191 2:7 2:16

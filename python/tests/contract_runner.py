@@ -1,4 +1,4 @@
-# 240:44 0:0 0:0
+# 257:44 0:0 0:0
 """Contract/check graph auditor and executor — see test-build/SKILL.md.
 
 Source modules own behavioral `CONTRACTS`; test modules own executable
@@ -47,6 +47,7 @@ Exit 0 only when the graph closes and every executed check passes.
 # === END CONTRACTS ===
 from __future__ import annotations
 
+import argparse
 import ast
 import asyncio
 import hashlib
@@ -282,7 +283,7 @@ def _rel(path: Path) -> str:
         return str(path)
 
 
-async def main() -> int:
+async def main(only: set[str] | None = None) -> int:
     contracts, uncovered_modules = _source_declarations()
     checks = _check_declarations()
     effective_checks, gaps, warnings = audit_graph(contracts, checks)
@@ -298,6 +299,14 @@ async def main() -> int:
     if gaps:
         print(f"\n{len(gaps)} graph gap(s); no checks executed")
         return 1
+
+    if only:
+        known_ids = {check.id for check in effective_checks}
+        unknown_ids = sorted(only - known_ids)
+        if unknown_ids:
+            print(f"\nunknown check id(s): {', '.join(unknown_ids)}")
+            return 1
+        effective_checks = [check for check in effective_checks if check.id in only]
 
     results: list[dict[str, Any]] = []
     print(f"\nexecuting {len(effective_checks)} checks\n")
@@ -329,5 +338,14 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
-# 240:44 0:0 0:0
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        metavar="CHECK_ID",
+        help="execute only this check after auditing the complete declaration graph",
+    )
+    args = parser.parse_args()
+    sys.exit(asyncio.run(main(set(args.only) or None)))
+# 257:44 0:0 0:0

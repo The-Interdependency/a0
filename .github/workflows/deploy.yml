@@ -38,7 +38,9 @@ jobs:
         run: uv sync --frozen
 
       - name: Run provider contracts
-        run: uv run pytest -q tests/test_open_comp_prov_v0.0.0alpha.py tests/test_open_comp_rout_v0.0.0alpha.py tests/test_aone_open_comp_adap_v0.0.0alpha.py tests/test_a0_package.py python/tests/test_open_comp_cont_v0.0.0alpha.py
+        run: |
+          uv run pytest -q tests/test_open_comp_prov_v0.0.0alpha.py tests/test_open_comp_rout_v0.0.0alpha.py tests/test_aone_open_comp_adap_v0.0.0alpha.py tests/test_a0_package.py
+          uv run python -m python.tests.contract_runner --only check_openai_compatible_registry_wiring --only check_openai_compatible_repair_regressions
 
   check-console-tabs:
     name: Console tab regression guard

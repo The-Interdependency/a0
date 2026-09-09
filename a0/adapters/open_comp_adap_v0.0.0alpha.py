@@ -1,4 +1,4 @@
-# 98:41 0:0 2:0
+# 96:41 0:0 2:0
 """Synchronous standalone adapter for registry-defined OpenAI-compatible APIs."""
 from __future__ import annotations
 
@@ -104,6 +104,10 @@ class OpenAICompatibleAdapter:
     def complete(self, messages: List[Message], **kwargs: Any) -> Dict[str, Any]:
         effort = _normalize_effort(self.spec, kwargs.get("reasoning_effort"))
         max_tokens = int(kwargs.get("max_tokens") or 4096)
+        if self.api_family not in {"responses", "chat_completions"}:
+            raise ValueError(
+                f"Provider {self.provider_id!r} has unsupported api_family={self.api_family!r}"
+            )
         try:
             if self.api_family == "responses":
                 request: dict[str, Any] = {
@@ -134,12 +138,6 @@ class OpenAICompatibleAdapter:
                 choices = data.get("choices") or []
                 message = (choices[0].get("message") if choices else None) or {}
                 text = str(message.get("content") or "")
-            else:
-                raise ValueError(
-                    f"Provider {self.provider_id!r} has unsupported api_family={self.api_family!r}"
-                )
-        except ValueError:
-            raise
         except Exception as exc:
             raise RuntimeError(
                 f"{self.provider_id} request failed: {type(exc).__name__}"
@@ -154,4 +152,4 @@ class OpenAICompatibleAdapter:
             },
             "subagents_used": [],
         }
-# 98:41 0:0 2:0
+# 96:41 0:0 2:0

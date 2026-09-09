@@ -1,6 +1,8 @@
-# 198:1 0:0 0:0
+# 236:1 0:0 0:0
 """Routing and catalog tests for registry-driven compatible providers."""
 
+import ast
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -22,6 +24,49 @@ def _clear_provider_keys(monkeypatch: pytest.MonkeyPatch) -> None:
         api_key_env = spec.get("api_key_env")
         if api_key_env:
             monkeypatch.delenv(api_key_env, raising=False)
+
+
+def test_cheap_provider_prefers_deepseek_before_expensive_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python.services.energy_registry import cheap_provider
+
+    _clear_provider_keys(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "expensive-secret")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "cheap-secret")
+
+    assert cheap_provider() == "deepseek"
+
+
+def test_approval_replays_preserve_explicit_provider_pin() -> None:
+    root = Path(__file__).resolve().parents[1]
+    tree = ast.parse((root / "python/routes/chat.py").read_text(encoding="utf-8"))
+    replay_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "call_provider"
+    ]
+    assert len(replay_calls) == 2
+    assert all(
+        any(keyword.arg == "pin_requested_provider" for keyword in call.keywords)
+        for call in replay_calls
+    )
+
+    pending_writes = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_store_pending_gate"
+    ]
+    assert len(pending_writes) == 2
+    for call in pending_writes:
+        entry = call.args[1]
+        assert isinstance(entry, ast.Dict)
+        keys = {key.value for key in entry.keys if isinstance(key, ast.Constant)}
+        assert "pin_requested_provider" in keys
 
 
 @pytest.mark.asyncio
@@ -257,4 +302,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             provider_id="deepseek",
             use_tools=False,
         )
-# 198:1 0:0 0:0
+# 236:1 0:0 0:0
