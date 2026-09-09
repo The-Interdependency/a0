@@ -1,4 +1,4 @@
-# 649:189 2:7 2:16
+# 652:189 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -487,6 +487,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                         pin_requested_provider=bool(
                             pending.get("pin_requested_provider", False)
                         ),
+                        routed_user_tier=tier,
                     )
                 finally:
                     set_approval_scope_user_id(None)
@@ -604,6 +605,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                             pin_requested_provider=bool(
                                 pending.get("pin_requested_provider", False)
                             ),
+                            routed_user_tier=tier,
                         )
                     finally:
                         set_approval_scope_user_id(None)
@@ -795,6 +797,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                     history,
                     system_prompt_override=system_prompt or None,
                     pin_requested_provider=provider_pin_requested,
+                    enforce_routed_tier=True,
                 )
                 print(f"[chat-dbg] provider={inst.provider_id!r} hist_len={len(history)} content_len={len(content or '')} content_preview={repr((content or '')[:80])}")
                 # Use the resolved provider_id from the instance — for forge
@@ -920,4 +923,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   then: both gate-id and scope approval replays retain that exact provider pin, including any subsequently pending gate
 #   class: correctness
 # === END CONTRACTS ===
-# 649:189 2:7 2:16
+# 652:189 2:7 2:16

@@ -14,6 +14,8 @@ python/agents/platonic_regions.py
 python/agents/zfae.py
 python/config/__init__.py
 python/config/policy_loader.py
+python/config/pricing.json
+python/config/providers.json
 python/engine/__init__.py
 python/engine/memory_core.py
 python/engine/module_graph.py

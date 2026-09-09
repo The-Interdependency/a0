@@ -1,4 +1,4 @@
-# 27:22 0:0 1:1
+# 29:22 0:0 1:1
 """Compatibility wrapper for the registry-driven OpenAI provider."""
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ async def call(
     reasoning_effort: Optional[str] = "medium",
     temperature: float = 1.0,
     store: bool = False,
+    pin_model_override: bool = False,
 ) -> tuple[str, dict]:
     """Run the built-in OpenAI provider through the shared transport."""
     return await openai_compatible_provider.call(
@@ -52,5 +53,6 @@ async def call(
         reasoning_effort=reasoning_effort,
         temperature=temperature,
         store=store,
+        pin_model_override=pin_model_override,
     )
-# 27:22 0:0 1:1
+# 29:22 0:0 1:1

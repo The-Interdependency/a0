@@ -1,4 +1,4 @@
-# 398:129 0:0 16:15
+# 400:141 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -35,6 +35,18 @@
 # id: inference_fanout_preserves_requested_provider
 #   given: multi-model orchestration explicitly requests one provider for a lane
 #   then: call_provider uses that provider and its instance memory without replacing it from the shared prompt's role slot
+#   class: correctness
+#   since: 2026-09-09
+#
+# id: inference_auto_route_gates_and_reports_effective_provider
+#   given: an unpinned request is reassigned from its seed provider to a classified role-slot provider
+#   then: the effective provider is tier-gated before transport and returned in usage for billing and provenance attribution
+#   class: security
+#   since: 2026-09-09
+#
+# id: inference_explicit_openai_model_is_pinned
+#   given: an explicit concrete OpenAI model resolves through the legacy openai provider branch
+#   then: the selected model reaches the compatible transport without role-policy or environment replacement
 #   class: correctness
 #   since: 2026-09-09
 # === END CONTRACTS ===
@@ -290,6 +302,13 @@ def _get_max_tool_rounds() -> int:
     return v if v is not None else _MAX_TOOL_ROUNDS
 
 
+def _attribute_provider(result: tuple[str, dict], provider_id: str) -> tuple[str, dict]:
+    content, usage = result
+    attributed = dict(usage or {})
+    attributed["provider_id"] = provider_id
+    return content, attributed
+
+
 async def call_provider(
     provider_id: str,
     messages: list[dict],
@@ -301,7 +320,8 @@ async def call_provider(
     reasoning_effort: Optional[str] = None,
     progress_callback: Optional[Callable[[int, int], None]] = None,
     skip_manifest: bool = False,
-    pin_requested_provider: bool = False,
+    pin_requested_provider: bool = False, model_override: Optional[str] = None,
+    routed_user_tier: Optional[str] = None,
 ) -> tuple[str, dict]:
     """
     Forward messages to the named provider with the system prompt prepended.
@@ -315,7 +335,7 @@ async def call_provider(
     provider's instance memory.
     reasoning_effort is mapped per-provider, gated by capability flags in
     providers.json (single source of truth — no model slugs in code):
-      - OpenAI: passed via openai_router call_cfg (ignored on the openai branch)
+      - OpenAI: passed via openai_router call_cfg unless a concrete model is pinned
       - Grok:   passed as reasoning_effort when spec.supports_reasoning_effort
       - Claude: mapped to thinking.budget_tokens when spec.supports_thinking
       - Gemini: honored only on the native SDK path (gemini3 spec.supports_thinking)
@@ -340,10 +360,21 @@ async def call_provider(
         system_prompt = (system_prompt or "") + "\n\n## Instance Memory\n" + _imem
     if _slot_provider:
         provider_id = _slot_provider
+        if routed_user_tier is not None:
+            from .model_catalog import _tier_ok
+            min_tier = (BUILTIN_PROVIDERS.get(provider_id) or {}).get("min_tier")
+            if not _tier_ok(routed_user_tier, min_tier):
+                raise PermissionError(
+                    f"Model requires tier {min_tier!r} or higher; caller tier is {routed_user_tier!r}"
+                )
     messages = _build_provider_messages(messages, provider_id)
 
     if provider_id == "openai":
-        return await _call_openai_routed(messages, system_prompt, use_tools=use_tools, user_id=user_id, skip_approval=skip_approval)
+        result = await _call_openai_routed(
+            messages, system_prompt, use_tools=use_tools, user_id=user_id,
+            skip_approval=skip_approval,
+            model_override=model_override if pin_requested_provider else None)
+        return _attribute_provider(result, provider_id)
 
     spec = BUILTIN_PROVIDERS.get(provider_id)
     if not spec:
@@ -376,12 +407,12 @@ async def call_provider(
             payload_messages.append({"role": "system", "content": system_prompt})
         payload_messages.extend(messages)
         from .providers import openai_compatible_provider
-        return await openai_compatible_provider.call(
+        result = await openai_compatible_provider.call(
             payload_messages, provider_id=provider_id, role=_slot,
-            model_override=spec["model"], api_key=api_key, max_tokens=max_tokens,
-            use_tools=use_tools, reasoning_effort=effective_effort,
-            pin_model_override=pin_requested_provider,
-        )
+            model_override=(model_override or spec["model"]), api_key=api_key,
+            max_tokens=max_tokens, use_tools=use_tools,
+            reasoning_effort=effective_effort, pin_model_override=pin_requested_provider)
+        return _attribute_provider(result, provider_id)
 
     api_key = os.environ.get(spec["api_key_env"], "")
     if not api_key:
@@ -399,46 +430,39 @@ async def call_provider(
 
     if spec.get("adapter") == "openai-compatible":
         from .providers import openai_compatible_provider
-        return await openai_compatible_provider.call(
+        result = await openai_compatible_provider.call(
             payload_messages, provider_id=provider_id, role=_slot,
-            api_key=api_key, model_override=spec["model"], max_tokens=max_tokens,
+            api_key=api_key, model_override=(model_override or spec["model"]),
+            max_tokens=max_tokens,
             use_tools=use_tools, reasoning_effort=reasoning_effort,
             pin_model_override=pin_requested_provider,
-            progress_callback=progress_callback,
-        )
+            progress_callback=progress_callback)
+        return _attribute_provider(result, provider_id)
 
     if vendor == "anthropic":
-        return await _call_anthropic(
+        result = await _call_anthropic(
             api_key, spec["model"], payload_messages, max_tokens,
-            use_tools=use_tools,
-            reasoning_effort=reasoning_effort,
-            enable_caching=spec.get("supports_prompt_caching", False),
-        )
+            use_tools=use_tools, reasoning_effort=reasoning_effort,
+            enable_caching=spec.get("supports_prompt_caching", False))
+        return _attribute_provider(result, provider_id)
 
     if vendor == "google":
         from .providers.gemini_provider import call as gemini_call
-        return await gemini_call(
-            payload_messages,
-            api_key=api_key,
-            model_override=spec["model"],
-            max_tokens=max_tokens,
-            use_tools=use_tools,
-            reasoning_effort=reasoning_effort,
-            provider_id=provider_id,
-            supports_thinking=bool(spec.get("supports_thinking")),
-        )
+        result = await gemini_call(
+            payload_messages, api_key=api_key, model_override=spec["model"],
+            max_tokens=max_tokens, use_tools=use_tools,
+            reasoning_effort=reasoning_effort, provider_id=provider_id,
+            supports_thinking=bool(spec.get("supports_thinking")))
+        return _attribute_provider(result, provider_id)
 
     if vendor == "xai":
         from .providers.xai_provider import call as grok_call
-        return await grok_call(
-            payload_messages,
-            api_key=api_key,
-            model_override=spec["model"],
-            max_tokens=max_tokens,
-            use_tools=use_tools,
+        result = await grok_call(
+            payload_messages, api_key=api_key, model_override=spec["model"],
+            max_tokens=max_tokens, use_tools=use_tools,
             reasoning_effort=reasoning_effort,
-            progress_callback=progress_callback,
-        )
+            progress_callback=progress_callback)
+        return _attribute_provider(result, provider_id)
 
     # No-silent-fallback doctrine: if we got here the spec exists in
     # BUILTIN_PROVIDERS but its vendor isn't wired to a call path — raise so
@@ -450,11 +474,9 @@ async def call_provider(
 
 
 async def _call_openai_routed(
-    messages: list[dict],
-    system_prompt: Optional[str] = None,
-    use_tools: bool = True,
-    user_id: Optional[str] = None,
-    skip_approval: bool = False,
+    messages: list[dict], system_prompt: Optional[str] = None,
+    use_tools: bool = True, user_id: Optional[str] = None,
+    skip_approval: bool = False, model_override: Optional[str] = None,
 ) -> tuple[str, dict]:
     """
     Route to the appropriate role via openai_router, check approval gate,
@@ -482,18 +504,19 @@ async def _call_openai_routed(
     route_decision = make_route_decision(task_text, pre_approved_scopes=pre_approved_scopes)
     role = route_decision["role"]
     call_cfg = make_call_config(role)
+    if model_override is not None:
+        call_cfg = {**call_cfg, "model": model_override}
 
     if route_decision["requires_approval"] and not skip_approval:
         import uuid
         gate_id = f"gate-{uuid.uuid4().hex[:8]}"
         packet = make_approval_packet(task_text, gate_id)
-        input_repr = json.dumps({"task": task_text})
         output_repr = json.dumps(packet)
         await log_openai_event(
             role=role,
             model=call_cfg["model"],
             reasoning_effort=call_cfg["reasoning_effort"],
-            input_text=input_repr,
+            input_text=json.dumps({"task": task_text}),
             output_text=output_repr,
             approval_state="pending",
         )
@@ -538,15 +561,12 @@ async def _call_openai_routed(
 
     from .providers.openai_provider import call as openai_call
     content, usage = await openai_call(
-        full_input,
-        api_key=api_key,
-        model_override=call_cfg["model"],
+        full_input, api_key=api_key, model_override=call_cfg["model"],
         max_tokens=call_cfg["max_output_tokens"],
-        use_tools=use_tools,
-        reasoning_effort=call_cfg["reasoning_effort"],
+        use_tools=use_tools, reasoning_effort=call_cfg["reasoning_effort"],
         temperature=call_cfg["temperature"],
         store=call_cfg["store"],
-    )
+        pin_model_override=model_override is not None)
 
     input_repr = json.dumps(full_input)
     await log_openai_event(
@@ -581,14 +601,10 @@ async def _call_anthropic(
     """
     from .providers.claude_provider import call as _claude_call
     return await _claude_call(
-        messages,
-        api_key=api_key,
-        model_override=model,
-        max_tokens=max_tokens,
-        use_tools=use_tools,
+        messages, api_key=api_key, model_override=model,
+        max_tokens=max_tokens, use_tools=use_tools,
         reasoning_effort=reasoning_effort,
-        enable_caching=enable_caching,
-    )
+        enable_caching=enable_caching)
 
 
-# 398:129 0:0 16:15
+# 400:141 0:0 16:15

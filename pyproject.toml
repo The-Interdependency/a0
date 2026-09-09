@@ -7,6 +7,7 @@ include = ["python*"]
 
 [tool.setuptools.package-data]
 "python.services.providers" = ["open_comp_prov_v0.0.0alpha.py"]
+"python.config" = ["providers.json", "pricing.json"]
 
 
 [project]
