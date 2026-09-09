@@ -1,4 +1,4 @@
-# 378:1 0:0 0:0
+# 400:1 0:0 0:0
 """Contract tests for registry-driven OpenAI-compatible providers."""
 
 from pathlib import Path
@@ -83,6 +83,33 @@ async def test_openai_approval_usage_retains_concrete_model(
     assert usage["approval_state"] == "pending"
     assert usage["provider_id"] == "openai"
     assert usage["model_id"] == "gpt-5-mini"
+
+
+@pytest.mark.asyncio
+async def test_compatible_tools_stop_at_shared_approval_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python import logger
+    from python.services import inference
+    from python.services.providers import openai_compatible_provider as provider
+
+    async def noop(*_args, **_kwargs):
+        return None
+
+    async def transport_must_not_run(*_args, **_kwargs):
+        raise AssertionError("transport ran before approval")
+
+    monkeypatch.setattr(logger, "seed_openai_hmmm_if_empty", noop)
+    monkeypatch.setattr(logger, "log_openai_event", noop)
+    monkeypatch.setattr(provider, "call", transport_must_not_run)
+    content, usage = await inference.call_provider(
+        "deepseek", [{"role": "user", "content": "publish this post"}],
+        use_tools=True, skip_manifest=True,
+    )
+    assert content.startswith("[APPROVAL REQUIRED")
+    assert usage["approval_state"] == "pending"
+    assert usage["provider_id"] == "deepseek"
+    assert usage["model_id"] == "deepseek-v4-flash"
 
 
 def test_repeat_fingerprint_excludes_volatile_transport_ids() -> None:
@@ -464,4 +491,4 @@ async def test_transport_redacts_opaque_key_before_error_truncation(
     assert "[redacted]" in content
 
 
-# 378:1 0:0 0:0
+# 400:1 0:0 0:0
