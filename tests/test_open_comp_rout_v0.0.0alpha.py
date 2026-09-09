@@ -1,4 +1,4 @@
-# 396:1 0:0 0:0
+# 400:1 0:0 0:0
 """Routing and catalog tests for registry-driven compatible providers."""
 
 import ast
@@ -211,6 +211,7 @@ async def test_role_model_override_uses_concrete_owner_tier_and_provenance(
     )
 
     assert content == "pro-routed"
+    assert captured["provider_id"] == "deepseek-pro"
     assert captured["model_override"] == "deepseek-v4-pro"
     assert captured["pin_model_override"] is True
     assert usage["provider_id"] == "deepseek-pro"
@@ -488,10 +489,13 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from python.services.energy_registry import estimate_cost, get_model_pricing
-    from python.services.model_catalog import resolve_model_id
+    from python.services.model_catalog import resolve_model_id, routed_model_owner
+    from python.services.openai_router import make_call_config
     from python.services.providers import openai_compatible_provider as provider
 
     _clear_provider_keys(monkeypatch)
+    assert routed_model_owner(make_call_config("practice")["model"], "openai", "free") == "openai"
+    assert routed_model_owner(make_call_config("record")["model"], "openai", "free") == "openai-nano"
     provider_id, spec = await resolve_model_id("deepseek-v4-pro")
     assert provider_id == "deepseek-pro"
     assert spec["model"] == "deepseek-v4-pro"
@@ -506,4 +510,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             provider_id="deepseek",
             use_tools=False,
         )
-# 396:1 0:0 0:0
+# 400:1 0:0 0:0
