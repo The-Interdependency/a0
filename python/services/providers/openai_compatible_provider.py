@@ -46,6 +46,12 @@ from __future__ import annotations
 #   then: reasoning.encrypted_content is requested for the stateless continuation
 #   class: correctness
 #   since: 2026-09-09
+#
+# id: openai_compatible_caller_provider_is_scoped
+#   given: a compatible-provider call runs inside an async task with an existing caller-provider context
+#   then: the provider identity is active for the complete transport loop and the prior context is restored on every exit
+#   class: correctness
+#   since: 2026-09-09
 # === END CONTRACTS ===
 
 import copy
@@ -183,10 +189,8 @@ async def _call_responses(
         _canonical_tool_calls,
         _get_max_tool_rounds,
     )
-    from ..tool_distill import set_caller_provider
     from ..tool_executor import execute_tool
 
-    set_caller_provider(provider_name)
     input_items = _format_responses_messages(input_messages)
     client_kwargs: dict[str, str] = {"api_key": api_key}
     if base_url:
@@ -294,10 +298,8 @@ async def _call_chat_completions(
         _canonical_tool_calls,
         _get_max_tool_rounds,
     )
-    from ..tool_distill import set_caller_provider
     from ..tool_executor import execute_tool, get_active_chat_schemas
 
-    set_caller_provider(provider_name)
     client_kwargs: dict[str, str] = {"api_key": api_key}
     if base_url:
         client_kwargs["base_url"] = base_url.rstrip("/")
@@ -392,36 +394,41 @@ async def call(
     base_url = str(spec.get("base_url") or "").strip() or None
     effort = _normalize_reasoning_effort(spec, reasoning_effort)
     api_family = spec.get("api_family", "responses")
+    from ..tool_distill import reset_caller_provider, set_caller_provider
 
-    if api_family == "responses":
-        tools = _response_tools(spec.get("tool_profile", "all-responses")) if use_tools else None
-        return await _call_responses(
-            api_key=key,
-            model=model,
-            input_messages=messages,
-            max_output_tokens=max_tokens,
-            temperature=temperature,
-            reasoning_effort=effort,
-            store=store,
-            use_tools=use_tools,
-            base_url=base_url,
-            provider_name=provider_id,
-            tools_override=tools,
-            supports_store=bool(spec.get("supports_store", spec.get("vendor") == "openai")),
+    caller_provider_token = set_caller_provider(provider_id)
+    try:
+        if api_family == "responses":
+            tools = _response_tools(spec.get("tool_profile", "all-responses")) if use_tools else None
+            return await _call_responses(
+                api_key=key,
+                model=model,
+                input_messages=messages,
+                max_output_tokens=max_tokens,
+                temperature=temperature,
+                reasoning_effort=effort,
+                store=store,
+                use_tools=use_tools,
+                base_url=base_url,
+                provider_name=provider_id,
+                tools_override=tools,
+                supports_store=bool(spec.get("supports_store", spec.get("vendor") == "openai")),
+            )
+        if api_family == "chat_completions":
+            return await _call_chat_completions(
+                api_key=key,
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                reasoning_effort=effort,
+                use_tools=use_tools,
+                base_url=base_url,
+                provider_name=provider_id,
+            )
+        raise ValueError(
+            f"Provider {provider_id!r} has unsupported api_family={api_family!r}"
         )
-    if api_family == "chat_completions":
-        return await _call_chat_completions(
-            api_key=key,
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            reasoning_effort=effort,
-            use_tools=use_tools,
-            base_url=base_url,
-            provider_name=provider_id,
-        )
-    raise ValueError(
-        f"Provider {provider_id!r} has unsupported api_family={api_family!r}"
-    )
+    finally:
+        reset_caller_provider(caller_provider_token)
 # 329:49 0:0 2:5

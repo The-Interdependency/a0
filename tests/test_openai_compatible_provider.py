@@ -79,6 +79,11 @@ def test_deepseek_is_configuration_not_a_provider_specific_adapter() -> None:
 async def test_responses_transport_uses_registry_base_url_model_and_effort(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from python.services.tool_distill import (
+        get_caller_provider,
+        reset_caller_provider,
+        set_caller_provider,
+    )
     from python.services.providers import openai_compatible_provider as provider
 
     captured: dict = {"requests": []}
@@ -102,12 +107,17 @@ async def test_responses_transport_uses_registry_base_url_model_and_effort(
     monkeypatch.setattr(provider, "AsyncOpenAI", FakeAsyncOpenAI)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
 
-    content, usage = await provider.call(
-        [{"role": "user", "content": "hi"}],
-        provider_id="deepseek-pro",
-        use_tools=False,
-        reasoning_effort="medium",
-    )
+    outer_token = set_caller_provider("outer-provider")
+    try:
+        content, usage = await provider.call(
+            [{"role": "user", "content": "hi"}],
+            provider_id="deepseek-pro",
+            use_tools=False,
+            reasoning_effort="medium",
+        )
+        assert get_caller_provider() == "outer-provider"
+    finally:
+        reset_caller_provider(outer_token)
 
     assert content == "ok"
     assert usage == {"input_tokens": 2, "output_tokens": 1}
@@ -466,6 +476,47 @@ async def test_inference_dispatches_adapter_field_without_database(
     assert captured["provider_id"] == "deepseek"
     assert captured["model_override"] == "deepseek-v4-flash"
     assert captured["role"] == "practice"
+
+
+@pytest.mark.asyncio
+async def test_fanout_bridge_pins_each_requested_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python.services import energy_registry, inference, openai_router
+    from python.services.providers import openai_compatible_provider as provider
+
+    _clear_provider_keys(monkeypatch)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
+    monkeypatch.setattr(openai_router, "resolve_role", lambda _text: "practice")
+
+    async def conflicting_slot(_slot: str) -> tuple[str, str]:
+        return "wrong-slot-memory", "openai"
+
+    async def selected_memory(provider_id: str) -> str:
+        assert provider_id == "deepseek-pro"
+        return "selected-provider-memory"
+
+    captured: dict = {}
+
+    async def fake_call(messages, **kwargs):
+        captured["messages"] = messages
+        captured.update(kwargs)
+        return "fanout-ok", {}
+
+    monkeypatch.setattr(inference, "_slot_routing_info", conflicting_slot)
+    monkeypatch.setattr(inference, "_instance_memory_block", selected_memory)
+    monkeypatch.setattr(provider, "call", fake_call)
+
+    content = await energy_registry._aimmh_call_fn(
+        "deepseek-pro",
+        [{"role": "user", "content": "practice this"}],
+    )
+
+    assert content == "fanout-ok"
+    assert captured["provider_id"] == "deepseek-pro"
+    system_text = captured["messages"][0]["content"]
+    assert "selected-provider-memory" in system_text
+    assert "wrong-slot-memory" not in system_text
 
 
 @pytest.mark.asyncio

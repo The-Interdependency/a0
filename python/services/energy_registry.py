@@ -305,6 +305,7 @@ async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30
             system_prompt=system_context,
             use_tools=False,
             progress_callback=_on_progress,
+            pin_requested_provider=True,
         )
         out = content or ""
         elapsed_ms = int((_time.perf_counter() - started_at) * 1000)

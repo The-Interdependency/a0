@@ -31,6 +31,12 @@
 #   then: the compatible transport receives that exact role for model override resolution
 #   class: correctness
 #   since: 2026-09-09
+#
+# id: inference_fanout_preserves_requested_provider
+#   given: multi-model orchestration explicitly requests one provider for a lane
+#   then: call_provider uses that provider and its instance memory without replacing it from the shared prompt's role slot
+#   class: correctness
+#   since: 2026-09-09
 # === END CONTRACTS ===
 import json
 import logging
@@ -295,6 +301,7 @@ async def call_provider(
     reasoning_effort: Optional[str] = None,
     progress_callback: Optional[Callable[[int, int], None]] = None,
     skip_manifest: bool = False,
+    pin_requested_provider: bool = False,
 ) -> tuple[str, dict]:
     """
     Forward messages to the named provider with the system prompt prepended.
@@ -303,6 +310,8 @@ async def call_provider(
     skip_approval=True bypasses the approval gate (used for replay after explicit APPROVE).
     skip_manifest=True omits the skill manifest from the doctrine prefix (saves
     ~500 tokens; use for internal/automated callers that never invoke skill_load).
+    pin_requested_provider=True is reserved for multi-model orchestration lanes;
+    it preserves the lane's provider and loads that provider's instance memory.
     reasoning_effort is mapped per-provider, gated by capability flags in
     providers.json (single source of truth — no model slugs in code):
       - OpenAI: passed via openai_router call_cfg (ignored on the openai branch)
@@ -319,9 +328,13 @@ async def call_provider(
         (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), ""
     )
     _slot = _resolve_role(_task_text)
-    _imem, _slot_provider = await _slot_routing_info(_slot)
-    if not _imem:
+    if pin_requested_provider:
         _imem = await _instance_memory_block(provider_id)
+        _slot_provider = None
+    else:
+        _imem, _slot_provider = await _slot_routing_info(_slot)
+        if not _imem:
+            _imem = await _instance_memory_block(provider_id)
     if _imem:
         system_prompt = (system_prompt or "") + "\n\n## Instance Memory\n" + _imem
     if _slot_provider:
