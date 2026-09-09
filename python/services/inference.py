@@ -1,4 +1,4 @@
-# 399:120 0:0 16:15
+# 398:129 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -310,8 +310,9 @@ async def call_provider(
     skip_approval=True bypasses the approval gate (used for replay after explicit APPROVE).
     skip_manifest=True omits the skill manifest from the doctrine prefix (saves
     ~500 tokens; use for internal/automated callers that never invoke skill_load).
-    pin_requested_provider=True is reserved for multi-model orchestration lanes;
-    it preserves the lane's provider and loads that provider's instance memory.
+    pin_requested_provider=True is reserved for explicit-model and multi-model
+    orchestration lanes; it preserves the resolved provider, model, and that
+    provider's instance memory.
     reasoning_effort is mapped per-provider, gated by capability flags in
     providers.json (single source of truth — no model slugs in code):
       - OpenAI: passed via openai_router call_cfg (ignored on the openai branch)
@@ -374,15 +375,12 @@ async def call_provider(
         if system_prompt:
             payload_messages.append({"role": "system", "content": system_prompt})
         payload_messages.extend(messages)
-        from .providers.openai_compatible_provider import call as compatible_call
-        return await compatible_call(
-            payload_messages,
-            provider_id=provider_id, role=_slot,
-            model_override=spec["model"],
-            api_key=api_key,
-            max_tokens=max_tokens,
-            use_tools=use_tools,
-            reasoning_effort=effective_effort,
+        from .providers import openai_compatible_provider
+        return await openai_compatible_provider.call(
+            payload_messages, provider_id=provider_id, role=_slot,
+            model_override=spec["model"], api_key=api_key, max_tokens=max_tokens,
+            use_tools=use_tools, reasoning_effort=effective_effort,
+            pin_model_override=pin_requested_provider,
         )
 
     api_key = os.environ.get(spec["api_key_env"], "")
@@ -400,15 +398,12 @@ async def call_provider(
     vendor = spec.get("vendor", "")
 
     if spec.get("adapter") == "openai-compatible":
-        from .providers.openai_compatible_provider import call as compatible_call
-        return await compatible_call(
-            payload_messages,
-            provider_id=provider_id, role=_slot,
-            api_key=api_key,
-            model_override=spec["model"],
-            max_tokens=max_tokens,
-            use_tools=use_tools,
-            reasoning_effort=reasoning_effort,
+        from .providers import openai_compatible_provider
+        return await openai_compatible_provider.call(
+            payload_messages, provider_id=provider_id, role=_slot,
+            api_key=api_key, model_override=spec["model"], max_tokens=max_tokens,
+            use_tools=use_tools, reasoning_effort=reasoning_effort,
+            pin_model_override=pin_requested_provider,
             progress_callback=progress_callback,
         )
 
@@ -596,4 +591,4 @@ async def _call_anthropic(
     )
 
 
-# 399:120 0:0 16:15
+# 398:129 0:0 16:15

@@ -1,4 +1,4 @@
-# 227:44 0:0 0:0
+# 240:44 0:0 0:0
 """Contract/check graph auditor and executor — see test-build/SKILL.md.
 
 Source modules own behavioral `CONTRACTS`; test modules own executable
@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import hashlib
 import importlib
 import importlib.util
 import sys
@@ -229,8 +230,20 @@ async def _execute_check(check: Declaration) -> dict[str, Any]:
         }
 
     try:
-        _target_path, module_name, function_name = _resolve_call_no_exec(check)
-        module = importlib.import_module(module_name)
+        target_path, module_name, function_name = _resolve_call_no_exec(check)
+        if target_path.name.count(".") > 1:
+            synthetic_name = (
+                "_a0_versioned_check_"
+                + hashlib.sha256(str(target_path).encode("utf-8")).hexdigest()[:16]
+            )
+            spec = importlib.util.spec_from_file_location(synthetic_name, target_path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"cannot load versioned check module: {target_path}")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[synthetic_name] = module
+            spec.loader.exec_module(module)
+        else:
+            module = importlib.import_module(module_name)
         function: Any = getattr(module, function_name)
     except Exception as exc:
         return {
@@ -317,4 +330,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
-# 227:44 0:0 0:0
+# 240:44 0:0 0:0

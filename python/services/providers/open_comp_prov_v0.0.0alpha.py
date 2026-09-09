@@ -1,4 +1,4 @@
-# 329:49 0:0 2:5
+# 338:55 0:0 2:5
 """Generic OpenAI-compatible provider transport.
 
 Provider identity, endpoint, credential name, model, API family, reasoning
@@ -20,7 +20,7 @@ from __future__ import annotations
 #   network_boundary: external
 #   user_data_boundary: write
 #   admin_only: false
-#   tests: tests/test_openai_compatible_provider.py
+#   tests: tests/test_open_comp_prov_v0.0.0alpha.py
 #   rollout: default_enabled
 #   rollback: Revert this module and remove registry entries whose adapter is openai-compatible.
 #   requires: a0_service_providers_resolver, a0_service_tool_executor, a0_service_tool_distill, a0_service_inference, a0_service_energy_registry
@@ -371,6 +371,7 @@ async def call(
     reasoning_effort: Optional[str] = None,
     temperature: float = 1.0,
     store: bool = False,
+    pin_model_override: bool = False,
     progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> tuple[str, dict]:
     """Dispatch one registry-defined provider through its configured API family."""
@@ -390,7 +391,14 @@ async def call(
     if not key:
         raise ValueError(f"{api_key_env} not configured")
 
-    model = await resolve_model_for_role(provider_id, role) if model_override is None or model_override == spec.get("model") else model_override
+    if pin_model_override:
+        model = model_override or str(spec.get("model") or "").strip()
+        if not model:
+            raise ValueError(f"Provider {provider_id!r} has no model to pin")
+    elif model_override is None or model_override == spec.get("model"):
+        model = await resolve_model_for_role(provider_id, role)
+    else:
+        model = model_override
     base_url = str(spec.get("base_url") or "").strip() or None
     effort = _normalize_reasoning_effort(spec, reasoning_effort)
     api_family = spec.get("api_family", "responses")
@@ -431,4 +439,4 @@ async def call(
         )
     finally:
         reset_caller_provider(caller_provider_token)
-# 329:49 0:0 2:5
+# 338:55 0:0 2:5

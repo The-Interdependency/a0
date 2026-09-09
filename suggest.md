@@ -145,7 +145,7 @@ Update `OutputEnvelope.gaming_alerts` type and the JSON schema in `io/schemas.py
 
 **File:** `a0/adapters/gemini_adapter.py`
 
-**Problem:** The file is empty. The adapter `Protocol` in `model_adapter.py` defines the interface. OpenAI-compatible providers are now implemented through `openai_compatible_adapter.py`; Gemini still lacks a native standalone adapter.
+**Problem:** The file is empty. The adapter `Protocol` in `model_adapter.py` defines the interface. OpenAI-compatible providers are now implemented through `open_comp_adap_v0.0.0alpha.py`; Gemini still lacks a native standalone adapter.
 
 **Minimum viable implementation:** add a Gemini `ModelAdapter`, then extend the
 registry-driven selection without reintroducing hard-coded provider branches.

@@ -5,6 +5,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["python*"]
 
+[tool.setuptools.package-data]
+"python.services.providers" = ["open_comp_prov_v0.0.0alpha.py"]
+
 
 [project]
 name = "repl-nix-workspace"
@@ -43,6 +46,7 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"

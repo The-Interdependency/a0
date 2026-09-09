@@ -1,4 +1,4 @@
-# 93:35 0:0 2:0
+# 98:41 0:0 2:0
 """Synchronous standalone adapter for registry-defined OpenAI-compatible APIs."""
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 #   network_boundary: external
 #   user_data_boundary: write
 #   admin_only: false
-#   tests: tests/test_a0_openai_compatible_adapter.py
+#   tests: tests/test_aone_open_comp_adap_v0.0.0alpha.py
 #   rollout: default_enabled
 #   rollback: Remove this module and restore router selection to Claude/local only.
 #   requires: a0_provider_registry
@@ -33,6 +33,12 @@ from __future__ import annotations
 # id: a0_openai_compatible_error_suppresses_secret_cause
 #   given: an upstream compatible-provider exception may echo its credential
 #   then: the public RuntimeError omits the original exception cause
+#   class: safety
+#   since: 2026-09-09
+#
+# id: a0_openai_compatible_store_defaults_off
+#   given: a standalone Responses provider supports upstream response storage
+#   then: requests send store=false unless the caller explicitly opts in
 #   class: safety
 #   since: 2026-09-09
 # === END CONTRACTS ===
@@ -105,6 +111,11 @@ class OpenAICompatibleAdapter:
                     "input": messages,
                     "max_output_tokens": max_tokens,
                 }
+                supports_store = bool(
+                    self.spec.get("supports_store", self.spec.get("vendor") == "openai")
+                )
+                if supports_store:
+                    request["store"] = bool(kwargs.get("store", False))
                 if effort and effort != "none":
                     request["reasoning"] = {"effort": effort}
                 response = self._client.responses.create(**request)
@@ -143,4 +154,4 @@ class OpenAICompatibleAdapter:
             },
             "subagents_used": [],
         }
-# 93:35 0:0 2:0
+# 98:41 0:0 2:0

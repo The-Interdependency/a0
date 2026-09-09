@@ -1,4 +1,4 @@
-# 28:22 0:0 1:1
+# 27:22 0:0 1:1
 """Compatibility wrapper for the registry-driven OpenAI provider."""
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 #   network_boundary: external
 #   user_data_boundary: write
 #   admin_only: false
-#   tests: tests/test_openai_compatible_provider.py
+#   tests: tests/test_open_comp_prov_v0.0.0alpha.py
 #   rollout: default_enabled
 #   rollback: Restore the former OpenAI-only Responses implementation.
 #   requires: a0_service_providers_openai_compatible
@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .openai_compatible_provider import call as _compatible_call
+from . import openai_compatible_provider
 
 
 async def call(
@@ -41,7 +41,7 @@ async def call(
     store: bool = False,
 ) -> tuple[str, dict]:
     """Run the built-in OpenAI provider through the shared transport."""
-    return await _compatible_call(
+    return await openai_compatible_provider.call(
         messages,
         provider_id="openai",
         role=role,
@@ -53,4 +53,4 @@ async def call(
         temperature=temperature,
         store=store,
     )
-# 28:22 0:0 1:1
+# 27:22 0:0 1:1

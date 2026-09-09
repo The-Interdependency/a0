@@ -15,7 +15,7 @@ from __future__ import annotations
 #   network_boundary: none
 #   user_data_boundary: none
 #   admin_only: false
-#   tests: tests/test_a0_openai_compatible_adapter.py
+#   tests: tests/test_aone_open_comp_adap_v0.0.0alpha.py
 #   rollout: default_enabled
 #   rollback: Remove this module and restore router selection to Claude/local only.
 #   requires: none

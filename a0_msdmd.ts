@@ -1,4 +1,4 @@
-// 7796:0 0:1 0:1
+// 7992:0 0:1 0:1
 import { defineMsdmdCollection } from "./.agents/skills/msdmd/collection";
 
 export default defineMsdmdCollection({
@@ -11,8 +11,30 @@ export default defineMsdmdCollection({
         "since": "2026-09-07",
         "then": "the registry-derived client executes the configured API family and returns text/usage without credentials; missing keys and unsupported families fail closed"
       },
-      "file": "a0/adapters/openai_compatible_adapter.py",
+      "file": "a0/adapters/open_comp_adap_v0.0.0alpha.py",
       "id": "a0_openai_compatible_completion"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "an upstream compatible-provider exception may echo its credential",
+        "since": "2026-09-09",
+        "then": "the public RuntimeError omits the original exception cause"
+      },
+      "file": "a0/adapters/open_comp_adap_v0.0.0alpha.py",
+      "id": "a0_openai_compatible_error_suppresses_secret_cause"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "a standalone Responses provider supports upstream response storage",
+        "since": "2026-09-09",
+        "then": "requests send store=false unless the caller explicitly opts in"
+      },
+      "file": "a0/adapters/open_comp_adap_v0.0.0alpha.py",
+      "id": "a0_openai_compatible_store_defaults_off"
     },
     {
       "block": "MODULE_BUILD",
@@ -31,11 +53,11 @@ export default defineMsdmdCollection({
         "since": "2026-09-07",
         "storage_boundary": "none",
         "summary": "Executes standalone a0 requests against any registry-defined OpenAI-compatible Responses or Chat Completions endpoint.",
-        "tests": "tests/test_a0_openai_compatible_adapter.py",
+        "tests": "tests/test_aone_open_comp_adap_v0.0.0alpha.py",
         "unresolved": "none",
         "user_data_boundary": "write"
       },
-      "file": "a0/adapters/openai_compatible_adapter.py",
+      "file": "a0/adapters/open_comp_adap_v0.0.0alpha.py",
       "id": "a0_adapter_openai_compatible"
     },
     {
@@ -46,7 +68,7 @@ export default defineMsdmdCollection({
         "since": "2026-09-07",
         "then": "an explicit compatible provider resolves or fails closed while an unset choice may auto-select only a configured a0_default provider"
       },
-      "file": "a0/provider_registry.py",
+      "file": "a0/prov_regi_v0.0.0alpha.py",
       "id": "a0_provider_selection"
     },
     {
@@ -66,11 +88,11 @@ export default defineMsdmdCollection({
         "since": "2026-09-07",
         "storage_boundary": "read",
         "summary": "Resolves explicit or auto-selected OpenAI-compatible standalone a0 providers from python/config/providers.json.",
-        "tests": "tests/test_a0_openai_compatible_adapter.py",
+        "tests": "tests/test_aone_open_comp_adap_v0.0.0alpha.py",
         "unresolved": "none",
         "user_data_boundary": "none"
       },
-      "file": "a0/provider_registry.py",
+      "file": "a0/prov_regi_v0.0.0alpha.py",
       "id": "a0_provider_registry"
     },
     {
@@ -1038,6 +1060,17 @@ export default defineMsdmdCollection({
       "id": "a0_service_bg_tasks"
     },
     {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "call_model resolves an explicit model id after its enabled and tier gates",
+        "since": "2026-09-09",
+        "then": "the resolved provider is pinned through inference and cannot be replaced by a prompt role slot"
+      },
+      "file": "python/services/call_fn.py",
+      "id": "call_fn_resolved_model_pins_provider"
+    },
+    {
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
@@ -1378,6 +1411,39 @@ export default defineMsdmdCollection({
       "id": "a0_service_heartbeat"
     },
     {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "routing classifies a request into a role slot handled by an OpenAI-compatible provider",
+        "since": "2026-09-09",
+        "then": "the compatible transport receives that exact role for model override resolution"
+      },
+      "file": "python/services/inference.py",
+      "id": "inference_compatible_provider_receives_classified_role"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "multi-model orchestration explicitly requests one provider for a lane",
+        "since": "2026-09-09",
+        "then": "call_provider uses that provider and its instance memory without replacing it from the shared prompt's role slot"
+      },
+      "file": "python/services/inference.py",
+      "id": "inference_fanout_preserves_requested_provider"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "safety",
+        "given": "consecutive tool calls have the same function name and semantic arguments but different provider-generated ids",
+        "since": "2026-09-09",
+        "then": "_canonical_tool_calls emits the same fingerprint so the second execution is refused"
+      },
+      "file": "python/services/inference.py",
+      "id": "inference_tool_repeat_fingerprint_ignores_transport_ids"
+    },
+    {
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
@@ -1621,12 +1687,45 @@ export default defineMsdmdCollection({
       "block": "CONTRACTS",
       "fields": {
         "class": "correctness",
+        "given": "a compatible-provider call runs inside an async task with an existing caller-provider context",
+        "since": "2026-09-09",
+        "then": "the provider identity is active for the complete transport loop and the prior context is restored on every exit"
+      },
+      "file": "python/services/providers/open_comp_prov_v0.0.0alpha.py",
+      "id": "openai_compatible_caller_provider_is_scoped"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
         "given": "a registered OpenAI-compatible provider id, messages, and optional model/key/effort overrides",
         "since": "2026-09-07",
         "then": "endpoint, model, credential name, API family, effort scale, and tool profile come from providers.json; missing explicit configuration fails closed and credentials do not enter error text"
       },
-      "file": "python/services/providers/openai_compatible_provider.py",
+      "file": "python/services/providers/open_comp_prov_v0.0.0alpha.py",
       "id": "openai_compatible_registry_driven"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "a Responses tool round emits reasoning and function-call output items",
+        "since": "2026-09-09",
+        "then": "the continuation includes the complete output sequence before function-call outputs"
+      },
+      "file": "python/services/providers/open_comp_prov_v0.0.0alpha.py",
+      "id": "openai_compatible_responses_preserves_reasoning_items"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "an OpenAI Responses request enables reasoning while store is false",
+        "since": "2026-09-09",
+        "then": "reasoning.encrypted_content is requested for the stateless continuation"
+      },
+      "file": "python/services/providers/open_comp_prov_v0.0.0alpha.py",
+      "id": "openai_stateless_reasoning_is_replayable"
     },
     {
       "block": "MODULE_BUILD",
@@ -1645,11 +1744,11 @@ export default defineMsdmdCollection({
         "since": "2026-09-07",
         "storage_boundary": "none",
         "summary": "Registry-driven OpenAI-compatible transport supporting Responses and Chat Completions with the shared repeat-safe tool loop.",
-        "tests": "tests/test_openai_compatible_provider.py",
+        "tests": "tests/test_open_comp_prov_v0.0.0alpha.py",
         "unresolved": "none",
         "user_data_boundary": "write"
       },
-      "file": "python/services/providers/openai_compatible_provider.py",
+      "file": "python/services/providers/open_comp_prov_v0.0.0alpha.py",
       "id": "a0_service_providers_openai_compatible"
     },
     {
@@ -1657,7 +1756,7 @@ export default defineMsdmdCollection({
       "fields": {
         "admin_only": "false",
         "auth_boundary": "none",
-        "internal_surface": "_call_responses",
+        "internal_surface": "none",
         "module_kind": "adapter",
         "module_name": "openai_provider",
         "network_boundary": "external",
@@ -1669,7 +1768,7 @@ export default defineMsdmdCollection({
         "since": "2026-06-02",
         "storage_boundary": "none",
         "summary": "Stable OpenAI-specific call surface delegating transport behavior to the generic OpenAI-compatible adapter.",
-        "tests": "tests/test_openai_compatible_provider.py",
+        "tests": "tests/test_open_comp_prov_v0.0.0alpha.py",
         "unresolved": "none",
         "user_data_boundary": "write"
       },
@@ -3210,8 +3309,21 @@ export default defineMsdmdCollection({
         "requires": "python3",
         "timeout": "20"
       },
-      "file": "python/tests/test_openai_compatible_contracts.py",
+      "file": "python/tests/test_open_comp_cont_v0.0.0alpha.py",
       "id": "check_openai_compatible_registry_wiring"
+    },
+    {
+      "block": "CHECKS",
+      "fields": {
+        "call": "self::check_openai_compatible_repair_regressions",
+        "cleanup": "none",
+        "mutates": "none",
+        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped",
+        "requires": "python3, pytest",
+        "timeout": "60"
+      },
+      "file": "python/tests/test_open_comp_cont_v0.0.0alpha.py",
+      "id": "check_openai_compatible_repair_regressions"
     },
     {
       "block": "CHECKS",
@@ -5102,6 +5214,90 @@ export default defineMsdmdCollection({
       "kind": "requires",
       "source_block": "CHECKS",
       "source_id": "check_openai_compatible_registry_wiring",
+      "to": "python3"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "calls",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "self::check_openai_compatible_repair_regressions"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "a0_openai_compatible_error_suppresses_secret_cause"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "a0_openai_compatible_store_defaults_off"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "call_fn_resolved_model_pins_provider"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "inference_compatible_provider_receives_classified_role"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "inference_fanout_preserves_requested_provider"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "inference_tool_repeat_fingerprint_ignores_transport_ids"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "openai_compatible_caller_provider_is_scoped"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "openai_compatible_responses_preserves_reasoning_items"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "openai_stateless_reasoning_is_replayable"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "pytest"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "requires",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
       "to": "python3"
     },
     {
@@ -7796,4 +7992,4 @@ export default defineMsdmdCollection({
   "gaps": [],
   "repo": "a0"
 });
-// 7796:0 0:1 0:1
+// 7992:0 0:1 0:1

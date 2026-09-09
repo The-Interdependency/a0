@@ -1,4 +1,4 @@
-# 89:1 0:0 0:0
+# 109:1 0:0 0:0
 """Standalone a0 selection and OpenAI-compatible adapter contracts."""
 
 from types import SimpleNamespace
@@ -18,7 +18,7 @@ class _Dump:
 def test_registry_auto_selects_flash_and_explicitly_selects_pro(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from a0.provider_registry import resolve_openai_compatible_provider
+    from a0 import resolve_openai_compatible_provider
 
     monkeypatch.delenv("A0_PROVIDER", raising=False)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
@@ -35,7 +35,7 @@ def test_registry_auto_selects_flash_and_explicitly_selects_pro(
 def test_explicit_unknown_and_noncompatible_provider_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from a0.provider_registry import resolve_openai_compatible_provider
+    from a0 import resolve_openai_compatible_provider
 
     monkeypatch.setenv("A0_PROVIDER", "missing-provider")
     with pytest.raises(ValueError, match="Unknown A0_PROVIDER"):
@@ -50,7 +50,7 @@ def test_adapter_uses_registry_transport_and_sanitizes_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from a0.adapters import openai_compatible_adapter as adapter_module
-    from a0.provider_registry import resolve_openai_compatible_provider
+    from a0 import resolve_openai_compatible_provider
 
     captured: dict = {}
 
@@ -90,6 +90,28 @@ def test_adapter_uses_registry_transport_and_sanitizes_failure(
     assert caught.value.__cause__ is None
     assert "test-secret" not in str(caught.value)
 
+    monkeypatch.setenv("OPENAI_API_KEY", "standalone-openai-secret")
+    monkeypatch.setenv("A0_PROVIDER", "openai")
+    provider_id, spec = resolve_openai_compatible_provider()
+    openai_adapter = adapter_module.OpenAICompatibleAdapter(provider_id, spec)
+    openai_adapter.complete([{"role": "user", "content": "private by default"}])
+    assert captured["request"]["store"] is False
+    openai_adapter.complete(
+        [{"role": "user", "content": "explicit retention"}], store=True
+    )
+    assert captured["request"]["store"] is True
+
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-test-secret")
+    monkeypatch.setenv("A0_PROVIDER", "openai")
+    provider_id, spec = resolve_openai_compatible_provider()
+    openai_adapter = adapter_module.OpenAICompatibleAdapter(provider_id, spec)
+    openai_adapter.complete([{"role": "user", "content": "private by default"}])
+    assert captured["request"]["store"] is False
+    openai_adapter.complete(
+        [{"role": "user", "content": "explicit storage"}], store=True
+    )
+    assert captured["request"]["store"] is True
+
 
 def test_router_prefers_configured_generic_adapter(
     monkeypatch: pytest.MonkeyPatch,
@@ -122,4 +144,4 @@ def test_explicit_provider_missing_key_fails_closed(
 
     with pytest.raises(ValueError, match="DEEPSEEK_API_KEY not configured"):
         _select_adapter(request)
-# 89:1 0:0 0:0
+# 109:1 0:0 0:0

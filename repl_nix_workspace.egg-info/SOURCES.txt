@@ -113,7 +113,7 @@ python/services/providers/__init__.py
 python/services/providers/_resolver.py
 python/services/providers/claude_provider.py
 python/services/providers/gemini_provider.py
-python/services/providers/openai_compatible_provider.py
+python/services/providers/open_comp_prov_v0.0.0alpha.py
 python/services/providers/openai_provider.py
 python/services/providers/xai_provider.py
 python/services/tools/__init__.py
@@ -145,7 +145,7 @@ python/tests/contract_runner.py
 python/tests/test_coherence_primes.py
 python/tests/test_contract_runner.py
 python/tests/test_encoder_compiles.py
-python/tests/test_openai_compatible_contracts.py
+python/tests/test_open_comp_cont_v0.0.0alpha.py
 python/tests/test_platonic_agent.py
 python/tests/test_ptcna_state.py
 python/tests/test_runtime_readiness.py
@@ -167,8 +167,8 @@ repl_nix_workspace.egg-info/SOURCES.txt
 repl_nix_workspace.egg-info/dependency_links.txt
 repl_nix_workspace.egg-info/requires.txt
 repl_nix_workspace.egg-info/top_level.txt
-tests/test_a0_openai_compatible_adapter.py
 tests/test_a0_package.py
+tests/test_aone_open_comp_adap_v0.0.0alpha.py
 tests/test_artifacts.py
 tests/test_compute_transcript_full.py
 tests/test_cut_modes.py
@@ -177,7 +177,8 @@ tests/test_hmmm_boundary.py
 tests/test_inference_modes_usage.py
 tests/test_interdependent_bootstrap.py
 tests/test_live_server.py
-tests/test_openai_compatible_provider.py
+tests/test_open_comp_prov_v0.0.0alpha.py
+tests/test_open_comp_rout_v0.0.0alpha.py
 tests/test_openai_policy_hmmm.py
 tests/test_route_imports.py
 tests/test_run_context.py

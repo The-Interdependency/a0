@@ -134,8 +134,8 @@ Naming convention: `{name}.py` = self-contained module; `{name}_api.py` = thin d
 ### Key Python Services & Engines
 
 - `python/services/inference.py` — Orchestrates LLM calls across registered energy providers (Grok / Gemini / Claude / OpenAI-compatible); resolves role, normalizes reasoning effort, injects tier-specific `prompt_context`.
-- `python/services/providers/openai_compatible_provider.py` — Generic Responses/Chat Completions transport; endpoints, credential env names, models, and provider quirks stay in `python/config/providers.json`.
-- `a0/provider_registry.py` + `a0/adapters/openai_compatible_adapter.py` — Standalone/Termux provider selection from that same registry; `A0_PROVIDER` is explicit and fail-closed.
+- `python/services/providers/open_comp_prov_v0.0.0alpha.py` — Generic Responses/Chat Completions transport; endpoints, credential env names, models, and provider quirks stay in `python/config/providers.json`.
+- `a0/prov_regi_v0.0.0alpha.py` + `a0/adapters/open_comp_adap_v0.0.0alpha.py` — Standalone/Termux provider selection from that same registry; `A0_PROVIDER` is explicit and fail-closed.
 - `python/services/heartbeat.py` — Periodic tick: audit snapshots, memory checkpoints, PCNA propagation, sub-agent cleanup.
 - `python/services/tool_executor.py` — Tool invocation with approval gates.
 - `python/engine/ptcna_state.py` — durable Platonic-Agent adapter over the exactly pinned producer-owned PTCNA pipeline and UCNS receipt.

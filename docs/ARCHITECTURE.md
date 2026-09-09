@@ -16,14 +16,14 @@
 - `python/services/inference.py` — Dispatcher + orchestration; delegates outbound API calls to `providers/<name>.py`
 - `python/services/providers/` — Native adapters plus generic transports:
   - `_resolver.py` — registry-defined env override > spec model lookup; raises on unresolvable
-  - `openai_compatible_provider.py` — provider-neutral Responses/Chat Completions transport + tool loop
+  - `open_comp_prov_v0.0.0alpha.py` — provider-neutral Responses/Chat Completions transport + tool loop
   - `openai_provider.py` — stable OpenAI wrapper over the generic transport
   - `xai_provider.py` — xAI Grok via native xai-sdk (search + function-tool loop + streaming)
   - `gemini_provider.py` — google-genai SDK (thin wrapper over `gemini_native.py`)
   - `claude_provider.py` — Anthropic SDK + prompt caching
 - `python/services/provider_seeds_bootstrap.py` — Lifespan-time idempotent seeding of provider WS modules
-- `a0/provider_registry.py` — standalone/Termux selection from the canonical provider JSON; explicit `A0_PROVIDER` fails closed
-- `a0/adapters/openai_compatible_adapter.py` — synchronous standalone transport for registry-defined compatible providers
+- `a0/prov_regi_v0.0.0alpha.py` — standalone/Termux selection from the canonical provider JSON; explicit `A0_PROVIDER` fails closed
+- `a0/adapters/open_comp_adap_v0.0.0alpha.py` — synchronous standalone transport for registry-defined compatible providers
 - `python/services/heartbeat.py` — Background heartbeat service (30s tick)
 - `python/services/bandit.py` — Multi-Armed Bandit (UCB1) service
 - `python/services/edcm.py` — EDCM behavioral directives scoring
