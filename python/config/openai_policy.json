@@ -110,7 +110,7 @@
       ]
     },
     "practice": {
-      "model": "gpt-5.5-mini",
+      "model": "gpt-5-mini",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 2500,
@@ -139,7 +139,7 @@
       ]
     },
     "record": {
-      "model": "gpt-5.5-nano",
+      "model": "gpt-5-nano",
       "store": false,
       "parallel_tool_calls": false,
       "max_output_tokens": 1200,
