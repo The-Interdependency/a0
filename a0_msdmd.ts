@@ -1,4 +1,4 @@
-// 8027:0 0:1 0:1
+// 8045:0 0:1 0:1
 import { defineMsdmdCollection } from "./.agents/skills/msdmd/collection";
 
 export default defineMsdmdCollection({
@@ -1068,6 +1068,17 @@ export default defineMsdmdCollection({
       },
       "file": "python/services/bg_tasks.py",
       "id": "a0_service_bg_tasks"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "a caller marks its seed model as auto-selected rather than explicit",
+        "since": "2026-09-09",
+        "then": "call_model leaves the resolved provider unpinned so inference may route by the classified role slot"
+      },
+      "file": "python/services/call_fn.py",
+      "id": "call_fn_auto_model_keeps_role_slot_routing"
     },
     {
       "block": "CONTRACTS",
@@ -2812,7 +2823,7 @@ export default defineMsdmdCollection({
         "call": "self::check_openai_compatible_repair_regressions",
         "cleanup": "none",
         "mutates": "none",
-        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, chat_approval_replay_preserves_provider_pin",
+        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, chat_approval_replay_preserves_provider_pin",
         "requires": "python3, pytest",
         "timeout": "60"
       },
@@ -5257,6 +5268,13 @@ export default defineMsdmdCollection({
       "source_block": "CHECKS",
       "source_id": "check_openai_compatible_repair_regressions",
       "to": "a0_openai_compatible_store_defaults_off"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "call_fn_auto_model_keeps_role_slot_routing"
     },
     {
       "from": "check_openai_compatible_repair_regressions",
@@ -8027,4 +8045,4 @@ export default defineMsdmdCollection({
   "gaps": [],
   "repo": "a0"
 });
-// 8027:0 0:1 0:1
+// 8045:0 0:1 0:1

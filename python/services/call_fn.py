@@ -1,4 +1,4 @@
-# 99:73 0:0 3:2
+# 101:86 0:0 3:2
 """call_fn — canonical CallFn adapter.
 
 aimmh_lib.adapters.make_call_fn pattern, ported to a0p. The CallFn is the
@@ -60,6 +60,12 @@ from __future__ import annotations
 #   then: the resolved provider is pinned through inference and cannot be replaced by a prompt role slot
 #   class: correctness
 #   since: 2026-09-09
+#
+# id: call_fn_auto_model_keeps_role_slot_routing
+#   given: a caller marks its seed model as auto-selected rather than explicit
+#   then: call_model leaves the resolved provider unpinned so inference may route by the classified role slot
+#   class: correctness
+#   since: 2026-09-09
 # === END CONTRACTS ===
 
 from typing import Awaitable, Callable, Optional
@@ -104,6 +110,7 @@ async def call_model(
     reasoning_effort: Optional[str] = None,
     enforce_tier: bool = True,
     enforce_enabled: bool = True,
+    pin_requested_provider: bool = True,
 ) -> tuple[str, dict]:
     """Module-level full-shape call. Resolves model_id → provider_id, gates
     on tier + provider-enabled flag, and delegates to call_provider.
@@ -140,7 +147,7 @@ async def call_model(
         user_id=user_id,
         skip_approval=skip_approval,
         reasoning_effort=reasoning_effort,
-        pin_requested_provider=True,
+        pin_requested_provider=pin_requested_provider,
     )
     return content, usage
 
@@ -204,4 +211,4 @@ def make_call_fn(
         content, _usage = await full(model_id, messages, **kwargs)
         return content
     return _call
-# 99:73 0:0 3:2
+# 101:86 0:0 3:2

@@ -1,4 +1,4 @@
-# 647:191 2:7 2:16
+# 649:189 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -372,6 +372,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 model_id = conv.get("model") or ""
         if not model_id:
             raise HTTPException(status_code=503, detail="No instantiation selected")
+        provider_pin_requested = model_from_body or agent_model_id is not None
         # Resolve model_id → provider_id via the catalog so forge agents
         # whose model_id is a real model name (e.g. "gpt-5-mini") route
         # correctly downstream. The fallback below is intentionally
@@ -793,6 +794,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 content, usage = await inst.run(
                     history,
                     system_prompt_override=system_prompt or None,
+                    pin_requested_provider=provider_pin_requested,
                 )
                 print(f"[chat-dbg] provider={inst.provider_id!r} hist_len={len(history)} content_len={len(content or '')} content_preview={repr((content or '')[:80])}")
                 # Use the resolved provider_id from the instance — for forge
@@ -845,9 +847,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 "history": history,
                 "system_prompt": system_prompt or None,
                 "provider_id": provider_id,
-                # AgentInstance.run delegates to call_model, which pins the
-                # resolved model/provider after tier and enabled gates.
-                "pin_requested_provider": True,
+                "pin_requested_provider": provider_pin_requested,
                 "uid": uid,
                 # Persist the allow-list so approval replay uses the same tool set.
                 "enabled_tools": list(_conv_tools) if isinstance(_conv_tools, list) else None,
@@ -920,4 +920,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   then: both gate-id and scope approval replays retain that exact provider pin, including any subsequently pending gate
 #   class: correctness
 # === END CONTRACTS ===
-# 647:191 2:7 2:16
+# 649:189 2:7 2:16

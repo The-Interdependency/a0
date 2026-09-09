@@ -1,4 +1,4 @@
-# 236:1 0:0 0:0
+# 270:1 0:0 0:0
 """Routing and catalog tests for registry-driven compatible providers."""
 
 import ast
@@ -54,6 +54,18 @@ def test_approval_replays_preserve_explicit_provider_pin() -> None:
         for call in replay_calls
     )
 
+    instance_runs = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "run"
+    ]
+    assert any(
+        any(keyword.arg == "pin_requested_provider" for keyword in call.keywords)
+        for call in instance_runs
+    )
+
     pending_writes = [
         node
         for node in ast.walk(tree)
@@ -67,6 +79,37 @@ def test_approval_replays_preserve_explicit_provider_pin() -> None:
         assert isinstance(entry, ast.Dict)
         keys = {key.value for key in entry.keys if isinstance(key, ast.Constant)}
         assert "pin_requested_provider" in keys
+
+
+@pytest.mark.asyncio
+async def test_call_model_leaves_auto_selected_provider_unpinned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from python.services import call_fn
+
+    async def resolve_model_id(model_id: str):
+        assert model_id == "auto-seed"
+        return "deepseek", {}
+
+    captured: dict = {}
+
+    async def call_provider(**kwargs):
+        captured.update(kwargs)
+        return "routed", {}
+
+    monkeypatch.setattr(call_fn, "resolve_model_id", resolve_model_id)
+    monkeypatch.setattr(call_fn, "call_provider", call_provider)
+
+    content, _ = await call_fn.call_model(
+        "auto-seed",
+        [{"role": "user", "content": "practice this"}],
+        enforce_tier=False,
+        enforce_enabled=False,
+        pin_requested_provider=False,
+    )
+
+    assert content == "routed"
+    assert captured["pin_requested_provider"] is False
 
 
 @pytest.mark.asyncio
@@ -302,4 +345,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             provider_id="deepseek",
             use_tools=False,
         )
-# 236:1 0:0 0:0
+# 270:1 0:0 0:0
