@@ -1,4 +1,4 @@
-# 400:114 0:0 16:15
+# 399:120 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -25,6 +25,12 @@
 #   then: _canonical_tool_calls emits the same fingerprint so the second execution is refused
 #   class: safety
 #   since: 2026-09-09
+#
+# id: inference_compatible_provider_receives_classified_role
+#   given: routing classifies a request into a role slot handled by an OpenAI-compatible provider
+#   then: the compatible transport receives that exact role for model override resolution
+#   class: correctness
+#   since: 2026-09-09
 # === END CONTRACTS ===
 import json
 import logging
@@ -32,7 +38,6 @@ import os
 from typing import Callable, Optional
 import httpx
 
-from .tool_executor import TOOL_SCHEMAS_CHAT, TOOL_SCHEMAS_RESPONSES, execute_tool, set_caller_provider
 from .prompt_assembly import _prepend_doctrine
 from .attachments import build_provider_messages as _build_provider_messages
 # Single source of truth for provider specs — loaded from python/config/providers.json.
@@ -359,7 +364,7 @@ async def call_provider(
         from .providers.openai_compatible_provider import call as compatible_call
         return await compatible_call(
             payload_messages,
-            provider_id=provider_id,
+            provider_id=provider_id, role=_slot,
             model_override=spec["model"],
             api_key=api_key,
             max_tokens=max_tokens,
@@ -385,7 +390,7 @@ async def call_provider(
         from .providers.openai_compatible_provider import call as compatible_call
         return await compatible_call(
             payload_messages,
-            provider_id=provider_id,
+            provider_id=provider_id, role=_slot,
             api_key=api_key,
             model_override=spec["model"],
             max_tokens=max_tokens,
@@ -578,4 +583,4 @@ async def _call_anthropic(
     )
 
 
-# 400:114 0:0 16:15
+# 399:120 0:0 16:15

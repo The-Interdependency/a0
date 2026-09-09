@@ -1,4 +1,4 @@
-# 327:35 0:0 2:5
+# 327:43 0:0 2:5
 """Generic OpenAI-compatible provider transport.
 
 Provider identity, endpoint, credential name, model, API family, reasoning
@@ -34,6 +34,12 @@ from __future__ import annotations
 #   then: endpoint, model, credential name, API family, effort scale, and tool profile come from providers.json; missing explicit configuration fails closed and credentials do not enter error text
 #   class: correctness
 #   since: 2026-09-07
+#
+# id: openai_compatible_responses_preserves_reasoning_items
+#   given: a Responses tool round emits reasoning and function-call output items
+#   then: the continuation includes the complete output sequence before function-call outputs
+#   class: correctness
+#   since: 2026-09-09
 # === END CONTRACTS ===
 
 import copy
@@ -234,7 +240,9 @@ async def _call_responses(
             except Exception as exc:
                 return _safe_provider_error(provider_name, exc, api_key), accumulated_usage
 
-        input_items.extend(tool_calls)
+        # Responses continuations without previous_response_id must replay the
+        # complete output sequence, including encrypted/reasoning state.
+        input_items.extend(copy.deepcopy(output_items))
         for tool_call in tool_calls:
             try:
                 arguments = json.loads(tool_call.get("arguments", "{}"))
@@ -408,4 +416,4 @@ async def call(
     raise ValueError(
         f"Provider {provider_id!r} has unsupported api_family={api_family!r}"
     )
-# 327:35 0:0 2:5
+# 327:43 0:0 2:5

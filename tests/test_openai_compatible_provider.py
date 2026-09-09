@@ -1,4 +1,4 @@
-# 369:1 0:0 0:0
+# 384:1 0:0 0:0
 """Contract tests for registry-driven OpenAI-compatible providers."""
 
 from pathlib import Path
@@ -166,12 +166,20 @@ async def test_first_responses_tool_call_executes_before_repeat_detection(
                 responses.append(request)
                 if len(responses) == 1:
                     return _Dump({
-                        "output": [{
-                            "type": "function_call",
-                            "name": "sys.pwd",
-                            "arguments": "{}",
-                            "call_id": "call-1",
-                        }],
+                        "output": [
+                            {
+                                "type": "reasoning",
+                                "id": "reasoning-1",
+                                "encrypted_content": "opaque-state",
+                                "summary": [],
+                            },
+                            {
+                                "type": "function_call",
+                                "name": "sys.pwd",
+                                "arguments": "{}",
+                                "call_id": "call-1",
+                            },
+                        ],
                         "usage": {},
                     })
                 return _Dump({
@@ -202,6 +210,11 @@ async def test_first_responses_tool_call_executes_before_repeat_detection(
     assert content == "tool-ok"
     assert executed == [("sys.pwd", {})]
     assert len(responses) == 2
+    continuation = responses[1]["input"]
+    assert continuation[-3]["type"] == "reasoning"
+    assert continuation[-3]["encrypted_content"] == "opaque-state"
+    assert continuation[-2]["type"] == "function_call"
+    assert continuation[-1]["type"] == "function_call_output"
 
 
 @pytest.mark.asyncio
@@ -416,12 +429,13 @@ async def test_openai_wrapper_preserves_reasoning_and_store_contract(
 async def test_inference_dispatches_adapter_field_without_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from python.services import inference
+    from python.services import inference, openai_router
     from python.services.providers import openai_compatible_provider as provider
 
     _clear_provider_keys(monkeypatch)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(openai_router, "resolve_role", lambda _text: "practice")
     captured: dict = {}
 
     async def fake_call(messages, **kwargs):
@@ -441,6 +455,7 @@ async def test_inference_dispatches_adapter_field_without_database(
     assert usage == {"total_tokens": 1}
     assert captured["provider_id"] == "deepseek"
     assert captured["model_override"] == "deepseek-v4-flash"
+    assert captured["role"] == "practice"
 
 
 @pytest.mark.asyncio
@@ -466,4 +481,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             provider_id="deepseek",
             use_tools=False,
         )
-# 369:1 0:0 0:0
+# 384:1 0:0 0:0
