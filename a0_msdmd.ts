@@ -1,4 +1,3 @@
-// 8116:0 0:1 0:1
 import { defineMsdmdCollection } from "./.agents/skills/msdmd/collection";
 
 export default defineMsdmdCollection({
@@ -1011,6 +1010,30 @@ export default defineMsdmdCollection({
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
+        "auth_boundary": "user approval scopes",
+        "internal_surface": "none",
+        "module_kind": "service",
+        "module_name": "approval_gate",
+        "network_boundary": "none",
+        "owner": "Erin Spencer",
+        "public_surface": "approval_gate_result",
+        "requires": "a0_service_openai_router",
+        "rollback": "Revert compatible-provider gate wiring and restore the legacy OpenAI-local gate builder.",
+        "rollout": "default_enabled",
+        "since": "2026-09-09",
+        "storage_boundary": "read/write audit",
+        "summary": "Builds the policy route decision and pending approval response shared by legacy OpenAI and registry-driven compatible-provider transports.",
+        "tests": "tests/test_open_comp_prov_v0.0.0alpha.py",
+        "unresolved": "none",
+        "user_data_boundary": "read"
+      },
+      "file": "python/services/approval_gate.py",
+      "id": "a0_service_approval_gate"
+    },
+    {
+      "block": "MODULE_BUILD",
+      "fields": {
+        "admin_only": "false",
         "auth_boundary": "none",
         "internal_surface": "_bucket_id, _client, _storage_key, _find_by_sha, _insert_row, _public_url, _fetch_row",
         "module_kind": "service",
@@ -1466,6 +1489,17 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
+        "class": "security",
+        "given": "a tool-enabled OpenAI-compatible provider turn requests an external write without a grant",
+        "since": "2026-09-09",
+        "then": "inference returns a pending approval gate before transport or tool execution and replay may bypass only with skip_approval"
+      },
+      "file": "python/services/inference.py",
+      "id": "inference_compatible_provider_approval_gate"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
         "class": "correctness",
         "given": "routing classifies a request into a role slot handled by an OpenAI-compatible provider",
         "since": "2026-09-09",
@@ -1473,6 +1507,17 @@ export default defineMsdmdCollection({
       },
       "file": "python/services/inference.py",
       "id": "inference_compatible_provider_receives_classified_role"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "correctness",
+        "given": "role routing selects a concrete model owned by a different compatible-provider catalog entry",
+        "since": "2026-09-09",
+        "then": "transport uses the owning provider's complete registry spec and identity as well as the selected model"
+      },
+      "file": "python/services/inference.py",
+      "id": "inference_compatible_transport_uses_effective_owner"
     },
     {
       "block": "CONTRACTS",
@@ -1518,7 +1563,7 @@ export default defineMsdmdCollection({
         "network_boundary": "external",
         "owner": "Erin Spencer",
         "public_surface": "call_provider",
-        "requires": "a0_service_tool_executor, a0_service_prompt_assembly, a0_service_attachments, a0_service_energy_registry",
+        "requires": "a0_service_tool_executor, a0_service_prompt_assembly, a0_service_attachments, a0_service_energy_registry, a0_service_approval_gate",
         "rollback": "Revert this file; inference is the live model-call path and has no migration state.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
@@ -2866,7 +2911,7 @@ export default defineMsdmdCollection({
         "call": "self::check_openai_compatible_repair_regressions",
         "cleanup": "none",
         "mutates": "none",
-        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, catalog_routed_model_tier_follows_concrete_owner, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403",
+        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, inference_compatible_provider_approval_gate, inference_compatible_transport_uses_effective_owner, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, catalog_routed_model_tier_follows_concrete_owner, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403",
         "requires": "python3, pytest",
         "timeout": "60"
       },
@@ -5366,7 +5411,21 @@ export default defineMsdmdCollection({
       "kind": "claims_proves",
       "source_block": "CHECKS",
       "source_id": "check_openai_compatible_repair_regressions",
+      "to": "inference_compatible_provider_approval_gate"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
       "to": "inference_compatible_provider_receives_classified_role"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "inference_compatible_transport_uses_effective_owner"
     },
     {
       "from": "check_openai_compatible_repair_regressions",
@@ -7070,6 +7129,20 @@ export default defineMsdmdCollection({
       "to": "a0_platonic_ptcna_state"
     },
     {
+      "from": "a0_service_approval_gate",
+      "kind": "owns",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_service_approval_gate",
+      "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_service_approval_gate",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_service_approval_gate",
+      "to": "a0_service_openai_router"
+    },
+    {
       "from": "a0_service_artifacts",
       "kind": "owns",
       "source_block": "MODULE_BUILD",
@@ -7264,6 +7337,13 @@ export default defineMsdmdCollection({
       "source_block": "MODULE_BUILD",
       "source_id": "a0_service_inference",
       "to": "Erin Spencer"
+    },
+    {
+      "from": "a0_service_inference",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_service_inference",
+      "to": "a0_service_approval_gate"
     },
     {
       "from": "a0_service_inference",
@@ -8116,4 +8196,3 @@ export default defineMsdmdCollection({
   "gaps": [],
   "repo": "a0"
 });
-// 8116:0 0:1 0:1
