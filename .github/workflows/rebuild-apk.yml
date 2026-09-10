@@ -1,0 +1,75 @@
+name: Rebuild Android APK
+
+on:
+  push:
+    branches:
+      - build/rebuild-apk-20260910
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Inject a0 Android bridge
+        shell: bash
+        run: |
+          cp android/a0-bridge.js dist/public/a0-bridge.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('dist/public/index.html')
+          html = p.read_text(encoding='utf-8')
+          tag = '<script src="/a0-bridge.js"></script>'
+          if tag not in html:
+              if '</head>' in html:
+                  html = html.replace('</head>', tag + '</head>', 1)
+              else:
+                  html = tag + html
+              p.write_text(html, encoding='utf-8')
+          PY
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Build installable debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Record checksum
+        shell: bash
+        run: |
+          sha256sum android/app/build/outputs/apk/debug/app-debug.apk | tee a0-apk.sha256
+          cat a0-apk.sha256 >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: a0-android-apk
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            a0-apk.sha256
+          if-no-files-found: error
+          retention-days: 30
