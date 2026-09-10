@@ -1,4 +1,4 @@
-# 96:41 0:0 2:0
+# 100:47 0:0 2:0
 """Synchronous standalone adapter for registry-defined OpenAI-compatible APIs."""
 from __future__ import annotations
 
@@ -41,6 +41,12 @@ from __future__ import annotations
 #   then: requests send store=false unless the caller explicitly opts in
 #   class: safety
 #   since: 2026-09-09
+#
+# id: a0_openai_compatible_reasoning_floor
+#   given: a standalone compatible provider declares a minimum reasoning effort above the request or default
+#   then: the adapter raises the effective effort to that configured floor before transport
+#   class: correctness
+#   since: 2026-09-10
 # === END CONTRACTS ===
 
 import os
@@ -58,7 +64,11 @@ def _normalize_effort(spec: dict[str, Any], requested: str | None) -> str | None
     mapped = (spec.get("reasoning_effort_map") or {}).get(value, value)
     allowed = spec.get("reasoning_efforts") or []
     if allowed and mapped not in allowed:
-        return spec.get("default_reasoning_effort") or allowed[0]
+        mapped = spec.get("default_reasoning_effort") or allowed[0]
+    floor = spec.get("min_reasoning_effort")
+    order = {"minimal": 0, "low": 1, "medium": 2, "high": 3}
+    if floor and order.get(mapped, -1) < order.get(floor, -1):
+        mapped = floor
     return mapped
 
 
@@ -152,4 +162,4 @@ class OpenAICompatibleAdapter:
             },
             "subagents_used": [],
         }
-# 96:41 0:0 2:0
+# 100:47 0:0 2:0
