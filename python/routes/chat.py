@@ -1,4 +1,4 @@
-# 677:194 2:7 2:16
+# 675:196 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -854,10 +854,10 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 "history": history,
                 "system_prompt": system_prompt or None,
                 "provider_id": provider_id,
-                "pin_requested_provider": provider_pin_requested,
-                "model_override": (
-                    usage.get("model_id") if provider_pin_requested else None
-                ),
+                # Approval replay is a deterministic continuation of the
+                # already resolved turn, even when the initial choice was auto-routed.
+                "pin_requested_provider": bool(usage.get("model_id")),
+                "model_override": usage.get("model_id"),
                 "uid": uid,
                 # Persist the allow-list so approval replay uses the same tool set.
                 "enabled_tools": list(_conv_tools) if isinstance(_conv_tools, list) else None,
@@ -944,8 +944,8 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   class: correctness
 #
 # id: chat_approval_replay_preserves_provider_pin
-#   given: a provider-pinned single-model call stops at an approval gate
-#   then: both gate-id and scope approval replays retain that exact provider and concrete model pin, including any subsequently pending gate
+#   given: any explicit or auto-routed single-model call stops at an approval gate
+#   then: both gate-id and scope approval replays retain the already resolved provider and concrete model pin, including any subsequently pending gate
 #   class: correctness
 #
 # id: chat_routed_tier_denial_is_clean_403
@@ -953,4 +953,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   then: the route removes its staged message and returns HTTP 403 instead of leaving a dangling turn or returning 500
 #   class: security
 # === END CONTRACTS ===
-# 677:194 2:7 2:16
+# 675:196 2:7 2:16
