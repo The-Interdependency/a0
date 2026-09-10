@@ -1,4 +1,4 @@
-# 400:1 0:0 0:0
+# 399:1 0:0 0:0
 """Contract tests for registry-driven OpenAI-compatible providers."""
 
 from pathlib import Path
@@ -109,7 +109,7 @@ async def test_compatible_tools_stop_at_shared_approval_gate(
     assert content.startswith("[APPROVAL REQUIRED")
     assert usage["approval_state"] == "pending"
     assert usage["provider_id"] == "deepseek"
-    assert usage["model_id"] == "deepseek-v4-flash"
+    assert usage["model_id"] == "deepseek-flash"
 
 
 def test_repeat_fingerprint_excludes_volatile_transport_ids() -> None:
@@ -154,8 +154,7 @@ def test_deepseek_is_configuration_not_a_provider_specific_adapter() -> None:
     assert flash["adapter"] == pro["adapter"] == "openai-compatible"
     assert flash["base_url"] == pro["base_url"] == "https://api.deepseek.com"
     assert flash["api_key_env"] == pro["api_key_env"] == "DEEPSEEK_API_KEY"
-    assert flash["model"] == "deepseek-v4-flash"
-    assert pro["model"] == "deepseek-v4-pro"
+    assert flash["model"] == pro["model"] == "deepseek-flash"
 
     registry_text = (root / "python/config/providers.json").read_text(encoding="utf-8")
     assert "deepseek-chat" not in registry_text
@@ -198,7 +197,7 @@ async def test_responses_transport_uses_registry_base_url_model_and_effort(
     try:
         content, usage = await provider.call(
             [{"role": "user", "content": "hi"}],
-            provider_id="deepseek-pro",
+            provider_id="deepseek",
             use_tools=False,
             reasoning_effort="medium",
         )
@@ -213,7 +212,7 @@ async def test_responses_transport_uses_registry_base_url_model_and_effort(
         "base_url": "https://api.deepseek.com",
     }
     request = captured["requests"][0]
-    assert request["model"] == "deepseek-v4-pro"
+    assert request["model"] == "deepseek-flash"
     assert request["reasoning"] == {"effort": "high"}
     assert "store" not in request
     assert "tools" not in request
@@ -243,18 +242,18 @@ async def test_dispatcher_primary_placeholder_still_honors_model_env_override(
 
     monkeypatch.setattr(provider, "AsyncOpenAI", FakeAsyncOpenAI)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
-    monkeypatch.setenv("DEEPSEEK_MODEL_CONDUCT", "deepseek-v4-flash-override")
+    monkeypatch.setenv("DEEPSEEK_MODEL_CONDUCT", "deepseek-flash-override")
 
     content, _ = await provider.call(
         [{"role": "user", "content": "hi"}],
         provider_id="deepseek",
         role="conduct",
-        model_override="deepseek-v4-flash",
+        model_override="deepseek-flash",
         use_tools=False,
     )
 
     assert content == "override-ok"
-    assert captured["model"] == "deepseek-v4-flash-override"
+    assert captured["model"] == "deepseek-flash-override"
 
 
 @pytest.mark.asyncio
@@ -491,4 +490,4 @@ async def test_transport_redacts_opaque_key_before_error_truncation(
     assert "[redacted]" in content
 
 
-# 400:1 0:0 0:0
+# 399:1 0:0 0:0

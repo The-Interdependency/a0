@@ -1,4 +1,4 @@
-# 342:55 0:0 2:5
+# 364:67 0:0 2:5
 """Generic OpenAI-compatible provider transport.
 
 Provider identity, endpoint, credential name, model, API family, reasoning
@@ -14,7 +14,7 @@ from __future__ import annotations
 #   summary: Registry-driven OpenAI-compatible transport supporting Responses and Chat Completions with the shared repeat-safe tool loop.
 #   owner: Erin Spencer
 #   public_surface: call
-#   internal_surface: _call_responses, _call_chat_completions, _normalize_reasoning_effort, _response_tools
+#   internal_surface: _format_responses_messages, _call_responses, _call_chat_completions, _normalize_reasoning_effort, _response_tools
 #   auth_boundary: none
 #   storage_boundary: none
 #   network_boundary: external
@@ -52,6 +52,18 @@ from __future__ import annotations
 #   then: the provider identity is active for the complete transport loop and the prior context is restored on every exit
 #   class: correctness
 #   since: 2026-09-09
+#
+# id: openai_compatible_explicit_none_reasoning
+#   given: a compatible provider declares that reasoning effort none must be sent explicitly
+#   then: the Responses request carries reasoning.effort=none instead of omitting the field and activating the provider default
+#   class: correctness
+#   since: 2026-09-10
+#
+# id: openai_compatible_responses_formats_vision_input
+#   given: attachment preparation supplies OpenAI Chat-style text and image_url content parts to a Responses-family provider
+#   then: transport converts them to input_text and input_image parts before the request is sent
+#   class: correctness
+#   since: 2026-09-10
 # === END CONTRACTS ===
 
 import copy
@@ -123,7 +135,22 @@ def _format_responses_messages(messages: list[dict]) -> list[dict]:
         role = message.get("role", "user")
         content = message.get("content", "")
         if isinstance(content, list):
-            formatted.append({"role": role, "content": content})
+            parts: list = []
+            for part in content:
+                if not isinstance(part, dict):
+                    parts.append(part)
+                    continue
+                part_type = part.get("type")
+                if part_type == "text":
+                    parts.append({"type": "input_text", "text": part.get("text", "")})
+                elif part_type == "image_url":
+                    image_url = part.get("image_url") or ""
+                    if isinstance(image_url, dict):
+                        image_url = image_url.get("url") or ""
+                    parts.append({"type": "input_image", "image_url": image_url})
+                else:
+                    parts.append(part)
+            formatted.append({"role": role, "content": parts})
         elif role in {"system", "assistant", "developer"}:
             formatted.append({"role": role, "content": content})
         else:
@@ -151,6 +178,7 @@ def _responses_kwargs(
     max_output_tokens: int,
     temperature: float,
     reasoning_effort: Optional[str],
+    explicit_none_reasoning: bool = False,
     store: bool,
     supports_store: bool,
     tools: list[dict] | None,
@@ -164,9 +192,11 @@ def _responses_kwargs(
     }
     if supports_store:
         kwargs["store"] = store
-    if reasoning_effort and reasoning_effort != "none":
+    if reasoning_effort and (
+        reasoning_effort != "none" or explicit_none_reasoning
+    ):
         kwargs["reasoning"] = {"effort": reasoning_effort}
-        if supports_store and not store:
+        if reasoning_effort != "none" and supports_store and not store:
             kwargs["include"] = ["reasoning.encrypted_content"]
     if tools:
         kwargs["tools"] = tools
@@ -181,6 +211,7 @@ async def _call_responses(
     max_output_tokens: int,
     temperature: float,
     reasoning_effort: Optional[str],
+    explicit_none_reasoning: bool = False,
     store: bool,
     use_tools: bool,
     base_url: str | None = None,
@@ -211,6 +242,7 @@ async def _call_responses(
             max_output_tokens=max_output_tokens,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
+            explicit_none_reasoning=explicit_none_reasoning,
             store=store,
             supports_store=supports_store,
             tools=tools,
@@ -246,6 +278,7 @@ async def _call_responses(
                     max_output_tokens=max_output_tokens,
                     temperature=temperature,
                     reasoning_effort=reasoning_effort,
+                    explicit_none_reasoning=explicit_none_reasoning,
                     store=store,
                     supports_store=supports_store,
                     tools=None,
@@ -419,6 +452,7 @@ async def call(
                 max_output_tokens=max_tokens,
                 temperature=temperature,
                 reasoning_effort=effort,
+                explicit_none_reasoning=bool(spec.get("explicit_none_reasoning")),
                 store=store,
                 use_tools=use_tools,
                 base_url=base_url,
@@ -443,4 +477,4 @@ async def call(
         )
     finally:
         reset_caller_provider(caller_provider_token)
-# 342:55 0:0 2:5
+# 364:67 0:0 2:5

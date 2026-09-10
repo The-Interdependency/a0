@@ -1,8 +1,8 @@
 {
-  "version": "2026-09-07.a0.pricing.v2",
-  "prices_as_of": "2026-09-07",
+  "version": "2026-09-10.a0.pricing.v3",
+  "prices_as_of": "2026-09-10",
   "_doc": {
-    "schema": "providers.<id>.models is a list of {id, context_window, input_per_1m, output_per_1m, cached_input_per_1m?, cache_write_per_1m?, supports_vision?, supports_thinking?, note?} entries. All prices are USD per 1,000,000 tokens.",
+    "schema": "providers.<id>.models is a list of {id, context_window, max_output_tokens?, input_per_1m, output_per_1m, cached_input_per_1m?, cache_write_per_1m?, supports_vision?, supports_thinking?, note?} entries. All prices are USD per 1,000,000 tokens.",
     "source-of-truth": "Boot source-of-truth for per-model pricing. estimate_cost(provider_id, ..., model=<id>) consults this file first and uses per-model rates; without a model arg, falls back to the provider flagship rate from providers.json. Hydrates each ws_modules.route_config.available_models list on first boot and on POST /api/energy/refresh-pricing/{provider_id}.",
     "naming": "Model ids are the slugs the provider's API accepts. Keep in sync with providers.json presets section so optimizer presets and per-model pricing line up.",
     "live-refresh": "POST /api/energy/refresh-pricing/{provider_id} re-reads this file from disk and re-hydrates the seed's available_models. Live HTML extraction from pricing_url is a future phase; for now admins update this file in repo, redeploy, then refresh."
@@ -187,13 +187,15 @@
       "pricing_url": "https://api-docs.deepseek.com/quick_start/pricing/",
       "models": [
         {
-          "id": "deepseek-v4-flash",
+          "id": "deepseek-flash",
           "context_window": 1000000,
-          "input_per_1m": 0.44,
-          "output_per_1m": 1.32,
-          "cached_input_per_1m": 0.014,
+          "max_output_tokens": 384000,
+          "input_per_1m": 0.3,
+          "output_per_1m": 1.2,
+          "cached_input_per_1m": 0.006,
           "supports_thinking": true,
-          "note": "Official peak rates; off-peak rates are lower."
+          "supports_vision": true,
+          "note": "DeepSeek V4.1 Flash official peak rates; off-peak rates are half."
         }
       ]
     },
@@ -201,13 +203,15 @@
       "pricing_url": "https://api-docs.deepseek.com/quick_start/pricing/",
       "models": [
         {
-          "id": "deepseek-v4-pro",
+          "id": "deepseek-flash",
           "context_window": 1000000,
-          "input_per_1m": 1.32,
-          "output_per_1m": 3.96,
-          "cached_input_per_1m": 0.044,
+          "max_output_tokens": 384000,
+          "input_per_1m": 0.3,
+          "output_per_1m": 1.2,
+          "cached_input_per_1m": 0.006,
           "supports_thinking": true,
-          "note": "Official peak rates; off-peak rates are lower."
+          "supports_vision": true,
+          "note": "Compatibility pricing for the retired deepseek-pro provider id; routes to DeepSeek V4.1 Flash."
         }
       ]
     }

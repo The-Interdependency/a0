@@ -1,4 +1,4 @@
-# 117:19 0:0 0:0
+# 123:19 0:0 0:0
 """Executable msdmd witness for the generic provider boundary."""
 
 # === CHECKS ===
@@ -11,7 +11,7 @@
 #   cleanup: none
 #
 # id: check_openai_compatible_repair_regressions
-#   proves: a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, a0_openai_compatible_reasoning_floor, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, inference_compatible_provider_approval_gate, inference_compatible_transport_uses_effective_owner, tool_dispatch_enforces_approval_scope, approval_gate_uses_current_user_turn, approval_gate_replay_is_scope_bound, approval_gate_dispatch_denial_becomes_pending, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, catalog_routed_model_tier_follows_concrete_owner, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403
+#   proves: a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, a0_openai_compatible_reasoning_floor, a0_openai_compatible_explicit_none_reasoning, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, inference_legacy_model_alias_memory_survives, inference_compatible_provider_approval_gate, inference_compatible_transport_uses_effective_owner, tool_dispatch_enforces_approval_scope, approval_gate_uses_current_user_turn, approval_gate_replay_is_scope_bound, approval_gate_dispatch_denial_becomes_pending, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, openai_compatible_explicit_none_reasoning, openai_compatible_responses_formats_vision_input, cheap_provider_prefers_configured_low_cost_provider, deprecated_provider_aliases_canonicalize, catalog_routed_model_tier_follows_concrete_owner, catalog_legacy_model_aliases_canonicalize, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403
 #   call: self::check_openai_compatible_repair_regressions
 #   requires: python3, pytest
 #   timeout: 60
@@ -48,8 +48,8 @@ def check_openai_compatible_registry_wiring() -> None:
 
     root = Path(__file__).resolve().parents[2]
     registry_text = (root / "python/config/providers.json").read_text(encoding="utf-8")
-    assert "deepseek-v4-flash" in registry_text
-    assert "deepseek-v4-pro" in registry_text
+    assert '"model": "deepseek-flash"' in registry_text
+    assert '"deprecated_alias_for": "deepseek"' in registry_text
     assert "deepseek-chat" not in registry_text
     assert "deepseek-reasoner" not in registry_text
     assert not (root / "python/services/providers/deepseek_provider.py").exists()
@@ -74,7 +74,7 @@ def check_openai_compatible_registry_wiring() -> None:
     environment = {"DEEPSEEK_API_KEY": "witness-secret", "A0_PROVIDER": "deepseek-pro"}
     with patch.dict(os.environ, environment, clear=False):
         provider_id, spec = resolve_openai_compatible_provider()
-        assert provider_id == "deepseek-pro"
+        assert provider_id == "deepseek"
         with patch.object(standalone_adapter, "OpenAI", FakeSyncOpenAI):
             result = standalone_adapter.OpenAICompatibleAdapter(provider_id, spec).complete(
                 [{"role": "user", "content": "hi"}]
@@ -85,7 +85,7 @@ def check_openai_compatible_registry_wiring() -> None:
         async def run_service_call():
             return await service_adapter.call(
                 [{"role": "user", "content": "hi"}],
-                provider_id="deepseek-pro",
+                provider_id="deepseek",
                 use_tools=False,
             )
 
@@ -96,7 +96,7 @@ def check_openai_compatible_registry_wiring() -> None:
     assert usage["output_tokens"] == 1
     assert captured["sync_client"]["base_url"] == "https://api.deepseek.com"
     assert captured["async_client"]["base_url"] == "https://api.deepseek.com"
-    assert captured["async_request"]["model"] == "deepseek-v4-pro"
+    assert captured["async_request"]["model"] == "deepseek-flash"
 
 
 def check_openai_compatible_repair_regressions() -> None:
@@ -118,10 +118,11 @@ def check_openai_compatible_repair_regressions() -> None:
         f"{routing_tests}::test_call_model_pins_the_explicit_model_provider",
         f"{routing_tests}::test_explicit_model_pin_ignores_cross_tier_role_override",
         f"{routing_tests}::test_cheap_provider_prefers_deepseek_before_expensive_fallback",
+        f"{routing_tests}::test_deepseek_none_reasoning_is_explicit",
         f"{routing_tests}::test_approval_replays_preserve_explicit_provider_pin",
         f"{routing_tests}::test_call_model_leaves_auto_selected_provider_unpinned",
-        f"{routing_tests}::test_auto_role_route_reapplies_tier_and_reports_effective_provider",
-        f"{routing_tests}::test_role_model_override_uses_concrete_owner_tier_and_provenance",
+        f"{routing_tests}::test_legacy_provider_slot_canonicalizes_to_current_deepseek_route",
+        f"{routing_tests}::test_legacy_model_env_override_canonicalizes_to_current_flash",
         f"{routing_tests}::test_agent_instance_caches_effective_routed_provider",
         f"{routing_tests}::test_explicit_openai_model_reaches_legacy_routed_branch",
         f"{provider_tests}::test_openai_approval_usage_retains_concrete_model",
@@ -136,6 +137,11 @@ def check_openai_compatible_repair_regressions() -> None:
         f"{approval_tests}::test_legacy_openai_route_transports_through_concrete_owner",
         f"{approval_tests}::test_pending_replay_pins_every_resolved_model",
         f"{adapter_tests}::test_adapter_uses_registry_transport_and_sanitizes_failure",
+        f"{adapter_tests}::test_multi_provider_selection_canonicalizes_and_dedupes_aliases",
+        f"{adapter_tests}::test_hidden_provider_aliases_are_omitted_from_registry_rosters",
+        f"{adapter_tests}::test_responses_formatter_converts_chat_style_vision_parts",
+        f"{adapter_tests}::test_legacy_model_instance_memory_survives_canonical_routing",
+        f"{adapter_tests}::test_edcm_slot_uses_catalog_alias_resolution",
     ]
     environment = dict(os.environ)
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -157,4 +163,4 @@ def check_openai_compatible_repair_regressions() -> None:
 
 def test_openai_compatible_registry_wiring() -> None:
     check_openai_compatible_registry_wiring()
-# 117:19 0:0 0:0
+# 123:19 0:0 0:0

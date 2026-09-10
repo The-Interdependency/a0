@@ -187,8 +187,8 @@ SESSION_SECRET          # Express session encryption (no fallback in prod)
 INTERNAL_API_SECRET     # Express→Python shared secret (start-dev.sh generates a per-run value)
 DATABASE_URL            # PostgreSQL connection string
 XAI_API_KEY             # Grok energy provider
-DEEPSEEK_API_KEY        # DeepSeek V4 Flash/Pro; also used by standalone a0
-A0_PROVIDER             # Optional standalone provider id (e.g. deepseek-pro)
+DEEPSEEK_API_KEY        # DeepSeek V4.1 Flash; also used by standalone a0
+A0_PROVIDER             # Optional standalone provider id; deepseek is canonical
 STRIPE_SECRET_KEY       # Stripe billing
 STRIPE_WEBHOOK_SECRET   # Stripe webhook validation
 ADMIN_USER_ID           # User ID allowed to write prompt contexts

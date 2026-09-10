@@ -1,4 +1,4 @@
-# 258:214 0:0 2:5
+# 256:215 0:0 2:5
 """EDCMbone scoring report → 200-400 word human explanation with cited
 quoted spans from the transcript. Owner-only, idempotent per report
 (UNIQUE on report_id), strict-JSON output, refund-on-failure.
@@ -36,6 +36,7 @@ from sqlalchemy import text as _sa_text
 from ..database import engine, get_session
 from ..services.energy_registry import BUILTIN_PROVIDERS
 from ..services.inference import call_provider
+from ..services.model_catalog import resolve_model_id
 from ..services.run_logger import get_run_logger
 from ..storage import storage
 
@@ -403,13 +404,11 @@ async def explain_report(
                 )
             )).first()
             if _slot_row:
-                _slot_mid = _slot_row[0]
-                _match = next(
-                    (pid for pid, p in BUILTIN_PROVIDERS.items() if p.get("model") == _slot_mid),
-                    None,
-                )
-                if _match:
-                    resolved_provider_id = _match
+                try:
+                    resolved_provider_id, _ = await resolve_model_id(str(_slot_row[0]))
+                except ValueError:
+                    # Unknown persisted slot ids intentionally use the default provider.
+                    pass
     except Exception:
         pass  # fall back to default on any DB error
 
@@ -527,4 +526,4 @@ def _credits_view(row: Dict[str, Any]) -> Dict[str, Any]:
 #          rolls it up by provider in the paid_explainer section
 #   class: correctness
 # === END CONTRACTS ===
-# 258:214 0:0 2:5
+# 256:215 0:0 2:5
