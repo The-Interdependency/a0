@@ -48,8 +48,8 @@ def check_openai_compatible_registry_wiring() -> None:
 
     root = Path(__file__).resolve().parents[2]
     registry_text = (root / "python/config/providers.json").read_text(encoding="utf-8")
-    assert "deepseek-v4-flash" in registry_text
-    assert "deepseek-v4-pro" in registry_text
+    assert '"model": "deepseek-flash"' in registry_text
+    assert '"deprecated_alias_for": "deepseek"' in registry_text
     assert "deepseek-chat" not in registry_text
     assert "deepseek-reasoner" not in registry_text
     assert not (root / "python/services/providers/deepseek_provider.py").exists()
@@ -74,7 +74,7 @@ def check_openai_compatible_registry_wiring() -> None:
     environment = {"DEEPSEEK_API_KEY": "witness-secret", "A0_PROVIDER": "deepseek-pro"}
     with patch.dict(os.environ, environment, clear=False):
         provider_id, spec = resolve_openai_compatible_provider()
-        assert provider_id == "deepseek-pro"
+        assert provider_id == "deepseek"
         with patch.object(standalone_adapter, "OpenAI", FakeSyncOpenAI):
             result = standalone_adapter.OpenAICompatibleAdapter(provider_id, spec).complete(
                 [{"role": "user", "content": "hi"}]
@@ -85,7 +85,7 @@ def check_openai_compatible_registry_wiring() -> None:
         async def run_service_call():
             return await service_adapter.call(
                 [{"role": "user", "content": "hi"}],
-                provider_id="deepseek-pro",
+                provider_id="deepseek",
                 use_tools=False,
             )
 
@@ -96,7 +96,7 @@ def check_openai_compatible_registry_wiring() -> None:
     assert usage["output_tokens"] == 1
     assert captured["sync_client"]["base_url"] == "https://api.deepseek.com"
     assert captured["async_client"]["base_url"] == "https://api.deepseek.com"
-    assert captured["async_request"]["model"] == "deepseek-v4-pro"
+    assert captured["async_request"]["model"] == "deepseek-flash"
 
 
 def check_openai_compatible_repair_regressions() -> None:
@@ -120,8 +120,8 @@ def check_openai_compatible_repair_regressions() -> None:
         f"{routing_tests}::test_cheap_provider_prefers_deepseek_before_expensive_fallback",
         f"{routing_tests}::test_approval_replays_preserve_explicit_provider_pin",
         f"{routing_tests}::test_call_model_leaves_auto_selected_provider_unpinned",
-        f"{routing_tests}::test_auto_role_route_reapplies_tier_and_reports_effective_provider",
-        f"{routing_tests}::test_role_model_override_uses_concrete_owner_tier_and_provenance",
+        f"{routing_tests}::test_legacy_provider_slot_canonicalizes_to_current_deepseek_route",
+        f"{routing_tests}::test_legacy_model_env_override_canonicalizes_to_current_flash",
         f"{routing_tests}::test_agent_instance_caches_effective_routed_provider",
         f"{routing_tests}::test_explicit_openai_model_reaches_legacy_routed_branch",
         f"{provider_tests}::test_openai_approval_usage_retains_concrete_model",

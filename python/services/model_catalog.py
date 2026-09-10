@@ -1,4 +1,4 @@
-# 150:98 0:0 7:1
+# 164:104 0:0 7:1
 """model_catalog — single source of truth for "what models can this user use".
 
 Today three surfaces answer this question independently:
@@ -49,6 +49,12 @@ from __future__ import annotations
 #   then: entitlement and provenance use the concrete model's owning provider, while unknown routed models fail closed when a caller tier is present
 #   class: security
 #   since: 2026-09-09
+#
+# id: catalog_legacy_model_aliases_canonicalize
+#   given: a persisted or explicitly requested model id is a registry-declared legacy alias
+#   then: catalog resolution attributes it to the canonical provider and transport uses that provider's current primary model
+#   class: correctness
+#   since: 2026-09-10
 # === END CONTRACTS ===
 
 from typing import Any, Optional
@@ -77,12 +83,21 @@ def _resolve_static(model_id: str) -> Optional[tuple[str, dict]]:
     back to persisted route_config when this misses.
     """
     if model_id in BUILTIN_PROVIDERS:
-        return model_id, BUILTIN_PROVIDERS[model_id]
+        spec = BUILTIN_PROVIDERS[model_id]
+        canonical_id = str(spec.get("deprecated_alias_for") or "").strip()
+        if canonical_id:
+            canonical = BUILTIN_PROVIDERS.get(canonical_id)
+            if canonical is not None:
+                return canonical_id, canonical
+        return model_id, spec
     # Every provider's primary model is more authoritative than any optimizer
     # preset reference. This prevents a shared preset model from being
     # attributed to whichever provider happens to appear first in JSON.
     for pid, spec in BUILTIN_PROVIDERS.items():
         if spec.get("model") == model_id:
+            return pid, spec
+    for pid, spec in BUILTIN_PROVIDERS.items():
+        if model_id in (spec.get("model_aliases") or []):
             return pid, spec
     for pid, spec in BUILTIN_PROVIDERS.items():
         presets = _PROVIDER_PRESETS.get(pid, {})
@@ -133,6 +148,9 @@ async def resolve_routed_model(
     if not model_id:
         raise ValueError(f"Provider {provider_id!r} has no routed model")
     owner = routed_model_owner(model_id, provider_id, user_tier)
+    owner_spec = BUILTIN_PROVIDERS[owner]
+    if model_id in (owner_spec.get("model_aliases") or []):
+        model_id = str(owner_spec.get("model") or "").strip()
     return owner, model_id
 
 
@@ -216,6 +234,8 @@ async def list_models_for_user(user_id: Optional[str]) -> dict[str, Any]:
     cfgs: dict[str, dict] = {}
 
     for pid, spec in BUILTIN_PROVIDERS.items():
+        if spec.get("hidden"):
+            continue
         api_key_env = spec.get("api_key_env")
         import os
         key_present = bool(api_key_env and os.environ.get(api_key_env))
@@ -284,4 +304,4 @@ async def list_models_for_user(user_id: Optional[str]) -> dict[str, Any]:
         })
 
     return {"user_tier": user_tier, "providers": out_providers}
-# 150:98 0:0 7:1
+# 164:104 0:0 7:1

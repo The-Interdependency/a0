@@ -1,4 +1,4 @@
-# 342:55 0:0 2:5
+# 349:61 0:0 2:5
 """Generic OpenAI-compatible provider transport.
 
 Provider identity, endpoint, credential name, model, API family, reasoning
@@ -52,6 +52,12 @@ from __future__ import annotations
 #   then: the provider identity is active for the complete transport loop and the prior context is restored on every exit
 #   class: correctness
 #   since: 2026-09-09
+#
+# id: openai_compatible_explicit_none_reasoning
+#   given: a compatible provider declares that reasoning effort none must be sent explicitly
+#   then: the Responses request carries reasoning.effort=none instead of omitting the field and activating the provider default
+#   class: correctness
+#   since: 2026-09-10
 # === END CONTRACTS ===
 
 import copy
@@ -151,6 +157,7 @@ def _responses_kwargs(
     max_output_tokens: int,
     temperature: float,
     reasoning_effort: Optional[str],
+    explicit_none_reasoning: bool = False,
     store: bool,
     supports_store: bool,
     tools: list[dict] | None,
@@ -164,9 +171,11 @@ def _responses_kwargs(
     }
     if supports_store:
         kwargs["store"] = store
-    if reasoning_effort and reasoning_effort != "none":
+    if reasoning_effort and (
+        reasoning_effort != "none" or explicit_none_reasoning
+    ):
         kwargs["reasoning"] = {"effort": reasoning_effort}
-        if supports_store and not store:
+        if reasoning_effort != "none" and supports_store and not store:
             kwargs["include"] = ["reasoning.encrypted_content"]
     if tools:
         kwargs["tools"] = tools
@@ -181,6 +190,7 @@ async def _call_responses(
     max_output_tokens: int,
     temperature: float,
     reasoning_effort: Optional[str],
+    explicit_none_reasoning: bool = False,
     store: bool,
     use_tools: bool,
     base_url: str | None = None,
@@ -211,6 +221,7 @@ async def _call_responses(
             max_output_tokens=max_output_tokens,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
+            explicit_none_reasoning=explicit_none_reasoning,
             store=store,
             supports_store=supports_store,
             tools=tools,
@@ -246,6 +257,7 @@ async def _call_responses(
                     max_output_tokens=max_output_tokens,
                     temperature=temperature,
                     reasoning_effort=reasoning_effort,
+                    explicit_none_reasoning=explicit_none_reasoning,
                     store=store,
                     supports_store=supports_store,
                     tools=None,
@@ -419,6 +431,7 @@ async def call(
                 max_output_tokens=max_tokens,
                 temperature=temperature,
                 reasoning_effort=effort,
+                explicit_none_reasoning=bool(spec.get("explicit_none_reasoning")),
                 store=store,
                 use_tools=use_tools,
                 base_url=base_url,
@@ -443,4 +456,4 @@ async def call(
         )
     finally:
         reset_caller_provider(caller_provider_token)
-# 342:55 0:0 2:5
+# 349:61 0:0 2:5

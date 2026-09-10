@@ -1,4 +1,4 @@
-# 100:47 0:0 2:0
+# 102:53 0:0 2:0
 """Synchronous standalone adapter for registry-defined OpenAI-compatible APIs."""
 from __future__ import annotations
 
@@ -45,6 +45,12 @@ from __future__ import annotations
 # id: a0_openai_compatible_reasoning_floor
 #   given: a standalone compatible provider declares a minimum reasoning effort above the request or default
 #   then: the adapter raises the effective effort to that configured floor before transport
+#   class: correctness
+#   since: 2026-09-10
+#
+# id: a0_openai_compatible_explicit_none_reasoning
+#   given: a compatible provider declares that reasoning effort none must be sent explicitly
+#   then: standalone Responses calls carry reasoning.effort=none rather than falling back to the provider default
 #   class: correctness
 #   since: 2026-09-10
 # === END CONTRACTS ===
@@ -130,7 +136,9 @@ class OpenAICompatibleAdapter:
                 )
                 if supports_store:
                     request["store"] = bool(kwargs.get("store", False))
-                if effort and effort != "none":
+                if effort and (
+                    effort != "none" or self.spec.get("explicit_none_reasoning")
+                ):
                     request["reasoning"] = {"effort": effort}
                 response = self._client.responses.create(**request)
                 text = _response_text(response)
@@ -162,4 +170,4 @@ class OpenAICompatibleAdapter:
             },
             "subagents_used": [],
         }
-# 100:47 0:0 2:0
+# 102:53 0:0 2:0

@@ -1,4 +1,4 @@
-# 388:157 0:0 16:15
+# 393:157 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -168,7 +168,12 @@ async def _slot_routing_info(slot: str) -> tuple[str, "str | None"]:
             parts.append(f"[{(r['tier'] or '').upper()}] {r['content']}")
         mem = "\n".join(parts)
         resolved = next(
-            (pid for pid, p in BUILTIN_PROVIDERS.items() if p.get("model") == model_id),
+            (
+                pid
+                for pid, p in BUILTIN_PROVIDERS.items()
+                if p.get("model") == model_id
+                or model_id in (p.get("model_aliases") or [])
+            ),
             None,
         )
         return mem, resolved
@@ -609,4 +614,4 @@ async def _call_anthropic(
         enable_caching=enable_caching)
 
 
-# 388:157 0:0 16:15
+# 393:157 0:0 16:15

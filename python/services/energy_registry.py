@@ -1,4 +1,4 @@
-# 291:95 0:0 20:3
+# 299:100 0:0 20:3
 # === MODULE_BUILD ===
 # id: a0_service_energy_registry
 #   module_name: energy_registry
@@ -26,6 +26,11 @@
 #   then: cheap_provider selects DeepSeek Flash before registry-order fallback
 #   class: correctness
 #   since: 2026-09-09
+# id: deprecated_provider_aliases_canonicalize
+#   given: an internal caller requests a registry provider id with deprecated_alias_for
+#   then: the bridge dispatches, meters, and reports the canonical provider route
+#   class: correctness
+#   since: 2026-09-10
 # === END CONTRACTS ===
 import contextvars
 import json
@@ -137,9 +142,14 @@ async def active_provider() -> str:
         raise RuntimeError("No instantiation selected")
     model_id = (_row["model_id"] or "").strip()
     if model_id in BUILTIN_PROVIDERS:
-        return model_id
+        spec = BUILTIN_PROVIDERS[model_id]
+        return str(spec.get("deprecated_alias_for") or model_id)
     for pid, spec in BUILTIN_PROVIDERS.items():
-        if spec.get("model") == model_id or spec.get("spec_model") == model_id:
+        if (
+            spec.get("model") == model_id
+            or spec.get("spec_model") == model_id
+            or model_id in (spec.get("model_aliases") or [])
+        ):
             return pid
     raise RuntimeError("No instantiation selected")
 
@@ -153,7 +163,7 @@ _CHEAP_PROVIDER_ORDER = [
     "grok",           # grok-4-fast-reasoning $0.20/1M
     "gemini",         # gemini-2.5-flash $0.30/1M
     "openai",         # gpt-5-mini $0.25/1M
-    "deepseek",       # deepseek-v4-flash $0.44/1M
+    "deepseek",       # deepseek-flash $0.30/1M peak
 ]
 
 
@@ -287,6 +297,9 @@ async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30
     """Bridge aimmh-lib's CallFn signature into call_provider."""
     from .inference import call_provider as _cep
     from . import orch_progress as _op
+    model_id = str(
+        BUILTIN_PROVIDERS.get(model_id, {}).get("deprecated_alias_for") or model_id
+    )
     state = _per_call_usage_cv.get()
     call_idx = None
     if state is not None:
@@ -442,4 +455,4 @@ async def resolve_providers(providers: list[str] | None) -> list[str]:
         elif p in BUILTIN_PROVIDERS and p not in out:
             out.append(p)
     return out
-# 291:95 0:0 20:3
+# 299:100 0:0 20:3

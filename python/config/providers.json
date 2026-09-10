@@ -1,8 +1,8 @@
 {
-  "version": "2026-09-07.a0.providers.v2",
+  "version": "2026-09-10.a0.providers.v3",
   "attribution": "Externalized from energy_registry.py BUILTIN_PROVIDERS + _PROVIDER_PRESETS + _PROVIDER_PRICING_URLS so model slugs / provider IDs / capability flags live as data, not code literals (doctrine: no executable-data string literals).",
   "_doc": {
-    "providers[].* fields": "id label model adapter vendor base_url api_key_env model_env_prefix api_family tool_profile reasoning_efforts reasoning_effort_map cost_per_1k_input cost_per_1k_output cache_read_per_1k_input cache_write_per_1k_input max_tokens supports_streaming supports_prompt_caching supports_thinking supports_reasoning_effort min_tier note pricing_url",
+    "providers[].* fields": "id label model model_aliases adapter vendor base_url api_key_env model_env_prefix api_family tool_profile reasoning_efforts reasoning_effort_map explicit_none_reasoning cost_per_1k_input cost_per_1k_output cache_read_per_1k_input cache_write_per_1k_input max_tokens max_output_tokens supports_streaming supports_prompt_caching supports_thinking supports_reasoning_effort min_tier deprecated_alias_for hidden note pricing_url",
     "presets": "Per-provider role-map keyed by preset name. Roles: record practice conduct perform derive (the renamed pipeline slots). Single-model providers pin every preset to their one model so the active_preset switch still has effect."
   },
   "providers": {
@@ -300,8 +300,13 @@
     },
     "deepseek": {
       "id": "deepseek",
-      "label": "DeepSeek V4 Flash",
-      "model": "deepseek-v4-flash",
+      "label": "DeepSeek V4.1 Flash",
+      "model": "deepseek-flash",
+      "model_aliases": [
+        "deepseek-v4-flash",
+        "deepseek-v4-flash-vision-exp",
+        "deepseek-v4-pro"
+      ],
       "adapter": "openai-compatible",
       "vendor": "openai-compatible",
       "base_url": "https://api.deepseek.com",
@@ -309,35 +314,40 @@
       "model_env_prefix": "DEEPSEEK_MODEL_",
       "api_family": "responses",
       "tool_profile": "functions-only",
-      "reasoning_efforts": ["low", "high", "max"],
+      "reasoning_efforts": ["none", "low", "high", "max"],
       "reasoning_effort_map": {
-        "none": "low",
+        "none": "none",
         "minimal": "low",
         "low": "low",
         "medium": "high",
         "high": "high",
-        "xhigh": "max",
-        "max": "max"
+        "xhigh": "high",
+        "max": "max",
+        "ultra": "max"
       },
+      "explicit_none_reasoning": true,
       "default_reasoning_effort": "high",
       "a0_default": true,
-      "cost_per_1k_input": 0.00044,
-      "cost_per_1k_output": 0.00132,
-      "cache_read_per_1k_input": 0.000014,
+      "cost_per_1k_input": 0.0003,
+      "cost_per_1k_output": 0.0012,
+      "cache_read_per_1k_input": 0.000006,
       "max_tokens": 1000000,
+      "max_output_tokens": 384000,
       "supports_streaming": false,
       "supports_prompt_caching": true,
       "supports_thinking": true,
       "supports_reasoning_effort": true,
       "supports_store": false,
-      "supports_vision": false,
+      "supports_vision": true,
       "pricing_url": "https://api-docs.deepseek.com/quick_start/pricing/",
-      "note": "Default standalone a0 energy; official V4 alias and peak token rates as of 2026-09-07."
+      "note": "Default standalone a0 energy; V4.1 Flash canonical slug and official peak token rates as of 2026-09-10. Off-peak rates are half."
     },
     "deepseek-pro": {
       "id": "deepseek-pro",
-      "label": "DeepSeek V4 Pro",
-      "model": "deepseek-v4-pro",
+      "label": "DeepSeek Pro (legacy alias to V4.1 Flash)",
+      "model": "deepseek-flash",
+      "deprecated_alias_for": "deepseek",
+      "hidden": true,
       "adapter": "openai-compatible",
       "vendor": "openai-compatible",
       "base_url": "https://api.deepseek.com",
@@ -345,30 +355,32 @@
       "model_env_prefix": "DEEPSEEK_PRO_MODEL_",
       "api_family": "responses",
       "tool_profile": "functions-only",
-      "reasoning_efforts": ["low", "high", "max"],
+      "reasoning_efforts": ["none", "low", "high", "max"],
       "reasoning_effort_map": {
-        "none": "low",
+        "none": "none",
         "minimal": "low",
         "low": "low",
         "medium": "high",
         "high": "high",
-        "xhigh": "max",
-        "max": "max"
+        "xhigh": "high",
+        "max": "max",
+        "ultra": "max"
       },
+      "explicit_none_reasoning": true,
       "default_reasoning_effort": "high",
-      "cost_per_1k_input": 0.00132,
-      "cost_per_1k_output": 0.00396,
-      "cache_read_per_1k_input": 0.000044,
+      "cost_per_1k_input": 0.0003,
+      "cost_per_1k_output": 0.0012,
+      "cache_read_per_1k_input": 0.000006,
       "max_tokens": 1000000,
+      "max_output_tokens": 384000,
       "supports_streaming": false,
       "supports_prompt_caching": true,
       "supports_thinking": true,
       "supports_reasoning_effort": true,
       "supports_store": false,
-      "supports_vision": false,
-      "min_tier": "ws",
+      "supports_vision": true,
       "pricing_url": "https://api-docs.deepseek.com/quick_start/pricing/",
-      "note": "Higher-capability standalone a0 option; official V4 alias and peak token rates as of 2026-09-07."
+      "note": "Compatibility-only provider id. A0_PROVIDER=deepseek-pro resolves to deepseek; DeepSeek retires the distinct V4 Pro route at 2026-09-14 04:00 UTC."
     }
   },
   "presets": {
@@ -682,90 +694,46 @@
     },
     "deepseek": {
       "speed": {
-        "record": "deepseek-v4-flash",
-        "practice": "deepseek-v4-flash",
-        "conduct": "deepseek-v4-flash",
-        "perform": "deepseek-v4-flash",
-        "derive": "deepseek-v4-flash"
+        "record": "deepseek-flash",
+        "practice": "deepseek-flash",
+        "conduct": "deepseek-flash",
+        "perform": "deepseek-flash",
+        "derive": "deepseek-flash"
       },
       "price": {
-        "record": "deepseek-v4-flash",
-        "practice": "deepseek-v4-flash",
-        "conduct": "deepseek-v4-flash",
-        "perform": "deepseek-v4-flash",
-        "derive": "deepseek-v4-flash"
+        "record": "deepseek-flash",
+        "practice": "deepseek-flash",
+        "conduct": "deepseek-flash",
+        "perform": "deepseek-flash",
+        "derive": "deepseek-flash"
       },
       "balance": {
-        "record": "deepseek-v4-flash",
-        "practice": "deepseek-v4-flash",
-        "conduct": "deepseek-v4-flash",
-        "perform": "deepseek-v4-pro",
-        "derive": "deepseek-v4-flash"
+        "record": "deepseek-flash",
+        "practice": "deepseek-flash",
+        "conduct": "deepseek-flash",
+        "perform": "deepseek-flash",
+        "derive": "deepseek-flash"
       },
       "depth": {
-        "record": "deepseek-v4-flash",
-        "practice": "deepseek-v4-pro",
-        "conduct": "deepseek-v4-pro",
-        "perform": "deepseek-v4-pro",
-        "derive": "deepseek-v4-pro"
+        "record": "deepseek-flash",
+        "practice": "deepseek-flash",
+        "conduct": "deepseek-flash",
+        "perform": "deepseek-flash",
+        "derive": "deepseek-flash"
       },
       "coding": {
-        "record": "deepseek-v4-flash",
-        "practice": "deepseek-v4-flash",
-        "conduct": "deepseek-v4-pro",
-        "perform": "deepseek-v4-pro",
-        "derive": "deepseek-v4-flash"
+        "record": "deepseek-flash",
+        "practice": "deepseek-flash",
+        "conduct": "deepseek-flash",
+        "perform": "deepseek-flash",
+        "derive": "deepseek-flash"
       },
       "creativity": {
-        "record": "deepseek-v4-flash",
-        "practice": "deepseek-v4-pro",
-        "conduct": "deepseek-v4-pro",
-        "perform": "deepseek-v4-pro",
-        "derive": "deepseek-v4-flash"
-      }
-    },
-    "deepseek-pro": {
-      "speed": {
-        "record": "deepseek-v4-pro",
-        "practice": "deepseek-v4-pro",
-        "conduct": "deepseek-v4-pro",
-        "perform": "deepseek-v4-pro",
-        "derive": "deepseek-v4-pro"
-      },
-      "price": {
-        "record": "deepseek-v4-pro",
-        "practice": "deepseek-v4-pro",
-        "conduct": "deepseek-v4-pro",
-        "perform": "deepseek-v4-pro",
-        "derive": "deepseek-v4-pro"
-      },
-      "balance": {
-        "record": "deepseek-v4-pro",
-        "practice": "deepseek-v4-pro",
-        "conduct": "deepseek-v4-pro",
-        "perform": "deepseek-v4-pro",
-        "derive": "deepseek-v4-pro"
-      },
-      "depth": {
-        "record": "deepseek-v4-pro",
-        "practice": "deepseek-v4-pro",
-        "conduct": "deepseek-v4-pro",
-        "perform": "deepseek-v4-pro",
-        "derive": "deepseek-v4-pro"
-      },
-      "coding": {
-        "record": "deepseek-v4-pro",
-        "practice": "deepseek-v4-pro",
-        "conduct": "deepseek-v4-pro",
-        "perform": "deepseek-v4-pro",
-        "derive": "deepseek-v4-pro"
-      },
-      "creativity": {
-        "record": "deepseek-v4-pro",
-        "practice": "deepseek-v4-pro",
-        "conduct": "deepseek-v4-pro",
-        "perform": "deepseek-v4-pro",
-        "derive": "deepseek-v4-pro"
+        "record": "deepseek-flash",
+        "practice": "deepseek-flash",
+        "conduct": "deepseek-flash",
+        "perform": "deepseek-flash",
+        "derive": "deepseek-flash"
       }
     }
   }

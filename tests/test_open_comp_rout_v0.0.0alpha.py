@@ -1,4 +1,4 @@
-# 398:1 0:0 0:0
+# 399:1 0:0 0:0
 """Routing and catalog tests for registry-driven compatible providers."""
 
 import ast
@@ -24,6 +24,17 @@ def _clear_provider_keys(monkeypatch: pytest.MonkeyPatch) -> None:
         api_key_env = spec.get("api_key_env")
         if api_key_env:
             monkeypatch.delenv(api_key_env, raising=False)
+
+
+def test_deepseek_none_reasoning_is_explicit() -> None:
+    from python.services.providers import openai_compatible_provider
+    kwargs = openai_compatible_provider._responses_kwargs(
+        model="deepseek-flash", input_items=[], max_output_tokens=8, temperature=1.0,
+        reasoning_effort="none", explicit_none_reasoning=True,
+        store=False, supports_store=False, tools=None,
+    )
+    assert kwargs["reasoning"] == {"effort": "none"}
+    assert "include" not in kwargs
 
 
 def test_cheap_provider_prefers_deepseek_before_expensive_fallback(
@@ -126,7 +137,7 @@ async def test_call_model_leaves_auto_selected_provider_unpinned(
 
 
 @pytest.mark.asyncio
-async def test_auto_role_route_reapplies_tier_and_reports_effective_provider(
+async def test_legacy_provider_slot_canonicalizes_to_current_deepseek_route(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from python.services import inference, openai_router
@@ -142,17 +153,11 @@ async def test_auto_role_route_reapplies_tier_and_reports_effective_provider(
     monkeypatch.setattr(inference, "_slot_routing_info", practice_slot)
     monkeypatch.setattr(inference, "_instance_memory_block", no_memory)
 
-    with pytest.raises(PermissionError, match="requires tier 'ws'"):
-        await inference.call_provider(
-            "deepseek",
-            [{"role": "user", "content": "practice this"}],
-            use_tools=False,
-            routed_user_tier="free",
-        )
-
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
+    captured: dict = {}
 
     async def fake_call(messages, **kwargs):
+        captured.update(kwargs)
         return "role-routed", {"total_tokens": 1}
 
     monkeypatch.setattr(provider, "call", fake_call)
@@ -160,15 +165,18 @@ async def test_auto_role_route_reapplies_tier_and_reports_effective_provider(
         "deepseek",
         [{"role": "user", "content": "practice this"}],
         use_tools=False,
-        routed_user_tier="ws",
+        routed_user_tier="free",
     )
 
     assert content == "role-routed"
-    assert usage["provider_id"] == "deepseek-pro"
+    assert captured["provider_id"] == "deepseek"
+    assert captured["model_override"] == "deepseek-flash"
+    assert usage["provider_id"] == "deepseek"
+    assert usage["model_id"] == "deepseek-flash"
 
 
 @pytest.mark.asyncio
-async def test_role_model_override_uses_concrete_owner_tier_and_provenance(
+async def test_legacy_model_env_override_canonicalizes_to_current_flash(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from python.services import inference, openai_router
@@ -184,15 +192,6 @@ async def test_role_model_override_uses_concrete_owner_tier_and_provenance(
     monkeypatch.setattr(inference, "_slot_routing_info", no_slot)
     monkeypatch.setattr(inference, "_instance_memory_block", no_memory)
     monkeypatch.setenv("DEEPSEEK_MODEL_PRACTICE", "deepseek-v4-pro")
-
-    with pytest.raises(PermissionError, match="deepseek-v4-pro.*tier 'ws'"):
-        await inference.call_provider(
-            "deepseek",
-            [{"role": "user", "content": "practice this"}],
-            use_tools=False,
-            routed_user_tier="free",
-        )
-
     captured: dict = {}
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
 
@@ -205,15 +204,15 @@ async def test_role_model_override_uses_concrete_owner_tier_and_provenance(
         "deepseek",
         [{"role": "user", "content": "practice this"}],
         use_tools=False,
-        routed_user_tier="ws",
+        routed_user_tier="free",
     )
 
     assert content == "pro-routed"
-    assert captured["provider_id"] == "deepseek-pro"
-    assert captured["model_override"] == "deepseek-v4-pro"
+    assert captured["provider_id"] == "deepseek"
+    assert captured["model_override"] == "deepseek-flash"
     assert captured["pin_model_override"] is True
-    assert usage["provider_id"] == "deepseek-pro"
-    assert usage["model_id"] == "deepseek-v4-pro"
+    assert usage["provider_id"] == "deepseek"
+    assert usage["model_id"] == "deepseek-flash"
 
 
 @pytest.mark.asyncio
@@ -223,17 +222,17 @@ async def test_agent_instance_caches_effective_routed_provider(
     from python.services import agent_instance
 
     async def fake_call_model(*args, **kwargs):
-        return "role-routed", {"provider_id": "deepseek-pro"}
+        return "role-routed", {"provider_id": "deepseek"}
 
     monkeypatch.setattr(agent_instance, "call_model", fake_call_model)
-    instance = agent_instance.AgentInstance(model_id="deepseek-v4-flash")
+    instance = agent_instance.AgentInstance(model_id="deepseek-flash")
 
     await instance.run(
         [{"role": "user", "content": "practice this"}],
         pin_requested_provider=False,
     )
 
-    assert instance.provider_id == "deepseek-pro"
+    assert instance.provider_id == "deepseek"
 
 
 @pytest.mark.asyncio
@@ -267,7 +266,7 @@ async def test_explicit_openai_model_reaches_legacy_routed_branch(
 
 
 @pytest.mark.asyncio
-async def test_free_catalog_does_not_surface_cross_tier_deepseek_pro(
+async def test_catalog_hides_legacy_deepseek_pro_provider_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from python.services import energy_registry, model_catalog
@@ -284,10 +283,11 @@ async def test_free_catalog_does_not_surface_cross_tier_deepseek_pro(
 
     catalog = await model_catalog.list_models_for_user(None)
     flash = next(item for item in catalog["providers"] if item["provider_id"] == "deepseek")
-    pro = next(item for item in catalog["providers"] if item["provider_id"] == "deepseek-pro")
 
-    assert "deepseek-v4-pro" not in {item["model_id"] for item in flash["models"]}
-    assert pro["tier_blocked"] is True
+    assert {item["model_id"] for item in flash["models"]} == {"deepseek-flash"}
+    assert "deepseek-pro" not in {
+        item["provider_id"] for item in catalog["providers"]
+    }
 
 
 @pytest.mark.asyncio
@@ -351,10 +351,10 @@ async def test_inference_dispatches_adapter_field_without_database(
     assert usage == {
         "total_tokens": 1,
         "provider_id": "deepseek",
-        "model_id": "deepseek-v4-flash",
+        "model_id": "deepseek-flash",
     }
     assert captured["provider_id"] == "deepseek"
-    assert captured["model_override"] == "deepseek-v4-flash"
+    assert captured["model_override"] == "deepseek-flash"
     assert captured["role"] == "practice"
 
 
@@ -373,7 +373,7 @@ async def test_fanout_bridge_pins_each_requested_provider(
         return "wrong-slot-memory", "openai"
 
     async def selected_memory(provider_id: str) -> str:
-        assert provider_id == "deepseek-pro"
+        assert provider_id == "deepseek"
         return "selected-provider-memory"
 
     captured: dict = {}
@@ -393,7 +393,7 @@ async def test_fanout_bridge_pins_each_requested_provider(
     )
 
     assert content == "fanout-ok"
-    assert captured["provider_id"] == "deepseek-pro"
+    assert captured["provider_id"] == "deepseek"
     system_text = captured["messages"][0]["content"]
     assert "selected-provider-memory" in system_text
     assert "wrong-slot-memory" not in system_text
@@ -429,7 +429,7 @@ async def test_call_model_pins_the_explicit_model_provider(
     monkeypatch.setattr(provider, "call", fake_call)
 
     content, _ = await call_fn.call_model(
-        "deepseek-v4-flash",
+        "deepseek-flash",
         [{"role": "user", "content": "practice this"}],
         enforce_tier=False,
         enforce_enabled=False,
@@ -473,13 +473,13 @@ async def test_explicit_model_pin_ignores_cross_tier_role_override(
         [{"role": "user", "content": "practice this"}],
         provider_id="deepseek",
         role="practice",
-        model_override="deepseek-v4-flash",
+        model_override="deepseek-flash",
         pin_model_override=True,
         use_tools=False,
     )
 
     assert content == "pinned"
-    assert captured["model"] == "deepseek-v4-flash"
+    assert captured["model"] == "deepseek-flash"
 
 
 @pytest.mark.asyncio
@@ -494,13 +494,13 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
     _clear_provider_keys(monkeypatch)
     assert routed_model_owner(make_call_config("practice")["model"], "openai", "free") == "openai"
     assert routed_model_owner(make_call_config("record")["model"], "openai", "free") == "openai-nano"
-    provider_id, spec = await resolve_model_id("deepseek-v4-pro")
-    assert provider_id == "deepseek-pro"
-    assert spec["model"] == "deepseek-v4-pro"
-    assert get_model_pricing("deepseek", "deepseek-v4-flash")["input_per_1m"] == 0.44
+    for legacy_id in ("deepseek-pro", "deepseek-v4-pro"):
+        provider_id, spec = await resolve_model_id(legacy_id)
+        assert (provider_id, spec["model"]) == ("deepseek", "deepseek-flash")
+    assert get_model_pricing("deepseek", "deepseek-flash")["input_per_1m"] == 0.3
     assert estimate_cost(
-        "deepseek", 1_000_000, 1_000_000, model="deepseek-v4-flash"
-    ) == pytest.approx(1.76)
+        "deepseek", 1_000_000, 1_000_000, model="deepseek-flash"
+    ) == pytest.approx(1.5)
 
     with pytest.raises(ValueError, match="DEEPSEEK_API_KEY not configured"):
         await provider.call(
@@ -508,4 +508,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             provider_id="deepseek",
             use_tools=False,
         )
-# 398:1 0:0 0:0
+# 399:1 0:0 0:0

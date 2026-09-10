@@ -1,4 +1,4 @@
-# 36:29 0:0 1:0
+# 55:30 0:0 1:0
 """Read standalone a0 model adapters from the canonical provider registry."""
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from __future__ import annotations
 # === CONTRACTS ===
 # id: a0_provider_selection
 #   given: optional A0_PROVIDER, canonical provider registry data, and process credentials
-#   then: an explicit compatible provider resolves or fails closed while an unset choice may auto-select only a configured a0_default provider
+#   then: an explicit compatible provider resolves or fails closed, deprecated provider aliases resolve to their canonical provider, and an unset choice may auto-select only a configured a0_default provider
 #   class: correctness
 #   since: 2026-09-07
 # === END CONTRACTS ===
@@ -49,6 +49,27 @@ def _is_openai_compatible(spec: dict[str, Any]) -> bool:
     return spec.get("adapter") == "openai-compatible" or spec.get("vendor") == "openai"
 
 
+def _resolve_alias(
+    providers: dict[str, dict[str, Any]],
+    provider_id: str,
+) -> tuple[str, dict[str, Any]]:
+    """Resolve one registry-declared provider alias without provider literals."""
+    spec = providers[provider_id]
+    canonical_id = str(spec.get("deprecated_alias_for") or "").strip()
+    if not canonical_id:
+        return provider_id, spec
+    canonical = providers.get(canonical_id)
+    if canonical is None:
+        raise ValueError(
+            f"A0_PROVIDER {provider_id!r} aliases missing provider {canonical_id!r}"
+        )
+    if canonical.get("deprecated_alias_for"):
+        raise ValueError(
+            f"A0_PROVIDER {provider_id!r} has a chained provider alias"
+        )
+    return canonical_id, canonical
+
+
 def resolve_openai_compatible_provider(
     provider_id: str | None = None,
 ) -> tuple[str, dict[str, Any]] | None:
@@ -59,11 +80,12 @@ def resolve_openai_compatible_provider(
         spec = providers.get(explicit)
         if spec is None:
             raise ValueError(f"Unknown A0_PROVIDER: {explicit!r}")
+        canonical_id, spec = _resolve_alias(providers, explicit)
         if not _is_openai_compatible(spec):
             raise ValueError(
                 f"A0_PROVIDER {explicit!r} does not use the openai-compatible adapter"
             )
-        return explicit, spec
+        return canonical_id, spec
 
     for candidate, spec in providers.items():
         api_key_env = str(spec.get("api_key_env") or "")
@@ -75,4 +97,4 @@ def resolve_openai_compatible_provider(
         ):
             return candidate, spec
     return None
-# 36:29 0:0 1:0
+# 55:30 0:0 1:0

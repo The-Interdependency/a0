@@ -1,4 +1,4 @@
-# 121:1 0:0 0:0
+# 127:1 0:0 0:0
 """Standalone a0 selection and OpenAI-compatible adapter contracts."""
 
 from types import SimpleNamespace
@@ -15,7 +15,7 @@ class _Dump:
         return {"output": [], "usage": {"input_tokens": 1, "output_tokens": 1}}
 
 
-def test_registry_auto_selects_flash_and_explicitly_selects_pro(
+def test_registry_auto_selects_flash_and_canonicalizes_legacy_pro_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from a0 import resolve_openai_compatible_provider
@@ -24,12 +24,13 @@ def test_registry_auto_selects_flash_and_explicitly_selects_pro(
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-secret")
     provider_id, spec = resolve_openai_compatible_provider()
     assert provider_id == "deepseek"
-    assert spec["model"] == "deepseek-v4-flash"
+    assert spec["model"] == "deepseek-flash"
+    assert spec["supports_vision"] is True
 
     monkeypatch.setenv("A0_PROVIDER", "deepseek-pro")
     provider_id, spec = resolve_openai_compatible_provider()
-    assert provider_id == "deepseek-pro"
-    assert spec["model"] == "deepseek-v4-pro"
+    assert provider_id == "deepseek"
+    assert spec["model"] == "deepseek-flash"
 
 
 def test_explicit_unknown_and_noncompatible_provider_fail_closed(
@@ -72,20 +73,26 @@ def test_adapter_uses_registry_transport_and_sanitizes_failure(
     result = adapter.complete([{"role": "user", "content": "hi"}])
 
     assert result["text"] == "standalone-ok"
-    assert result["raw"]["provider"] == "deepseek-pro"
+    assert result["raw"]["provider"] == "deepseek"
     assert "test-secret" not in repr(result)
     assert captured["client"] == {
         "api_key": "test-secret",
         "base_url": "https://api.deepseek.com",
     }
-    assert captured["request"]["model"] == "deepseek-v4-pro"
+    assert captured["request"]["model"] == "deepseek-flash"
     assert captured["request"]["reasoning"] == {"effort": "high"}
+
+    adapter.complete(
+        [{"role": "user", "content": "disable thinking"}],
+        reasoning_effort="none",
+    )
+    assert captured["request"]["reasoning"] == {"effort": "none"}
 
     def fail_with_secret(**request):
         raise RuntimeError("upstream echoed test-secret")
 
     adapter._client.responses.create = fail_with_secret
-    with pytest.raises(RuntimeError, match="deepseek-pro request failed") as caught:
+    with pytest.raises(RuntimeError, match="deepseek request failed") as caught:
         adapter.complete([{"role": "user", "content": "fail"}])
     assert caught.value.__cause__ is None
     assert "test-secret" not in str(caught.value)
@@ -94,7 +101,7 @@ def test_adapter_uses_registry_transport_and_sanitizes_failure(
         raise ValueError("upstream echoed test-secret")
 
     adapter._client.responses.create = value_error_with_secret
-    with pytest.raises(RuntimeError, match="deepseek-pro request failed") as caught:
+    with pytest.raises(RuntimeError, match="deepseek request failed") as caught:
         adapter.complete([{"role": "user", "content": "fail-value"}])
     assert caught.value.__cause__ is None
     assert "test-secret" not in str(caught.value)
@@ -159,4 +166,4 @@ def test_explicit_provider_missing_key_fails_closed(
 
     with pytest.raises(ValueError, match="DEEPSEEK_API_KEY not configured"):
         _select_adapter(request)
-# 121:1 0:0 0:0
+# 127:1 0:0 0:0

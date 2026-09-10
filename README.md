@@ -8,7 +8,7 @@
 
 ## The Agent
 
-ZFAE (`a0(zeta fun alpha echo)`) is the single persistent agent running on the instrument. Large language models (GPT-5 mini, Gemini 2.5 Flash, Claude Sonnet 4.5, Grok 4 Fast, DeepSeek V4) are treated as **energy providers** — they supply computational energy for each response but are not the agent itself.
+ZFAE (`a0(zeta fun alpha echo)`) is the single persistent agent running on the instrument. Large language models (GPT-5 mini, Gemini 2.5 Flash, Claude Sonnet 4.5, Grok 4 Fast, DeepSeek V4.1 Flash) are treated as **energy providers** — they supply computational energy for each response but are not the agent itself.
 
 Sub-agents (`a0(zeta{n})`) can be spawned to fork the PCNA instance, execute in parallel, and merge results back into the primary agent.
 
@@ -90,13 +90,16 @@ In development `scripts/start-dev.sh` generates a shared `INTERNAL_API_SECRET` a
 
 The standalone `run.sh` runtime reads the same `python/config/providers.json`
 registry as the FastAPI service. With a DeepSeek key present it auto-selects
-V4 Flash through the generic `openai-compatible` adapter. Pin V4 Pro explicitly:
+V4.1 Flash through the generic `openai-compatible` adapter:
 
 ```bash
 export DEEPSEEK_API_KEY="..."
-export A0_PROVIDER=deepseek-pro   # omit for deepseek-v4-flash
 printf '%s\n' '{"task_id":"ds1","input":{"text":"hello"},"tools_allowed":["none"],"mode":"analyze","hmmm":["direct model turn"]}' | ./run.sh
 ```
+
+The canonical API model is `deepseek-flash`. The retired provider choice
+`A0_PROVIDER=deepseek-pro` remains a hidden compatibility alias and resolves to
+the same V4.1 Flash route; it no longer represents a higher-capability tier.
 
 Provider configuration contains only the credential environment-variable name;
 keys remain in the process environment and are never written to source.
@@ -133,7 +136,7 @@ npx playwright test
 | `ANTHROPIC_API_KEY` | Claude Sonnet 4.5 |
 | `GEMINI_API_KEY` | Gemini 2.5 Flash |
 | `OPENAI_API_KEY` | GPT-5 mini |
-| `DEEPSEEK_API_KEY` | DeepSeek V4 Flash/Pro through the OpenAI-compatible adapter |
+| `DEEPSEEK_API_KEY` | DeepSeek V4.1 Flash through the OpenAI-compatible adapter |
 | `STRIPE_SECRET_KEY` | Stripe (donations + EDCMbone explainer) |
 | `STRIPE_PUBLISHABLE_KEY` | Stripe embedded checkout |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook HMAC |
