@@ -27,6 +27,17 @@ export default defineMsdmdCollection({
     {
       "block": "CONTRACTS",
       "fields": {
+        "class": "correctness",
+        "given": "a standalone compatible provider declares a minimum reasoning effort above the request or default",
+        "since": "2026-09-10",
+        "then": "the adapter raises the effective effort to that configured floor before transport"
+      },
+      "file": "a0/adapters/open_comp_adap_v0.0.0alpha.py",
+      "id": "a0_openai_compatible_reasoning_floor"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
         "class": "safety",
         "given": "a standalone Responses provider supports upstream response storage",
         "since": "2026-09-09",
@@ -850,7 +861,7 @@ export default defineMsdmdCollection({
       "fields": {
         "class": "correctness",
         "given": "any explicit or auto-routed single-model call stops at an approval gate",
-        "then": "both gate-id and scope approval replays retain the already resolved provider and concrete model pin, including any subsequently pending gate"
+        "then": "both replay paths retain the resolved provider/model, gate-id replay carries only the exact approved tool scopes, and any subsequent denial replaces the pending gate"
       },
       "file": "python/routes/chat.py",
       "id": "chat_approval_replay_preserves_provider_pin"
@@ -1007,22 +1018,55 @@ export default defineMsdmdCollection({
       "id": "a0_service_agent_lifecycle"
     },
     {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "security",
+        "given": "any tool-capable provider selects a scoped tool that text preflight did not identify",
+        "since": "2026-09-10",
+        "then": "the denial becomes a pending gate carrying the concrete tool and scope instead of an inert tool-result string"
+      },
+      "file": "python/services/appr_gate_serv_v0.0.0alpha.py",
+      "id": "approval_gate_dispatch_denial_becomes_pending"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "security",
+        "given": "a user approves one pending action and replay reaches a registered scoped tool",
+        "since": "2026-09-10",
+        "then": "dispatch is cleared only when the tool's declared scope exactly matches a scope recorded by that pending gate"
+      },
+      "file": "python/services/appr_gate_serv_v0.0.0alpha.py",
+      "id": "approval_gate_replay_is_scope_bound"
+    },
+    {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "security",
+        "given": "conversation history contains an earlier gated request and a later unrelated user turn",
+        "since": "2026-09-10",
+        "then": "approval classification evaluates only the latest user turn while replay retains that original turn as the latest history entry"
+      },
+      "file": "python/services/appr_gate_serv_v0.0.0alpha.py",
+      "id": "approval_gate_uses_current_user_turn"
+    },
+    {
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
         "auth_boundary": "user approval scopes",
-        "internal_surface": "_message_text",
+        "internal_surface": "_message_text, _current_user_text, _pending_gate, _tool_approval_gate_result",
         "module_kind": "service",
         "module_name": "approval_gate_service",
         "network_boundary": "none",
         "owner": "Erin Spencer",
-        "public_surface": "approval_gate_result",
-        "requires": "a0_service_openai_router",
-        "rollback": "Revert compatible-provider gate wiring and restore the legacy OpenAI-local gate builder.",
+        "public_surface": "approval_gate_result, capture_tool_approval, pending_gate_entry",
+        "requires": "a0_service_openai_router, a0_service_run_context, a0_service_tool_executor",
+        "rollback": "Revert shared transport capture and restore the legacy OpenAI-local gate builder.",
         "rollout": "default_enabled",
         "since": "2026-09-09",
         "storage_boundary": "read/write audit",
-        "summary": "Builds the policy route decision and pending approval response shared by legacy OpenAI and registry-driven compatible-provider transports.",
+        "summary": "Builds current-turn pending approvals and converts scoped tool-dispatch denials from every transport into exact-scope replay gates.",
         "tests": "tests/test_appr_tool_disp_v0.0.0alpha.py",
         "unresolved": "none",
         "user_data_boundary": "read"
@@ -1490,9 +1534,9 @@ export default defineMsdmdCollection({
       "block": "CONTRACTS",
       "fields": {
         "class": "security",
-        "given": "a tool-enabled OpenAI-compatible provider turn requests an external write without a grant",
+        "given": "a tool-enabled provider turn requests an external write without a grant, whether text preflight or actual dispatch identifies it",
         "since": "2026-09-09",
-        "then": "inference returns a pending approval gate before transport or tool execution and replay may bypass only with skip_approval"
+        "then": "inference returns a pending approval gate before mutation and replay bypasses text preflight only while dispatch remains limited to the gate's exact scopes"
       },
       "file": "python/services/inference.py",
       "id": "inference_compatible_provider_approval_gate"
@@ -1947,19 +1991,19 @@ export default defineMsdmdCollection({
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
-        "auth_boundary": "holds the approval-scope user id that tools read to scope pre-approved actions",
+        "auth_boundary": "holds the approval-scope user id and exact per-gate tool scopes used by dispatch enforcement",
         "internal_surface": "none",
         "module_kind": "service",
         "module_name": "run_context",
         "network_boundary": "none",
         "owner": "Erin Spencer",
-        "public_surface": "get_current_run_id, set_approval_scope_user_id, get_approval_scope_user_id, current_approval_gate_cleared, get_current_depth, get_current_root_run_id, get_current_parent_run_id, bind_run, reset_run, snapshot",
+        "public_surface": "get_current_run_id, set_approval_scope_user_id, get_approval_scope_user_id, current_approval_gate_scopes, get_current_depth, get_current_root_run_id, get_current_parent_run_id, bind_run, reset_run, snapshot",
         "requires": "none",
         "rollback": "Revert this file; recursion tracking reverts to prior ContextVar surface.",
         "rollout": "default_enabled",
         "since": "2026-06-02",
         "storage_boundary": "none",
-        "summary": "Run-scoped ContextVars for ZFAE recursion tracking \u2014 run id, depth, root/parent run id, and approval-scope user id, inherited by async tool/inference calls and rebound on sub-agent spawn.",
+        "summary": "Run-scoped ContextVars for ZFAE recursion and exact per-gate approval scopes, inherited by async tool/inference calls and rebound on sub-agent spawn.",
         "tests": "tests/test_run_context.py",
         "unresolved": "none",
         "user_data_boundary": "none"
@@ -2398,7 +2442,7 @@ export default defineMsdmdCollection({
         "class": "security",
         "given": "a registered tool declares an approval_scope",
         "since": "2026-09-10",
-        "then": "its handler cannot run without either that user's persisted scope or an explicitly cleared per-gate replay context"
+        "then": "its handler cannot run without either that user's persisted matching scope or the same scope in an explicit per-gate replay context; a denial is surfaced for pending-gate continuation"
       },
       "file": "python/services/tool_executor.py",
       "id": "tool_dispatch_enforces_approval_scope"
@@ -2413,7 +2457,7 @@ export default defineMsdmdCollection({
         "module_name": "tool_executor",
         "network_boundary": "none",
         "owner": "Erin Spencer",
-        "public_surface": "set_allowed_tools, reset_allowed_tools, get_active_chat_schemas, get_active_responses_schemas, get_a0_skill_manifest, get_a0_skill_body, TOOL_SCHEMAS_CHAT, TOOL_SCHEMAS_RESPONSES, execute_tool",
+        "public_surface": "set_allowed_tools, reset_allowed_tools, get_active_chat_schemas, get_active_responses_schemas, get_a0_skill_manifest, get_a0_skill_body, TOOL_SCHEMAS_CHAT, TOOL_SCHEMAS_RESPONSES, execute_tool, ToolApprovalRequired",
         "requires": "a0_service_tool_distill",
         "rollback": "Revert this file; falls back to the tools registry dispatcher directly.",
         "rollout": "default_enabled",
@@ -2922,7 +2966,7 @@ export default defineMsdmdCollection({
         "call": "self::check_openai_compatible_repair_regressions",
         "cleanup": "none",
         "mutates": "none",
-        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, inference_compatible_provider_approval_gate, inference_compatible_transport_uses_effective_owner, tool_dispatch_enforces_approval_scope, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, catalog_routed_model_tier_follows_concrete_owner, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403",
+        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, a0_openai_compatible_reasoning_floor, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, inference_compatible_provider_approval_gate, inference_compatible_transport_uses_effective_owner, tool_dispatch_enforces_approval_scope, approval_gate_uses_current_user_turn, approval_gate_replay_is_scope_bound, approval_gate_dispatch_denial_becomes_pending, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, catalog_routed_model_tier_follows_concrete_owner, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403",
         "requires": "python3, pytest",
         "timeout": "60"
       },
@@ -5366,7 +5410,35 @@ export default defineMsdmdCollection({
       "kind": "claims_proves",
       "source_block": "CHECKS",
       "source_id": "check_openai_compatible_repair_regressions",
+      "to": "a0_openai_compatible_reasoning_floor"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
       "to": "a0_openai_compatible_store_defaults_off"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "approval_gate_dispatch_denial_becomes_pending"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "approval_gate_replay_is_scope_bound"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "approval_gate_uses_current_user_turn"
     },
     {
       "from": "check_openai_compatible_repair_regressions",
@@ -7159,6 +7231,20 @@ export default defineMsdmdCollection({
       "source_block": "MODULE_BUILD",
       "source_id": "a0_service_approval_gate",
       "to": "a0_service_openai_router"
+    },
+    {
+      "from": "a0_service_approval_gate",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_service_approval_gate",
+      "to": "a0_service_run_context"
+    },
+    {
+      "from": "a0_service_approval_gate",
+      "kind": "requires",
+      "source_block": "MODULE_BUILD",
+      "source_id": "a0_service_approval_gate",
+      "to": "a0_service_tool_executor"
     },
     {
       "from": "a0_service_artifacts",
