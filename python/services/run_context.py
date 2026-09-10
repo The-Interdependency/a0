@@ -16,11 +16,11 @@ treats absence as "out of band" and logs to the unbound bucket.
 # id: a0_service_run_context
 #   module_name: run_context
 #   module_kind: service
-#   summary: Run-scoped ContextVars for ZFAE recursion tracking — run id, depth, root/parent run id, and approval-scope user id, inherited by async tool/inference calls and rebound on sub-agent spawn.
+#   summary: Run-scoped ContextVars for ZFAE recursion and exact per-gate approval scopes, inherited by async tool/inference calls and rebound on sub-agent spawn.
 #   owner: Erin Spencer
-#   public_surface: get_current_run_id, set_approval_scope_user_id, get_approval_scope_user_id, current_approval_gate_cleared, get_current_depth, get_current_root_run_id, get_current_parent_run_id, bind_run, reset_run, snapshot
+#   public_surface: get_current_run_id, set_approval_scope_user_id, get_approval_scope_user_id, current_approval_gate_scopes, get_current_depth, get_current_root_run_id, get_current_parent_run_id, bind_run, reset_run, snapshot
 #   internal_surface: none
-#   auth_boundary: holds the approval-scope user id that tools read to scope pre-approved actions
+#   auth_boundary: holds the approval-scope user id and exact per-gate tool scopes used by dispatch enforcement
 #   storage_boundary: none
 #   network_boundary: none
 #   user_data_boundary: none
@@ -60,8 +60,8 @@ current_user_tier: contextvars.ContextVar[str] = contextvars.ContextVar(
 current_max_tool_rounds: contextvars.ContextVar[Optional[int]] = contextvars.ContextVar(
     "a0p_max_tool_rounds", default=None,
 )
-current_approval_gate_cleared: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    "approval_gate_cleared", default=False,
+current_approval_gate_scopes: contextvars.ContextVar[frozenset[str]] = contextvars.ContextVar(
+    "approval_gate_scopes", default=frozenset(),
 )
 
 
@@ -128,7 +128,7 @@ def snapshot() -> dict:
         "orchestration_mode": current_orchestration_mode.get(),
         "user_tier": current_user_tier.get(),
         "max_tool_rounds": current_max_tool_rounds.get(),
-        "approval_gate_cleared": current_approval_gate_cleared.get(),
+        "approval_gate_scopes": sorted(current_approval_gate_scopes.get()),
     }
 # N:M
 # 74:33 0:0 9:0
