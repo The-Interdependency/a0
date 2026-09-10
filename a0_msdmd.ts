@@ -849,8 +849,8 @@ export default defineMsdmdCollection({
       "block": "CONTRACTS",
       "fields": {
         "class": "correctness",
-        "given": "a provider-pinned single-model call stops at an approval gate",
-        "then": "both gate-id and scope approval replays retain that exact provider and concrete model pin, including any subsequently pending gate"
+        "given": "any explicit or auto-routed single-model call stops at an approval gate",
+        "then": "both gate-id and scope approval replays retain the already resolved provider and concrete model pin, including any subsequently pending gate"
       },
       "file": "python/routes/chat.py",
       "id": "chat_approval_replay_preserves_provider_pin"
@@ -1011,9 +1011,9 @@ export default defineMsdmdCollection({
       "fields": {
         "admin_only": "false",
         "auth_boundary": "user approval scopes",
-        "internal_surface": "none",
+        "internal_surface": "_message_text",
         "module_kind": "service",
-        "module_name": "approval_gate",
+        "module_name": "approval_gate_service",
         "network_boundary": "none",
         "owner": "Erin Spencer",
         "public_surface": "approval_gate_result",
@@ -1023,11 +1023,11 @@ export default defineMsdmdCollection({
         "since": "2026-09-09",
         "storage_boundary": "read/write audit",
         "summary": "Builds the policy route decision and pending approval response shared by legacy OpenAI and registry-driven compatible-provider transports.",
-        "tests": "tests/test_open_comp_prov_v0.0.0alpha.py",
+        "tests": "tests/test_appr_tool_disp_v0.0.0alpha.py",
         "unresolved": "none",
         "user_data_boundary": "read"
       },
-      "file": "python/services/approval_gate.py",
+      "file": "python/services/appr_gate_serv_v0.0.0alpha.py",
       "id": "a0_service_approval_gate"
     },
     {
@@ -1953,7 +1953,7 @@ export default defineMsdmdCollection({
         "module_name": "run_context",
         "network_boundary": "none",
         "owner": "Erin Spencer",
-        "public_surface": "get_current_run_id, set_approval_scope_user_id, get_approval_scope_user_id, get_current_depth, get_current_root_run_id, get_current_parent_run_id, bind_run, reset_run, snapshot",
+        "public_surface": "get_current_run_id, set_approval_scope_user_id, get_approval_scope_user_id, current_approval_gate_cleared, get_current_depth, get_current_root_run_id, get_current_parent_run_id, bind_run, reset_run, snapshot",
         "requires": "none",
         "rollback": "Revert this file; recursion tracking reverts to prior ContextVar surface.",
         "rollout": "default_enabled",
@@ -2393,11 +2393,22 @@ export default defineMsdmdCollection({
       "id": "a0_service_tool_distill"
     },
     {
+      "block": "CONTRACTS",
+      "fields": {
+        "class": "security",
+        "given": "a registered tool declares an approval_scope",
+        "since": "2026-09-10",
+        "then": "its handler cannot run without either that user's persisted scope or an explicitly cleared per-gate replay context"
+      },
+      "file": "python/services/tool_executor.py",
+      "id": "tool_dispatch_enforces_approval_scope"
+    },
+    {
       "block": "MODULE_BUILD",
       "fields": {
         "admin_only": "false",
-        "auth_boundary": "none",
-        "internal_surface": "_parse_frontmatter, _discover_distiller_specs, _pick_distiller, _get_distiller_spec, _discover_a0_skills, _score_skill_match, _skill_recommend, _skill_load",
+        "auth_boundary": "enforces each registered tool approval_scope before dispatch",
+        "internal_surface": "_parse_frontmatter, _discover_distiller_specs, _pick_distiller, _get_distiller_spec, _discover_a0_skills, _score_skill_match, _skill_recommend, _skill_load, _approval_denial",
         "module_kind": "service",
         "module_name": "tool_executor",
         "network_boundary": "none",
@@ -2911,7 +2922,7 @@ export default defineMsdmdCollection({
         "call": "self::check_openai_compatible_repair_regressions",
         "cleanup": "none",
         "mutates": "none",
-        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, inference_compatible_provider_approval_gate, inference_compatible_transport_uses_effective_owner, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, catalog_routed_model_tier_follows_concrete_owner, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403",
+        "proves": "a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, inference_compatible_provider_approval_gate, inference_compatible_transport_uses_effective_owner, tool_dispatch_enforces_approval_scope, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, catalog_routed_model_tier_follows_concrete_owner, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403",
         "requires": "python3, pytest",
         "timeout": "60"
       },
@@ -5468,6 +5479,13 @@ export default defineMsdmdCollection({
       "source_block": "CHECKS",
       "source_id": "check_openai_compatible_repair_regressions",
       "to": "openai_stateless_reasoning_is_replayable"
+    },
+    {
+      "from": "check_openai_compatible_repair_regressions",
+      "kind": "claims_proves",
+      "source_block": "CHECKS",
+      "source_id": "check_openai_compatible_repair_regressions",
+      "to": "tool_dispatch_enforces_approval_scope"
     },
     {
       "from": "check_openai_compatible_repair_regressions",
