@@ -88,7 +88,11 @@ def _normalize_reasoning_effort(spec: dict, effort: Optional[str]) -> Optional[s
     mapped = (spec.get("reasoning_effort_map") or {}).get(requested, requested)
     allowed = spec.get("reasoning_efforts") or []
     if allowed and mapped not in allowed:
-        return spec.get("default_reasoning_effort") or allowed[0]
+        mapped = spec.get("default_reasoning_effort") or allowed[0]
+    floor = spec.get("min_reasoning_effort")
+    order = {"minimal": 0, "low": 1, "medium": 2, "high": 3}
+    if floor and order.get(mapped, -1) < order.get(floor, -1):
+        mapped = floor
     return mapped
 
 
@@ -372,7 +376,6 @@ async def call(
     temperature: float = 1.0,
     store: bool = False,
     pin_model_override: bool = False,
-    approval_gate_cleared: bool = False,
     progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> tuple[str, dict]:
     """Dispatch one registry-defined provider through its configured API family."""
@@ -403,11 +406,9 @@ async def call(
     base_url = str(spec.get("base_url") or "").strip() or None
     effort = _normalize_reasoning_effort(spec, reasoning_effort)
     api_family = spec.get("api_family", "responses")
-    from ..run_context import current_approval_gate_cleared
     from ..tool_distill import reset_caller_provider, set_caller_provider
 
     caller_provider_token = set_caller_provider(provider_id)
-    approval_token = current_approval_gate_cleared.set(approval_gate_cleared)
     try:
         if api_family == "responses":
             tools = _response_tools(spec.get("tool_profile", "all-responses")) if use_tools else None
@@ -441,6 +442,5 @@ async def call(
             f"Provider {provider_id!r} has unsupported api_family={api_family!r}"
         )
     finally:
-        current_approval_gate_cleared.reset(approval_token)
         reset_caller_provider(caller_provider_token)
 # 342:55 0:0 2:5
