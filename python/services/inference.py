@@ -1,4 +1,4 @@
-# 379:156 0:0 16:15
+# 388:157 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -51,8 +51,8 @@
 #   since: 2026-09-09
 #
 # id: inference_compatible_provider_approval_gate
-#   given: a tool-enabled OpenAI-compatible provider turn requests an external write without a grant
-#   then: inference returns a pending approval gate before transport or tool execution and replay may bypass only with skip_approval
+#   given: a tool-enabled provider turn requests an external write without a grant, whether text preflight or actual dispatch identifies it
+#   then: inference returns a pending approval gate before mutation and replay bypasses text preflight only while dispatch remains limited to the gate's exact scopes
 #   class: security
 #   since: 2026-09-09
 #
@@ -65,7 +65,7 @@
 import json
 import logging
 import os
-from typing import Callable, Optional
+from typing import Awaitable, Callable, Optional, Sequence
 import httpx
 
 from .prompt_assembly import _prepend_doctrine
@@ -332,12 +332,14 @@ async def call_provider(
     skip_manifest: bool = False,
     pin_requested_provider: bool = False, model_override: Optional[str] = None,
     routed_user_tier: Optional[str] = None,
+    approved_tool_scopes: Optional[Sequence[str]] = None,
 ) -> tuple[str, dict]:
     """
     Forward messages to the named provider with the system prompt prepended.
     Returns (content, usage_dict).
     user_id is threaded into the OpenAI path for approval-scope checking.
-    skip_approval=True bypasses the approval gate (used for replay after explicit APPROVE).
+    skip_approval=True bypasses only replayed text preflight; tool dispatch still
+    requires an exact match in approved_tool_scopes or a persisted user scope.
     skip_manifest=True omits the skill manifest from the doctrine prefix (saves
     ~500 tokens; use for internal/automated callers that never invoke skill_load).
     pin_requested_provider=True is reserved for explicit-model and multi-model
@@ -375,7 +377,8 @@ async def call_provider(
             messages, system_prompt, use_tools=use_tools, user_id=user_id,
             skip_approval=skip_approval,
             model_override=model_override if pin_requested_provider else None,
-            routed_user_tier=routed_user_tier)
+            routed_user_tier=routed_user_tier,
+            approved_tool_scopes=approved_tool_scopes)
         return _attribute_provider(result, result[1].get("provider_id", provider_id), result[1].get("model_id"))
 
     spec = BUILTIN_PROVIDERS.get(provider_id)
@@ -395,10 +398,8 @@ async def call_provider(
     spec = BUILTIN_PROVIDERS[effective_provider_id]
     messages = _build_provider_messages(messages, effective_provider_id)
 
-    if use_tools and (
-        spec.get("adapter") == "openai-compatible" or spec.get("vendor") == "openai"
-    ):
-        from . import approval_gate_service
+    from . import approval_gate_service
+    if use_tools:
         _, pending = await approval_gate_service.approval_gate_result(
             messages, user_id=user_id, skip_approval=skip_approval,
             provider_id=effective_provider_id, model_id=effective_model,
@@ -406,6 +407,13 @@ async def call_provider(
         )
         if pending is not None:
             return pending
+
+    async def capture(transport: Awaitable[tuple[str, dict]]) -> tuple[str, dict]:
+        return await approval_gate_service.capture_tool_approval(
+            transport, messages=messages, provider_id=effective_provider_id,
+            model_id=effective_model, reasoning_effort=reasoning_effort,
+            approved_tool_scopes=approved_tool_scopes,
+        )
 
     # OpenAI-vendored single-model providers (openai-5.5, openai-5.5-pro and
     # any future siblings). The legacy "openai" provider above goes through
@@ -431,12 +439,11 @@ async def call_provider(
             payload_messages.append({"role": "system", "content": system_prompt})
         payload_messages.extend(messages)
         from .providers import openai_compatible_provider
-        result = await openai_compatible_provider.call(
+        result = await capture(openai_compatible_provider.call(
             payload_messages, provider_id=provider_id, role=_slot,
             model_override=effective_model, api_key=api_key, max_tokens=max_tokens,
             use_tools=use_tools,
-            reasoning_effort=effective_effort, pin_model_override=True,
-            approval_gate_cleared=skip_approval)
+            reasoning_effort=effective_effort, pin_model_override=True))
         return _attribute_provider(result, effective_provider_id, effective_model)
 
     api_key = os.environ.get(spec["api_key_env"], "")
@@ -455,36 +462,35 @@ async def call_provider(
 
     if spec.get("adapter") == "openai-compatible":
         from .providers import openai_compatible_provider
-        result = await openai_compatible_provider.call(
+        result = await capture(openai_compatible_provider.call(
             payload_messages, provider_id=provider_id, role=_slot,
             api_key=api_key, model_override=effective_model, max_tokens=max_tokens,
             use_tools=use_tools, reasoning_effort=reasoning_effort,
-            pin_model_override=True, approval_gate_cleared=skip_approval,
-            progress_callback=progress_callback)
+            pin_model_override=True, progress_callback=progress_callback))
         return _attribute_provider(result, effective_provider_id, effective_model)
 
     if vendor == "anthropic":
-        result = await _call_anthropic(
+        result = await capture(_call_anthropic(
             api_key, effective_model, payload_messages, max_tokens,
             use_tools=use_tools, reasoning_effort=reasoning_effort,
-            enable_caching=spec.get("supports_prompt_caching", False))
+            enable_caching=spec.get("supports_prompt_caching", False)))
         return _attribute_provider(result, effective_provider_id, effective_model)
 
     if vendor == "google":
         from .providers.gemini_provider import call as gemini_call
-        result = await gemini_call(
+        result = await capture(gemini_call(
             payload_messages, api_key=api_key, model_override=effective_model,
             max_tokens=max_tokens, use_tools=use_tools, reasoning_effort=reasoning_effort,
             provider_id=provider_id,
-            supports_thinking=bool(spec.get("supports_thinking")))
+            supports_thinking=bool(spec.get("supports_thinking"))))
         return _attribute_provider(result, effective_provider_id, effective_model)
 
     if vendor == "xai":
         from .providers.xai_provider import call as grok_call
-        result = await grok_call(
+        result = await capture(grok_call(
             payload_messages, api_key=api_key, model_override=effective_model,
             max_tokens=max_tokens, use_tools=use_tools, reasoning_effort=reasoning_effort,
-            progress_callback=progress_callback)
+            progress_callback=progress_callback))
         return _attribute_provider(result, effective_provider_id, effective_model)
 
     # No-silent-fallback doctrine: if we got here the spec exists in
@@ -501,6 +507,7 @@ async def _call_openai_routed(
     use_tools: bool = True, user_id: Optional[str] = None,
     skip_approval: bool = False, model_override: Optional[str] = None,
     routed_user_tier: Optional[str] = None,
+    approved_tool_scopes: Optional[Sequence[str]] = None,
 ) -> tuple[str, dict]:
     """
     Route to the appropriate role via openai_router, check approval gate,
@@ -513,10 +520,7 @@ async def _call_openai_routed(
     from .openai_router import make_call_config, resolve_role
     from ..logger import log_openai_event
 
-    task_text = " ".join(
-        approval_gate_service._message_text(m.get("content"))
-        for m in messages if m.get("role") == "user"
-    )
+    task_text = approval_gate_service._current_user_text(messages)
 
     role = resolve_role(task_text)
     call_cfg = make_call_config(role)
@@ -549,14 +553,21 @@ async def _call_openai_routed(
     full_input.extend(messages)
 
     from .providers import openai_compatible_provider
-    content, usage = await openai_compatible_provider.call(
+    result = await approval_gate_service.capture_tool_approval(
+        openai_compatible_provider.call(
         full_input, provider_id=effective_provider_id, role=role,
         api_key=api_key, model_override=call_cfg["model"],
         max_tokens=call_cfg["max_output_tokens"],
         use_tools=use_tools, reasoning_effort=call_cfg["reasoning_effort"],
         temperature=call_cfg["temperature"],
         store=call_cfg["store"],
-        pin_model_override=True, approval_gate_cleared=skip_approval)
+        pin_model_override=True), messages=messages,
+        provider_id=effective_provider_id, model_id=call_cfg["model"],
+        reasoning_effort=call_cfg["reasoning_effort"],
+        approved_tool_scopes=approved_tool_scopes)
+    if result[1].get("approval_state") == "pending":
+        return result
+    content, usage = result
     usage.update({"provider_id": effective_provider_id, "model_id": call_cfg["model"]})
 
     input_repr = json.dumps(full_input)
@@ -598,4 +609,4 @@ async def _call_anthropic(
         enable_caching=enable_caching)
 
 
-# 379:156 0:0 16:15
+# 388:157 0:0 16:15
