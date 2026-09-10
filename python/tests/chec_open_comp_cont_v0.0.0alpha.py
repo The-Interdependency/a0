@@ -1,4 +1,4 @@
-# 117:19 0:0 0:0
+# 118:19 0:0 0:0
 """Executable msdmd witness for the generic provider boundary."""
 
 # === CHECKS ===
@@ -11,7 +11,7 @@
 #   cleanup: none
 #
 # id: check_openai_compatible_repair_regressions
-#   proves: a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, a0_openai_compatible_reasoning_floor, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, inference_compatible_provider_approval_gate, inference_compatible_transport_uses_effective_owner, tool_dispatch_enforces_approval_scope, approval_gate_uses_current_user_turn, approval_gate_replay_is_scope_bound, approval_gate_dispatch_denial_becomes_pending, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, cheap_provider_prefers_configured_low_cost_provider, catalog_routed_model_tier_follows_concrete_owner, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403
+#   proves: a0_openai_compatible_error_suppresses_secret_cause, a0_openai_compatible_store_defaults_off, a0_openai_compatible_reasoning_floor, a0_openai_compatible_explicit_none_reasoning, call_fn_resolved_model_pins_provider, call_fn_auto_model_keeps_role_slot_routing, inference_tool_repeat_fingerprint_ignores_transport_ids, inference_compatible_provider_receives_classified_role, inference_fanout_preserves_requested_provider, inference_auto_route_gates_and_reports_effective_provider, inference_explicit_openai_model_is_pinned, inference_compatible_provider_approval_gate, inference_compatible_transport_uses_effective_owner, tool_dispatch_enforces_approval_scope, approval_gate_uses_current_user_turn, approval_gate_replay_is_scope_bound, approval_gate_dispatch_denial_becomes_pending, openai_compatible_responses_preserves_reasoning_items, openai_stateless_reasoning_is_replayable, openai_compatible_caller_provider_is_scoped, openai_compatible_explicit_none_reasoning, cheap_provider_prefers_configured_low_cost_provider, deprecated_provider_aliases_canonicalize, catalog_routed_model_tier_follows_concrete_owner, catalog_legacy_model_aliases_canonicalize, chat_approval_replay_preserves_provider_pin, chat_routed_tier_denial_is_clean_403
 #   call: self::check_openai_compatible_repair_regressions
 #   requires: python3, pytest
 #   timeout: 60
@@ -118,6 +118,7 @@ def check_openai_compatible_repair_regressions() -> None:
         f"{routing_tests}::test_call_model_pins_the_explicit_model_provider",
         f"{routing_tests}::test_explicit_model_pin_ignores_cross_tier_role_override",
         f"{routing_tests}::test_cheap_provider_prefers_deepseek_before_expensive_fallback",
+        f"{routing_tests}::test_deepseek_none_reasoning_is_explicit",
         f"{routing_tests}::test_approval_replays_preserve_explicit_provider_pin",
         f"{routing_tests}::test_call_model_leaves_auto_selected_provider_unpinned",
         f"{routing_tests}::test_legacy_provider_slot_canonicalizes_to_current_deepseek_route",
@@ -157,4 +158,4 @@ def check_openai_compatible_repair_regressions() -> None:
 
 def test_openai_compatible_registry_wiring() -> None:
     check_openai_compatible_registry_wiring()
-# 117:19 0:0 0:0
+# 118:19 0:0 0:0
