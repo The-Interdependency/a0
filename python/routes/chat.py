@@ -1,4 +1,4 @@
-# 675:196 2:7 2:16
+# 672:191 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -8,6 +8,7 @@ from typing import Optional
 from ..storage import storage
 from ..services.energy_registry import active_provider, BUILTIN_PROVIDERS, cache_breakdown, estimate_cost
 from ..services.inference import call_provider
+from ..services import approval_gate_service
 from ..services.prompt_assembly import build_system_prompt
 from ..services.bg_tasks import spawn as _spawn_bg
 
@@ -490,11 +491,18 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                         ),
                         model_override=pending.get("model_override"),
                         routed_user_tier=tier,
+                        approved_tool_scopes=pending.get("approval_scopes"),
                     )
                 finally:
                     set_approval_scope_user_id(None)
                     _reset_at(_t_gate_at)
                 reply = f"[APPROVED — gate {gate_id_to_approve} cleared]{scope_note}\n\n{approved_content}"
+                if approved_usage.get("approval_state") == "pending":
+                    _store_pending_gate(conv_id, approval_gate_service.pending_gate_entry(
+                        approved_usage, history=pending["history"],
+                        system_prompt=pending["system_prompt"], provider_id=replay_provider,
+                        uid=uid, enabled_tools=pending.get("enabled_tools"),
+                    ))
             else:
                 replay_provider = "system"
                 reply = (
@@ -616,20 +624,12 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                     replay_result = {"content": replay_content, "usage": replay_usage}
                     reply += f"\n\nRetrying blocked action...\n\n{replay_content}"
                     if replay_usage.get("approval_state") == "pending":
-                        _store_pending_gate(conv_id, {
-                            "gate_id": replay_usage.get("gate_id"),
-                            "history": pending["history"],
-                            "system_prompt": pending["system_prompt"],
-                            "provider_id": pending["provider_id"],
-                            "pin_requested_provider": bool(
-                                pending.get("pin_requested_provider", False)
-                            ),
-                            "model_override": pending.get("model_override"),
-                            "uid": uid,
-                            # Carry the allow-list forward so subsequent replays
-                            # continue to respect the original tool selection.
-                            "enabled_tools": pending.get("enabled_tools"),
-                        })
+                        _store_pending_gate(conv_id, approval_gate_service.pending_gate_entry(
+                            replay_usage, history=pending["history"],
+                            system_prompt=pending["system_prompt"],
+                            provider_id=pending["provider_id"], uid=uid,
+                            enabled_tools=pending.get("enabled_tools"),
+                        ))
                 else:
                     replay_result = None
 
@@ -849,19 +849,11 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             current_client_run_id.reset(_t_cri)
 
         if usage.get("approval_state") == "pending":
-            _store_pending_gate(conv_id, {
-                "gate_id": usage.get("gate_id"),
-                "history": history,
-                "system_prompt": system_prompt or None,
-                "provider_id": provider_id,
-                # Approval replay is a deterministic continuation of the
-                # already resolved turn, even when the initial choice was auto-routed.
-                "pin_requested_provider": bool(usage.get("model_id")),
-                "model_override": usage.get("model_id"),
-                "uid": uid,
-                # Persist the allow-list so approval replay uses the same tool set.
-                "enabled_tools": list(_conv_tools) if isinstance(_conv_tools, list) else None,
-            })
+            _store_pending_gate(conv_id, approval_gate_service.pending_gate_entry(
+                usage, history=history, system_prompt=system_prompt or None,
+                provider_id=provider_id, uid=uid,
+                enabled_tools=list(_conv_tools) if isinstance(_conv_tools, list) else None,
+            ))
 
         _attach_cost_usd(usage, provider_id)
 
@@ -945,7 +937,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #
 # id: chat_approval_replay_preserves_provider_pin
 #   given: any explicit or auto-routed single-model call stops at an approval gate
-#   then: both gate-id and scope approval replays retain the already resolved provider and concrete model pin, including any subsequently pending gate
+#   then: both replay paths retain the resolved provider/model, gate-id replay carries only the exact approved tool scopes, and any subsequent denial replaces the pending gate
 #   class: correctness
 #
 # id: chat_routed_tier_denial_is_clean_403
@@ -953,4 +945,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   then: the route removes its staged message and returns HTTP 403 instead of leaving a dangling turn or returning 500
 #   class: security
 # === END CONTRACTS ===
-# 675:196 2:7 2:16
+# 672:191 2:7 2:16
