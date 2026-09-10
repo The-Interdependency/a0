@@ -75,6 +75,7 @@ python/scripts/backfill_generated_images.py
 python/services/__init__.py
 python/services/agent_instance.py
 python/services/agent_lifecycle.py
+python/services/appr_gate_serv_v0.0.0alpha.py
 python/services/artifacts.py
 python/services/attachments.py
 python/services/bg_tasks.py
@@ -143,11 +144,11 @@ python/storage/memory.py
 python/storage/system.py
 python/storage/transcripts.py
 python/tests/__init__.py
+python/tests/chec_open_comp_cont_v0.0.0alpha.py
 python/tests/contract_runner.py
 python/tests/test_coherence_primes.py
 python/tests/test_contract_runner.py
 python/tests/test_encoder_compiles.py
-python/tests/chec_open_comp_cont_v0.0.0alpha.py
 python/tests/test_platonic_agent.py
 python/tests/test_ptcna_state.py
 python/tests/test_runtime_readiness.py
@@ -171,6 +172,7 @@ repl_nix_workspace.egg-info/requires.txt
 repl_nix_workspace.egg-info/top_level.txt
 tests/test_a0_package.py
 tests/test_aone_open_comp_adap_v0.0.0alpha.py
+tests/test_appr_tool_disp_v0.0.0alpha.py
 tests/test_artifacts.py
 tests/test_compute_transcript_full.py
 tests/test_cut_modes.py
