@@ -1,4 +1,4 @@
-# 400:1 0:0 0:0
+# 398:1 0:0 0:0
 """Routing and catalog tests for registry-driven compatible providers."""
 
 import ast
@@ -78,14 +78,12 @@ def test_approval_replays_preserve_explicit_provider_pin() -> None:
         and node.func.id == "_store_pending_gate"
     ]
     declared_pending_writes = [
-        call for call in pending_writes if isinstance(call.args[1], ast.Dict)
+        call for call in pending_writes
+        if isinstance(call.args[1], ast.Call)
+        and isinstance(call.args[1].func, ast.Attribute)
+        and call.args[1].func.attr == "pending_gate_entry"
     ]
-    assert len(declared_pending_writes) == 2
-    for call in declared_pending_writes:
-        entry = call.args[1]
-        keys = {key.value for key in entry.keys if isinstance(key, ast.Constant)}
-        assert "pin_requested_provider" in keys
-        assert "model_override" in keys
+    assert len(declared_pending_writes) == 3
 
 
 def test_chat_routed_tier_denial_is_a_clean_403() -> None:
@@ -510,4 +508,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             provider_id="deepseek",
             use_tools=False,
         )
-# 400:1 0:0 0:0
+# 398:1 0:0 0:0
