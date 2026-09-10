@@ -1,4 +1,4 @@
-# 116:1 0:0 0:0
+# 121:1 0:0 0:0
 """Standalone a0 selection and OpenAI-compatible adapter contracts."""
 
 from types import SimpleNamespace
@@ -121,6 +121,12 @@ def test_adapter_uses_registry_transport_and_sanitizes_failure(
     )
     assert captured["request"]["store"] is True
 
+    monkeypatch.setenv("A0_PROVIDER", "openai-5.5-pro")
+    provider_id, spec = resolve_openai_compatible_provider()
+    pro_adapter = adapter_module.OpenAICompatibleAdapter(provider_id, spec)
+    pro_adapter.complete([{"role": "user", "content": "use the configured floor"}])
+    assert captured["request"]["reasoning"] == {"effort": "high"}
+
 
 def test_router_prefers_configured_generic_adapter(
     monkeypatch: pytest.MonkeyPatch,
@@ -153,4 +159,4 @@ def test_explicit_provider_missing_key_fails_closed(
 
     with pytest.raises(ValueError, match="DEEPSEEK_API_KEY not configured"):
         _select_adapter(request)
-# 116:1 0:0 0:0
+# 121:1 0:0 0:0
