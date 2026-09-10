@@ -1,4 +1,4 @@
-# 352:92 0:0 12:4
+# 378:101 0:0 12:4
 """ZFAE Tool Executor — thin shim over the per-tool registry.
 
 Tools live in `python/services/tools/*.py` (one file per tool, self-declared
@@ -21,9 +21,9 @@ SCHEMA + async handle). This module:
 #   module_kind: service
 #   summary: Thin shim over the per-tool registry — re-exports stable TOOL_SCHEMAS lists, wraps the dispatcher with call_id persistence and distiller summarization, and owns the distiller/a0 skill loaders and approval-scope ContextVar.
 #   owner: Erin Spencer
-#   public_surface: set_allowed_tools, reset_allowed_tools, get_active_chat_schemas, get_active_responses_schemas, get_a0_skill_manifest, get_a0_skill_body, TOOL_SCHEMAS_CHAT, TOOL_SCHEMAS_RESPONSES, execute_tool
-#   internal_surface: _parse_frontmatter, _discover_distiller_specs, _pick_distiller, _get_distiller_spec, _discover_a0_skills, _score_skill_match, _skill_recommend, _skill_load
-#   auth_boundary: none
+#   public_surface: set_allowed_tools, reset_allowed_tools, get_active_chat_schemas, get_active_responses_schemas, get_a0_skill_manifest, get_a0_skill_body, TOOL_SCHEMAS_CHAT, TOOL_SCHEMAS_RESPONSES, execute_tool, ToolApprovalRequired
+#   internal_surface: _parse_frontmatter, _discover_distiller_specs, _pick_distiller, _get_distiller_spec, _discover_a0_skills, _score_skill_match, _skill_recommend, _skill_load, _approval_denial
+#   auth_boundary: enforces each registered tool approval_scope before dispatch
 #   storage_boundary: read
 #   network_boundary: none
 #   user_data_boundary: read
@@ -35,6 +35,14 @@ SCHEMA + async handle). This module:
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===
+
+# === CONTRACTS ===
+# id: tool_dispatch_enforces_approval_scope
+#   given: a registered tool declares an approval_scope
+#   then: its handler cannot run without either that user's persisted matching scope or the same scope in an explicit per-gate replay context; a denial is surfaced for pending-gate continuation
+#   class: security
+#   since: 2026-09-10
+# === END CONTRACTS ===
 
 import contextvars as _cv
 import contextvars
@@ -463,6 +471,35 @@ async def execute_tool(name: str, arguments: dict) -> str:
     return await _maybe_summarize(name, arguments or {}, raw, call_id)
 
 
+class ToolApprovalRequired(RuntimeError):
+    """Signal a scoped tool denial to the transport's pending-gate boundary."""
+
+    def __init__(self, tool_name: str, approval_scope: str) -> None:
+        super().__init__(f"tool {tool_name!r} requires approval scope {approval_scope!r}")
+        self.tool_name = tool_name
+        self.approval_scope = approval_scope
+
+
+async def _approval_denial(name: str) -> None:
+    """Fail closed before dispatch when a tool's declared scope is absent."""
+    spec = _registry().get(name)
+    scope = spec.approval_scope if spec is not None else None
+    if not scope:
+        return None
+    from .run_context import current_approval_gate_scopes
+    if scope in current_approval_gate_scopes.get():
+        return None
+    user_id = get_approval_scope_user_id()
+    if user_id:
+        try:
+            from ..storage import storage
+            if scope in await storage.get_approval_scope_names(user_id):
+                return None
+        except Exception as exc:
+            print(f"[tool_approval] scope lookup failed for {name}: {exc}")
+    raise ToolApprovalRequired(name, scope)
+
+
 async def _execute_tool_inner(name: str, arguments: dict) -> str:
     """Raw dispatch — returns the tool's unfiltered output. skill_* handlers
     live in this module (they wrap the a0-skill loader); everything else goes
@@ -476,10 +513,13 @@ async def _execute_tool_inner(name: str, arguments: dict) -> str:
             )
         if name == "skill_load":
             return _skill_load(args.get("name", ""))
+        await _approval_denial(name)
         try:
             return await _registry_dispatch(name, **args)
         except KeyError:
             return f"[unknown tool: {name}]"
+    except ToolApprovalRequired:
+        raise
     except Exception as exc:
         return f"[tool error — {name}: {exc}]"
 
@@ -490,6 +530,7 @@ __all__ = [
     "TOOL_SCHEMAS_RESPONSES_ZFAE",
     "OPENAI_NATIVE_TOOLS",
     "execute_tool",
+    "ToolApprovalRequired",
     "set_caller_provider",
     "reset_caller_provider",
     "set_approval_scope_user_id",
@@ -504,4 +545,4 @@ __all__ = [
     "get_active_chat_schemas",
     "get_active_responses_schemas",
 ]
-# 352:92 0:0 12:4
+# 378:101 0:0 12:4

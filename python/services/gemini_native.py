@@ -1,4 +1,4 @@
-# 186:66 0:0 1:1
+# 190:66 0:0 1:1
 """Native google-genai SDK adapter for Gemini 2.5 and Gemini 3.
 
 Replaces the OpenAI-compat HTTP path for Gemini providers. Unlocks:
@@ -41,7 +41,9 @@ from typing import Any, Optional
 from google import genai
 from google.genai import types as gtypes
 
-from .tool_executor import get_active_chat_schemas, execute_tool, set_caller_provider
+from .tool_executor import (
+    ToolApprovalRequired, execute_tool, get_active_chat_schemas, set_caller_provider,
+)
 
 _MAX_TOOL_ROUNDS = 5
 
@@ -274,6 +276,8 @@ async def call_gemini_native(
         for fc in fn_calls:
             try:
                 result = await execute_tool(fc.name, dict(fc.args or {}))
+            except ToolApprovalRequired:
+                raise
             except Exception as exc:
                 result = f"[tool {fc.name} error: {type(exc).__name__}]"
             try:
@@ -289,4 +293,4 @@ async def call_gemini_native(
 
     # Loop exit safeguard (shouldn't reach here).
     return "[gemini: tool loop exhausted]", accumulated
-# 186:66 0:0 1:1
+# 190:66 0:0 1:1

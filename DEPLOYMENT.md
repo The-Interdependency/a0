@@ -76,6 +76,7 @@ values.
 echo -n "postgres://..." | gcloud secrets create a0p-database-url --data-file=-
 echo -n "your-session-secret" | gcloud secrets create a0p-session-secret --data-file=-
 echo -n "xai-key" | gcloud secrets create a0p-xai-api-key --data-file=-
+echo -n "deepseek-key" | gcloud secrets create a0p-deepseek-api-key --data-file=-
 echo -n "sk_live_..." | gcloud secrets create a0p-stripe-secret-key --data-file=-
 echo -n "whsec_..." | gcloud secrets create a0p-stripe-webhook-secret --data-file=-
 ```
@@ -83,7 +84,7 @@ echo -n "whsec_..." | gcloud secrets create a0p-stripe-webhook-secret --data-fil
 Grant the service account access to each secret:
 
 ```bash
-for SECRET in a0p-database-url a0p-session-secret a0p-xai-api-key a0p-stripe-secret-key a0p-stripe-webhook-secret; do
+for SECRET in a0p-database-url a0p-session-secret a0p-xai-api-key a0p-deepseek-api-key a0p-stripe-secret-key a0p-stripe-webhook-secret; do
   gcloud secrets add-iam-policy-binding $SECRET \
     --member="serviceAccount:$SA" \
     --role="roles/secretmanager.secretAccessor"
@@ -107,8 +108,9 @@ Replit Auth (OIDC) will not work outside Replit. Before going live on Cloud Run 
 
 ## Pre-deploy checks
 
-Every push runs the **Console tab regression guard** (`scripts/check-console-tabs.mjs`)
-as a separate CI job before the build/deploy job. The guard spins up an ephemeral
+Every push runs the provider adapter contracts and the **Console tab regression
+guard** (`scripts/check-console-tabs.mjs`) as separate CI jobs before the
+build/deploy job. The guard spins up an ephemeral
 Postgres + Python backend in the runner, fetches `/api/v1/ui/structure`, and fails
 the build if either:
 
@@ -117,8 +119,7 @@ the build if either:
 2. `CUSTOM_TAB_RENDERERS` registers a `tab_id` that the API no longer returns
    (an orphan / dead entry).
 
-The deploy job has `needs: check-console-tabs`, so a failure here blocks the
-deploy entirely.
+The deploy job needs both gates, so either failure blocks deployment entirely.
 
 To run the same check locally against a running dev server:
 
@@ -153,5 +154,6 @@ docker run -p 5000:5000 \
   -e DATABASE_URL="..." \
   -e SESSION_SECRET="..." \
   -e XAI_API_KEY="..." \
+  -e DEEPSEEK_API_KEY="..." \
   a0p:local
 ```

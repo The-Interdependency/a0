@@ -1,4 +1,4 @@
-# 63:10 0:0 0:0
+# 76:10 0:0 0:0
 # DOC module: tests.test_a0_package
 # DOC label: a0 package import + CLI smoke
 # DOC description: Imports every module under the a0/ package to catch
@@ -8,8 +8,10 @@
 import importlib
 import json
 import pkgutil
+from pathlib import Path
 import subprocess
 import sys
+import tomllib
 
 import pytest
 
@@ -91,4 +93,19 @@ def test_a0_cli_smoke(tmp_path):
     out = json.loads(proc.stdout.decode("utf-8"))
     assert out["task_id"] == "smoke1"
     assert "result" in out
-# 63:10 0:0 0:0
+
+
+def test_instance_fanout_propagates_resolved_provider_id():
+    root = Path(__file__).resolve().parents[1]
+    api = (root / "python/routes/instances_api.py").read_text(encoding="utf-8")
+    ui = (root / "client/src/components/chat-input.tsx").read_text(encoding="utf-8")
+    assert '"provider_id": provider_id' in api
+    assert "i.provider_id ?? VENDOR_TO_PROVIDER[i.vendor]" in ui
+
+
+def test_provider_registry_json_is_declared_as_package_data():
+    root = Path(__file__).resolve().parents[1]
+    config = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    packaged = config["tool"]["setuptools"]["package-data"]["python.config"]
+    assert {"providers.json", "pricing.json"}.issubset(packaged)
+# 76:10 0:0 0:0

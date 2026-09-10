@@ -1,4 +1,4 @@
-// 364:7 0:3 0:6
+// 365:7 0:3 0:6
 // N:M
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -58,6 +58,7 @@ interface InstanceRow {
   id: string;
   canonical_name: string;
   vendor: string;
+  provider_id?: string | null;
   model_id: string;
   role_slot?: string | null;
 }
@@ -187,7 +188,7 @@ export function ChatInput({
       const providerSet = new Set<string>();
       const selectedInst = instances.filter((i) => selectedInstances.includes(i.id));
       selectedInst.forEach((i) => {
-        const pid = VENDOR_TO_PROVIDER[i.vendor];
+        const pid = i.provider_id ?? VENDOR_TO_PROVIDER[i.vendor];
         if (pid) providerSet.add(pid);
       });
       opts.orchestration_mode = "fan_out";
@@ -397,4 +398,4 @@ export function ChatInput({
   );
 }
 // N:M
-// 364:7 0:3 0:6
+// 365:7 0:3 0:6

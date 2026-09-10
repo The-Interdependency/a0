@@ -1,4 +1,4 @@
-# 637:184 2:7 2:16
+# 672:191 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -8,10 +8,11 @@ from typing import Optional
 from ..storage import storage
 from ..services.energy_registry import active_provider, BUILTIN_PROVIDERS, cache_breakdown, estimate_cost
 from ..services.inference import call_provider
+from ..services import approval_gate_service
 from ..services.prompt_assembly import build_system_prompt
 from ..services.bg_tasks import spawn as _spawn_bg
 
-# In-memory pending gate store: conv_id → {gate_id, history, system_prompt, provider_id, uid, ts}
+# In-memory pending gate store: conv_id → gate context, including provider pin state.
 # Used to replay a blocked action when the user grants a scope.
 # Entries are evicted after _PENDING_GATE_TTL_SECS to keep the map bounded.
 _pending_gates: dict[int, dict] = {}
@@ -81,6 +82,7 @@ def _attach_cost_usd(usage: dict | None, provider_id: str | None) -> None:
             cb.get("output", 0),
             cb.get("cache_read", 0),
             cb.get("cache_write", 0),
+            model=usage.get("model_id"),
         )
         usage["cost_usd"] = round(float(cost), 6)
     except Exception as exc:
@@ -372,6 +374,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 model_id = conv.get("model") or ""
         if not model_id:
             raise HTTPException(status_code=503, detail="No instantiation selected")
+        provider_pin_requested = model_from_body or agent_model_id is not None
         # Resolve model_id → provider_id via the catalog so forge agents
         # whose model_id is a real model name (e.g. "gpt-5-mini") route
         # correctly downstream. The fallback below is intentionally
@@ -483,11 +486,23 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                         system_prompt=pending["system_prompt"],
                         user_id=uid or None,
                         skip_approval=True,
+                        pin_requested_provider=bool(
+                            pending.get("pin_requested_provider", False)
+                        ),
+                        model_override=pending.get("model_override"),
+                        routed_user_tier=tier,
+                        approved_tool_scopes=pending.get("approval_scopes"),
                     )
                 finally:
                     set_approval_scope_user_id(None)
                     _reset_at(_t_gate_at)
                 reply = f"[APPROVED — gate {gate_id_to_approve} cleared]{scope_note}\n\n{approved_content}"
+                if approved_usage.get("approval_state") == "pending":
+                    _store_pending_gate(conv_id, approval_gate_service.pending_gate_entry(
+                        approved_usage, history=pending["history"],
+                        system_prompt=pending["system_prompt"], provider_id=replay_provider,
+                        uid=uid, enabled_tools=pending.get("enabled_tools"),
+                    ))
             else:
                 replay_provider = "system"
                 reply = (
@@ -597,6 +612,11 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                             messages=pending["history"],
                             system_prompt=pending["system_prompt"],
                             user_id=uid or None,
+                            pin_requested_provider=bool(
+                                pending.get("pin_requested_provider", False)
+                            ),
+                            model_override=pending.get("model_override"),
+                            routed_user_tier=tier,
                         )
                     finally:
                         set_approval_scope_user_id(None)
@@ -604,16 +624,12 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                     replay_result = {"content": replay_content, "usage": replay_usage}
                     reply += f"\n\nRetrying blocked action...\n\n{replay_content}"
                     if replay_usage.get("approval_state") == "pending":
-                        _store_pending_gate(conv_id, {
-                            "gate_id": replay_usage.get("gate_id"),
-                            "history": pending["history"],
-                            "system_prompt": pending["system_prompt"],
-                            "provider_id": pending["provider_id"],
-                            "uid": uid,
-                            # Carry the allow-list forward so subsequent replays
-                            # continue to respect the original tool selection.
-                            "enabled_tools": pending.get("enabled_tools"),
-                        })
+                        _store_pending_gate(conv_id, approval_gate_service.pending_gate_entry(
+                            replay_usage, history=pending["history"],
+                            system_prompt=pending["system_prompt"],
+                            provider_id=pending["provider_id"], uid=uid,
+                            enabled_tools=pending.get("enabled_tools"),
+                        ))
                 else:
                     replay_result = None
 
@@ -784,6 +800,8 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 content, usage = await inst.run(
                     history,
                     system_prompt_override=system_prompt or None,
+                    pin_requested_provider=provider_pin_requested,
+                    enforce_routed_tier=True,
                 )
                 print(f"[chat-dbg] provider={inst.provider_id!r} hist_len={len(history)} content_len={len(content or '')} content_preview={repr((content or '')[:80])}")
                 # Use the resolved provider_id from the instance — for forge
@@ -831,15 +849,11 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             current_client_run_id.reset(_t_cri)
 
         if usage.get("approval_state") == "pending":
-            _store_pending_gate(conv_id, {
-                "gate_id": usage.get("gate_id"),
-                "history": history,
-                "system_prompt": system_prompt or None,
-                "provider_id": provider_id,
-                "uid": uid,
-                # Persist the allow-list so approval replay uses the same tool set.
-                "enabled_tools": list(_conv_tools) if isinstance(_conv_tools, list) else None,
-            })
+            _store_pending_gate(conv_id, approval_gate_service.pending_gate_entry(
+                usage, history=history, system_prompt=system_prompt or None,
+                provider_id=provider_id, uid=uid,
+                enabled_tools=list(_conv_tools) if isinstance(_conv_tools, list) else None,
+            ))
 
         _attach_cost_usd(usage, provider_id)
 
@@ -878,6 +892,24 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         }
     except HTTPException:
         raise
+    except PermissionError as exc:
+        failed_user = locals().get("user_msg")
+        if isinstance(failed_user, dict) and failed_user.get("id") is not None:
+            try:
+                async with engine.begin() as cleanup_conn:
+                    await cleanup_conn.execute(
+                        _text(
+                            "DELETE FROM messages "
+                            "WHERE id = :message_id AND conversation_id = :conversation_id"
+                        ),
+                        {"message_id": failed_user["id"], "conversation_id": conv_id},
+                    )
+            except Exception as cleanup_exc:
+                print(f"[chat] failed to clean rejected user message: {cleanup_exc}")
+        pending_entry = locals().get("pending")
+        if isinstance(pending_entry, dict) and conv_id not in _pending_gates:
+            _store_pending_gate(conv_id, pending_entry)
+        raise HTTPException(status_code=403, detail=str(exc)) from None
     except Exception as exc:
         tb = traceback.format_exc()
         print(f"[chat] send_message error: {exc}\n{tb}")
@@ -902,5 +934,15 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #          active_provider — server-side sources still fall back, only
 #          user input is strict)
 #   class: correctness
+#
+# id: chat_approval_replay_preserves_provider_pin
+#   given: any explicit or auto-routed single-model call stops at an approval gate
+#   then: both replay paths retain the resolved provider/model, gate-id replay carries only the exact approved tool scopes, and any subsequent denial replaces the pending gate
+#   class: correctness
+#
+# id: chat_routed_tier_denial_is_clean_403
+#   given: role routing rejects the effective concrete model for the caller tier after the user message was staged
+#   then: the route removes its staged message and returns HTTP 403 instead of leaving a dangling turn or returning 500
+#   class: security
 # === END CONTRACTS ===
-# 637:184 2:7 2:16
+# 672:191 2:7 2:16

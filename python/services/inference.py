@@ -1,9 +1,9 @@
-# 393:107 0:0 16:14
+# 388:157 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
 #   module_kind: service
-#   summary: Orchestrates LLM calls across registered energy providers (Grok/Gemini/Claude/OpenAI-style) — resolves role, normalizes reasoning effort, runs the tool loop, and injects tier-specific prompt_context.
+#   summary: Orchestrates LLM calls across registered energy providers (Grok/Gemini/Claude/OpenAI-compatible) — resolves role, normalizes reasoning effort, runs the tool loop, and injects tier-specific prompt_context.
 #   owner: Erin Spencer
 #   public_surface: call_provider
 #   internal_surface: _instance_memory_block, _slot_instance_block, _slot_routing_info, _sanitize_provider_error, _canonical_tool_calls, _gate_to_effort, _effort_to_thinking_budget, _call_openai_routed, _call_anthropic
@@ -15,25 +15,59 @@
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; inference is the live model-call path and has no migration state.
-#   requires: a0_service_tool_executor, a0_service_prompt_assembly, a0_service_attachments, a0_service_energy_registry
+#   requires: a0_service_tool_executor, a0_service_prompt_assembly, a0_service_attachments, a0_service_energy_registry, a0_service_approval_gate
 #   since: 2026-06-02
 #   unresolved: none
 # === END MODULE_BUILD ===
-import os
+# === CONTRACTS ===
+# id: inference_tool_repeat_fingerprint_ignores_transport_ids
+#   given: consecutive tool calls have the same function name and semantic arguments but different provider-generated ids
+#   then: _canonical_tool_calls emits the same fingerprint so the second execution is refused
+#   class: safety
+#   since: 2026-09-09
+#
+# id: inference_compatible_provider_receives_classified_role
+#   given: routing classifies a request into a role slot handled by an OpenAI-compatible provider
+#   then: the compatible transport receives that exact role for model override resolution
+#   class: correctness
+#   since: 2026-09-09
+#
+# id: inference_fanout_preserves_requested_provider
+#   given: multi-model orchestration explicitly requests one provider for a lane
+#   then: call_provider uses that provider and its instance memory without replacing it from the shared prompt's role slot
+#   class: correctness
+#   since: 2026-09-09
+#
+# id: inference_auto_route_gates_and_reports_effective_provider
+#   given: an unpinned request is reassigned from its seed provider to a classified role-slot provider
+#   then: the role-resolved concrete model's catalog owner is tier-gated before transport and returned with that model in usage for billing and provenance attribution
+#   class: security
+#   since: 2026-09-09
+#
+# id: inference_explicit_openai_model_is_pinned
+#   given: an explicit concrete OpenAI model resolves through the legacy openai provider branch
+#   then: the selected model reaches the compatible transport without role-policy or environment replacement
+#   class: correctness
+#   since: 2026-09-09
+#
+# id: inference_compatible_provider_approval_gate
+#   given: a tool-enabled provider turn requests an external write without a grant, whether text preflight or actual dispatch identifies it
+#   then: inference returns a pending approval gate before mutation and replay bypasses text preflight only while dispatch remains limited to the gate's exact scopes
+#   class: security
+#   since: 2026-09-09
+#
+# id: inference_compatible_transport_uses_effective_owner
+#   given: role routing selects a concrete model owned by a different compatible-provider catalog entry
+#   then: transport uses the owning provider's complete registry spec and identity as well as the selected model
+#   class: correctness
+#   since: 2026-09-09
+# === END CONTRACTS ===
 import json
-import copy
-import random
-import asyncio
 import logging
-from typing import Optional, Callable, Awaitable, Any
+import os
+from typing import Awaitable, Callable, Optional, Sequence
 import httpx
 
-from .tool_executor import (
-    TOOL_SCHEMAS_CHAT,
-    TOOL_SCHEMAS_RESPONSES,
-    execute_tool,
-    set_caller_provider,
-)
 from .prompt_assembly import _prepend_doctrine
 from .attachments import build_provider_messages as _build_provider_messages
 # Single source of truth for provider specs — loaded from python/config/providers.json.
@@ -55,9 +89,10 @@ async def _instance_memory_block(provider_id: str) -> str:
     /api/v1/agents/instances/{id}/memory (admin). Deleting all entries and
     clearing swarm_context on the instance stops injection entirely.
     """
-    from ..database import get_session
-    from sqlalchemy import text as _sa_text
     try:
+        from ..database import get_session
+        from sqlalchemy import text as _sa_text
+
         spec = BUILTIN_PROVIDERS.get(provider_id, {})
         model_id = (spec.get("model") or "").strip()
         if not model_id:
@@ -107,9 +142,10 @@ async def _slot_routing_info(slot: str) -> tuple[str, "str | None"]:
     Returns ("", None) when no instance is assigned, on any error, or when
     the model_id does not match any known provider — inference is never blocked.
     """
-    from ..database import get_session
-    from sqlalchemy import text as _sa_text
     try:
+        from ..database import get_session
+        from sqlalchemy import text as _sa_text
+
         async with get_session() as session:
             inst = (await session.execute(_sa_text(
                 "SELECT id, model_id, swarm_context FROM model_instances "
@@ -225,7 +261,7 @@ def _sanitize_provider_error(provider: str, exc: BaseException) -> str:
 
 
 def _canonical_tool_calls(tool_calls: list[dict]) -> str:
-    """Produce a stable string fingerprint of a list of tool calls for repeat detection."""
+    """Fingerprint semantic tool requests without volatile transport identifiers."""
     norm = []
     for tc in tool_calls:
         if "function" in tc:
@@ -242,6 +278,8 @@ def _canonical_tool_calls(tool_calls: list[dict]) -> str:
             args_str = json.dumps(args_obj, sort_keys=True, default=str)
         except Exception:
             args_str = str(args)
+        norm.append({"name": str(name), "arguments": args_str})
+    return json.dumps(norm, sort_keys=True, separators=(",", ":"))
 
 # Anthropic API version (stable; new features arrive via anthropic-beta header).
 _ANTHROPIC_VERSION = "2023-06-01"
@@ -276,28 +314,40 @@ def _get_max_tool_rounds() -> int:
     return v if v is not None else _MAX_TOOL_ROUNDS
 
 
+def _attribute_provider(result: tuple[str, dict], provider_id: str,
+                        model_id: Optional[str] = None) -> tuple[str, dict]:
+    content, usage = result
+    attributed = dict(usage or {})
+    attributed["provider_id"] = provider_id
+    if model_id: attributed["model_id"] = model_id
+    return content, attributed
+
+
 async def call_provider(
-    provider_id: str,
-    messages: list[dict],
-    system_prompt: Optional[str] = None,
-    max_tokens: int = 8000,
-    use_tools: bool = True,
-    user_id: Optional[str] = None,
-    skip_approval: bool = False,
-    reasoning_effort: Optional[str] = None,
+    provider_id: str, messages: list[dict],
+    system_prompt: Optional[str] = None, max_tokens: int = 8000,
+    use_tools: bool = True, user_id: Optional[str] = None,
+    skip_approval: bool = False, reasoning_effort: Optional[str] = None,
     progress_callback: Optional[Callable[[int, int], None]] = None,
     skip_manifest: bool = False,
+    pin_requested_provider: bool = False, model_override: Optional[str] = None,
+    routed_user_tier: Optional[str] = None,
+    approved_tool_scopes: Optional[Sequence[str]] = None,
 ) -> tuple[str, dict]:
     """
     Forward messages to the named provider with the system prompt prepended.
     Returns (content, usage_dict).
     user_id is threaded into the OpenAI path for approval-scope checking.
-    skip_approval=True bypasses the approval gate (used for replay after explicit APPROVE).
+    skip_approval=True bypasses only replayed text preflight; tool dispatch still
+    requires an exact match in approved_tool_scopes or a persisted user scope.
     skip_manifest=True omits the skill manifest from the doctrine prefix (saves
     ~500 tokens; use for internal/automated callers that never invoke skill_load).
+    pin_requested_provider=True is reserved for explicit-model and multi-model
+    orchestration lanes; it preserves the resolved provider, model, and that
+    provider's instance memory.
     reasoning_effort is mapped per-provider, gated by capability flags in
     providers.json (single source of truth — no model slugs in code):
-      - OpenAI: passed via openai_router call_cfg (ignored on the openai branch)
+      - OpenAI: passed via openai_router call_cfg unless a concrete model is pinned
       - Grok:   passed as reasoning_effort when spec.supports_reasoning_effort
       - Claude: mapped to thinking.budget_tokens when spec.supports_thinking
       - Gemini: honored only on the native SDK path (gemini3 spec.supports_thinking)
@@ -311,17 +361,25 @@ async def call_provider(
         (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), ""
     )
     _slot = _resolve_role(_task_text)
-    _imem, _slot_provider = await _slot_routing_info(_slot)
-    if not _imem:
+    if pin_requested_provider:
         _imem = await _instance_memory_block(provider_id)
+        _slot_provider = None
+    else:
+        _imem, _slot_provider = await _slot_routing_info(_slot)
+        if not _imem:
+            _imem = await _instance_memory_block(provider_id)
     if _imem:
         system_prompt = (system_prompt or "") + "\n\n## Instance Memory\n" + _imem
     if _slot_provider:
         provider_id = _slot_provider
-    messages = _build_provider_messages(messages, provider_id)
-
     if provider_id == "openai":
-        return await _call_openai_routed(messages, system_prompt, use_tools=use_tools, user_id=user_id, skip_approval=skip_approval)
+        result = await _call_openai_routed(
+            messages, system_prompt, use_tools=use_tools, user_id=user_id,
+            skip_approval=skip_approval,
+            model_override=model_override if pin_requested_provider else None,
+            routed_user_tier=routed_user_tier,
+            approved_tool_scopes=approved_tool_scopes)
+        return _attribute_provider(result, result[1].get("provider_id", provider_id), result[1].get("model_id"))
 
     spec = BUILTIN_PROVIDERS.get(provider_id)
     if not spec:
@@ -329,18 +387,45 @@ async def call_provider(
             f"Unknown provider_id={provider_id!r} — no spec in BUILTIN_PROVIDERS. "
             f"This indicates a misrouted call; fix at the caller."
         )
+    from .model_catalog import resolve_routed_model
+    effective_provider_id, effective_model = await resolve_routed_model(
+        provider_id, _slot, pin_requested_provider=pin_requested_provider,
+        model_override=model_override, user_tier=routed_user_tier)
+    # A role-selected model can belong to a different provider entry. From
+    # this point onward transport must use that owner's complete configuration
+    # (identity, base URL, key env, capabilities), not the seed provider's.
+    provider_id = effective_provider_id
+    spec = BUILTIN_PROVIDERS[effective_provider_id]
+    messages = _build_provider_messages(messages, effective_provider_id)
+
+    from . import approval_gate_service
+    if use_tools:
+        _, pending = await approval_gate_service.approval_gate_result(
+            messages, user_id=user_id, skip_approval=skip_approval,
+            provider_id=effective_provider_id, model_id=effective_model,
+            reasoning_effort=reasoning_effort,
+        )
+        if pending is not None:
+            return pending
+
+    async def capture(transport: Awaitable[tuple[str, dict]]) -> tuple[str, dict]:
+        return await approval_gate_service.capture_tool_approval(
+            transport, messages=messages, provider_id=effective_provider_id,
+            model_id=effective_model, reasoning_effort=reasoning_effort,
+            approved_tool_scopes=approved_tool_scopes,
+        )
 
     # OpenAI-vendored single-model providers (openai-5.5, openai-5.5-pro and
     # any future siblings). The legacy "openai" provider above goes through
-    # role-based router; these go straight to openai_provider.call with the
-    # spec's pinned model. reasoning_effort is clamped UP to the spec's
+    # role-based router; these go through the generic compatible transport
+    # with the spec's pinned model. reasoning_effort is clamped UP to the spec's
     # min_reasoning_effort (no silent downgrade — gpt-5.5-pro returns HTTP
     # 400 on 'low', so we honor the floor verbatim, not silently swallow).
     if spec.get("vendor") == "openai":
-        api_key = os.environ.get(spec["env_key"], "")
+        api_key = os.environ.get(spec["api_key_env"], "")
         if not api_key:
             raise RuntimeError(
-                f"{provider_id} unavailable: env var {spec['env_key']} is not set. "
+                f"{provider_id} unavailable: env var {spec['api_key_env']} is not set. "
                 f"Set the API key or route the request to a configured provider."
             )
         effective_effort = (reasoning_effort or "medium").lower()
@@ -353,20 +438,18 @@ async def call_provider(
         if system_prompt:
             payload_messages.append({"role": "system", "content": system_prompt})
         payload_messages.extend(messages)
-        from .providers.openai_provider import call as openai_call
-        return await openai_call(
-            payload_messages,
-            model_override=spec["model"],
-            api_key=api_key,
-            max_tokens=max_tokens,
+        from .providers import openai_compatible_provider
+        result = await capture(openai_compatible_provider.call(
+            payload_messages, provider_id=provider_id, role=_slot,
+            model_override=effective_model, api_key=api_key, max_tokens=max_tokens,
             use_tools=use_tools,
-            reasoning_effort=effective_effort,
-        )
+            reasoning_effort=effective_effort, pin_model_override=True))
+        return _attribute_provider(result, effective_provider_id, effective_model)
 
-    api_key = os.environ.get(spec["env_key"], "")
+    api_key = os.environ.get(spec["api_key_env"], "")
     if not api_key:
         raise RuntimeError(
-            f"{provider_id} unavailable: env var {spec['env_key']} is not set. "
+            f"{provider_id} unavailable: env var {spec['api_key_env']} is not set. "
             f"Set the API key or route the request to a configured provider."
         )
 
@@ -377,38 +460,38 @@ async def call_provider(
 
     vendor = spec.get("vendor", "")
 
+    if spec.get("adapter") == "openai-compatible":
+        from .providers import openai_compatible_provider
+        result = await capture(openai_compatible_provider.call(
+            payload_messages, provider_id=provider_id, role=_slot,
+            api_key=api_key, model_override=effective_model, max_tokens=max_tokens,
+            use_tools=use_tools, reasoning_effort=reasoning_effort,
+            pin_model_override=True, progress_callback=progress_callback))
+        return _attribute_provider(result, effective_provider_id, effective_model)
+
     if vendor == "anthropic":
-        return await _call_anthropic(
-            api_key, spec["model"], payload_messages, max_tokens,
-            use_tools=use_tools,
-            reasoning_effort=reasoning_effort,
-            enable_caching=spec.get("supports_prompt_caching", False),
-        )
+        result = await capture(_call_anthropic(
+            api_key, effective_model, payload_messages, max_tokens,
+            use_tools=use_tools, reasoning_effort=reasoning_effort,
+            enable_caching=spec.get("supports_prompt_caching", False)))
+        return _attribute_provider(result, effective_provider_id, effective_model)
 
     if vendor == "google":
         from .providers.gemini_provider import call as gemini_call
-        return await gemini_call(
-            payload_messages,
-            api_key=api_key,
-            model_override=spec["model"],
-            max_tokens=max_tokens,
-            use_tools=use_tools,
-            reasoning_effort=reasoning_effort,
+        result = await capture(gemini_call(
+            payload_messages, api_key=api_key, model_override=effective_model,
+            max_tokens=max_tokens, use_tools=use_tools, reasoning_effort=reasoning_effort,
             provider_id=provider_id,
-            supports_thinking=bool(spec.get("supports_thinking")),
-        )
+            supports_thinking=bool(spec.get("supports_thinking"))))
+        return _attribute_provider(result, effective_provider_id, effective_model)
 
     if vendor == "xai":
         from .providers.xai_provider import call as grok_call
-        return await grok_call(
-            payload_messages,
-            api_key=api_key,
-            model_override=spec["model"],
-            max_tokens=max_tokens,
-            use_tools=use_tools,
-            reasoning_effort=reasoning_effort,
-            progress_callback=progress_callback,
-        )
+        result = await capture(grok_call(
+            payload_messages, api_key=api_key, model_override=effective_model,
+            max_tokens=max_tokens, use_tools=use_tools, reasoning_effort=reasoning_effort,
+            progress_callback=progress_callback))
+        return _attribute_provider(result, effective_provider_id, effective_model)
 
     # No-silent-fallback doctrine: if we got here the spec exists in
     # BUILTIN_PROVIDERS but its vendor isn't wired to a call path — raise so
@@ -420,11 +503,11 @@ async def call_provider(
 
 
 async def _call_openai_routed(
-    messages: list[dict],
-    system_prompt: Optional[str] = None,
-    use_tools: bool = True,
-    user_id: Optional[str] = None,
-    skip_approval: bool = False,
+    messages: list[dict], system_prompt: Optional[str] = None,
+    use_tools: bool = True, user_id: Optional[str] = None,
+    skip_approval: bool = False, model_override: Optional[str] = None,
+    routed_user_tier: Optional[str] = None,
+    approved_tool_scopes: Optional[Sequence[str]] = None,
 ) -> tuple[str, dict]:
     """
     Route to the appropriate role via openai_router, check approval gate,
@@ -433,71 +516,34 @@ async def _call_openai_routed(
     Call config (model, effort, etc.) is obtained separately via make_call_config().
     user_id is used to load pre-approved scopes so pre-authorized actions bypass the gate.
     """
-    from .openai_router import make_route_decision, make_call_config, make_approval_packet, get_triggered_actions
-    from ..logger import log_openai_event, seed_openai_hmmm_if_empty
-    from ..config.policy_loader import get_hmmm_seed_items, get_action_scope, get_scope_categories
-    from ..storage import storage
+    from . import approval_gate_service
+    from .openai_router import make_call_config, resolve_role
+    from ..logger import log_openai_event
 
-    await seed_openai_hmmm_if_empty(get_hmmm_seed_items())
+    task_text = approval_gate_service._current_user_text(messages)
 
-    task_text = " ".join(m.get("content", "") for m in messages if m.get("role") == "user")
-
-    pre_approved_scopes: set[str] = set()
-    if user_id:
-        try:
-            pre_approved_scopes = await storage.get_approval_scope_names(user_id)
-        except Exception as _scope_err:
-            print(f"[approval_scopes] failed to load scopes for {user_id}: {_scope_err}")
-
-    route_decision = make_route_decision(task_text, pre_approved_scopes=pre_approved_scopes)
-    role = route_decision["role"]
+    role = resolve_role(task_text)
     call_cfg = make_call_config(role)
+    if model_override is not None:
+        call_cfg = {**call_cfg, "model": model_override}
+    from .model_catalog import routed_model_owner
+    effective_provider_id = routed_model_owner(
+        call_cfg["model"], "openai", routed_user_tier)
+    messages = _build_provider_messages(messages, effective_provider_id)
+    route_decision, pending = await approval_gate_service.approval_gate_result(
+        messages, user_id=user_id, skip_approval=skip_approval,
+        provider_id=effective_provider_id, model_id=call_cfg["model"],
+        reasoning_effort=call_cfg["reasoning_effort"],
+    )
+    if pending is not None:
+        return pending
 
-    if route_decision["requires_approval"] and not skip_approval:
-        import uuid
-        gate_id = f"gate-{uuid.uuid4().hex[:8]}"
-        packet = make_approval_packet(task_text, gate_id)
-        input_repr = json.dumps({"task": task_text})
-        output_repr = json.dumps(packet)
-        await log_openai_event(
-            role=role,
-            model=call_cfg["model"],
-            reasoning_effort=call_cfg["reasoning_effort"],
-            input_text=input_repr,
-            output_text=output_repr,
-            approval_state="pending",
-        )
-        usage = {
-            "approval_state": "pending",
-            "gate_id": gate_id,
-            "approval_packet": packet,
-            "route_decision": route_decision,
-        }
-        triggered = get_triggered_actions(task_text)
-        scope_hints: list[str] = []
-        scope_categories = get_scope_categories()
-        seen_scopes: set[str] = set()
-        for action in triggered:
-            sc = get_action_scope(action)
-            if sc and sc not in seen_scopes and sc in scope_categories:
-                meta = scope_categories[sc]
-                scope_hints.append(f"  Pre-approve all {meta['label']}: APPROVE SCOPE {sc}")
-                seen_scopes.add(sc)
-        scope_section = "\n" + "\n".join(scope_hints) if scope_hints else ""
-        content = (
-            f"[APPROVAL REQUIRED — gate_id: {gate_id}]\n"
-            f"Action: {packet['action'][:120]}\n"
-            f"Impact: {packet['impact']}\n"
-            f"Rollback: {packet['rollback']}\n"
-            f"To approve this action: APPROVE {gate_id}"
-            f"{scope_section}"
-        )
-        return content, usage
-
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    spec = BUILTIN_PROVIDERS[effective_provider_id]
+    api_key_env = str(spec.get("api_key_env") or "")
+    api_key = os.environ.get(api_key_env, "")
     if not api_key:
         raise RuntimeError(
-            "openai unavailable: env var OPENAI_API_KEY is not set. "
+            f"{effective_provider_id} unavailable: env var {api_key_env} is not set. "
             "Set the API key or route the request to a configured provider."
         )
 
@@ -506,17 +552,23 @@ async def _call_openai_routed(
         full_input.append({"role": "system", "content": system_prompt})
     full_input.extend(messages)
 
-    from .providers.openai_provider import call as openai_call
-    content, usage = await openai_call(
-        full_input,
-        api_key=api_key,
-        model_override=call_cfg["model"],
+    from .providers import openai_compatible_provider
+    result = await approval_gate_service.capture_tool_approval(
+        openai_compatible_provider.call(
+        full_input, provider_id=effective_provider_id, role=role,
+        api_key=api_key, model_override=call_cfg["model"],
         max_tokens=call_cfg["max_output_tokens"],
-        use_tools=use_tools,
-        reasoning_effort=call_cfg["reasoning_effort"],
+        use_tools=use_tools, reasoning_effort=call_cfg["reasoning_effort"],
         temperature=call_cfg["temperature"],
         store=call_cfg["store"],
-    )
+        pin_model_override=True), messages=messages,
+        provider_id=effective_provider_id, model_id=call_cfg["model"],
+        reasoning_effort=call_cfg["reasoning_effort"],
+        approved_tool_scopes=approved_tool_scopes)
+    if result[1].get("approval_state") == "pending":
+        return result
+    content, usage = result
+    usage.update({"provider_id": effective_provider_id, "model_id": call_cfg["model"]})
 
     input_repr = json.dumps(full_input)
     await log_openai_event(
@@ -551,14 +603,10 @@ async def _call_anthropic(
     """
     from .providers.claude_provider import call as _claude_call
     return await _claude_call(
-        messages,
-        api_key=api_key,
-        model_override=model,
-        max_tokens=max_tokens,
-        use_tools=use_tools,
+        messages, api_key=api_key, model_override=model,
+        max_tokens=max_tokens, use_tools=use_tools,
         reasoning_effort=reasoning_effort,
-        enable_caching=enable_caching,
-    )
+        enable_caching=enable_caching)
 
 
-# 393:107 0:0 16:14
+# 388:157 0:0 16:15

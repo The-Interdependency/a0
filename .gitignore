@@ -22,6 +22,7 @@ playwright-report/
 # Local secrets
 .env
 .venv/
+.skill-lib/
 .state/
 android/keystore/
 android/keystore.properties

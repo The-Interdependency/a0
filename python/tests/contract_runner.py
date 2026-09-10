@@ -1,4 +1,4 @@
-# 227:44 0:0 0:0
+# 257:44 0:0 0:0
 """Contract/check graph auditor and executor — see test-build/SKILL.md.
 
 Source modules own behavioral `CONTRACTS`; test modules own executable
@@ -47,8 +47,10 @@ Exit 0 only when the graph closes and every executed check passes.
 # === END CONTRACTS ===
 from __future__ import annotations
 
+import argparse
 import ast
 import asyncio
+import hashlib
 import importlib
 import importlib.util
 import sys
@@ -229,8 +231,20 @@ async def _execute_check(check: Declaration) -> dict[str, Any]:
         }
 
     try:
-        _target_path, module_name, function_name = _resolve_call_no_exec(check)
-        module = importlib.import_module(module_name)
+        target_path, module_name, function_name = _resolve_call_no_exec(check)
+        if target_path.name.count(".") > 1:
+            synthetic_name = (
+                "_a0_versioned_check_"
+                + hashlib.sha256(str(target_path).encode("utf-8")).hexdigest()[:16]
+            )
+            spec = importlib.util.spec_from_file_location(synthetic_name, target_path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"cannot load versioned check module: {target_path}")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[synthetic_name] = module
+            spec.loader.exec_module(module)
+        else:
+            module = importlib.import_module(module_name)
         function: Any = getattr(module, function_name)
     except Exception as exc:
         return {
@@ -269,7 +283,7 @@ def _rel(path: Path) -> str:
         return str(path)
 
 
-async def main() -> int:
+async def main(only: set[str] | None = None) -> int:
     contracts, uncovered_modules = _source_declarations()
     checks = _check_declarations()
     effective_checks, gaps, warnings = audit_graph(contracts, checks)
@@ -285,6 +299,14 @@ async def main() -> int:
     if gaps:
         print(f"\n{len(gaps)} graph gap(s); no checks executed")
         return 1
+
+    if only:
+        known_ids = {check.id for check in effective_checks}
+        unknown_ids = sorted(only - known_ids)
+        if unknown_ids:
+            print(f"\nunknown check id(s): {', '.join(unknown_ids)}")
+            return 1
+        effective_checks = [check for check in effective_checks if check.id in only]
 
     results: list[dict[str, Any]] = []
     print(f"\nexecuting {len(effective_checks)} checks\n")
@@ -316,5 +338,14 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
-# 227:44 0:0 0:0
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        metavar="CHECK_ID",
+        help="execute only this check after auditing the complete declaration graph",
+    )
+    args = parser.parse_args()
+    sys.exit(asyncio.run(main(set(args.only) or None)))
+# 257:44 0:0 0:0

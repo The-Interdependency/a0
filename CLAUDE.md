@@ -133,7 +133,9 @@ Naming convention: `{name}.py` = self-contained module; `{name}_api.py` = thin d
 
 ### Key Python Services & Engines
 
-- `python/services/inference.py` — Orchestrates LLM calls across registered energy providers (Grok / Gemini / Claude / OpenAI-style); resolves role, normalizes reasoning effort, injects tier-specific `prompt_context`.
+- `python/services/inference.py` — Orchestrates LLM calls across registered energy providers (Grok / Gemini / Claude / OpenAI-compatible); resolves role, normalizes reasoning effort, injects tier-specific `prompt_context`.
+- `python/services/providers/open_comp_prov_v0.0.0alpha.py` — Generic Responses/Chat Completions transport; endpoints, credential env names, models, and provider quirks stay in `python/config/providers.json`.
+- `a0/prov_regi_v0.0.0alpha.py` + `a0/adapters/open_comp_adap_v0.0.0alpha.py` — Standalone/Termux provider selection from that same registry; `A0_PROVIDER` is explicit and fail-closed.
 - `python/services/heartbeat.py` — Periodic tick: audit snapshots, memory checkpoints, PCNA propagation, sub-agent cleanup.
 - `python/services/tool_executor.py` — Tool invocation with approval gates.
 - `python/engine/ptcna_state.py` — durable Platonic-Agent adapter over the exactly pinned producer-owned PTCNA pipeline and UCNS receipt.
@@ -171,7 +173,7 @@ Auth is handled entirely by Express. Tiers (Free → Seeker → Operator → Pat
 
 | Workflow | Trigger | Does |
 |----------|---------|------|
-| `.github/workflows/deploy.yml` | push/PR to `main` | Boots Postgres + Python backend, runs console-tab guard; on push to `main`, builds Docker image and deploys to Cloud Run (`a0p`, us-central1) |
+| `.github/workflows/deploy.yml` | push/PR to `main` | Runs provider contracts, boots Postgres + Python for the console-tab guard; on push to `main`, builds and deploys to Cloud Run (`a0p`, us-central1) |
 | `.github/workflows/clean-build-check.yml` | push/PR to `main` | Builds with `REPL_ID` unset and fails if any `@replit` reference leaks into the client bundle |
 
 ---
@@ -185,6 +187,8 @@ SESSION_SECRET          # Express session encryption (no fallback in prod)
 INTERNAL_API_SECRET     # Express→Python shared secret (start-dev.sh generates a per-run value)
 DATABASE_URL            # PostgreSQL connection string
 XAI_API_KEY             # Grok energy provider
+DEEPSEEK_API_KEY        # DeepSeek V4 Flash/Pro; also used by standalone a0
+A0_PROVIDER             # Optional standalone provider id (e.g. deepseek-pro)
 STRIPE_SECRET_KEY       # Stripe billing
 STRIPE_WEBHOOK_SECRET   # Stripe webhook validation
 ADMIN_USER_ID           # User ID allowed to write prompt contexts

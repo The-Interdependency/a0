@@ -1,3 +1,4 @@
+// 13:0 0:1 0:1
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
@@ -13,3 +14,4 @@ const config: CapacitorConfig = {
 };
 
 export default config;
+// 13:0 0:1 0:1

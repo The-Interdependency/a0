@@ -1,4 +1,4 @@
-# 99:73 0:0 3:2
+# 105:86 0:0 3:2
 """call_fn — canonical CallFn adapter.
 
 aimmh_lib.adapters.make_call_fn pattern, ported to a0p. The CallFn is the
@@ -54,6 +54,20 @@ from __future__ import annotations
 #   unresolved: none
 # === END MODULE_BUILD ===
 
+# === CONTRACTS ===
+# id: call_fn_resolved_model_pins_provider
+#   given: call_model resolves an explicit model id after its enabled and tier gates
+#   then: the resolved provider is pinned through inference and cannot be replaced by a prompt role slot
+#   class: correctness
+#   since: 2026-09-09
+#
+# id: call_fn_auto_model_keeps_role_slot_routing
+#   given: a caller marks its seed model as auto-selected rather than explicit
+#   then: call_model leaves the resolved provider unpinned so inference may route by the classified role slot
+#   class: correctness
+#   since: 2026-09-09
+# === END CONTRACTS ===
+
 from typing import Awaitable, Callable, Optional
 
 from .inference import call_provider
@@ -96,6 +110,8 @@ async def call_model(
     reasoning_effort: Optional[str] = None,
     enforce_tier: bool = True,
     enforce_enabled: bool = True,
+    pin_requested_provider: bool = True,
+    enforce_routed_tier: Optional[bool] = None,
 ) -> tuple[str, dict]:
     """Module-level full-shape call. Resolves model_id → provider_id, gates
     on tier + provider-enabled flag, and delegates to call_provider.
@@ -111,8 +127,9 @@ async def call_model(
       RuntimeError     — provider API key missing (no silent fallback)
     """
     provider_id, spec = await resolve_model_id(model_id)
-    if enforce_tier:
-        user_tier = await _user_tier(user_id)
+    gate_routed_tier = enforce_tier if enforce_routed_tier is None else enforce_routed_tier
+    user_tier = await _user_tier(user_id) if enforce_tier or gate_routed_tier else None
+    if enforce_tier and user_tier is not None:
         _check_tier(spec, user_tier)
     if enforce_enabled:
         if not await is_provider_enabled(provider_id):
@@ -132,6 +149,9 @@ async def call_model(
         user_id=user_id,
         skip_approval=skip_approval,
         reasoning_effort=reasoning_effort,
+        pin_requested_provider=pin_requested_provider,
+        model_override=(str(spec.get("model") or "") or None) if pin_requested_provider else None,
+        routed_user_tier=user_tier if gate_routed_tier else None,
     )
     return content, usage
 
@@ -195,4 +215,4 @@ def make_call_fn(
         content, _usage = await full(model_id, messages, **kwargs)
         return content
     return _call
-# 99:73 0:0 3:2
+# 105:86 0:0 3:2

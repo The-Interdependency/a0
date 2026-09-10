@@ -1,4 +1,4 @@
-# 112:67 0:0 3:3
+# 119:67 0:0 3:3
 """AgentInstance — runtime handle for "the thing that calls a model".
 
 Unifies three concepts that previously each had bespoke plumbing:
@@ -95,6 +95,8 @@ class AgentInstance:
         max_tokens: int = 8000,
         skip_approval: bool = False,
         reasoning_effort: Optional[str] = None,
+        pin_requested_provider: bool = True,
+        enforce_routed_tier: Optional[bool] = None,
     ) -> tuple[str, dict]:
         """Send history, return (content, usage). Single seam to the model.
 
@@ -117,9 +119,14 @@ class AgentInstance:
             reasoning_effort=reasoning_effort,
             enforce_tier=self.enforce_tier,
             enforce_enabled=self.enforce_enabled,
+            pin_requested_provider=pin_requested_provider,
+            enforce_routed_tier=enforce_routed_tier,
         )
         # Cache the resolved provider for downstream persistence/logging.
-        if self.provider_id is None:
+        routed_provider = usage.get("provider_id") if isinstance(usage, dict) else None
+        if isinstance(routed_provider, str) and routed_provider:
+            self.provider_id = routed_provider
+        elif self.provider_id is None:
             self.provider_id, _spec = await resolve_model_id(self.model_id)
         return content, usage
 
@@ -196,4 +203,4 @@ class AgentInstance:
             f"tools={self.use_tools}, "
             f"resolved={self.provider_id!r})"
         )
-# 112:67 0:0 3:3
+# 119:67 0:0 3:3

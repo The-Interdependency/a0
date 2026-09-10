@@ -1,4 +1,4 @@
-# 251:69 0:0 1:6
+# 255:69 0:0 1:6
 """xai_provider — xAI Grok via the official xai-sdk (gRPC).
 
 Migrated from raw httpx to the `xai-sdk` Python SDK (v1.12+). The contract
@@ -100,7 +100,7 @@ async def call(
     from ..energy_registry import BUILTIN_PROVIDERS
 
     spec = BUILTIN_PROVIDERS.get("grok", {})
-    key = api_key or os.environ.get(spec.get("env_key", "XAI_API_KEY"), "").strip()
+    key = api_key or os.environ.get(spec.get("api_key_env", "XAI_API_KEY"), "").strip()
     if not key:
         raise ValueError("XAI_API_KEY not configured")
     model = model_override or await resolve_model_for_role("grok", role)
@@ -255,7 +255,9 @@ async def _call_with_tools(
 ) -> tuple[str, dict]:
     """xai-sdk chat with our function-tool loop. Streaming when no tools."""
     from ..tool_distill import set_caller_provider
-    from ..tool_executor import get_active_chat_schemas, execute_tool
+    from ..tool_executor import (
+        ToolApprovalRequired, execute_tool, get_active_chat_schemas,
+    )
 
     set_caller_provider("grok")
     client = AsyncClient(api_key=api_key)
@@ -327,6 +329,8 @@ async def _call_with_tools(
                 result = await execute_tool(name, args)
                 chat.append(tool_result(result, tool_call_id=tc.id))
 
+    except ToolApprovalRequired:
+        raise
     except Exception as exc:
         from ..inference import _sanitize_provider_error
         return _sanitize_provider_error("grok", exc), accumulated_usage
@@ -384,4 +388,4 @@ async def _stream_chat(
             pass
 
     return ("".join(text_parts) or "[no content]"), accumulated_usage
-# 251:69 0:0 1:6
+# 255:69 0:0 1:6
