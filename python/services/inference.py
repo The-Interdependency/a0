@@ -1,4 +1,4 @@
-# 370:156 0:0 16:15
+# 379:156 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -370,8 +370,6 @@ async def call_provider(
         system_prompt = (system_prompt or "") + "\n\n## Instance Memory\n" + _imem
     if _slot_provider:
         provider_id = _slot_provider
-    messages = _build_provider_messages(messages, provider_id)
-
     if provider_id == "openai":
         result = await _call_openai_routed(
             messages, system_prompt, use_tools=use_tools, user_id=user_id,
@@ -395,12 +393,13 @@ async def call_provider(
     # (identity, base URL, key env, capabilities), not the seed provider's.
     provider_id = effective_provider_id
     spec = BUILTIN_PROVIDERS[effective_provider_id]
+    messages = _build_provider_messages(messages, effective_provider_id)
 
     if use_tools and (
         spec.get("adapter") == "openai-compatible" or spec.get("vendor") == "openai"
     ):
-        from .approval_gate import approval_gate_result
-        _, pending = await approval_gate_result(
+        from . import approval_gate_service
+        _, pending = await approval_gate_service.approval_gate_result(
             messages, user_id=user_id, skip_approval=skip_approval,
             provider_id=effective_provider_id, model_id=effective_model,
             reasoning_effort=reasoning_effort,
@@ -436,7 +435,8 @@ async def call_provider(
             payload_messages, provider_id=provider_id, role=_slot,
             model_override=effective_model, api_key=api_key, max_tokens=max_tokens,
             use_tools=use_tools,
-            reasoning_effort=effective_effort, pin_model_override=True)
+            reasoning_effort=effective_effort, pin_model_override=True,
+            approval_gate_cleared=skip_approval)
         return _attribute_provider(result, effective_provider_id, effective_model)
 
     api_key = os.environ.get(spec["api_key_env"], "")
@@ -459,7 +459,8 @@ async def call_provider(
             payload_messages, provider_id=provider_id, role=_slot,
             api_key=api_key, model_override=effective_model, max_tokens=max_tokens,
             use_tools=use_tools, reasoning_effort=reasoning_effort,
-            pin_model_override=True, progress_callback=progress_callback)
+            pin_model_override=True, approval_gate_cleared=skip_approval,
+            progress_callback=progress_callback)
         return _attribute_provider(result, effective_provider_id, effective_model)
 
     if vendor == "anthropic":
@@ -508,10 +509,14 @@ async def _call_openai_routed(
     Call config (model, effort, etc.) is obtained separately via make_call_config().
     user_id is used to load pre-approved scopes so pre-authorized actions bypass the gate.
     """
+    from . import approval_gate_service
     from .openai_router import make_call_config, resolve_role
     from ..logger import log_openai_event
 
-    task_text = " ".join(m.get("content", "") for m in messages if m.get("role") == "user")
+    task_text = " ".join(
+        approval_gate_service._message_text(m.get("content"))
+        for m in messages if m.get("role") == "user"
+    )
 
     role = resolve_role(task_text)
     call_cfg = make_call_config(role)
@@ -520,8 +525,8 @@ async def _call_openai_routed(
     from .model_catalog import routed_model_owner
     effective_provider_id = routed_model_owner(
         call_cfg["model"], "openai", routed_user_tier)
-    from .approval_gate import approval_gate_result
-    route_decision, pending = await approval_gate_result(
+    messages = _build_provider_messages(messages, effective_provider_id)
+    route_decision, pending = await approval_gate_service.approval_gate_result(
         messages, user_id=user_id, skip_approval=skip_approval,
         provider_id=effective_provider_id, model_id=call_cfg["model"],
         reasoning_effort=call_cfg["reasoning_effort"],
@@ -529,10 +534,12 @@ async def _call_openai_routed(
     if pending is not None:
         return pending
 
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    spec = BUILTIN_PROVIDERS[effective_provider_id]
+    api_key_env = str(spec.get("api_key_env") or "")
+    api_key = os.environ.get(api_key_env, "")
     if not api_key:
         raise RuntimeError(
-            "openai unavailable: env var OPENAI_API_KEY is not set. "
+            f"{effective_provider_id} unavailable: env var {api_key_env} is not set. "
             "Set the API key or route the request to a configured provider."
         )
 
@@ -541,14 +548,15 @@ async def _call_openai_routed(
         full_input.append({"role": "system", "content": system_prompt})
     full_input.extend(messages)
 
-    from .providers.openai_provider import call as openai_call
-    content, usage = await openai_call(
-        full_input, api_key=api_key, model_override=call_cfg["model"],
+    from .providers import openai_compatible_provider
+    content, usage = await openai_compatible_provider.call(
+        full_input, provider_id=effective_provider_id, role=role,
+        api_key=api_key, model_override=call_cfg["model"],
         max_tokens=call_cfg["max_output_tokens"],
         use_tools=use_tools, reasoning_effort=call_cfg["reasoning_effort"],
         temperature=call_cfg["temperature"],
         store=call_cfg["store"],
-        pin_model_override=model_override is not None)
+        pin_model_override=True, approval_gate_cleared=skip_approval)
     usage.update({"provider_id": effective_provider_id, "model_id": call_cfg["model"]})
 
     input_repr = json.dumps(full_input)
@@ -590,4 +598,4 @@ async def _call_anthropic(
         enable_caching=enable_caching)
 
 
-# 370:156 0:0 16:15
+# 379:156 0:0 16:15
