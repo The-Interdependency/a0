@@ -1,4 +1,4 @@
-# 299:100 0:0 20:3
+# 312:101 0:0 20:3
 # === MODULE_BUILD ===
 # id: a0_service_energy_registry
 #   module_name: energy_registry
@@ -6,7 +6,7 @@
 #   summary: Energy-provider catalog and pricing/cost layer — loads provider+pricing JSON data, resolves active/default/cheap providers, and estimates per-call cost and cache breakdown from usage.
 #   owner: Erin Spencer
 #   public_surface: BUILTIN_PROVIDERS, get_pricing_models, get_model_pricing, reload_pricing_doc, default_provider, active_provider, cheap_provider, estimate_cost, cache_breakdown, reset_per_call_usage
-#   internal_surface: _load_pricing_doc
+#   internal_surface: _canonical_provider_id, _load_pricing_doc
 #   auth_boundary: none
 #   storage_boundary: read
 #   network_boundary: internal
@@ -27,8 +27,8 @@
 #   class: correctness
 #   since: 2026-09-09
 # id: deprecated_provider_aliases_canonicalize
-#   given: an internal caller requests a registry provider id with deprecated_alias_for
-#   then: the bridge dispatches, meters, and reports the canonical provider route
+#   given: an internal caller or multi-provider request supplies a registry provider id with deprecated_alias_for
+#   then: provider selection canonicalizes and deduplicates the route before hub orchestration, dispatch, metering, and reporting
 #   class: correctness
 #   since: 2026-09-10
 # === END CONTRACTS ===
@@ -56,6 +56,19 @@ _PROVIDER_PRICING_URLS: dict[str, str] = {
     for pid, spec in BUILTIN_PROVIDERS.items()
     if spec.get("pricing_url")
 }
+
+
+def _canonical_provider_id(provider_id: str) -> str:
+    """Resolve one registry alias and fail visibly on a broken target."""
+    spec = BUILTIN_PROVIDERS.get(provider_id, {})
+    canonical_id = str(spec.get("deprecated_alias_for") or "").strip()
+    if not canonical_id:
+        return provider_id
+    if canonical_id not in BUILTIN_PROVIDERS:
+        raise ValueError(
+            f"Provider {provider_id!r} aliases missing provider {canonical_id!r}"
+        )
+    return canonical_id
 
 # Per-model pricing manifest — source of truth for input/output/cached rates
 # per individual model id. Used on boot and on POST /api/energy/refresh-pricing/{provider_id}.
@@ -111,6 +124,8 @@ def default_provider() -> str | None:
     the async active_provider() which reads the conduct slot from the DB.
     """
     for pid, info in BUILTIN_PROVIDERS.items():
+        if info.get("hidden"):
+            continue
         api_key_env = info.get("api_key_env", "")
         if api_key_env and os.environ.get(api_key_env):
             return pid
@@ -142,8 +157,7 @@ async def active_provider() -> str:
         raise RuntimeError("No instantiation selected")
     model_id = (_row["model_id"] or "").strip()
     if model_id in BUILTIN_PROVIDERS:
-        spec = BUILTIN_PROVIDERS[model_id]
-        return str(spec.get("deprecated_alias_for") or model_id)
+        return _canonical_provider_id(model_id)
     for pid, spec in BUILTIN_PROVIDERS.items():
         if (
             spec.get("model") == model_id
@@ -297,9 +311,7 @@ async def _aimmh_call_fn(model_id, messages, system_context=None, max_history=30
     """Bridge aimmh-lib's CallFn signature into call_provider."""
     from .inference import call_provider as _cep
     from . import orch_progress as _op
-    model_id = str(
-        BUILTIN_PROVIDERS.get(model_id, {}).get("deprecated_alias_for") or model_id
-    )
+    model_id = _canonical_provider_id(model_id)
     state = _per_call_usage_cv.get()
     call_idx = None
     if state is not None:
@@ -419,10 +431,12 @@ def get_multi_model_hub():
 
 
 def build_model_instances() -> dict:
-    """Construct one aimmh ModelInstance per BUILTIN_PROVIDERS entry with an active key."""
+    """Construct one aimmh ModelInstance per visible provider with an active key."""
     from aimmh_lib import ModelInstance
     out: dict = {}
     for pid, info in BUILTIN_PROVIDERS.items():
+        if info.get("hidden"):
+            continue
         api_key_env = info.get("api_key_env", "")
         if api_key_env and not os.environ.get(api_key_env):
             continue
@@ -447,12 +461,14 @@ async def resolve_providers(providers: list[str] | None) -> list[str]:
     for p in providers:
         if p == "active":
             try:
-                a = await active_provider()
+                a = _canonical_provider_id(await active_provider())
                 if a not in out:
                     out.append(a)
             except RuntimeError:
                 pass
-        elif p in BUILTIN_PROVIDERS and p not in out:
-            out.append(p)
+        elif p in BUILTIN_PROVIDERS:
+            canonical_id = _canonical_provider_id(p)
+            if canonical_id not in out:
+                out.append(canonical_id)
     return out
-# 299:100 0:0 20:3
+# 312:101 0:0 20:3

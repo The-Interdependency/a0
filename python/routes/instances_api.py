@@ -1,4 +1,4 @@
-# 344:42 3:17 1:4
+# 346:42 3:17 1:4
 # DOC module: instances_api
 # DOC label: Model Instances
 # DOC description: CRUD for model instances (D&D party), per-instance memory, task board, and chat/archive sub-routes.
@@ -37,7 +37,7 @@ from sqlalchemy import text as _sql
 from ..database import get_session
 from ._admin_gate import require_admin
 from ..services.agent_instance import AgentInstance
-from ..services.model_catalog import resolve_model_id
+from ..services.model_catalog import resolve_model_id, visible_provider_specs
 
 router = APIRouter(prefix="/api/v1", tags=["instances"])
 _log = logging.getLogger("a0p.instances_api")
@@ -99,12 +99,12 @@ def _provider_data() -> dict:
 async def list_models():
     """All models from providers.json, grouped by vendor.
 
-    Returns flagship models from providers{} plus all sub-models referenced
-    in presets{} so every model that can be used in a slot or preset can also
-    be instantiated and given instance memory.
+    Returns visible flagship models from providers{} plus all sub-models
+    referenced in their presets{} so every selectable model can be instantiated
+    and given instance memory without exposing hidden compatibility aliases.
     """
     data = _provider_data()
-    providers = data.get("providers", {})
+    providers = visible_provider_specs(data.get("providers", {}))
     presets = data.get("presets", {})
 
     # Build per-provider capability index for preset sub-model entries.
@@ -141,6 +141,8 @@ async def list_models():
 
     # Sub-models from presets that aren't already in the flagship list.
     for pid, preset_map in presets.items():
+        if pid not in provider_meta:
+            continue
         meta = provider_meta.get(pid, {})
         vendor = meta.get("vendor", "unknown")
         for _preset_name, slot_map in preset_map.items():
@@ -460,4 +462,4 @@ async def get_archives(iid: str):
     return [{"id": str(r["id"]), "label": r["label"],
              "archived_at": str(r["archived_at"]), "merge_status": r["merge_status"]}
             for r in rows]
-# 344:42 3:17 1:4
+# 346:42 3:17 1:4

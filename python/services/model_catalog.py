@@ -1,4 +1,4 @@
-# 164:104 0:0 7:1
+# 166:105 0:0 7:1
 """model_catalog — single source of truth for "what models can this user use".
 
 Today three surfaces answer this question independently:
@@ -28,7 +28,7 @@ from __future__ import annotations
 #   module_kind: service
 #   summary: Single source of truth for "what models can this user invoke" — unifies Forge dropdown, chat chips, and subagent spawn into one tier-gated, provenance-annotated model list plus model_id resolution.
 #   owner: Erin Spencer
-#   public_surface: resolve_model_id, resolve_routed_model, routed_model_owner, is_provider_enabled, list_models_for_user
+#   public_surface: resolve_model_id, resolve_routed_model, routed_model_owner, visible_provider_specs, is_provider_enabled, list_models_for_user
 #   internal_surface: _tier_ok, _resolve_static, _user_tier
 #   auth_boundary: none
 #   storage_boundary: read
@@ -52,7 +52,7 @@ from __future__ import annotations
 #
 # id: catalog_legacy_model_aliases_canonicalize
 #   given: a persisted or explicitly requested model id is a registry-declared legacy alias
-#   then: catalog resolution attributes it to the canonical provider and transport uses that provider's current primary model
+#   then: catalog resolution attributes it to the canonical provider, transport uses that provider's current primary model, and hidden provider aliases are omitted from registry-backed rosters
 #   class: correctness
 #   since: 2026-09-10
 # === END CONTRACTS ===
@@ -68,6 +68,11 @@ from .energy_registry import (
 # Canonical tiers in the billing layer are free / supporter / ws / admin
 # (see python/routes/chat.py:_ranks, python/services/stripe_service.py).
 _TIER_ORDER = {"free": 0, "supporter": 1, "ws": 2, "admin": 3}
+
+
+def visible_provider_specs(providers: dict[str, dict]) -> dict[str, dict]:
+    """Return provider entries intended for user-facing model rosters."""
+    return {pid: spec for pid, spec in providers.items() if not spec.get("hidden")}
 
 
 def _tier_ok(user_tier: str, min_tier: Optional[str]) -> bool:
@@ -304,4 +309,4 @@ async def list_models_for_user(user_id: Optional[str]) -> dict[str, Any]:
         })
 
     return {"user_tier": user_tier, "providers": out_providers}
-# 164:104 0:0 7:1
+# 166:105 0:0 7:1

@@ -1,4 +1,4 @@
-# 349:61 0:0 2:5
+# 364:67 0:0 2:5
 """Generic OpenAI-compatible provider transport.
 
 Provider identity, endpoint, credential name, model, API family, reasoning
@@ -14,7 +14,7 @@ from __future__ import annotations
 #   summary: Registry-driven OpenAI-compatible transport supporting Responses and Chat Completions with the shared repeat-safe tool loop.
 #   owner: Erin Spencer
 #   public_surface: call
-#   internal_surface: _call_responses, _call_chat_completions, _normalize_reasoning_effort, _response_tools
+#   internal_surface: _format_responses_messages, _call_responses, _call_chat_completions, _normalize_reasoning_effort, _response_tools
 #   auth_boundary: none
 #   storage_boundary: none
 #   network_boundary: external
@@ -56,6 +56,12 @@ from __future__ import annotations
 # id: openai_compatible_explicit_none_reasoning
 #   given: a compatible provider declares that reasoning effort none must be sent explicitly
 #   then: the Responses request carries reasoning.effort=none instead of omitting the field and activating the provider default
+#   class: correctness
+#   since: 2026-09-10
+#
+# id: openai_compatible_responses_formats_vision_input
+#   given: attachment preparation supplies OpenAI Chat-style text and image_url content parts to a Responses-family provider
+#   then: transport converts them to input_text and input_image parts before the request is sent
 #   class: correctness
 #   since: 2026-09-10
 # === END CONTRACTS ===
@@ -129,7 +135,22 @@ def _format_responses_messages(messages: list[dict]) -> list[dict]:
         role = message.get("role", "user")
         content = message.get("content", "")
         if isinstance(content, list):
-            formatted.append({"role": role, "content": content})
+            parts: list = []
+            for part in content:
+                if not isinstance(part, dict):
+                    parts.append(part)
+                    continue
+                part_type = part.get("type")
+                if part_type == "text":
+                    parts.append({"type": "input_text", "text": part.get("text", "")})
+                elif part_type == "image_url":
+                    image_url = part.get("image_url") or ""
+                    if isinstance(image_url, dict):
+                        image_url = image_url.get("url") or ""
+                    parts.append({"type": "input_image", "image_url": image_url})
+                else:
+                    parts.append(part)
+            formatted.append({"role": role, "content": parts})
         elif role in {"system", "assistant", "developer"}:
             formatted.append({"role": role, "content": content})
         else:
@@ -456,4 +477,4 @@ async def call(
         )
     finally:
         reset_caller_provider(caller_provider_token)
-# 349:61 0:0 2:5
+# 364:67 0:0 2:5

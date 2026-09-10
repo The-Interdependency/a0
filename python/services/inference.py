@@ -1,4 +1,4 @@
-# 393:157 0:0 16:15
+# 399:164 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -50,6 +50,12 @@
 #   class: correctness
 #   since: 2026-09-09
 #
+# id: inference_legacy_model_alias_memory_survives
+#   given: a canonical provider has persisted model instances stored under a declared legacy model alias
+#   then: provider memory lookup considers the canonical model and every declared alias while preferring the canonical row
+#   class: correctness
+#   since: 2026-09-10
+#
 # id: inference_compatible_provider_approval_gate
 #   given: a tool-enabled provider turn requests an external write without a grant, whether text preflight or actual dispatch identifies it
 #   then: inference returns a pending approval gate before mutation and replay bypasses text preflight only while dispatch remains limited to the gate's exact scopes
@@ -81,7 +87,8 @@ async def _instance_memory_block(provider_id: str) -> str:
     """Fetch editable instance memory for the provider's primary model.
 
     Reads instance_memory rows for the model_instances row whose model_id
-    matches this provider's model string. Also prepends swarm_context if set.
+    matches this provider's current model or a declared legacy alias. Also
+    prepends swarm_context if set.
     Returns "" when no instance exists, no entries exist, or on any error —
     so inference is never blocked by this path.
 
@@ -97,11 +104,17 @@ async def _instance_memory_block(provider_id: str) -> str:
         model_id = (spec.get("model") or "").strip()
         if not model_id:
             return ""
+        model_ids = [model_id, *(
+            alias for alias in (spec.get("model_aliases") or []) if alias != model_id
+        )]
+        model_ids.extend(pid for pid, candidate in BUILTIN_PROVIDERS.items()
+                         if candidate.get("deprecated_alias_for") == provider_id)
         async with get_session() as session:
             inst = (await session.execute(_sa_text(
                 "SELECT id, swarm_context FROM model_instances "
-                "WHERE model_id = :mid LIMIT 1"
-            ), {"mid": model_id})).mappings().first()
+                "WHERE model_id = ANY(CAST(:mids AS text[])) "
+                "ORDER BY CASE WHEN model_id = :mid THEN 0 ELSE 1 END LIMIT 1"
+            ), {"mid": model_id, "mids": model_ids})).mappings().first()
             if not inst:
                 return ""
             iid = str(inst["id"])
@@ -614,4 +627,4 @@ async def _call_anthropic(
         enable_caching=enable_caching)
 
 
-# 393:157 0:0 16:15
+# 399:164 0:0 16:15
