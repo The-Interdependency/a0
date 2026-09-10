@@ -1,4 +1,4 @@
-# 338:55 0:0 2:5
+# 342:55 0:0 2:5
 """Generic OpenAI-compatible provider transport.
 
 Provider identity, endpoint, credential name, model, API family, reasoning
@@ -372,6 +372,7 @@ async def call(
     temperature: float = 1.0,
     store: bool = False,
     pin_model_override: bool = False,
+    approval_gate_cleared: bool = False,
     progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> tuple[str, dict]:
     """Dispatch one registry-defined provider through its configured API family."""
@@ -402,9 +403,11 @@ async def call(
     base_url = str(spec.get("base_url") or "").strip() or None
     effort = _normalize_reasoning_effort(spec, reasoning_effort)
     api_family = spec.get("api_family", "responses")
+    from ..run_context import current_approval_gate_cleared
     from ..tool_distill import reset_caller_provider, set_caller_provider
 
     caller_provider_token = set_caller_provider(provider_id)
+    approval_token = current_approval_gate_cleared.set(approval_gate_cleared)
     try:
         if api_family == "responses":
             tools = _response_tools(spec.get("tool_profile", "all-responses")) if use_tools else None
@@ -438,5 +441,6 @@ async def call(
             f"Provider {provider_id!r} has unsupported api_family={api_family!r}"
         )
     finally:
+        current_approval_gate_cleared.reset(approval_token)
         reset_caller_provider(caller_provider_token)
-# 338:55 0:0 2:5
+# 342:55 0:0 2:5
