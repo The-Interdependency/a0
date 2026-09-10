@@ -1,4 +1,4 @@
-# 256:214 0:0 2:5
+# 256:215 0:0 2:5
 """EDCMbone scoring report → 200-400 word human explanation with cited
 quoted spans from the transcript. Owner-only, idempotent per report
 (UNIQUE on report_id), strict-JSON output, refund-on-failure.
@@ -407,6 +407,7 @@ async def explain_report(
                 try:
                     resolved_provider_id, _ = await resolve_model_id(str(_slot_row[0]))
                 except ValueError:
+                    # Unknown persisted slot ids intentionally use the default provider.
                     pass
     except Exception:
         pass  # fall back to default on any DB error
@@ -525,4 +526,4 @@ def _credits_view(row: Dict[str, Any]) -> Dict[str, Any]:
 #          rolls it up by provider in the paid_explainer section
 #   class: correctness
 # === END CONTRACTS ===
-# 256:214 0:0 2:5
+# 256:215 0:0 2:5
