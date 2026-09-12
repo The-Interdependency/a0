@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://a0p.replit.app/</loc>
+    <loc>https://replit.interdependentway.org/</loc>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://a0p.replit.app/pricing</loc>
+    <loc>https://replit.interdependentway.org/pricing</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://a0p.replit.app/splash</loc>
+    <loc>https://replit.interdependentway.org/splash</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>

@@ -1,4 +1,4 @@
-// 365:7 0:3 0:6
+// 376:7 0:3 0:6
 // N:M
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -64,6 +64,7 @@ interface InstanceRow {
 }
 
 interface PrefsRes { orchestration_mode?: string; cut_mode?: string; providers?: string[] }
+interface PublicCapabilities { chat_attachments: boolean }
 
 export function ChatInput({
   onSend,
@@ -84,6 +85,11 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedInstances, setSelectedInstances] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const capabilitiesQ = useQuery<PublicCapabilities>({
+    queryKey: ["/api/v1/public/capabilities"],
+    staleTime: Infinity,
+  });
+  const attachmentsEnabled = capabilitiesQ.data?.chat_attachments === true;
 
   const instancesQ = useQuery<InstanceRow[]>({
     queryKey: ["/api/v1/agents/instances"],
@@ -144,6 +150,7 @@ export function ChatInput({
   }, [uploadOne]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!attachmentsEnabled) return;
     const items = e.clipboardData?.items;
     if (!items) return;
     const files: File[] = [];
@@ -157,7 +164,7 @@ export function ChatInput({
       e.preventDefault();
       void handleFiles(files);
     }
-  }, [handleFiles]);
+  }, [attachmentsEnabled, handleFiles]);
 
   const removeAttachment = (id: number) => {
     setAttachments((prev) => {
@@ -349,30 +356,34 @@ export function ChatInput({
       )}
 
       <div className="flex gap-2 items-end">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPT_ATTR}
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) void handleFiles(e.target.files);
-            if (fileInputRef.current) fileInputRef.current.value = "";
-          }}
-          data-testid="input-file-attach"
-        />
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading || isSending}
-          className="shrink-0"
-          aria-label="Attach file"
-          title="Attach image or document"
-          data-testid="btn-attach"
-        >
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-        </Button>
+        {attachmentsEnabled && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPT_ATTR}
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) void handleFiles(e.target.files);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+              data-testid="input-file-attach"
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || isSending}
+              className="shrink-0"
+              aria-label="Attach file"
+              title="Attach image or document"
+              data-testid="btn-attach"
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+            </Button>
+          </>
+        )}
         <Textarea
           ref={textareaRef}
           value={input}
@@ -398,4 +409,4 @@ export function ChatInput({
   );
 }
 // N:M
-// 365:7 0:3 0:6
+// 376:7 0:3 0:6

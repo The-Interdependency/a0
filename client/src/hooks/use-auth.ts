@@ -1,9 +1,12 @@
-// 50:0 0:2 0:3
+// 53:0 0:2 0:3
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { User } from "@shared/models/auth";
 
-export type SafeUser = Omit<User, "passphraseHash">;
+export type SafeUser = Pick<
+  User,
+  "id" | "username" | "email" | "displayName" | "role" | "isActive" | "subscriptionTier"
+>;
 
 async function fetchUser(): Promise<SafeUser | null> {
   const response = await fetch("/api/auth/user", { credentials: "include" });
@@ -56,4 +59,4 @@ export function useAuth() {
     isLoggingOut: logoutMutation.isPending,
   };
 }
-// 50:0 0:2 0:3
+// 53:0 0:2 0:3

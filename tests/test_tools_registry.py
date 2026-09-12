@@ -1,4 +1,4 @@
-# 37:7 0:0 0:0
+# 54:7 0:0 0:0
 # DOC module: tests.test_tools_registry
 # DOC label: Tools registry
 # DOC description: Self-declaring per-tool module discovery — every file in
@@ -12,7 +12,8 @@ import os
 import pytest
 
 from python.services import tools as tools_pkg
-from python.services.tool_executor import TOOL_SCHEMAS_CHAT
+from python.services.tool_executor import TOOL_SCHEMAS_CHAT, get_active_chat_schemas
+from python.services.run_context import current_user_tier
 
 
 _TOOLS_DIR = os.path.dirname(tools_pkg.__file__)
@@ -57,4 +58,23 @@ def test_skill_tools_still_present():
     names = {t["function"]["name"] for t in TOOL_SCHEMAS_CHAT}
     assert "skill_recommend" in names
     assert "skill_load" in names
-# 37:7 0:0 0:0
+
+
+def test_runtime_tool_schemas_enforce_account_tier():
+    token = current_user_tier.set("free")
+    try:
+        free_names = {item["function"]["name"] for item in get_active_chat_schemas()}
+        assert "edcm_score" in free_names
+        assert "bash_run" not in free_names
+        assert "image_generate" not in free_names
+        assert "sub_agent_spawn" not in free_names
+    finally:
+        current_user_tier.reset(token)
+
+    token = current_user_tier.set("admin")
+    try:
+        admin_names = {item["function"]["name"] for item in get_active_chat_schemas()}
+        assert {"bash_run", "image_generate", "sub_agent_spawn"} <= admin_names
+    finally:
+        current_user_tier.reset(token)
+# 54:7 0:0 0:0

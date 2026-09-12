@@ -9,11 +9,11 @@
 #   owner: Erin Spencer
 #   public_surface: SCHEMA, handle
 #   internal_surface: none
-#   auth_boundary: none
+#   auth_boundary: admin tier
 #   storage_boundary: none
 #   network_boundary: none
 #   user_data_boundary: none
-#   admin_only: false
+#   admin_only: true
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; removes the pcna_infer tool from the registry.
@@ -43,7 +43,7 @@ SCHEMA = {
             "required": ["signal"],
         },
     },
-    "tier": "free",
+    "tier": "admin",
     "approval_scope": None,
     "enabled": True,
     "category": "pcna",

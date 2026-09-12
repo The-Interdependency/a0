@@ -1,4 +1,4 @@
-# 321:53 0:7 1:9
+# 326:53 0:7 1:9
 # DOC module: focus
 # DOC label: Focus
 # DOC description: Model focus management. Provides context boost injection per conversation, focus regain directives, per-conversation tool selection, and system prompt preview.
@@ -133,6 +133,11 @@ async def regain_focus(conv_id: int, request: Request):
         provider_id, _ = await _rmi(_candidate)
     except ValueError:
         provider_id = _candidate
+    from ..services import public_access_policy
+    try:
+        public_access_policy.enforce_public_provider_policy(tier, "single", [provider_id])
+    except public_access_policy.PublicAccessDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
 
     user_msg = await storage.create_message({
         "conversation_id": conv_id,
@@ -449,4 +454,4 @@ async def get_prompt_sections(conv_id: int, request: Request):
     sections["has_messages"] = has_messages
     sections["conversation_id"] = conv_id
     return sections
-# 321:53 0:7 1:9
+# 326:53 0:7 1:9

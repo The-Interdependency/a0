@@ -9,7 +9,7 @@
 #   owner: Erin Spencer
 #   public_surface: SCHEMA, handle
 #   internal_surface: none
-#   auth_boundary: none
+#   auth_boundary: working-set or admin tier
 #   storage_boundary: write
 #   network_boundary: external
 #   user_data_boundary: none
@@ -56,7 +56,7 @@ SCHEMA = {
             "required": ["prompt"],
         },
     },
-    "tier": "free",
+    "tier": "ws",
     "approval_scope": None,
     "enabled": True,
     "category": "media",

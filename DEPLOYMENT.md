@@ -2,7 +2,7 @@
 
 ## Overview
 
-Every push to `main` automatically builds a Docker image and deploys to Cloud Run via GitHub Actions (`.github/workflows/deploy.yml`). Alternatively, use `cloudbuild.yaml` for a GCP-native trigger.
+Every push to `main` runs release checks. After the explicit deployment opt-in is configured, GitHub Actions (`.github/workflows/deploy.yml`) builds the image and deploys it to Cloud Run.
 
 ---
 
@@ -75,6 +75,8 @@ values.
 ```bash
 echo -n "postgres://..." | gcloud secrets create a0p-database-url --data-file=-
 echo -n "your-session-secret" | gcloud secrets create a0p-session-secret --data-file=-
+echo -n "your-separate-internal-api-secret" | gcloud secrets create a0p-internal-api-secret --data-file=-
+echo -n "owner@example.com" | gcloud secrets create a0p-admin-email --data-file=-
 echo -n "xai-key" | gcloud secrets create a0p-xai-api-key --data-file=-
 echo -n "deepseek-key" | gcloud secrets create a0p-deepseek-api-key --data-file=-
 echo -n "sk_live_..." | gcloud secrets create a0p-stripe-secret-key --data-file=-
@@ -84,7 +86,7 @@ echo -n "whsec_..." | gcloud secrets create a0p-stripe-webhook-secret --data-fil
 Grant the service account access to each secret:
 
 ```bash
-for SECRET in a0p-database-url a0p-session-secret a0p-xai-api-key a0p-deepseek-api-key a0p-stripe-secret-key a0p-stripe-webhook-secret; do
+for SECRET in a0p-database-url a0p-session-secret a0p-internal-api-secret a0p-admin-email a0p-xai-api-key a0p-deepseek-api-key a0p-stripe-secret-key a0p-stripe-webhook-secret; do
   gcloud secrets add-iam-policy-binding $SECRET \
     --member="serviceAccount:$SA" \
     --role="roles/secretmanager.secretAccessor"
@@ -98,11 +100,13 @@ Options:
 - **Neon** (recommended for serverless): provision a database, copy the connection string into `a0p-database-url`
 - **Cloud SQL**: add `--add-cloudsql-instances` to the `gcloud run deploy` command and use the Unix socket path
 
-### 7. Auth provider (important)
+### 7. Authentication
 
-Replit Auth (OIDC) will not work outside Replit. Before going live on Cloud Run you must:
-1. Add a Google OAuth 2.0 client ID in GCP Console → APIs & Services → Credentials
-2. Swap the auth provider in `server/replit_integrations/auth.ts` to use `passport-google-oauth20`
+a0p uses its repository-owned username/passphrase and PostgreSQL session flow;
+it does not depend on Replit Auth. Set a unique production `SESSION_SECRET`,
+keep `ADMIN_EMAIL` limited to the owner account, and verify registration,
+sign-in, sign-out, and recovery against the production database before mapping
+the public domain.
 
 ---
 
@@ -153,7 +157,26 @@ docker build -t a0p:local .
 docker run -p 5000:5000 \
   -e DATABASE_URL="..." \
   -e SESSION_SECRET="..." \
+  -e INTERNAL_API_SECRET="a-different-random-secret" \
   -e XAI_API_KEY="..." \
   -e DEEPSEEK_API_KEY="..." \
   a0p:local
 ```
+
+### Public-access controls
+
+The donation-funded public boundary is conservative by default and can be
+tuned without code changes:
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `APP_ORIGIN` | canonical hostname | Trusted origin for Stripe returns; set explicitly in production |
+| `PUBLIC_PROVIDER_ALLOWLIST` | economical built-ins | Comma-separated provider IDs available to free users |
+| `PUBLIC_GUEST_PROVIDER` | active provider | Optional economical provider pinned for the guest preview |
+| `PUBLIC_MAX_PROVIDER_LANES` | `2` | Maximum provider calls in one free-tier orchestration or Fleet run |
+| `PUBLIC_MODEL_REQUEST_LIMIT` | `24` | Authenticated model-starting requests per window |
+| `PUBLIC_MODEL_WINDOW_SECONDS` | `3600` | Authenticated request-limit window |
+| `GUEST_TOKEN_LIMIT` | `2000` | Conservative pre-reserved guest tokens per hour and IP |
+| `AUTH_LOGIN_ATTEMPT_LIMIT` | `10` | Sign-in attempts per 15-minute window |
+| `AUTH_SIGNUP_ATTEMPT_LIMIT` | `5` | Account-creation attempts per hour |
+| `A0_PERSISTENT_UPLOADS_ENABLED` | unset | Show and accept chat attachments only after `uploads/` is durable shared storage |

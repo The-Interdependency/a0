@@ -1,21 +1,30 @@
 # Security Policy
 
-## Supported Versions
+## Supported code
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Security fixes target the current `main` branch and any active public a0p deployment.
+Older commits, forks, local installations, and retired releases are not
+independently supported.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## Report a vulnerability privately
 
-## Reporting a Vulnerability
+Email `wayseer@interdependentway.org` with the subject `a0p security report`.
+Please do not open a public issue for an unpatched vulnerability or include
+credentials, private conversation content, or personal data in GitHub.
 
-Use this section to tell people how to report a vulnerability.
+Include the affected URL or component, reproduction steps, likely impact, and
+the least-sensitive proof needed to verify the report. Do not access another
+person's data, execute destructive actions, or incur provider charges while
+testing.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+We aim to acknowledge a report within three business days and provide a status
+update within seven business days. Confirmed issues are prioritized by impact;
+credit is offered when requested and when disclosure does not create additional
+risk.
+
+## Public-data incidents
+
+If source control, a build artifact, or a deployment exposes user-generated
+content, report it through the same private address. Treat the affected data as
+compromised until it has been removed from the live surface and repository
+history and any exposed credentials have been rotated.

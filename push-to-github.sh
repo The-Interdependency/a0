@@ -5,10 +5,10 @@ echo "==> Removing stale git lock if present..."
 rm -f .git/index.lock
 
 echo "==> Staging CI/CD files..."
-git add Dockerfile .github/ cloudbuild.yaml DEPLOYMENT.md
+git add Dockerfile .github/ DEPLOYMENT.md
 
 echo "==> Committing..."
-git commit -m "Add Dockerfile, GitHub Actions, Cloud Build, and deployment guide"
+git commit -m "Add Dockerfile, GitHub Actions, and deployment guide"
 
 echo "==> Setting up GitHub remote..."
 git remote remove origin 2>/dev/null || true
