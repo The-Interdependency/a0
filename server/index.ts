@@ -1,4 +1,4 @@
-// 274:32 0:1 0:3
+// 309:35 0:1 0:3
 import "./types.d.ts";
 import path from "path";
 import fs from "fs";
@@ -6,6 +6,7 @@ import crypto from "crypto";
 import { spawn, type ChildProcess } from "child_process";
 import type { Server } from "http";
 import express from "express";
+import helmet from "helmet";
 import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import {
   setupAuth,
@@ -14,6 +15,10 @@ import {
   seedAdminUser,
 } from "./auth";
 import { registerAttachmentRoutes } from "./attachments";
+import {
+  consumePublicRateLimit,
+  isMeteredPublicModelPath,
+} from "./auth/serv_auth_rate_limt_v0.0.0alpha";
 import { db } from "./db";
 import { messageAttachments } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -23,6 +28,20 @@ const PORT = parseInt(process.env.PORT ?? "5000", 10);
 const PYTHON_URL = "http://localhost:8001";
 const VITE_URL = "http://localhost:5001";
 const IS_PROD = process.env.NODE_ENV === "production";
+
+app.disable("x-powered-by");
+app.use(helmet({
+  // Stripe Checkout loads its own scripts and frames. Keep the high-value
+  // transport/sniffing/frame headers now; define a complete Stripe-aware CSP
+  // separately instead of shipping a policy that breaks donations.
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  frameguard: { action: "deny" },
+  referrerPolicy: { policy: "no-referrer" },
+  strictTransportSecurity: IS_PROD
+    ? { maxAge: 31_536_000, includeSubDomains: true }
+    : false,
+}));
 const _ENV_INTERNAL_SECRET = process.env.INTERNAL_API_SECRET;
 if (!_ENV_INTERNAL_SECRET && IS_PROD) {
   throw new Error(
@@ -240,6 +259,27 @@ void (async () => {
     res.status(404).json({ error: "Not found" });
   });
 
+  app.use("/api", async (req, res, next) => {
+    const userId = req.session?.userId;
+    const isOwner = req.session?.userRole === "admin";
+    if (!userId || isOwner || !isMeteredPublicModelPath(req.method, req.originalUrl)) {
+      return next();
+    }
+    try {
+      const rate = await consumePublicRateLimit(req, "model", userId);
+      if (!rate.allowed) {
+        res.setHeader("Retry-After", String(rate.retryAfterSeconds));
+        return res.status(429).json({
+          error: "Public model-request limit reached. Please wait and try again.",
+        });
+      }
+      return next();
+    } catch (error) {
+      console.error("[rate-limit] public model gate failed:", error);
+      return res.status(503).json({ error: "Public request gate unavailable" });
+    }
+  });
+
   app.use(
     "/api",
     (req, _res, next) => {
@@ -334,4 +374,4 @@ void (async () => {
 });
 
 export default app;
-// 274:32 0:1 0:3
+// 309:35 0:1 0:3

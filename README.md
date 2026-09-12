@@ -1,6 +1,6 @@
 # a0p — a research instrument
 
-**a0p is a research instrument, not a product.** It is the deployed instance of `a0` (this codebase) running publicly at [replit.interdependentway.org](https://replit.interdependentway.org). It explores agent / energy-provider / PCNA dynamics in the open. Anyone may read and use it. Code-altering access is restricted to the owner and a small set of explicitly-invited collaborators. The instrument is funded by donations; it does not solicit subscribers.
+**a0p is a research instrument, not a product.** It is the public-facing instance of `a0` (this codebase), now being prepared for a controlled public release. It explores agent / energy-provider / PCNA dynamics in the open. Public use remains free; code-altering access is restricted to the owner and a small set of explicitly invited collaborators. The instrument is funded by donations and does not solicit subscribers. See [PUBLIC_RELEASE.md](PUBLIC_RELEASE.md) for the live-release gate instead of assuming that a historical hostname is healthy.
 
 > **Naming:** `a0` = the project / runtime / repository (used in contributor-facing material). `a0p` = the deployed instance of `a0` (used in user-facing UI copy and billing). The thing you build is `a0`; the thing that runs is `a0p`.
 
@@ -52,7 +52,7 @@ The frontend has zero hardcoded tabs. Every Python route module declares `UI_MET
 
 ## Access Model
 
-- **Reading and using the app is free for everyone.** Every tab is open. There is no paywall and donations do not unlock anything.
+- **Public use is free.** Donations do not unlock instrument capabilities. Public routes are bounded for privacy, abuse, and provider cost; shared-state mutation remains closed.
 - **Operator tier** — `@interdependentway.org` accounts are auto-promoted to `ws` on login.
 - **Owner-only ("admin") write endpoints** govern actions that mutate shared instrument state: agent state, learning state, system configuration, and module toggles. Per-user CRUD on your own data is not admin-gated. The static contract lives in `python/tests/contracts/gating.py`.
 
@@ -66,7 +66,7 @@ a0p runs on donations. There is no subscription tier and no perk unlocked by don
 
 > "I don't have the cash required for 501c3 status, so I have to report it for taxes, but every tax payer is allowed to claim up to five hundred dollars in charitable donations per year without receipts required."
 
-To donate, visit [a0p/pricing](https://replit.interdependentway.org/pricing). Minimum $5.
+When the public deployment is healthy, its Pricing page accepts donations. Minimum $5.
 
 The only productized service is the **EDCMbone transcript explainer** — a one-off paid analysis ($50 for 3 explanations, ~$16.67 each) priced against the operator's $1,000/hr benchmark.
 

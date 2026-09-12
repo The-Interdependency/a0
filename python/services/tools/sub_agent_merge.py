@@ -10,11 +10,11 @@
 #   owner: Erin Spencer
 #   public_surface: SCHEMA, handle
 #   internal_surface: none
-#   auth_boundary: none
+#   auth_boundary: admin tier until run ownership is enforced inside the merge tool
 #   storage_boundary: write
 #   network_boundary: internal
 #   user_data_boundary: write
-#   admin_only: false
+#   admin_only: true
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; removes the sub_agent_merge tool from the registry.
@@ -52,7 +52,7 @@ SCHEMA = {
             "required": [],
         },
     },
-    "tier": "free",
+    "tier": "admin",
     "approval_scope": None,
     "enabled": True,
     "category": "agent",

@@ -1,14 +1,14 @@
-# 672:191 2:7 2:16
+# 675:191 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from ..storage import storage
 from ..services.energy_registry import active_provider, BUILTIN_PROVIDERS, cache_breakdown, estimate_cost
 from ..services.inference import call_provider
-from ..services import approval_gate_service
+from ..services import approval_gate_service, public_access_policy
 from ..services.prompt_assembly import build_system_prompt
 from ..services.bg_tasks import spawn as _spawn_bg
 
@@ -122,7 +122,7 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 
 class CreateConversation(BaseModel):
-    title: str = "New Chat"
+    title: str = Field(default="New Chat", min_length=1, max_length=200)
     # null → resolve from current active_provider at creation. No silent
     # default to "gemini" — the global active_provider is the single source
     # of truth (set via POST /api/agents/active-provider).
@@ -132,20 +132,20 @@ class CreateConversation(BaseModel):
 
 
 class UpdateConversation(BaseModel):
-    title: str
+    title: str = Field(min_length=1, max_length=200)
 
 
 class SendMessage(BaseModel):
-    content: str
-    model: Optional[str] = None
+    content: str = Field(min_length=1, max_length=16000)
+    model: Optional[str] = Field(default=None, max_length=120)
     agent_id: Optional[int] = None
-    attachment_ids: list[int] = []
-    orchestration_mode: Optional[str] = None  # single|fan_out|council|daisy_chain|...
-    cut_mode: Optional[str] = None  # off|soft|hard
-    providers: Optional[list[str]] = None  # used when mode != single
+    attachment_ids: list[int] = Field(default_factory=list, max_length=10)
+    orchestration_mode: Optional[str] = Field(default=None, max_length=40)  # single|fan_out|council|daisy_chain|...
+    cut_mode: Optional[str] = Field(default=None, max_length=16)  # off|soft|hard
+    providers: Optional[list[str]] = Field(default=None, max_length=8)  # used when mode != single
     # Client UUID per send; multi-model path publishes lifecycle events to
     # /api/v1/orchestration/{client_run_id}/stream for live token meters.
-    client_run_id: Optional[str] = None
+    client_run_id: Optional[str] = Field(default=None, max_length=128)
 
 
 def _caller_uid(request: Request) -> Optional[str]:
@@ -422,6 +422,9 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                     status_code=403,
                     detail=f"Model '{_pid}' requires tier '{_mt}' or higher (current: {tier})",
                 )
+        public_access_policy.enforce_public_provider_policy(
+            tier, _mode_for_gate, providers_to_gate
+        )
 
         # Parse both up front. Explicit per-gate approval takes priority
         # over scope grant — scope only helps FUTURE gates, while the user
@@ -913,7 +916,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
     except Exception as exc:
         tb = traceback.format_exc()
         print(f"[chat] send_message error: {exc}\n{tb}")
-        raise HTTPException(status_code=500, detail=f"Chat error: {exc}")
+        raise HTTPException(status_code=500, detail="Chat request failed")
 
 
 # === CONTRACTS ===
@@ -945,4 +948,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   then: the route removes its staged message and returns HTTP 403 instead of leaving a dangling turn or returning 500
 #   class: security
 # === END CONTRACTS ===
-# 672:191 2:7 2:16
+# 675:191 2:7 2:16

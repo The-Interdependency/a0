@@ -71,6 +71,7 @@
       "max_tokens": 64000,
       "supports_streaming": true,
       "supports_prompt_caching": true,
+      "min_tier": "ws",
       "pricing_url": "https://www.anthropic.com/pricing",
       "supports_vision": false
     },
@@ -111,6 +112,7 @@
       "supports_store": true,
       "supports_vision": true,
       "api_family": "responses",
+      "min_tier": "ws",
       "pricing_url": "https://openai.com/api/pricing/",
       "note": "GPT-5.5 frontier model; 1M context; cached input 90% off (automatic on >=1024 token prefixes); released Apr 2026.",
       "min_reasoning_effort": "low"
@@ -132,6 +134,7 @@
       "supports_store": true,
       "supports_vision": true,
       "api_family": "responses",
+      "min_tier": "ws",
       "pricing_url": "https://openai.com/api/pricing/",
       "note": "GPT-5.5 Pro highest-accuracy variant; 1M context; FrontierMath Tier 4 SOTA at release; reserve for PCNA-critical merges and hardest reasoning.",
       "min_reasoning_effort": "high",

@@ -9,7 +9,7 @@
 #   owner: Erin Spencer
 #   public_surface: SCHEMA, handle
 #   internal_surface: none
-#   auth_boundary: none
+#   auth_boundary: working-set or admin tier until persisted tool results carry owner ids
 #   storage_boundary: read
 #   network_boundary: internal
 #   user_data_boundary: read
@@ -55,7 +55,7 @@ SCHEMA = {
             "required": ["call_id"],
         },
     },
-    "tier": "free",
+    "tier": "ws",
     "approval_scope": None,
     "enabled": True,
     "category": "introspection",

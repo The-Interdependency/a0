@@ -1,15 +1,18 @@
-# 32:6 1:1 1:2
+# 40:6 1:1 1:2
 # DOC module: guest
 # DOC label: Guest Chat
 # DOC description: Unauthenticated preview chat endpoint that routes through the currently active provider.
 # DOC tier: free
 # DOC role: route
 # DOC endpoint: POST /api/v1/guest/chat | Send one guest preview message.
+import os
+
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..services.inference import call_provider
 from ..services.energy_registry import active_provider
+from ..services import public_access_policy
 
 router = APIRouter(prefix="/api/v1/guest", tags=["guest"])
 
@@ -21,7 +24,7 @@ SYSTEM_PROMPT = (
 
 
 class GuestChatBody(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=4000)
 
 
 @router.post("/chat")
@@ -30,15 +33,21 @@ async def guest_chat(body: GuestChatBody):
         raise HTTPException(status_code=400, detail="message is required")
 
     try:
-        provider_id = await active_provider()
+        provider_id = os.environ.get("PUBLIC_GUEST_PROVIDER") or await active_provider()
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    try:
+        public_access_policy.enforce_public_provider_policy("free", "single", [provider_id])
+    except public_access_policy.PublicAccessDenied as exc:
+        raise HTTPException(status_code=503, detail="Guest preview provider is unavailable") from exc
 
     content, usage = await call_provider(
         provider_id=provider_id,
         messages=[{"role": "user", "content": body.message.strip()}],
         system_prompt=SYSTEM_PROMPT,
         max_tokens=512,
+        use_tools=False,
+        skip_manifest=True,
     )
 
     prompt_tokens = usage.get("prompt_tokens") or usage.get("input_tokens", 0)
@@ -48,4 +57,4 @@ async def guest_chat(body: GuestChatBody):
         tokens_used = max(10, len(body.message.split()) + len(content.split()))
 
     return {"content": content, "tokens_used": tokens_used}
-# 32:6 1:1 1:2
+# 40:6 1:1 1:2

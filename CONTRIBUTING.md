@@ -36,7 +36,7 @@ Grounding files: `README.md`, `package.json`, `pyproject.toml`.
 
 ## How access works for contributors
 
-> Naming reminder: `a0` is this project / repository; `a0p` is the deployed instance of `a0` running publicly. See "Project name: `a0` vs `a0p`" in `README.md`.
+> Naming reminder: `a0` is this project / repository; `a0p` is its public-facing deployment name. See `README.md` and `PUBLIC_RELEASE.md` before describing an instance as live.
 
 The deployed instance (`a0p`) is open to read and use; donations do not unlock anything. You will not hit a paywall by signing up. However, a small set of write endpoints are owner-only because they mutate shared research-instrument state (agent state, learning state, system configuration). The full posture is described in `README.md` under "Access model" and the contract lives in `python/services/gating.py`.
 

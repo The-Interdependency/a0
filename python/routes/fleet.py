@@ -1,4 +1,4 @@
-# 392:33 2:10 1:4
+# 400:33 2:10 1:4
 # N:M
 """Fleet benchmarking — head-to-head comparison of model/agent/orchestration tuples.
 
@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text as _sa_text
 
 from ..database import get_session
+from ..services import public_access_policy
 from ..services.inference_modes import run_inference_with_mode
 from ..services.energy_registry import cache_breakdown, estimate_cost
 
@@ -99,16 +100,16 @@ async def _get_owned_contestant(cid: int, uid: str) -> dict:
 # ---------- Benchmark CRUD ----------
 
 class CreateBenchmark(BaseModel):
-    name: str
-    prompt: str = ""
+    name: str = Field(min_length=1, max_length=120)
+    prompt: str = Field(default="", max_length=16000)
     mode: str = "one_shot"
     judge_enabled: bool = False
     judge_model: Optional[str] = None
 
 
 class UpdateBenchmark(BaseModel):
-    name: Optional[str] = None
-    prompt: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    prompt: Optional[str] = Field(default=None, max_length=16000)
     mode: Optional[str] = None
     judge_enabled: Optional[bool] = None
     judge_model: Optional[str] = None
@@ -201,21 +202,21 @@ async def delete_benchmark(bid: int, request: Request):
 # ---------- Contestant CRUD ----------
 
 class CreateContestant(BaseModel):
-    label: str = ""
-    provider_id: str
-    model_id: str = ""
+    label: str = Field(default="", max_length=120)
+    provider_id: str = Field(min_length=1, max_length=80)
+    model_id: str = Field(default="", max_length=120)
     agent_id: Optional[int] = None
     orchestration_mode: str = "single"
-    providers: list[str] = Field(default_factory=list)
+    providers: list[str] = Field(default_factory=list, max_length=8)
 
 
 class UpdateContestant(BaseModel):
-    label: Optional[str] = None
-    provider_id: Optional[str] = None
-    model_id: Optional[str] = None
+    label: Optional[str] = Field(default=None, max_length=120)
+    provider_id: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    model_id: Optional[str] = Field(default=None, max_length=120)
     agent_id: Optional[int] = None
     orchestration_mode: Optional[str] = None
-    providers: Optional[list[str]] = None
+    providers: Optional[list[str]] = Field(default=None, max_length=8)
     slot: Optional[int] = None
 
 
@@ -318,7 +319,7 @@ async def delete_contestant(cid: int, request: Request):
 # ---------- Run fan-out ----------
 
 class StartRun(BaseModel):
-    prompt: Optional[str] = None  # override; falls back to benchmark.prompt
+    prompt: Optional[str] = Field(default=None, max_length=16000)  # override; falls back to benchmark.prompt
 
 
 async def _run_one_contestant(
@@ -421,8 +422,16 @@ async def start_run(bid: int, body: StartRun, request: Request):
         contestants = (await sess.execute(_sa_text(
             "SELECT * FROM fleet_contestants WHERE benchmark_id = :id ORDER BY slot"
         ), {"id": bid})).mappings().all()
+        tier = (await sess.execute(_sa_text(
+            "SELECT subscription_tier FROM users WHERE id = :uid"
+        ), {"uid": uid})).scalar_one_or_none() or "free"
     if not contestants:
         raise HTTPException(status_code=400, detail="benchmark has no contestants")
+
+    try:
+        public_access_policy.enforce_public_fleet_policy(tier, contestants)
+    except public_access_policy.PublicAccessDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
 
     run_id = f"fbr-{uuid.uuid4().hex[:16]}"
     async with get_session() as sess:
@@ -488,4 +497,4 @@ async def list_runs(bid: int, request: Request):
             "WHERE benchmark_id = :bid ORDER BY started_at DESC LIMIT 50"
         ), {"bid": bid})).mappings().all()
     return [dict(r) for r in rows]
-# 392:33 2:10 1:4
+# 400:33 2:10 1:4

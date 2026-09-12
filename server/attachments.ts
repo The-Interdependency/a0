@@ -1,4 +1,4 @@
-// 104:4 2:1 2:2
+// 113:4 2:1 2:2
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
@@ -9,6 +9,9 @@ import { messageAttachments } from "@shared/schema";
 
 const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+const ATTACHMENTS_ENABLED =
+  process.env.NODE_ENV !== "production" ||
+  process.env.A0_PERSISTENT_UPLOADS_ENABLED === "true";
 
 const IMAGE_MIME = new Set([
   "image/png", "image/jpeg", "image/webp", "image/gif",
@@ -61,10 +64,17 @@ const upload = multer({
 });
 
 export function registerAttachmentRoutes(app: Express) {
+  app.get("/api/v1/public/capabilities", (_req, res) => {
+    res.json({ chat_attachments: ATTACHMENTS_ENABLED });
+  });
+
   app.post("/api/v1/attachments", (req: Request, res: Response) => {
     const userId = req.session?.userId;
     if (!userId) {
       return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (!ATTACHMENTS_ENABLED) {
+      return res.status(503).json({ error: "Attachments are unavailable until persistent storage is configured" });
     }
     upload.single("file")(req, res, async (err: unknown) => {
       if (err) {
@@ -94,7 +104,7 @@ export function registerAttachmentRoutes(app: Express) {
       } catch (e) {
         try {
           const safeGeneratedName = file.filename || "";
-          const hasExpectedNameFormat = /^[a-f0-9]{32}\.[a-z0-9]+$/i.test(safeGeneratedName);
+          const hasExpectedNameFormat = /^att-[a-f0-9]{24}\.[a-z0-9]+$/i.test(safeGeneratedName);
 
           if (hasExpectedNameFormat) {
             const candidatePath = path.resolve(path.join(UPLOADS_DIR, safeGeneratedName));
@@ -109,10 +119,10 @@ export function registerAttachmentRoutes(app: Express) {
             }
           }
         } catch {}
-        const msg = e instanceof Error ? e.message : "db insert failed";
-        res.status(500).json({ error: msg });
+        console.error("[attachments] metadata insert failed:", e);
+        res.status(500).json({ error: "Attachment could not be saved" });
       }
     });
   });
 }
-// 104:4 2:1 2:2
+// 113:4 2:1 2:2

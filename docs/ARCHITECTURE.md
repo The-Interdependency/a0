@@ -71,7 +71,7 @@ React + Vite + TypeScript, Tailwind CSS, shadcn/ui. Fully metadata-driven consol
 ### Console-Tab Regression Guards
 - `tests/e2e/console-tabs.spec.ts` — Playwright e2e: logs in, opens every tab, asserts `data-renderer` is never `missing`
 - `scripts/check-console-tabs.mjs` — static preflight: parses `CUSTOM_TAB_RENDERERS`, fetches `/api/v1/ui/structure`, fails on uncovered tabs. Run: `node scripts/check-console-tabs.mjs`
-- CI: `check-console-tabs` job in `.github/workflows/deploy.yml` and `cloudbuild.yaml` blocks deploy on failure
+- CI: the `check-console-tabs` job in `.github/workflows/deploy.yml` blocks deploy on failure
 
 ## Cognitive Engine Stack
 
