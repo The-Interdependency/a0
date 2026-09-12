@@ -1,4 +1,4 @@
-// 99:20 2:2 2:1
+// 100:20 2:2 2:1
 // === MODULE_BUILD ===
 // id: a0_public_request_rate_limit
 //   module_name: public request rate limit
@@ -90,42 +90,42 @@ export async function consumePublicRateLimit(
   const ipLockKey = `${probeType}:ip:${ipHash}`;
   const accountLockKey = accountHash ? `${probeType}:account:${accountHash}` : null;
 
-  // The sorted advisory locks and insert share one transaction-sized statement.
-  // Lock both dimensions so distributed callers cannot race either the IP or
-  // account limit across Cloud Run instances.
-  const result = await pool.query<{ id: number }>(
-    `WITH lock_keys AS (
-       SELECT unnest(array_remove(ARRAY[$1::text, $8::text], NULL)) AS key
-     ), gate AS MATERIALIZED (
-       SELECT pg_advisory_xact_lock(hashtextextended(key, 0))
-       FROM lock_keys
-       ORDER BY key
-     ), gate_ready AS (
-       SELECT COUNT(*) FROM gate
-     ), recent AS (
-       SELECT COUNT(*)::integer AS count
-       FROM security_probes, gate_ready
-       WHERE probe_type = $2
-         AND created_at >= NOW() - ($3 * INTERVAL '1 second')
-         AND (ip_hash = $4 OR ($5::varchar IS NOT NULL AND account_hash = $5))
-     )
-     INSERT INTO security_probes (probe_type, ip_hash, account_hash, detail)
-     SELECT $2, $4, $5, $6::jsonb
-     FROM recent
-     WHERE recent.count < $7
-     RETURNING id`,
-    [
-      ipLockKey,
-      probeType,
-      windowSeconds,
-      ipHash,
-      accountHash,
-      JSON.stringify({ window_seconds: windowSeconds, limit }),
-      limit,
-      accountLockKey,
-    ],
-  );
-
-  return { allowed: result.rowCount === 1, retryAfterSeconds: windowSeconds };
+  // Acquire both dimensions in a stable order, then count in a later statement.
+  // PostgreSQL assigns a statement snapshot before a blocked CTE resumes, so a
+  // single-statement lock/count/insert can miss the request that held the lock.
+  const lockKeys = [ipLockKey, accountLockKey].filter((key): key is string => Boolean(key)).sort();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const key of lockKeys) {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [key]);
+    }
+    const counts = await client.query<{ ip_count: number; account_count: number }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE ip_hash = $3)::integer AS ip_count,
+         COUNT(*) FILTER (WHERE $4::varchar IS NOT NULL AND account_hash = $4)::integer AS account_count
+       FROM security_probes
+       WHERE probe_type = $1
+         AND created_at >= clock_timestamp() - ($2 * INTERVAL '1 second')
+         AND (ip_hash = $3 OR ($4::varchar IS NOT NULL AND account_hash = $4))`,
+      [probeType, windowSeconds, ipHash, accountHash],
+    );
+    const { ip_count: ipCount, account_count: accountCount } = counts.rows[0];
+    const allowed = ipCount < limit && (!accountHash || accountCount < limit);
+    if (allowed) {
+      await client.query(
+        `INSERT INTO security_probes (probe_type, ip_hash, account_hash, detail)
+         VALUES ($1, $2, $3, $4::jsonb)`,
+        [probeType, ipHash, accountHash, JSON.stringify({ window_seconds: windowSeconds, limit })],
+      );
+    }
+    await client.query("COMMIT");
+    return { allowed, retryAfterSeconds: windowSeconds };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
-// 99:20 2:2 2:1
+// 100:20 2:2 2:1
