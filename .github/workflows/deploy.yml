@@ -91,13 +91,16 @@ jobs:
         run: npm ci
 
       - name: Install Python dependencies
-        run: uv sync --frozen --no-dev
+        run: uv sync --frozen
 
       - name: Apply database schema
         run: npm run db:push
 
       - name: Check public request limits
         run: node --import tsx scripts/chec_publ_rate_v0.0.0alpha.ts
+
+      - name: Run Python test suite
+        run: uv run pytest -q tests python/tests
 
       - name: Boot Python backend
         run: |
@@ -124,6 +127,17 @@ jobs:
           if [ -f /tmp/uvicorn.pid ]; then
             kill "$(cat /tmp/uvicorn.pid)" 2>/dev/null || true
           fi
+
+  container-build:
+    name: Production container build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build production image
+        run: docker build --tag a0p:ci .
 
   deployment-readiness:
     name: Google Cloud deployment readiness
@@ -155,7 +169,7 @@ jobs:
 
   deploy:
     name: Build, push, deploy
-    needs: [provider-contracts, check-console-tabs, deployment-readiness]
+    needs: [provider-contracts, check-console-tabs, container-build, deployment-readiness]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.GCP_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
