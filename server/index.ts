@@ -1,4 +1,4 @@
-// 309:35 0:1 0:3
+// 327:32 0:1 0:3
 import "./types.d.ts";
 import path from "path";
 import fs from "fs";
@@ -31,11 +31,26 @@ const IS_PROD = process.env.NODE_ENV === "production";
 
 app.disable("x-powered-by");
 app.use(helmet({
-  // Stripe Checkout loads its own scripts and frames. Keep the high-value
-  // transport/sniffing/frame headers now; define a complete Stripe-aware CSP
-  // separately instead of shipping a policy that breaks donations.
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      connectSrc: ["'self'", "https://api.stripe.com", "https://*.stripe.com", ...(IS_PROD ? [] : ["ws:"])],
+      fontSrc: ["'self'", "data:"],
+      formAction: ["'self'", "https://*.stripe.com"],
+      frameAncestors: ["'none'"],
+      frameSrc: ["'self'", "https://js.stripe.com", "https://hooks.stripe.com", "https://*.stripe.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      objectSrc: ["'none'"],
+      scriptSrc: ["'self'", "https://js.stripe.com"],
+      scriptSrcAttr: ["'none'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      workerSrc: ["'self'", "blob:"],
+      upgradeInsecureRequests: IS_PROD ? [] : null,
+    },
+  },
   crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
   frameguard: { action: "deny" },
   referrerPolicy: { policy: "no-referrer" },
   strictTransportSecurity: IS_PROD
@@ -374,4 +389,4 @@ void (async () => {
 });
 
 export default app;
-// 309:35 0:1 0:3
+// 327:32 0:1 0:3
