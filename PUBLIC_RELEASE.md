@@ -30,17 +30,21 @@ passes the checks below.
 3. Build the Docker image in CI, apply the database schema, run the public rate
    check, and smoke-test registration, session rotation, guest chat, signed-in
    chat, provider denial, and cross-user conversation denial against staging.
-4. Keep chat attachments disabled or visibly unavailable until `uploads/` is
+4. Require current-head CodeQL to report zero new alerts in code changed by the
+   release candidate. A green CodeQL check whose output still reports an alert
+   is not a clean security acceptance witness.
+5. Keep chat attachments disabled or visibly unavailable until `uploads/` is
    backed by durable shared storage. A Cloud Run container filesystem is
    ephemeral and cannot be treated as user storage.
-5. Do not expose system-primary memory or cross-owner matching until the
+6. Do not expose system-primary memory or cross-owner matching until the
    executable privacy, consent, audit, export, correction, retention, and
    deletion contracts in `docs/replit-backend-foundation.md` exist and pass.
-6. Map the public hostname only after the staging revision is healthy, then
+7. Map the public hostname only after the staging revision is healthy, then
    verify TLS, security headers, error handling, and the Stripe webhook.
 
 ## Release evidence
 
 Record the deployed commit SHA, Cloud Run revision, migration result, smoke-test
-result, and rollback revision in the release issue. If any item above is not
-true, describe a0p as a release candidate rather than a live public service.
+result, CodeQL current-head result, and rollback revision in the release issue.
+If any item above is not true, describe a0p as a release candidate rather than a
+live public service.
