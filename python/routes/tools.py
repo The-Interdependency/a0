@@ -1,4 +1,4 @@
-# 125:21 0:5 4:2
+# 128:21 0:5 4:2
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, Any
@@ -113,8 +113,10 @@ async def _require_owner_or_admin(request: Request, tool: dict) -> None:
 
 
 @router.get("/tools")
-async def list_tools(user_id: Optional[str] = None):
-    return await storage.get_custom_tools(user_id)
+async def list_tools(request: Request, user_id: Optional[str] = None):
+    uid = _require_uid(request)
+    owner_filter = user_id if _is_admin(request) and user_id else uid
+    return await storage.get_custom_tools(owner_filter)
 
 
 @router.post("/tools")
@@ -132,10 +134,11 @@ async def create_tool(body: CreateTool, request: Request):
 
 
 @router.get("/tools/{tool_id}")
-async def get_tool(tool_id: int):
+async def get_tool(tool_id: int, request: Request):
     tool = await storage.get_custom_tool(tool_id)
     if not tool:
         raise HTTPException(status_code=404, detail="tool not found")
+    await _require_owner_or_admin(request, tool)
     return tool
 
 
@@ -177,4 +180,4 @@ editable_registry.register(EditableField(
     patch_endpoint="/api/v1/tools/{id}",
     query_key="/api/v1/tools",
 ))
-# 125:21 0:5 4:2
+# 128:21 0:5 4:2

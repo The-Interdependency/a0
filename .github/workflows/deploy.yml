@@ -39,7 +39,7 @@ jobs:
 
       - name: Run provider contracts
         run: |
-          uv run pytest -q tests/test_open_comp_prov_v0.0.0alpha.py tests/test_open_comp_rout_v0.0.0alpha.py tests/test_aone_open_comp_adap_v0.0.0alpha.py tests/test_a0_package.py
+          uv run pytest -q tests/test_open_comp_prov_v0.0.0alpha.py tests/test_open_comp_rout_v0.0.0alpha.py tests/test_aone_open_comp_adap_v0.0.0alpha.py tests/test_a0_package.py tests/test_publ_acce_poli_v0.0.0alpha.py
           uv run python -m python.tests.contract_runner --only check_openai_compatible_registry_wiring --only check_openai_compatible_repair_regressions
 
   check-console-tabs:
@@ -91,10 +91,16 @@ jobs:
         run: npm ci
 
       - name: Install Python dependencies
-        run: uv sync --frozen --no-dev
+        run: uv sync --frozen
 
       - name: Apply database schema
         run: npm run db:push
+
+      - name: Check public request limits
+        run: node --import tsx scripts/chec_publ_rate_v0.0.0alpha.ts
+
+      - name: Run Python test suite
+        run: uv run pytest -q tests python/tests
 
       - name: Boot Python backend
         run: |
@@ -121,6 +127,17 @@ jobs:
           if [ -f /tmp/uvicorn.pid ]; then
             kill "$(cat /tmp/uvicorn.pid)" 2>/dev/null || true
           fi
+
+  container-build:
+    name: Production container build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build production image
+        run: docker build --tag a0p:ci .
 
   deployment-readiness:
     name: Google Cloud deployment readiness
@@ -152,7 +169,7 @@ jobs:
 
   deploy:
     name: Build, push, deploy
-    needs: [provider-contracts, check-console-tabs, deployment-readiness]
+    needs: [provider-contracts, check-console-tabs, container-build, deployment-readiness]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.GCP_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -195,6 +212,7 @@ jobs:
             --port=5000 \
             --min-instances=0 \
             --max-instances=10 \
-            --memory=512Mi \
+            --memory=1Gi \
             --cpu=1 \
-            --set-secrets="DATABASE_URL=a0p-database-url:latest,SESSION_SECRET=a0p-session-secret:latest,XAI_API_KEY=a0p-xai-api-key:latest,DEEPSEEK_API_KEY=a0p-deepseek-api-key:latest,STRIPE_SECRET_KEY=a0p-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=a0p-stripe-webhook-secret:latest"
+            --set-env-vars="APP_ENV=production,APP_ORIGIN=https://replit.interdependentway.org" \
+            --set-secrets="DATABASE_URL=a0p-database-url:latest,SESSION_SECRET=a0p-session-secret:latest,INTERNAL_API_SECRET=a0p-internal-api-secret:latest,ADMIN_EMAIL=a0p-admin-email:latest,XAI_API_KEY=a0p-xai-api-key:latest,DEEPSEEK_API_KEY=a0p-deepseek-api-key:latest,STRIPE_SECRET_KEY=a0p-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=a0p-stripe-webhook-secret:latest"

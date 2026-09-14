@@ -25,7 +25,7 @@ the truth.
 #   owner: Erin Spencer
 #   public_surface: SCHEMA, handle
 #   internal_surface: _make_call_fn
-#   auth_boundary: none
+#   auth_boundary: working-set or admin tier
 #   storage_boundary: none
 #   network_boundary: external
 #   user_data_boundary: write
@@ -123,7 +123,7 @@ SCHEMA = {
             "required": ["items", "instruction", "row_keys"],
         },
     },
-    "tier": "free",
+    "tier": "ws",
     "approval_scope": None,
     "enabled": True,
     "category": "orchestration",

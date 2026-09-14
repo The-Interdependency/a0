@@ -1,9 +1,11 @@
-// 356:44 1:1 1:3
+// 395:44 1:1 1:3
 import crypto from "crypto";
 import type { Express, Request, Response } from "express";
 import { authStorage } from "./storage";
 import { hashPassphrase, verifyPassphrase, validatePassphrase } from "./password";
 import { regenerateSession } from "./setup";
+import { consumePublicRateLimit } from "./serv_auth_rate_limt_v0.0.0alpha";
+import { toPublicUser } from "./serv_auth_user_view_v0.0.0alpha";
 
 function sha256Hex(input: string): string {
   return crypto.createHash("sha256").update(input).digest("hex");
@@ -88,8 +90,7 @@ export function registerAuthRoutes(app: Express) {
         req.session.destroy(() => {});
         return res.status(401).json({ message: "User not found" });
       }
-      const { passphraseHash: _, ...safe } = user;
-      res.json(safe);
+      res.json(toPublicUser(user));
     } catch {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -100,7 +101,15 @@ export function registerAuthRoutes(app: Express) {
     if (!username || !passphrase) {
       return res.status(400).json({ message: "Username and passphrase are required" });
     }
+    if (typeof username !== "string" || username.length > 80 || typeof passphrase !== "string" || passphrase.length > 512) {
+      return res.status(400).json({ message: "Invalid username or passphrase" });
+    }
     try {
+      const rate = await consumePublicRateLimit(req, "login", username);
+      if (!rate.allowed) {
+        res.setHeader("Retry-After", String(rate.retryAfterSeconds));
+        return res.status(429).json({ message: "Too many sign-in attempts. Please wait and try again." });
+      }
       const user = await authStorage.getUserByUsername(username);
       if (!user || !user.passphraseHash || !user.isActive) {
         return res.status(401).json({ message: "Invalid username or passphrase" });
@@ -115,8 +124,7 @@ export function registerAuthRoutes(app: Express) {
       req.session.userEmail = user.email ?? undefined;
       req.session.userRole = user.role;
       void tryPromoteWs(user.id, user.email);
-      const { passphraseHash: _, ...safe } = user;
-      res.json({ user: safe });
+      res.json({ user: toPublicUser(user) });
     } catch (err) {
       console.error("[auth] Login error:", err);
       res.status(500).json({ message: "Internal server error" });
@@ -129,6 +137,33 @@ export function registerAuthRoutes(app: Express) {
     if (!username || !email || !passphrase) {
       return res.status(400).json({ message: "Username, email, and passphrase are required" });
     }
+    if (
+      typeof username !== "string" ||
+      !/^[a-zA-Z0-9_.-]{3,40}$/.test(username) ||
+      typeof email !== "string" ||
+      email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      typeof passphrase !== "string" ||
+      passphrase.length > 512 ||
+      (displayName !== undefined && (typeof displayName !== "string" || displayName.length > 80)) ||
+      (challenges !== undefined && (
+        !Array.isArray(challenges) ||
+        challenges.length > 3 ||
+        challenges.some((challenge: unknown) => {
+          if (!challenge || typeof challenge !== "object") return true;
+          const value = challenge as Record<string, unknown>;
+          return (
+            typeof value.question !== "string" ||
+            value.question.length < 5 ||
+            value.question.length > 200 ||
+            typeof value.answer !== "string" ||
+            value.answer.length < 2 ||
+            Buffer.byteLength(value.answer, "utf8") > 72
+          );
+        })
+      ))
+    ) {
+      return res.status(400).json({ message: "Invalid registration fields" });
+    }
 
     const validation = validatePassphrase(passphrase);
     if (!validation.valid) {
@@ -136,6 +171,11 @@ export function registerAuthRoutes(app: Express) {
     }
 
     try {
+      const rate = await consumePublicRateLimit(req, "signup", email);
+      if (!rate.allowed) {
+        res.setHeader("Retry-After", String(rate.retryAfterSeconds));
+        return res.status(429).json({ message: "Too many account requests. Please wait and try again." });
+      }
       const existing = await authStorage.getUserByEmail(email);
       if (existing) {
         return res.status(409).json({ message: "An account with that email already exists" });
@@ -166,8 +206,7 @@ export function registerAuthRoutes(app: Express) {
       req.session.userRole = user.role;
       void tryPromoteWs(user.id, user.email);
 
-      const { passphraseHash: _, ...safe } = user;
-      res.status(201).json({ user: safe });
+      res.status(201).json({ user: toPublicUser(user) });
     } catch (err: unknown) {
       if (
         typeof err === "object" &&
@@ -434,4 +473,4 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 }
-// 356:44 1:1 1:3
+// 395:44 1:1 1:3

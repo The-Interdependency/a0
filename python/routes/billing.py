@@ -1,4 +1,4 @@
-# 418:311 5:7 2:4
+# 419:311 5:7 2:4
 import os
 import stripe
 from urllib.parse import urlparse
@@ -59,6 +59,7 @@ router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
 # subscribers are honored via the Stripe webhook + portal until they cancel.
 _DONATION_RETURN_PATH = "/pricing?donation=success"
 _WS_DOMAIN = "interdependentway.org"
+_DEFAULT_APP_ORIGIN = "https://replit.interdependentway.org"
 
 
 def _is_production() -> bool:
@@ -74,12 +75,12 @@ def _allowed_netlocs() -> set[str]:
     Localhost variants are included only outside production to avoid
     allowing developer-only origins in the deployed app.
     Comparison uses the parsed netloc (host[:port]) so prefix-bypass attacks
-    like https://a0p.replit.app.evil.com are rejected.
+    like https://replit.interdependentway.org.evil.com are rejected.
     """
     env = os.environ.get("APP_ORIGIN", "")
     raw = [o.strip().rstrip("/") for o in env.split(",") if o.strip()]
     if not raw:
-        raw = ["https://a0p.replit.app"]
+        raw = [_DEFAULT_APP_ORIGIN]
     netlocs: set[str] = set()
     for origin in raw:
         parsed = urlparse(origin)
@@ -96,11 +97,11 @@ def _allowed_origins() -> list[str]:
 
     Used to build the fallback_origin prefix for Stripe return URLs.
     Reads APP_ORIGIN from the environment (comma-separated list supported).
-    Falls back to https://a0p.replit.app when the env var is absent.
+    Falls back to the canonical public hostname when the env var is absent.
     """
     env = os.environ.get("APP_ORIGIN", "")
     raw = [o.strip().rstrip("/") for o in env.split(",") if o.strip()]
-    return raw if raw else ["https://a0p.replit.app"]
+    return raw if raw else [_DEFAULT_APP_ORIGIN]
 
 
 def _safe_return_url(candidate: Optional[str], fallback: str) -> str:
@@ -108,7 +109,7 @@ def _safe_return_url(candidate: Optional[str], fallback: str) -> str:
 
     Validates by parsing the URL and comparing the normalized netloc
     (host[:port]) against the allowlist, so prefix-bypass tricks such as
-    https://a0p.replit.app.evil.com/ are rejected.  Attacker-supplied values
+    https://replit.interdependentway.org.evil.com/ are rejected. Attacker-supplied values
     that target external hosts are silently replaced with the application's
     own safe default.
     """
@@ -329,7 +330,7 @@ async def create_donation(body: DonateBody, request: Request):
 
     stripe.api_key = STRIPE_SECRET_KEY
     allowed_origins = _allowed_origins()
-    fallback_origin = allowed_origins[0] if allowed_origins else "https://a0p.replit.app"
+    fallback_origin = allowed_origins[0] if allowed_origins else _DEFAULT_APP_ORIGIN
     return_url = _safe_return_url(body.return_url, f"{fallback_origin}{_DONATION_RETURN_PATH}")
 
     async with engine.connect() as conn:
@@ -400,7 +401,7 @@ async def customer_portal(body: PortalBody, request: Request):
         raise HTTPException(status_code=404, detail="No billing account found")
 
     allowed_origins = _allowed_origins()
-    fallback_origin = allowed_origins[0] if allowed_origins else "https://a0p.replit.app"
+    fallback_origin = allowed_origins[0] if allowed_origins else _DEFAULT_APP_ORIGIN
     safe_url = _safe_return_url(body.return_url, f"{fallback_origin}/pricing")
     session = stripe.billing_portal.Session.create(
         customer=rec["stripe_customer_id"], return_url=safe_url,
@@ -800,7 +801,7 @@ async def explainer_checkout(request: Request):
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
     candidate_url = body.get("return_url") if isinstance(body, dict) else None
     allowed_origins = _allowed_origins()
-    fallback_origin = allowed_origins[0] if allowed_origins else "https://a0p.replit.app"
+    fallback_origin = allowed_origins[0] if allowed_origins else _DEFAULT_APP_ORIGIN
     return_url = _safe_return_url(candidate_url, f"{fallback_origin}/transcripts?explainer_checkout=success")
 
     async with engine.connect() as conn:
@@ -858,4 +859,4 @@ async def explainer_checkout(request: Request):
 #          atomic)
 #   class: idempotency
 # === END CONTRACTS ===
-# 418:311 5:7 2:4
+# 419:311 5:7 2:4

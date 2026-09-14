@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-**`a0`** is a 3-process autonomous AI-agent platform with a metadata-driven console UI. `a0` is the codebase/runtime; **`a0p`** is the deployed public instance ("a research instrument, not a product") at `replit.interdependentway.org`.
+**`a0`** is a 3-process autonomous AI-agent platform with a metadata-driven console UI. `a0` is the codebase/runtime; **`a0p`** is the public-facing instance name ("a research instrument, not a product"). `PUBLIC_RELEASE.md` is the authority for whether an instance is ready to be described as live.
 
 A single persistent agent — **ZFAE** (`a0(zeta fun alpha echo)`) — runs on the instrument. Large language models (Grok, GPT-5 mini, Gemini 2.5 Flash, Claude Sonnet) are treated as **energy providers**: they supply computational energy per response but are not the agent itself. Sub-agents (`a0(zeta{n})`) can fork the PCNA instance, run in parallel, and merge results back.
 

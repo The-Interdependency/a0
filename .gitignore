@@ -31,3 +31,7 @@ android/.gradle/
 android/app/build/
 android/build/
 android/app/src/main/assets/public
+
+# Runtime/user data must never enter source control.
+/uploads/
+/attached_assets/

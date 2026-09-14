@@ -9,11 +9,11 @@
 #   owner: Erin Spencer
 #   public_surface: SCHEMA, handle
 #   internal_surface: none
-#   auth_boundary: gated behind the publish approval scope
+#   auth_boundary: admin tier plus publish approval scope
 #   storage_boundary: none
 #   network_boundary: external
 #   user_data_boundary: none
-#   admin_only: false
+#   admin_only: true
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; removes the post_tweet tool from the registry.
@@ -56,7 +56,7 @@ SCHEMA = {
             "required": ["text"],
         },
     },
-    "tier": "free",
+    "tier": "admin",
     "approval_scope": "publish",
     "enabled": True,
     "category": "social",

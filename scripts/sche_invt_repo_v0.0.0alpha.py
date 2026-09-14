@@ -1,4 +1,4 @@
-# 154:70 0:0 0:0
+# 155:70 0:0 0:0
 """Inventory a0 schema declarations and schema-mutating runtime paths.
 
 Usage:
@@ -94,6 +94,7 @@ SKIP_PARTS = {
 NON_RUNTIME_MUTATION_PATHS = {
     "scripts/sche_invt_repo_v0.0.0alpha.py",
     "scripts/sche_capt_live_v0.0.0alpha.py",
+    "scripts/chec_publ_rate_v0.0.0alpha.ts",
 }
 REVIEWED_LEGACY_MUTATION_PATHS = {
     ".github/workflows/deploy.yml",
@@ -256,4 +257,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-# 154:70 0:0 0:0
+# 155:70 0:0 0:0
