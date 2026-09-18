@@ -43,7 +43,7 @@ function logProbe(
 
 /**
  * Fire-and-forget call to the FastAPI internal endpoint that promotes
- * recognized work-email accounts to the WS tier. Failures are logged
+ * operator-allowlisted account IDs to the WS tier. Failures are logged
  * but never block the auth flow.
  */
 async function tryPromoteWs(userId: string, email: string | null | undefined): Promise<void> {

@@ -1,4 +1,4 @@
-# 40:6 1:1 1:2
+# 42:6 1:1 1:2
 # DOC module: guest
 # DOC label: Guest Chat
 # DOC description: Unauthenticated preview chat endpoint that routes through the currently active provider.
@@ -48,6 +48,8 @@ async def guest_chat(body: GuestChatBody):
         max_tokens=512,
         use_tools=False,
         skip_manifest=True,
+        pin_requested_provider=True,
+        routed_user_tier="free",
     )
 
     prompt_tokens = usage.get("prompt_tokens") or usage.get("input_tokens", 0)
@@ -57,4 +59,4 @@ async def guest_chat(body: GuestChatBody):
         tokens_used = max(10, len(body.message.split()) + len(content.split()))
 
     return {"content": content, "tokens_used": tokens_used}
-# 40:6 1:1 1:2
+# 42:6 1:1 1:2

@@ -1,13 +1,14 @@
-# 675:191 2:7 2:16
+# 685:192 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 
 from ..storage import storage
 from ..services.energy_registry import active_provider, BUILTIN_PROVIDERS, cache_breakdown, estimate_cost
 from ..services.inference import call_provider
+from ..services.run_context import current_user_tier
 from ..services import approval_gate_service, public_access_policy
 from ..services.prompt_assembly import build_system_prompt
 from ..services.bg_tasks import spawn as _spawn_bg
@@ -136,7 +137,7 @@ class UpdateConversation(BaseModel):
 
 
 class SendMessage(BaseModel):
-    content: str = Field(min_length=1, max_length=16000)
+    content: str = Field(max_length=16000)
     model: Optional[str] = Field(default=None, max_length=120)
     agent_id: Optional[int] = None
     attachment_ids: list[int] = Field(default_factory=list, max_length=10)
@@ -146,6 +147,13 @@ class SendMessage(BaseModel):
     # Client UUID per send; multi-model path publishes lifecycle events to
     # /api/v1/orchestration/{client_run_id}/stream for live token meters.
     client_run_id: Optional[str] = Field(default=None, max_length=128)
+
+    @model_validator(mode="after")
+    def require_text_or_attachment(self):
+        """Usage: attachment-only sends use empty content plus attachment_ids."""
+        if not self.content.strip() and not self.attachment_ids:
+            raise ValueError("content or attachment_ids is required")
+        return self
 
 
 def _caller_uid(request: Request) -> Optional[str]:
@@ -402,6 +410,25 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             except RuntimeError:
                 provider_id = model_id
 
+        # Resolve orchestration knobs: per-message override → user pref → defaults.
+        eff_mode = (body.orchestration_mode or "single").strip() or "single"
+        eff_cut = (body.cut_mode or "soft").strip() or "soft"
+        if uid and (body.orchestration_mode is None or body.cut_mode is None):
+            from sqlalchemy import text as _ptxt
+            async with engine.connect() as _c:
+                _r = (await _c.execute(_ptxt(
+                    "SELECT key, value FROM settings WHERE user_id = :u "
+                    "AND key IN ('orchestration_mode', 'cut_mode')"
+                ), {"u": uid})).mappings().all()
+            for _row in _r:
+                _v = _row["value"]
+                if isinstance(_v, dict):
+                    _v = _v.get("v") or _v.get("value")
+                if _row["key"] == "orchestration_mode" and body.orchestration_mode is None and _v:
+                    eff_mode = str(_v)
+                if _row["key"] == "cut_mode" and body.cut_mode is None and _v:
+                    eff_cut = str(_v)
+
         # Tier-gate restricted models (e.g. gemini3 = ws/admin only).
         # Gate the *resolved* provider list — never raw body.providers — so
         # aliases like "active" can't smuggle a ws-only model past the gate
@@ -409,7 +436,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         # time. resolve_providers() is the same path inference uses.
         from ..services.energy_registry import resolve_providers as _resolve
         _ranks = {"free": 0, "supporter": 1, "ws": 2, "admin": 3}
-        _mode_for_gate = (body.orchestration_mode or "single").strip() or "single"
+        _mode_for_gate = eff_mode
         if _mode_for_gate != "single" and body.providers:
             providers_to_gate = await _resolve(body.providers) or [provider_id]
         else:
@@ -425,6 +452,8 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         public_access_policy.enforce_public_provider_policy(
             tier, _mode_for_gate, providers_to_gate
         )
+
+        eff_providers = providers_to_gate
 
         # Parse both up front. Explicit per-gate approval takes priority
         # over scope grant — scope only helps FUTURE gates, while the user
@@ -482,6 +511,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 set_approval_scope_user_id(uid or None)
                 _gate_tools = pending.get("enabled_tools")
                 _t_gate_at = _set_at(list(_gate_tools) if isinstance(_gate_tools, list) else None)
+                _t_gate_tier = current_user_tier.set(tier)
                 try:
                     approved_content, approved_usage = await call_provider(
                         provider_id=replay_provider,
@@ -499,6 +529,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 finally:
                     set_approval_scope_user_id(None)
                     _reset_at(_t_gate_at)
+                    current_user_tier.reset(_t_gate_tier)
                 reply = f"[APPROVED — gate {gate_id_to_approve} cleared]{scope_note}\n\n{approved_content}"
                 if approved_usage.get("approval_state") == "pending":
                     _store_pending_gate(conv_id, approval_gate_service.pending_gate_entry(
@@ -609,6 +640,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                     _t_sg_at = _set_at2(
                         list(_scope_gate_tools) if isinstance(_scope_gate_tools, list) else None
                     )
+                    _t_scope_tier = current_user_tier.set(tier)
                     try:
                         replay_content, replay_usage = await call_provider(
                             provider_id=pending["provider_id"],
@@ -624,6 +656,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                     finally:
                         set_approval_scope_user_id(None)
                         _reset_at2(_t_sg_at)
+                        current_user_tier.reset(_t_scope_tier)
                     replay_result = {"content": replay_content, "usage": replay_usage}
                     reply += f"\n\nRetrying blocked action...\n\n{replay_content}"
                     if replay_usage.get("approval_state") == "pending":
@@ -702,7 +735,7 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             set_allowed_tools, reset_allowed_tools,
         )
         from ..services.run_context import (
-            current_orchestration_mode, current_cut_mode, current_user_tier,
+            current_orchestration_mode, current_cut_mode,
             current_max_tool_rounds,
         )
         from ..services.orch_progress import (
@@ -711,25 +744,6 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             register_owner as _register_owner,
             unregister_owner as _unregister_owner,
         )
-        # Resolve orchestration knobs: per-message override → user pref → defaults.
-        eff_mode = (body.orchestration_mode or "single").strip() or "single"
-        eff_cut = (body.cut_mode or "soft").strip() or "soft"
-        if uid and (body.orchestration_mode is None or body.cut_mode is None):
-            from sqlalchemy import text as _ptxt
-            async with engine.connect() as _c:
-                _r = (await _c.execute(_ptxt(
-                    "SELECT key, value FROM settings WHERE user_id = :u "
-                    "AND key IN ('orchestration_mode', 'cut_mode')"
-                ), {"u": uid})).mappings().all()
-            for _row in _r:
-                _v = _row["value"]
-                if isinstance(_v, dict):
-                    _v = _v.get("v") or _v.get("value")
-                if _row["key"] == "orchestration_mode" and body.orchestration_mode is None and _v:
-                    eff_mode = str(_v)
-                if _row["key"] == "cut_mode" and body.cut_mode is None and _v:
-                    eff_cut = str(_v)
-        eff_providers = body.providers or [provider_id]
 
         set_approval_scope_user_id(uid or None)
         # Effective tool allow-list: intersect per-agent list with per-conv
@@ -948,4 +962,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   then: the route removes its staged message and returns HTTP 403 instead of leaving a dangling turn or returning 500
 #   class: security
 # === END CONTRACTS ===
-# 675:191 2:7 2:16
+# 685:192 2:7 2:16

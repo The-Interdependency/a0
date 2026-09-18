@@ -8,6 +8,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
@@ -215,4 +218,4 @@ jobs:
             --memory=1Gi \
             --cpu=1 \
             --set-env-vars="APP_ENV=production,APP_ORIGIN=https://replit.interdependentway.org" \
-            --set-secrets="DATABASE_URL=a0p-database-url:latest,SESSION_SECRET=a0p-session-secret:latest,INTERNAL_API_SECRET=a0p-internal-api-secret:latest,ADMIN_EMAIL=a0p-admin-email:latest,XAI_API_KEY=a0p-xai-api-key:latest,DEEPSEEK_API_KEY=a0p-deepseek-api-key:latest,STRIPE_SECRET_KEY=a0p-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=a0p-stripe-webhook-secret:latest"
+            --set-secrets="DATABASE_URL=a0p-database-url:latest,SESSION_SECRET=a0p-session-secret:latest,INTERNAL_API_SECRET=a0p-internal-api-secret:latest,ADMIN_EMAIL=a0p-admin-email:latest,ADMIN_PASSWORD=a0p-admin-password:latest,XAI_API_KEY=a0p-xai-api-key:latest,DEEPSEEK_API_KEY=a0p-deepseek-api-key:latest,STRIPE_SECRET_KEY=a0p-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=a0p-stripe-webhook-secret:latest"

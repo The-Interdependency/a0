@@ -1,4 +1,4 @@
-# 400:33 2:10 1:4
+# 419:33 2:10 1:4
 # N:M
 """Fleet benchmarking — head-to-head comparison of model/agent/orchestration tuples.
 
@@ -327,6 +327,7 @@ async def _run_one_contestant(
     contestant: dict,
     prompt: str,
     uid: str,
+    tier: str,
 ) -> None:
     """Execute a single contestant. Always finishes (writes status + content
     or error). Never raises out — errors land in fleet_contestant_runs.error."""
@@ -361,6 +362,8 @@ async def _run_one_contestant(
     content = ""
     error: Optional[str] = None
     usage: dict = {}
+    from ..services.run_context import current_user_tier
+    token = current_user_tier.set(tier)
     try:
         content, usage = await run_inference_with_mode(
             messages=messages,
@@ -369,9 +372,12 @@ async def _run_one_contestant(
             cut_mode="soft",
             user_id=uid,
             system_prompt=system_prompt,
+            routed_user_tier=tier,
         )
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
+    finally:
+        current_user_tier.reset(token)
     elapsed_ms = int((time.perf_counter() - t0) * 1000)
 
     # Cost/token accounting (best-effort; multi-model usage may not be a single dict)
@@ -428,6 +434,19 @@ async def start_run(bid: int, body: StartRun, request: Request):
     if not contestants:
         raise HTTPException(status_code=400, detail="benchmark has no contestants")
 
+    from ..services.energy_registry import resolve_providers
+    resolved_contestants = []
+    for row in contestants:
+        contestant = dict(row)
+        mode = contestant.get("orchestration_mode") or "single"
+        requested = ([contestant["provider_id"]] if mode == "single" else
+                     list(contestant.get("providers") or []) or [contestant["provider_id"]])
+        resolved = await resolve_providers(requested)
+        if not resolved:
+            raise HTTPException(status_code=400, detail="No Fleet provider resolved")
+        contestant.update(provider_id=resolved[0], providers=resolved)
+        resolved_contestants.append(contestant)
+    contestants = resolved_contestants
     try:
         public_access_policy.enforce_public_fleet_policy(tier, contestants)
     except public_access_policy.PublicAccessDenied as exc:
@@ -444,7 +463,7 @@ async def start_run(bid: int, body: StartRun, request: Request):
     async def _drive() -> None:
         try:
             await asyncio.gather(
-                *[_run_one_contestant(run_id, dict(c), prompt, uid) for c in contestants],
+                *[_run_one_contestant(run_id, dict(c), prompt, uid, tier) for c in contestants],
                 return_exceptions=True,
             )
         finally:
@@ -497,4 +516,4 @@ async def list_runs(bid: int, request: Request):
             "WHERE benchmark_id = :bid ORDER BY started_at DESC LIMIT 50"
         ), {"bid": bid})).mappings().all()
     return [dict(r) for r in rows]
-# 400:33 2:10 1:4
+# 419:33 2:10 1:4

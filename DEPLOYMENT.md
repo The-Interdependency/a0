@@ -77,6 +77,10 @@ echo -n "postgres://..." | gcloud secrets create a0p-database-url --data-file=-
 echo -n "your-session-secret" | gcloud secrets create a0p-session-secret --data-file=-
 echo -n "your-separate-internal-api-secret" | gcloud secrets create a0p-internal-api-secret --data-file=-
 echo -n "owner@example.com" | gcloud secrets create a0p-admin-email --data-file=-
+# Supply the owner passphrase through stdin; keep it out of shell history.
+read -rs -p "Owner passphrase: " A0_BOOTSTRAP_PASSWORD
+printf '%s' "$A0_BOOTSTRAP_PASSWORD" | gcloud secrets create a0p-admin-password --data-file=-
+unset A0_BOOTSTRAP_PASSWORD
 echo -n "xai-key" | gcloud secrets create a0p-xai-api-key --data-file=-
 echo -n "deepseek-key" | gcloud secrets create a0p-deepseek-api-key --data-file=-
 echo -n "sk_live_..." | gcloud secrets create a0p-stripe-secret-key --data-file=-
@@ -86,7 +90,7 @@ echo -n "whsec_..." | gcloud secrets create a0p-stripe-webhook-secret --data-fil
 Grant the service account access to each secret:
 
 ```bash
-for SECRET in a0p-database-url a0p-session-secret a0p-internal-api-secret a0p-admin-email a0p-xai-api-key a0p-deepseek-api-key a0p-stripe-secret-key a0p-stripe-webhook-secret; do
+for SECRET in a0p-database-url a0p-session-secret a0p-internal-api-secret a0p-admin-email a0p-admin-password a0p-xai-api-key a0p-deepseek-api-key a0p-stripe-secret-key a0p-stripe-webhook-secret; do
   gcloud secrets add-iam-policy-binding $SECRET \
     --member="serviceAccount:$SA" \
     --role="roles/secretmanager.secretAccessor"
@@ -107,6 +111,24 @@ it does not depend on Replit Auth. Set a unique production `SESSION_SECRET`,
 keep `ADMIN_EMAIL` limited to the owner account, and verify registration,
 sign-in, sign-out, and recovery against the production database before mapping
 the public domain.
+
+Usage: provision both `ADMIN_EMAIL` and `ADMIN_PASSWORD` before the first boot.
+The seeder creates the owner with role/tier `admin`. It refuses to promote an
+existing ordinary account claiming that email; verify that account separately
+or select a fresh bootstrap identity. An existing admin keeps its password.
+Use `WS_USER_IDS` (comma-separated immutable account IDs) to grant working-set
+access after operator verification. Email suffixes and `admin_emails` entries
+convey no privilege. Review any historical automatically promoted WS accounts
+before launch; this patch does not infer their ownership or revoke stored tiers.
+
+Cloud Run ingress supplies a final client/proxy pair in `X-Forwarded-For`.
+`K_SERVICE` enables exactly that two-entry suffix; preceding supplied values are
+ignored, and missing/invalid suffixes fail closed at the request gate. Outside
+Cloud Run Express trusts no forwarding headers. In staging, verify that two
+real client addresses yield distinct buckets and spoofed prefixes do not change
+them before changing ingress or mapping a domain. See the
+[Google forwarding-header contract](https://docs.cloud.google.com/load-balancing/docs/https#x-forwarded-for_header)
+and [Express proxy guidance](https://expressjs.com/en/guide/behind-proxies/).
 
 ---
 
@@ -176,7 +198,7 @@ tuned without code changes:
 | `PUBLIC_MAX_PROVIDER_LANES` | `2` | Maximum provider calls in one free-tier orchestration or Fleet run |
 | `PUBLIC_MODEL_REQUEST_LIMIT` | `24` | Authenticated model-starting requests per window |
 | `PUBLIC_MODEL_WINDOW_SECONDS` | `3600` | Authenticated request-limit window |
-| `GUEST_TOKEN_LIMIT` | `2000` | Conservative pre-reserved guest tokens per hour and IP |
+| `GUEST_TOKEN_LIMIT` | `2000` | Atomic reservation per hour and IP, settled to actual usage; backend failures release the reservation |
 | `AUTH_LOGIN_ATTEMPT_LIMIT` | `10` | Sign-in attempts per 15-minute window |
 | `AUTH_SIGNUP_ATTEMPT_LIMIT` | `5` | Account-creation attempts per hour |
 | `A0_PERSISTENT_UPLOADS_ENABLED` | unset | Show and accept chat attachments only after `uploads/` is durable shared storage |

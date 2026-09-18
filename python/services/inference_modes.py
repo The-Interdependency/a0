@@ -1,4 +1,4 @@
-# 252:89 0:0 2:6
+# 255:89 0:0 2:6
 # N:M
 """run_inference_with_mode — orchestration entry point that fans aimmh-lib's
 multi-model primitives over the existing energy provider call path.
@@ -262,6 +262,7 @@ async def run_inference_with_mode(
     user_id: Optional[str] = None,
     system_prompt: Optional[str] = None,
     rounds: int = 1,
+    routed_user_tier: Optional[str] = None,
 ) -> tuple[str, dict]:
     """Top-level orchestration dispatch.
 
@@ -301,6 +302,8 @@ async def run_inference_with_mode(
             system_prompt=system_prompt,
             user_id=user_id,
             use_tools=bool(_filtered) if _filtered is not None else True,
+            pin_requested_provider=routed_user_tier is not None,
+            routed_user_tier=routed_user_tier,
         )
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
         try:
@@ -377,4 +380,4 @@ async def run_inference_with_mode(
     }
     return _summarize_results(results), usage
 # N:M
-# 252:89 0:0 2:6
+# 255:89 0:0 2:6

@@ -1,4 +1,4 @@
-# 61:19 3:3 2:1
+# 68:20 3:3 2:1
 # === MODULE_BUILD ===
 # id: a0_public_provider_policy
 #   module_name: public provider policy
@@ -55,6 +55,19 @@ def public_provider_allowlist() -> frozenset[str]:
     return frozenset(values or _DEFAULT_PUBLIC_PROVIDERS)
 
 
+def orchestration_call_count(mode: str, provider_count: int) -> int:
+    """Usage: count the one-round plan executed by inference_modes, before I/O."""
+    if mode == "single":
+        return 1
+    if mode in {"fan_out", "daisy_chain", "room_all"}:
+        return provider_count
+    if mode == "council":
+        return 2 * provider_count
+    if mode == "room_synthesized":
+        return max(2, provider_count)
+    raise PublicAccessDenied("Unknown public orchestration mode")
+
+
 def enforce_public_provider_policy(
     tier: str,
     orchestration_mode: str,
@@ -75,25 +88,22 @@ def enforce_public_provider_policy(
         )
 
     max_lanes = _positive_int_env("PUBLIC_MAX_PROVIDER_LANES", 2)
-    if orchestration_mode != "single" and len(providers) > max_lanes:
+    if orchestration_call_count(orchestration_mode, len(providers)) > max_lanes:
         raise PublicAccessDenied(
-            f"Public multi-provider runs are limited to {max_lanes} lanes"
+            f"Public orchestration is limited to {max_lanes} provider calls"
         )
 
 
 def enforce_public_fleet_policy(tier: str, contestants: Iterable[object]) -> None:
-    providers: list[str] = []
-    for raw in contestants:
-        contestant = raw if hasattr(raw, "get") else {}
-        orch = contestant.get("orchestration_mode") or "single"  # type: ignore[union-attr]
-        if orch == "single":
-            providers.append(contestant["provider_id"])  # type: ignore[index]
-        else:
-            providers.extend(
-                list(contestant.get("providers") or [])  # type: ignore[union-attr]
-                or [contestant["provider_id"]]  # type: ignore[index]
-            )
-    enforce_public_provider_policy(
-        tier, "fan_out" if len(providers) > 1 else "single", providers
-    )
-# 61:19 3:3 2:1
+    if tier != "free":
+        return
+    total_calls = 0
+    for contestant in contestants:
+        orch = contestant.get("orchestration_mode") or "single"
+        providers = ([contestant["provider_id"]] if orch == "single" else
+                     list(contestant.get("providers") or []) or [contestant["provider_id"]])
+        enforce_public_provider_policy(tier, orch, providers)
+        total_calls += orchestration_call_count(orch, len(providers))
+    if total_calls > _positive_int_env("PUBLIC_MAX_PROVIDER_LANES", 2):
+        raise PublicAccessDenied("Public Fleet run exceeds the provider-call limit")
+# 68:20 3:3 2:1

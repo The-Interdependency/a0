@@ -1,4 +1,4 @@
-# 419:311 5:7 2:4
+# 411:313 5:7 2:4
 import os
 import stripe
 from urllib.parse import urlparse
@@ -12,7 +12,7 @@ from .billing_helpers import is_supporter_subscription
 
 # DOC module: billing
 # DOC label: Billing
-# DOC description: Donations-only billing surface. a0p is a research instrument, not a subscription product — there is no recurring sign-up tier. Existing Supporter subscribers are honored until they cancel via the Stripe portal. ws tier auto-assigned to @interdependentway.org accounts; admin tier reserved for the owner + invited collaborators.
+# DOC description: Donations-only billing surface. a0p is a research instrument, not a subscription product — there is no recurring sign-up tier. Existing Supporter subscribers are honored until they cancel via the Stripe portal. ws tier assigned only to operator-allowlisted account IDs; admin tier reserved for the owner + invited collaborators.
 # DOC tier: free
 # DOC role: route
 # DOC endpoint: GET /api/v1/billing/status | Get current user billing status and tier
@@ -58,7 +58,6 @@ router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
 # The interval/Supporter scaffolding has been retired (Task #110); existing
 # subscribers are honored via the Stripe webhook + portal until they cancel.
 _DONATION_RETURN_PATH = "/pricing?donation=success"
-_WS_DOMAIN = "interdependentway.org"
 _DEFAULT_APP_ORIGIN = "https://replit.interdependentway.org"
 
 
@@ -157,15 +156,9 @@ def _user_role(request: Request) -> str:
 
 
 async def _check_admin(uid: str, email: Optional[str], conn, role: str = "user") -> bool:
-    if role == "admin":
-        return True
-    if not email:
-        return False
-    normalized = email.strip().lower()
-    row = await conn.execute(
-        text("SELECT 1 FROM admin_emails WHERE email = :email"), {"email": normalized}
-    )
-    return row.fetchone() is not None
+    # Email is unverified signup input. Only the authenticated stored role
+    # conveys admin authority; admin_emails is not proof of ownership.
+    return role == "admin"
 
 
 async def ensure_admin_emails() -> None:
@@ -182,10 +175,11 @@ async def ensure_admin_emails() -> None:
 
 
 async def _maybe_promote_ws(uid: str, email: Optional[str], current_tier: str) -> str:
-    """Auto-promote @interdependentway.org accounts to ws tier if currently free."""
-    if not email or current_tier != "free":
+    """Usage: operators set WS_USER_IDS to inspected, immutable account IDs."""
+    if current_tier != "free":
         return current_tier
-    if not email.strip().lower().endswith(f"@{_WS_DOMAIN}"):
+    allowed_ids = {value.strip() for value in os.environ.get("WS_USER_IDS", "").split(",") if value.strip()}
+    if uid not in allowed_ids:
         return current_tier
     async with engine.begin() as conn:
         await conn.execute(
@@ -519,7 +513,7 @@ class PromoteWsBody(BaseModel):
 
 @router.post("/internal/promote-ws")
 async def internal_promote_ws(body: PromoteWsBody, request: Request):
-    """Trigger the WS-tier email-domain promotion check.
+    """Trigger the operator account-ID allowlist check.
 
     Intended to be called by the Express auth layer immediately after
     successful login and registration. Gated by the internal API secret
@@ -859,4 +853,4 @@ async def explainer_checkout(request: Request):
 #          atomic)
 #   class: idempotency
 # === END CONTRACTS ===
-# 419:311 5:7 2:4
+# 411:313 5:7 2:4

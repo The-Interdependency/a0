@@ -1,7 +1,7 @@
-// 198:20 30:2 30:3
+// 214:21 30:2 30:3
 import { db, pool } from "../db";
 import { users, challengeResponses, guestTokenUsage } from "@shared/models/auth";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { verifyPassphrase } from "./password";
 
@@ -45,6 +45,7 @@ export const authStorage = {
         passphraseHash: data.passphraseHash,
         displayName: data.displayName ?? data.username,
         role: data.role ?? "user",
+        subscriptionTier: data.role === "admin" ? "admin" : "free",
       })
       .returning();
     return user;
@@ -192,22 +193,26 @@ export function currentHourStart(): Date {
 
 export async function getOrCreateGuestWindow(ipHash: string): Promise<{ id: number; tokensUsed: number }> {
   const windowStart = currentHourStart();
-  const [upserted] = await db
-    .insert(guestTokenUsage)
-    .values({ ipHash, tokensUsed: 0, windowStart })
-    .onConflictDoNothing()
-    .returning();
-  if (upserted) return upserted;
-  const [existing] = await db
-    .select()
-    .from(guestTokenUsage)
-    .where(
-      and(
-        eq(guestTokenUsage.ipHash, ipHash),
-        gte(guestTokenUsage.windowStart, windowStart)
-      )
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`guest:${ipHash}:${windowStart.toISOString()}`]);
+    let result = await client.query(
+      'SELECT id, tokens_used AS "tokensUsed" FROM guest_token_usage WHERE ip_hash = $1 AND window_start = $2 ORDER BY id LIMIT 1',
+      [ipHash, windowStart],
     );
-  return existing;
+    if (!result.rows.length) result = await client.query(
+      'INSERT INTO guest_token_usage (ip_hash, tokens_used, window_start) VALUES ($1, 0, $2) RETURNING id, tokens_used AS "tokensUsed"',
+      [ipHash, windowStart],
+    );
+    await client.query("COMMIT");
+    return result.rows[0];
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function incrementGuestTokensAtomic(
@@ -234,4 +239,16 @@ export async function incrementGuestTokensAtomic(
   }
   return { accepted: true, tokensUsed: updated.tokensUsed };
 }
-// 198:20 30:2 30:3
+/** Settle one accepted reservation once; zero actual tokens releases a failure. */
+export async function settleGuestTokensAtomic(id: number, reserved: number, actual: number): Promise<number> {
+  if (![reserved, actual].every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    throw new Error("Invalid guest token settlement");
+  }
+  const result = await pool.query(
+    `UPDATE guest_token_usage SET tokens_used = tokens_used + $3 - $2
+     WHERE id = $1 RETURNING tokens_used`, [id, reserved, actual],
+  );
+  if (!result.rows.length) throw new Error("Guest reservation window missing");
+  return result.rows[0].tokens_used;
+}
+// 214:21 30:2 30:3

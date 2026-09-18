@@ -1,4 +1,4 @@
-// 327:32 0:1 0:3
+// 325:32 0:1 0:3
 import "./types.d.ts";
 import path from "path";
 import fs from "fs";
@@ -17,7 +17,7 @@ import {
 import { registerAttachmentRoutes } from "./attachments";
 import {
   consumePublicRateLimit,
-  isMeteredPublicModelPath,
+  publicModelAccountKey,
 } from "./auth/serv_auth_rate_limt_v0.0.0alpha";
 import { db } from "./db";
 import { messageAttachments } from "@shared/schema";
@@ -36,7 +36,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       baseUri: ["'self'"],
       connectSrc: ["'self'", "https://api.stripe.com", "https://*.stripe.com", ...(IS_PROD ? [] : ["ws:"])],
-      fontSrc: ["'self'", "data:"],
+      fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       formAction: ["'self'", "https://*.stripe.com"],
       frameAncestors: ["'none'"],
       frameSrc: ["'self'", "https://js.stripe.com", "https://hooks.stripe.com", "https://*.stripe.com"],
@@ -44,7 +44,7 @@ app.use(helmet({
       objectSrc: ["'none'"],
       scriptSrc: ["'self'", "https://js.stripe.com"],
       scriptSrcAttr: ["'none'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       workerSrc: ["'self'", "blob:"],
       upgradeInsecureRequests: IS_PROD ? [] : null,
     },
@@ -275,13 +275,10 @@ void (async () => {
   });
 
   app.use("/api", async (req, res, next) => {
-    const userId = req.session?.userId;
-    const isOwner = req.session?.userRole === "admin";
-    if (!userId || isOwner || !isMeteredPublicModelPath(req.method, req.originalUrl)) {
-      return next();
-    }
     try {
-      const rate = await consumePublicRateLimit(req, "model", userId);
+      const accountKey = publicModelAccountKey(req);
+      if (!accountKey) return next();
+      const rate = await consumePublicRateLimit(req, "model", accountKey);
       if (!rate.allowed) {
         res.setHeader("Retry-After", String(rate.retryAfterSeconds));
         return res.status(429).json({
@@ -290,6 +287,7 @@ void (async () => {
       }
       return next();
     } catch (error) {
+      if (error instanceof URIError) return res.status(400).json({ error: "Invalid request path" });
       console.error("[rate-limit] public model gate failed:", error);
       return res.status(503).json({ error: "Public request gate unavailable" });
     }
@@ -319,7 +317,7 @@ void (async () => {
       target: PYTHON_URL,
       changeOrigin: true,
       // Forward client IP / proto / host headers so Python sees real client info
-      // through the X-Forwarded-* set (Express has trust proxy = 1).
+      // through the X-Forwarded-* set (Cloud Run ingress is configured in setupAuth).
       xfwd: true,
       pathRewrite: { "^/": "/api/" },
       on: {
@@ -389,4 +387,4 @@ void (async () => {
 });
 
 export default app;
-// 327:32 0:1 0:3
+// 325:32 0:1 0:3

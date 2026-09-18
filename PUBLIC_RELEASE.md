@@ -48,3 +48,42 @@ Record the deployed commit SHA, Cloud Run revision, migration result, smoke-test
 result, CodeQL current-head result, and rollback revision in the release issue.
 If any item above is not true, describe a0p as a release candidate rather than a
 live public service.
+
+## PR #109 repair witnesses
+
+The audit starting at `4b04abfad44df2a6f982559b57f1732ae8e78ccc` reproduced
+all 16 open P1/P2 findings. Its current CodeQL annotation was **workflow token
+permissions**, not the previously repaired Helmet CSP finding.
+
+| Live finding | Owning repair / regression witness |
+| --- | --- |
+| Persisted orchestration mode bypass | Resolve preferences and provider IDs before gating; reject before message storage |
+| Approval replay tier loss | Bind/reset tier in both replay paths, including provider failures |
+| Attachment-only rejection | Require text or attachment IDs while retaining size bounds |
+| Fonts blocked by CSP | Allow the existing Google stylesheet and font origins in their respective directives |
+| Shared Cloud Run proxy bucket | Use the declared two-address ingress suffix; reject missing/invalid suffixes and ignore supplied prefixes |
+| Guest reservation overcharging | Settle actual usage, release failed calls; serialize window creation so concurrent reservations share a balance |
+| Expired rate-probe growth | Delete up to 100 expired rows of the current rate kind per request; preserve live and unrelated probes |
+| Council/Fleet call amplification | Count actual one-round synthesis calls and aggregate the complete Fleet plan |
+| CLI/Fleet tool tier loss | Bind/reset the resolved caller tier around inference |
+| Missing admin bootstrap credential | Supply ADMIN_PASSWORD through Secret Manager; seed role and tier; reject unverified identity collisions |
+| Missing built-in tool discovery | Keep admin no-filter reads; retain caller ownership for ordinary users |
+| Unverified email privilege escalation | WS_USER_IDS names operator-verified account IDs; admin guards use stored roles/immutable IDs, never signup email |
+| CLI request-limit bypass | Meter bearer/API-key digest plus client IP before proxying |
+| Encoded-path request-limit bypass | Match the once-decoded ASGI path; reject malformed escapes |
+| Guest role-slot provider substitution | Pin the authorized provider and pass the free tier |
+| Fleet role-slot provider substitution | Freeze resolved contestants, pin each single lane, and carry the caller tier |
+| CodeQL workflow permission alert | Default deployment workflow token permissions to contents: read |
+
+Usage: run `uv run pytest -q tests/test_publ_acce_poli_v0.0.0alpha.py` with
+`DATABASE_URL` set. Provider calls and route storage are faked. Run
+`node --import tsx scripts/chec_publ_rate_v0.0.0alpha.ts` against an **isolated
+test database** after `npm run db:push` for concurrent rate/guest accounting,
+backend-failure settlement, and admin-bootstrap checks. `--unit` runs just the
+request/configuration checks without connecting to PostgreSQL. The existing
+CI runs the full script and Python suite, production image, and console guard.
+
+hmmm: passing source regressions does not prove live Cloud Run ingress shape,
+historical account ownership, history purge, credential rotation, staging
+health, or deployment. Record final exact-head CI/CodeQL and review standing
+on the PR; keep the public-domain prerequisites above intact.

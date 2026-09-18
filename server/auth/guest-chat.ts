@@ -1,7 +1,9 @@
-// 88:3 0:1 0:1
+// 100:5 0:1 0:1
 import crypto from "crypto";
 import type { Express, Request, Response } from "express";
-import { getOrCreateGuestWindow, incrementGuestTokensAtomic } from "./storage";
+import { getOrCreateGuestWindow, incrementGuestTokensAtomic, settleGuestTokensAtomic } from "./storage";
+
+import { publicClientIp } from "./serv_auth_rate_limt_v0.0.0alpha";
 
 const PYTHON_URL = "http://localhost:8001";
 const DEFAULT_TOKEN_LIMIT = 2000;
@@ -16,15 +18,15 @@ function hashIp(ip: string): string {
 }
 
 function getClientIp(req: Request): string {
-  return req.ip ?? req.socket?.remoteAddress ?? "unknown";
+  return publicClientIp(req);
 }
 
 export function registerGuestChatRoute(app: Express) {
   const LIMIT = parseInt(process.env.GUEST_TOKEN_LIMIT ?? String(DEFAULT_TOKEN_LIMIT), 10);
 
   app.get("/api/guest/status", async (req: Request, res: Response) => {
-    const ipHash = hashIp(getClientIp(req));
     try {
+      const ipHash = hashIp(getClientIp(req));
       const window = await getOrCreateGuestWindow(ipHash);
       const remaining = Math.max(0, LIMIT - window.tokensUsed);
       res.json({ tokensUsed: window.tokensUsed, tokensLimit: LIMIT, tokensRemaining: remaining });
@@ -44,9 +46,16 @@ export function registerGuestChatRoute(app: Express) {
       });
     }
 
-    const ipHash = hashIp(getClientIp(req));
-
+    let pending: { id: number; reserved: number } | undefined;
+    // Clear the local receipt before settlement: a DB error must retain the
+    // charge, never trigger a second refund in the outer error handler.
+    const settle = async (actual: number): Promise<number> => {
+      const receipt = pending!;
+      pending = undefined;
+      return settleGuestTokensAtomic(receipt.id, receipt.reserved, actual);
+    };
     try {
+      const ipHash = hashIp(getClientIp(req));
       const window = await getOrCreateGuestWindow(ipHash);
       if (window.tokensUsed >= LIMIT) {
         return res.status(429).json({
@@ -58,7 +67,7 @@ export function registerGuestChatRoute(app: Express) {
         });
       }
 
-      // Reserve the worst-case response budget before making a paid provider
+      // Reserve a conservative response budget before making a paid provider
       // call. Charging after the response allowed concurrent requests to all
       // pass the same stale balance and spend beyond the public limit.
       const estimatedInputTokens = Math.ceil(message.trim().length / 3);
@@ -74,6 +83,7 @@ export function registerGuestChatRoute(app: Express) {
         });
       }
 
+      pending = { id: window.id, reserved: reservedTokens };
       const pyRes = await fetch(`${PYTHON_URL}/api/v1/guest/chat`, {
         method: "POST",
         headers: {
@@ -84,11 +94,14 @@ export function registerGuestChatRoute(app: Express) {
       });
 
       if (!pyRes.ok) {
+        await settle(0);
         return res.status(502).json({ message: "AI backend error" });
       }
 
       const data = (await pyRes.json()) as { content: string; tokens_used: number };
-      const tokensUsed = reservation.tokensUsed;
+      const actualTokens = Number.isSafeInteger(data.tokens_used) && data.tokens_used >= 0
+        ? data.tokens_used : reservedTokens;
+      const tokensUsed = await settle(actualTokens);
       const remaining = Math.max(0, LIMIT - tokensUsed);
 
       res.json({
@@ -98,9 +111,10 @@ export function registerGuestChatRoute(app: Express) {
         tokensRemaining: remaining,
       });
     } catch (err) {
+      if (pending) await settle(0).catch((error) => console.error("[guest-chat] settlement failed:", error));
       console.error("[guest-chat] Error:", err);
       res.status(502).json({ message: "AI backend unavailable" });
     }
   });
 }
-// 88:3 0:1 0:1
+// 100:5 0:1 0:1

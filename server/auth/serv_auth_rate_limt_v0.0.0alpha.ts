@@ -1,4 +1,4 @@
-// 100:20 2:2 2:1
+// 130:25 2:2 2:1
 // === MODULE_BUILD ===
 // id: a0_public_request_rate_limit
 //   module_name: public request rate limit
@@ -17,6 +17,7 @@
 //   rollback: Remove the middleware calls; stored probe rows expire from limit consideration automatically.
 // === END MODULE_BUILD ===
 import crypto from "crypto";
+import { isIP } from "node:net";
 import type { Request } from "express";
 import { pool } from "../db";
 
@@ -51,6 +52,7 @@ const LIMITS: Record<PublicRateLimitKind, LimitConfig> = {
 };
 
 const MODEL_REQUEST_PATHS = [
+  /^\/api\/v1\/cli\/chat$/,
   /^\/api\/v1\/conversations\/\d+\/messages$/,
   /^\/api\/v1\/conversations\/\d+\/focus$/,
   /^\/api\/v1\/fleet\/benchmarks\/\d+\/run$/,
@@ -59,8 +61,33 @@ const MODEL_REQUEST_PATHS = [
 
 export function isMeteredPublicModelPath(method: string, originalUrl: string): boolean {
   if (method.toUpperCase() !== "POST") return false;
-  const path = originalUrl.split("?", 1)[0];
+  // Match the once-decoded ASGI path, including encoded digits/slashes. A
+  // malformed escape must not skip metering; reject it at the middleware.
+  const path = decodeURIComponent(originalUrl.split("?", 1)[0]).replace(/\/+$/, "");
   return MODEL_REQUEST_PATHS.some((pattern) => pattern.test(path));
+}
+
+export function publicClientIp(req: Request): string {
+  if (!process.env.K_SERVICE) return req.ip ?? req.socket?.remoteAddress ?? "unknown";
+  const forwarded = req.headers["x-forwarded-for"];
+  const chain = typeof forwarded === "string" ? forwarded.split(",").map((v) => v.trim()) : [];
+  const suffix = chain.slice(-2);
+  if (suffix.length !== 2 || suffix.some((ip) => !isIP(ip))) {
+    throw new Error("Cloud Run client/proxy suffix is missing or invalid");
+  }
+  return suffix[0];
+}
+
+/** Usage: CLI is metered by bearer digest plus IP even without a session. */
+export function publicModelAccountKey(req: Request): string | null {
+  if (!isMeteredPublicModelPath(req.method, req.originalUrl)) return null;
+  const path = decodeURIComponent(req.originalUrl.split("?", 1)[0]).replace(/\/+$/, "");
+  if (path === "/api/v1/cli/chat") {
+    const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+    const key = bearer || req.headers["x-api-key"];
+    return typeof key === "string" && key ? `cli:${key}` : "cli:anonymous";
+  }
+  return req.session?.userRole === "admin" ? null : req.session?.userId ?? null;
 }
 
 function positiveIntEnv(name: string, fallback: number): number {
@@ -81,10 +108,10 @@ export async function consumePublicRateLimit(
   const config = LIMITS[kind];
   const limit = positiveIntEnv(config.limitEnv, config.defaultLimit);
   const windowSeconds = positiveIntEnv(config.windowEnv, config.defaultWindowSeconds);
-  const ip = String(req.ip ?? req.socket?.remoteAddress ?? "unknown");
+  const ip = publicClientIp(req);
   const ipHash = hashBoundaryValue("ip", ip);
   const accountHash = accountKey
-    ? hashBoundaryValue("account", accountKey.trim().toLowerCase())
+    ? hashBoundaryValue("account", kind === "model" ? accountKey : accountKey.trim().toLowerCase())
     : null;
   const probeType = `rate_${kind}`;
   const ipLockKey = `${probeType}:ip:${ipHash}`;
@@ -119,6 +146,16 @@ export async function consumePublicRateLimit(
         [probeType, ipHash, accountHash, JSON.stringify({ window_seconds: windowSeconds, limit })],
       );
     }
+    // Bounded retention: remove more expired rows than this request can add.
+    // Preserve all other probe types and every row inside this kind's window.
+    await client.query(
+      `DELETE FROM security_probes WHERE id IN (
+         SELECT id FROM security_probes
+         WHERE probe_type = $1
+           AND created_at < clock_timestamp() - ($2 * INTERVAL '1 second')
+         ORDER BY created_at LIMIT 100 FOR UPDATE SKIP LOCKED
+       )`, [probeType, windowSeconds],
+    );
     await client.query("COMMIT");
     return { allowed, retryAfterSeconds: windowSeconds };
   } catch (error) {
@@ -128,4 +165,4 @@ export async function consumePublicRateLimit(
     client.release();
   }
 }
-// 100:20 2:2 2:1
+// 130:25 2:2 2:1

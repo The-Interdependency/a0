@@ -115,7 +115,7 @@ async def _require_owner_or_admin(request: Request, tool: dict) -> None:
 @router.get("/tools")
 async def list_tools(request: Request, user_id: Optional[str] = None):
     uid = _require_uid(request)
-    owner_filter = user_id if _is_admin(request) and user_id else uid
+    owner_filter = user_id if _is_admin(request) else uid
     return await storage.get_custom_tools(owner_filter)
 
 

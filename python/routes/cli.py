@@ -1,4 +1,4 @@
-# 126:95 2:4 1:6
+# 131:95 2:4 1:6
 # DOC module: cli
 # DOC label: CLI Keys
 # DOC description: API key management for CLI and Termux access. Users generate bearer tokens (a0k_...) used to authenticate one-shot or interactive terminal sessions without a browser session.
@@ -237,12 +237,17 @@ async def cli_chat(body: CliChatBody, request: Request):
 
     # Route through the canonical adapter so CLI shares the chat seam.
     from ..services.call_fn import call_model
-    content, usage = await call_model(
-        provider_id,
-        history,
-        user_id=uid,
-        system_prompt=system_prompt or None,
-    )
+    from ..services.run_context import current_user_tier
+    token = current_user_tier.set(tier)
+    try:
+        content, usage = await call_model(
+            provider_id,
+            history,
+            user_id=uid,
+            system_prompt=system_prompt or None,
+        )
+    finally:
+        current_user_tier.reset(token)
 
     await storage.create_message({
         "conversation_id": conv_id,
@@ -258,4 +263,4 @@ async def cli_chat(body: CliChatBody, request: Request):
         "tier": tier,
         "usage": usage,
     }
-# 126:95 2:4 1:6
+# 131:95 2:4 1:6

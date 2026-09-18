@@ -1,4 +1,4 @@
-# 80:169 0:2 2:2
+# 80:154 0:2 2:2
 import math
 import os
 from fastapi import APIRouter, HTTPException, Request
@@ -138,23 +138,8 @@ async def _upsert_context_value(name: str, value: str, uid: str = "system"):
 
 
 async def _is_admin(uid: str, email: str | None, role: str = "user") -> bool:
-    if role == "admin":
-        return True
-    normalized = (email or "").strip().lower()
-    if ADMIN_EMAIL and normalized and normalized == ADMIN_EMAIL.strip().lower():
-        return True
-    if normalized:
-        try:
-            async with engine.connect() as conn:
-                row = await conn.execute(
-                    text("SELECT 1 FROM admin_emails WHERE email = :email"),
-                    {"email": normalized},
-                )
-                if row.first():
-                    return True
-        except Exception:
-            pass
-    return False
+    # Usage: only the authenticated stored role can edit shared prompt context.
+    return role == "admin"
 
 
 def _is_tier_key(name: str) -> bool:
@@ -294,4 +279,4 @@ editable_registry.register(EditableField(
     patch_endpoint="/api/v1/context/system-sections",
     query_key="/api/v1/contexts",
 ))
-# 80:169 0:2 2:2
+# 80:154 0:2 2:2
