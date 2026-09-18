@@ -69,7 +69,7 @@ permissions**, not the previously repaired Helmet CSP finding.
 | Missing admin bootstrap credential | Supply ADMIN_PASSWORD through Secret Manager; seed role and tier; reject unverified identity collisions |
 | Missing built-in tool discovery | Keep admin no-filter reads; retain caller ownership for ordinary users |
 | Unverified email privilege escalation | WS_USER_IDS names operator-verified account IDs; admin guards use stored roles/immutable IDs, never signup email |
-| CLI request-limit bypass | Meter bearer/API-key digest plus client IP before proxying |
+| CLI request-limit bypass | Meter every CLI attempt by client IP before proxying; FastAPI owns bearer authentication |
 | Encoded-path request-limit bypass | Match the once-decoded ASGI path; reject malformed escapes |
 | Guest role-slot provider substitution | Pin the authorized provider and pass the free tier |
 | Fleet role-slot provider substitution | Freeze resolved contestants, pin each single lane, and carry the caller tier |

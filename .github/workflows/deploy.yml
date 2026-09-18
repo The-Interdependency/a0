@@ -21,6 +21,9 @@ jobs:
   provider-contracts:
     name: Provider adapter contracts
     runs-on: ubuntu-latest
+    env:
+      # Required to import route models; this job fakes storage and performs no DB I/O.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/a0p_check
 
     steps:
       - name: Checkout

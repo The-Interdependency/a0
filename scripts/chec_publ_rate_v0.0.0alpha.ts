@@ -1,4 +1,4 @@
-// 156:19
+// 157:19
 // === MODULE_BUILD ===
 // id: check_a0_public_request_rate_limit
 //   module_name: public request rate limit check
@@ -51,11 +51,11 @@ async function main(): Promise<void> {
     method: "POST", originalUrl: "/api/v1/cli/%63hat",
     headers: { authorization: "Bearer a0k_CaseSensitive" },
   } as Request;
-  assert.equal(publicModelAccountKey(cliRequest), "cli:a0k_CaseSensitive");
+  assert.equal(publicModelAccountKey(cliRequest), "");
   cliRequest.headers = { "x-api-key": "a0k_other" };
-  assert.equal(publicModelAccountKey(cliRequest), "cli:a0k_other");
+  assert.equal(publicModelAccountKey(cliRequest), "");
   cliRequest.headers = {};
-  assert.equal(publicModelAccountKey(cliRequest), "cli:anonymous");
+  assert.equal(publicModelAccountKey(cliRequest), "");
   const incoming = { ...fakeRequest("127.0.0.1"), headers: { "x-forwarded-for": "spoof, 192.0.2.1, 169.254.1.1" } } as Request;
   process.env.K_SERVICE = "a0p-test";
   assert.equal(publicClientIp(incoming), "192.0.2.1");
@@ -71,8 +71,8 @@ async function main(): Promise<void> {
   assert.match(deployment, /\npermissions:\n  contents: read/);
   assert.match(deployment, /ADMIN_PASSWORD=a0p-admin-password:latest/);
   const entry = readFileSync("server/index.ts", "utf8");
-  assert.match(entry, /fontSrc:.*https:\/\/fonts.gstatic.com/);
-  assert.match(entry, /styleSrc:.*https:\/\/fonts.googleapis.com/);
+  assert.ok(entry.includes('fontSrc: ["\'self\'", "data:", "https://fonts.gstatic.com"]'));
+  assert.ok(entry.includes('styleSrc: ["\'self\'", "\'unsafe-inline\'", "https://fonts.googleapis.com"]'));
   if (process.argv.includes("--unit")) {
     await pool.end();
     console.log("public request boundary unit checks passed");
@@ -115,9 +115,10 @@ async function main(): Promise<void> {
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM security_probes WHERE probe_type = 'test_keep_probe'")).rows[0].n, 1);
   await pool.query("DELETE FROM security_probes WHERE probe_type = 'test_keep_probe'");
   process.env.PUBLIC_MODEL_REQUEST_LIMIT = "1";
-  const cliKey = "cli:a0k_test-limit";
+  const cliKey = publicModelAccountKey(cliRequest);
   assert.equal((await consumePublicRateLimit(fakeRequest("192.0.2.11"), "model", cliKey)).allowed, true);
-  assert.equal((await consumePublicRateLimit(fakeRequest("192.0.2.12"), "model", cliKey)).allowed, false);
+  assert.equal((await consumePublicRateLimit(fakeRequest("192.0.2.11"), "model", cliKey)).allowed, false);
+  assert.equal((await consumePublicRateLimit(fakeRequest("192.0.2.12"), "model", cliKey)).allowed, true);
   await pool.query("DELETE FROM security_probes WHERE probe_type = 'rate_model'");
   await checkGuestAndBootstrap();
   await clean();
@@ -186,4 +187,4 @@ main().catch(async (error) => {
   await pool.end().catch(() => undefined);
   process.exitCode = 1;
 });
-// 156:19
+// 157:19

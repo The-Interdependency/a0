@@ -277,7 +277,7 @@ void (async () => {
   app.use("/api", async (req, res, next) => {
     try {
       const accountKey = publicModelAccountKey(req);
-      if (!accountKey) return next();
+      if (accountKey === null) return next();
       const rate = await consumePublicRateLimit(req, "model", accountKey);
       if (!rate.allowed) {
         res.setHeader("Retry-After", String(rate.retryAfterSeconds));

@@ -1,4 +1,4 @@
-// 130:25 2:2 2:1
+// 128:28 2:2 2:1
 // === MODULE_BUILD ===
 // id: a0_public_request_rate_limit
 //   module_name: public request rate limit
@@ -78,14 +78,15 @@ export function publicClientIp(req: Request): string {
   return suffix[0];
 }
 
-/** Usage: CLI is metered by bearer digest plus IP even without a session. */
+/** Usage: null skips; an empty key meters by IP without an account bucket.
+ * CLI authentication remains in FastAPI; meter every CLI attempt here by IP,
+ * including missing/invalid keys. Credentials never enter limiter storage.
+ */
 export function publicModelAccountKey(req: Request): string | null {
   if (!isMeteredPublicModelPath(req.method, req.originalUrl)) return null;
   const path = decodeURIComponent(req.originalUrl.split("?", 1)[0]).replace(/\/+$/, "");
   if (path === "/api/v1/cli/chat") {
-    const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
-    const key = bearer || req.headers["x-api-key"];
-    return typeof key === "string" && key ? `cli:${key}` : "cli:anonymous";
+    return "";
   }
   return req.session?.userRole === "admin" ? null : req.session?.userId ?? null;
 }
@@ -165,4 +166,4 @@ export async function consumePublicRateLimit(
     client.release();
   }
 }
-// 130:25 2:2 2:1
+// 128:28 2:2 2:1
