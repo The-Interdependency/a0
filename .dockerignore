@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+node_modules
+dist
+uploads
+attached_assets
+android
+test-results
+playwright-report
+.playwright
+.env
+*.tar.gz
+*.apk
+__pycache__
+*.pyc

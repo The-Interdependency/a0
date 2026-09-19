@@ -20,11 +20,11 @@ back when the spawned agent's first turn lands.
 #   owner: Erin Spencer
 #   public_surface: SCHEMA, handle
 #   internal_surface: none
-#   auth_boundary: none
+#   auth_boundary: admin tier until per-owner recursive cost and state isolation are implemented
 #   storage_boundary: write
 #   network_boundary: internal
 #   user_data_boundary: write
-#   admin_only: false
+#   admin_only: true
 #   tests: hmmm
 #   rollout: default_enabled
 #   rollback: Revert this file; removes the sub_agent_spawn tool from the registry.
@@ -86,7 +86,7 @@ SCHEMA = {
             "required": ["task"],
         },
     },
-    "tier": "free",
+    "tier": "admin",
     "approval_scope": None,
     "enabled": True,
     "category": "agent",

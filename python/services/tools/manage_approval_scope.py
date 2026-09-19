@@ -9,7 +9,7 @@
 #   owner: Erin Spencer
 #   public_surface: SCHEMA, handle
 #   internal_surface: none
-#   auth_boundary: scoped to the active approval-scope user id; mutates that user's granted scopes
+#   auth_boundary: working-set or admin tier; scoped to the active approval-scope user id
 #   storage_boundary: write
 #   network_boundary: internal
 #   user_data_boundary: write
@@ -52,7 +52,7 @@ SCHEMA = {
             "required": ["action"],
         },
     },
-    "tier": "free",
+    "tier": "ws",
     "approval_scope": None,
     "enabled": True,
     "category": "governance",

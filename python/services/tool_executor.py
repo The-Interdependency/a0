@@ -1,4 +1,4 @@
-# 378:101 0:0 12:4
+# 397:101 0:0 12:4
 """ZFAE Tool Executor — thin shim over the per-tool registry.
 
 Tools live in `python/services/tools/*.py` (one file per tool, self-declared
@@ -56,6 +56,7 @@ from .tool_distill import (
 from .tools import dispatch as _registry_dispatch
 from .tools import registry as _registry
 from .tools import tool_schemas_chat as _registry_schemas
+from .run_context import current_user_tier
 
 # ---------------------------------------------------------------------------
 # Per-conversation tool allow-list ContextVar.
@@ -65,6 +66,24 @@ from .tools import tool_schemas_chat as _registry_schemas
 _allowed_tools_cv: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
     "_allowed_tools", default=None
 )
+_TIER_RANK = {"free": 0, "supporter": 1, "ws": 2, "admin": 3}
+
+
+def _tool_tier_allows(name: str) -> bool:
+    spec = _registry().get(name)
+    if spec is None:
+        return True
+    required = getattr(spec, "tier", "free")
+    return _TIER_RANK.get(current_user_tier.get(), 0) >= _TIER_RANK.get(required, 3)
+
+
+def _tier_visible_schemas(schemas: list[dict]) -> list[dict]:
+    return [
+        schema for schema in schemas
+        if _tool_tier_allows(
+            schema.get("function", {}).get("name") or schema.get("name") or schema.get("type", "")
+        )
+    ]
 
 
 def set_allowed_tools(names: list[str] | None) -> contextvars.Token:
@@ -84,18 +103,20 @@ def get_active_chat_schemas() -> list[dict]:
     The allow-list is set per-request via set_allowed_tools() so parallel
     requests don't interfere with each other.
     """
+    visible = _tier_visible_schemas(TOOL_SCHEMAS_CHAT)
     allowed = _allowed_tools_cv.get()
     if allowed is None:
-        return TOOL_SCHEMAS_CHAT
+        return visible
     allowed_set = set(allowed)
-    return [s for s in TOOL_SCHEMAS_CHAT if s["function"]["name"] in allowed_set]
+    return [s for s in visible if s["function"]["name"] in allowed_set]
 
 
 def get_active_responses_schemas() -> list[dict]:
     """Like get_active_chat_schemas but for TOOL_SCHEMAS_RESPONSES (OpenAI format)."""
+    visible = _tier_visible_schemas(TOOL_SCHEMAS_RESPONSES)
     allowed = _allowed_tools_cv.get()
     if allowed is None:
-        return TOOL_SCHEMAS_RESPONSES
+        return visible
     allowed_set = set(allowed)
     # Map OpenAI native tool types to their logical allow-list name so that
     # disabling "web_search" also removes the native "web_search_preview" entry.
@@ -103,7 +124,7 @@ def get_active_responses_schemas() -> list[dict]:
         "web_search_preview": "web_search",
     }
     filtered = []
-    for s in TOOL_SCHEMAS_RESPONSES:
+    for s in visible:
         if "name" in s:
             # Named tool (function-call style) — check allow-list directly.
             if s["name"] in allowed_set:
@@ -513,6 +534,8 @@ async def _execute_tool_inner(name: str, arguments: dict) -> str:
             )
         if name == "skill_load":
             return _skill_load(args.get("name", ""))
+        if not _tool_tier_allows(name):
+            return f"[tool denied — {name} is not available for this account tier]"
         await _approval_denial(name)
         try:
             return await _registry_dispatch(name, **args)
@@ -545,4 +568,4 @@ __all__ = [
     "get_active_chat_schemas",
     "get_active_responses_schemas",
 ]
-# 378:101 0:0 12:4
+# 397:101 0:0 12:4

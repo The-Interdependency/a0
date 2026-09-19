@@ -1,11 +1,14 @@
-// 71:4 1:1 1:1
+// 71:7 1:1 1:1
 import session from "express-session";
 import ConnectPgSimple from "connect-pg-simple";
 import type { Express } from "express";
 import { pool } from "../db";
 
 export async function setupAuth(app: Express) {
-  app.set("trust proxy", 1);
+  // Cloud Run supplies the client and frontend address as the final two XFF
+  // entries. Never trust a caller-supplied leftmost prefix or local-dev headers.
+  // Usage: keep Express private behind Cloud Run; verify this suffix in staging.
+  app.set("trust proxy", process.env.K_SERVICE ? 2 : false);
 
   const IS_PROD = process.env.NODE_ENV === "production";
   const secret = process.env.SESSION_SECRET;
@@ -82,4 +85,4 @@ export function regenerateSession(req: import("express").Request): Promise<void>
     req.session.regenerate((err) => (err ? reject(err) : resolve()));
   });
 }
-// 71:4 1:1 1:1
+// 71:7 1:1 1:1

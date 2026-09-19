@@ -1,7 +1,7 @@
-# 77:8 2:3 1:1
+# 68:9 2:3 1:1
 # DOC module: admin
-# DOC label: Admin Email Allowlist
-# DOC description: Admin-only endpoints for listing, adding, and removing admin email allowlist entries.
+# DOC label: Admin Contact List
+# DOC description: Admin-only endpoints for listing, adding, and removing admin contact entries; these entries confer no account privileges.
 # DOC tier: admin
 # DOC role: route
 # DOC endpoint: GET /api/v1/admin/emails | List configured admin email entries.
@@ -31,16 +31,8 @@ def _user_role(request: Request) -> str:
 
 
 async def _is_admin(uid: str, email: Optional[str], role: str = "user") -> bool:
-    if role == "admin":
-        return True
-    if not email:
-        return False
-    normalized = email.strip().lower()
-    async with engine.connect() as conn:
-        row = await conn.execute(
-            text("SELECT 1 FROM admin_emails WHERE email = :email"), {"email": normalized}
-        )
-        return row.fetchone() is not None
+    # Email entries are contact records, never proof of account ownership.
+    return role == "admin"
 
 
 class AddEmailBody(BaseModel):
@@ -101,4 +93,4 @@ async def remove_admin_email(request: Request, email: str):
         if result.rowcount == 0:
             return JSONResponse(status_code=404, content={"error": "Not found"})
     return {"ok": True, "email": target}
-# 77:8 2:3 1:1
+# 68:9 2:3 1:1

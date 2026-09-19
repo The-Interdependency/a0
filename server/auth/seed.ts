@@ -1,6 +1,9 @@
-// 36:0 0:0 0:2
+// 42:0 0:0 0:2
 import { authStorage } from "./storage";
 import { hashPassphrase } from "./password";
+import { db } from "../db";
+import { users } from "@shared/models/auth";
+import { eq } from "drizzle-orm";
 
 export async function seedAdminUser() {
   const adminEmail = process.env.ADMIN_EMAIL?.trim();
@@ -14,14 +17,20 @@ export async function seedAdminUser() {
   try {
     const existing = await authStorage.getUserByEmail(adminEmail);
     if (existing) {
+      if (existing.role !== "admin") {
+        throw new Error("ADMIN_EMAIL belongs to a non-admin account; verify ownership and select a fresh bootstrap identity");
+      }
+      if (existing.subscriptionTier !== "admin") {
+        await db
+          .update(users)
+          .set({ subscriptionTier: "admin", updatedAt: new Date() })
+          .where(eq(users.id, existing.id));
+      }
       return;
     }
 
     if (!adminPassword) {
-      console.warn(
-        "[auth] ADMIN_EMAIL is set but ADMIN_PASSWORD is not. Cannot seed admin user."
-      );
-      return;
+      throw new Error("ADMIN_PASSWORD is required to bootstrap ADMIN_EMAIL");
     }
 
     const passphraseHash = await hashPassphrase(adminPassword);
@@ -40,6 +49,7 @@ export async function seedAdminUser() {
     );
   } catch (err) {
     console.error("[auth] Failed to seed admin user:", err);
+    throw err;
   }
 }
-// 36:0 0:0 0:2
+// 42:0 0:0 0:2

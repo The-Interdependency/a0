@@ -1,4 +1,4 @@
-# 392:33 2:10 1:4
+# 419:33 2:10 1:4
 # N:M
 """Fleet benchmarking — head-to-head comparison of model/agent/orchestration tuples.
 
@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text as _sa_text
 
 from ..database import get_session
+from ..services import public_access_policy
 from ..services.inference_modes import run_inference_with_mode
 from ..services.energy_registry import cache_breakdown, estimate_cost
 
@@ -99,16 +100,16 @@ async def _get_owned_contestant(cid: int, uid: str) -> dict:
 # ---------- Benchmark CRUD ----------
 
 class CreateBenchmark(BaseModel):
-    name: str
-    prompt: str = ""
+    name: str = Field(min_length=1, max_length=120)
+    prompt: str = Field(default="", max_length=16000)
     mode: str = "one_shot"
     judge_enabled: bool = False
     judge_model: Optional[str] = None
 
 
 class UpdateBenchmark(BaseModel):
-    name: Optional[str] = None
-    prompt: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    prompt: Optional[str] = Field(default=None, max_length=16000)
     mode: Optional[str] = None
     judge_enabled: Optional[bool] = None
     judge_model: Optional[str] = None
@@ -201,21 +202,21 @@ async def delete_benchmark(bid: int, request: Request):
 # ---------- Contestant CRUD ----------
 
 class CreateContestant(BaseModel):
-    label: str = ""
-    provider_id: str
-    model_id: str = ""
+    label: str = Field(default="", max_length=120)
+    provider_id: str = Field(min_length=1, max_length=80)
+    model_id: str = Field(default="", max_length=120)
     agent_id: Optional[int] = None
     orchestration_mode: str = "single"
-    providers: list[str] = Field(default_factory=list)
+    providers: list[str] = Field(default_factory=list, max_length=8)
 
 
 class UpdateContestant(BaseModel):
-    label: Optional[str] = None
-    provider_id: Optional[str] = None
-    model_id: Optional[str] = None
+    label: Optional[str] = Field(default=None, max_length=120)
+    provider_id: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    model_id: Optional[str] = Field(default=None, max_length=120)
     agent_id: Optional[int] = None
     orchestration_mode: Optional[str] = None
-    providers: Optional[list[str]] = None
+    providers: Optional[list[str]] = Field(default=None, max_length=8)
     slot: Optional[int] = None
 
 
@@ -318,7 +319,7 @@ async def delete_contestant(cid: int, request: Request):
 # ---------- Run fan-out ----------
 
 class StartRun(BaseModel):
-    prompt: Optional[str] = None  # override; falls back to benchmark.prompt
+    prompt: Optional[str] = Field(default=None, max_length=16000)  # override; falls back to benchmark.prompt
 
 
 async def _run_one_contestant(
@@ -326,6 +327,7 @@ async def _run_one_contestant(
     contestant: dict,
     prompt: str,
     uid: str,
+    tier: str,
 ) -> None:
     """Execute a single contestant. Always finishes (writes status + content
     or error). Never raises out — errors land in fleet_contestant_runs.error."""
@@ -360,6 +362,8 @@ async def _run_one_contestant(
     content = ""
     error: Optional[str] = None
     usage: dict = {}
+    from ..services.run_context import current_user_tier
+    token = current_user_tier.set(tier)
     try:
         content, usage = await run_inference_with_mode(
             messages=messages,
@@ -368,9 +372,12 @@ async def _run_one_contestant(
             cut_mode="soft",
             user_id=uid,
             system_prompt=system_prompt,
+            routed_user_tier=tier,
         )
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
+    finally:
+        current_user_tier.reset(token)
     elapsed_ms = int((time.perf_counter() - t0) * 1000)
 
     # Cost/token accounting (best-effort; multi-model usage may not be a single dict)
@@ -421,8 +428,29 @@ async def start_run(bid: int, body: StartRun, request: Request):
         contestants = (await sess.execute(_sa_text(
             "SELECT * FROM fleet_contestants WHERE benchmark_id = :id ORDER BY slot"
         ), {"id": bid})).mappings().all()
+        tier = (await sess.execute(_sa_text(
+            "SELECT subscription_tier FROM users WHERE id = :uid"
+        ), {"uid": uid})).scalar_one_or_none() or "free"
     if not contestants:
         raise HTTPException(status_code=400, detail="benchmark has no contestants")
+
+    from ..services.energy_registry import resolve_providers
+    resolved_contestants = []
+    for row in contestants:
+        contestant = dict(row)
+        mode = contestant.get("orchestration_mode") or "single"
+        requested = ([contestant["provider_id"]] if mode == "single" else
+                     list(contestant.get("providers") or []) or [contestant["provider_id"]])
+        resolved = await resolve_providers(requested)
+        if not resolved:
+            raise HTTPException(status_code=400, detail="No Fleet provider resolved")
+        contestant.update(provider_id=resolved[0], providers=resolved)
+        resolved_contestants.append(contestant)
+    contestants = resolved_contestants
+    try:
+        public_access_policy.enforce_public_fleet_policy(tier, contestants)
+    except public_access_policy.PublicAccessDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
 
     run_id = f"fbr-{uuid.uuid4().hex[:16]}"
     async with get_session() as sess:
@@ -435,7 +463,7 @@ async def start_run(bid: int, body: StartRun, request: Request):
     async def _drive() -> None:
         try:
             await asyncio.gather(
-                *[_run_one_contestant(run_id, dict(c), prompt, uid) for c in contestants],
+                *[_run_one_contestant(run_id, dict(c), prompt, uid, tier) for c in contestants],
                 return_exceptions=True,
             )
         finally:
@@ -488,4 +516,4 @@ async def list_runs(bid: int, request: Request):
             "WHERE benchmark_id = :bid ORDER BY started_at DESC LIMIT 50"
         ), {"bid": bid})).mappings().all()
     return [dict(r) for r in rows]
-# 392:33 2:10 1:4
+# 419:33 2:10 1:4

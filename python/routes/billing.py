@@ -1,4 +1,4 @@
-# 418:311 5:7 2:4
+# 411:313 5:7 2:4
 import os
 import stripe
 from urllib.parse import urlparse
@@ -12,7 +12,7 @@ from .billing_helpers import is_supporter_subscription
 
 # DOC module: billing
 # DOC label: Billing
-# DOC description: Donations-only billing surface. a0p is a research instrument, not a subscription product — there is no recurring sign-up tier. Existing Supporter subscribers are honored until they cancel via the Stripe portal. ws tier auto-assigned to @interdependentway.org accounts; admin tier reserved for the owner + invited collaborators.
+# DOC description: Donations-only billing surface. a0p is a research instrument, not a subscription product — there is no recurring sign-up tier. Existing Supporter subscribers are honored until they cancel via the Stripe portal. ws tier assigned only to operator-allowlisted account IDs; admin tier reserved for the owner + invited collaborators.
 # DOC tier: free
 # DOC role: route
 # DOC endpoint: GET /api/v1/billing/status | Get current user billing status and tier
@@ -58,7 +58,7 @@ router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
 # The interval/Supporter scaffolding has been retired (Task #110); existing
 # subscribers are honored via the Stripe webhook + portal until they cancel.
 _DONATION_RETURN_PATH = "/pricing?donation=success"
-_WS_DOMAIN = "interdependentway.org"
+_DEFAULT_APP_ORIGIN = "https://replit.interdependentway.org"
 
 
 def _is_production() -> bool:
@@ -74,12 +74,12 @@ def _allowed_netlocs() -> set[str]:
     Localhost variants are included only outside production to avoid
     allowing developer-only origins in the deployed app.
     Comparison uses the parsed netloc (host[:port]) so prefix-bypass attacks
-    like https://a0p.replit.app.evil.com are rejected.
+    like https://replit.interdependentway.org.evil.com are rejected.
     """
     env = os.environ.get("APP_ORIGIN", "")
     raw = [o.strip().rstrip("/") for o in env.split(",") if o.strip()]
     if not raw:
-        raw = ["https://a0p.replit.app"]
+        raw = [_DEFAULT_APP_ORIGIN]
     netlocs: set[str] = set()
     for origin in raw:
         parsed = urlparse(origin)
@@ -96,11 +96,11 @@ def _allowed_origins() -> list[str]:
 
     Used to build the fallback_origin prefix for Stripe return URLs.
     Reads APP_ORIGIN from the environment (comma-separated list supported).
-    Falls back to https://a0p.replit.app when the env var is absent.
+    Falls back to the canonical public hostname when the env var is absent.
     """
     env = os.environ.get("APP_ORIGIN", "")
     raw = [o.strip().rstrip("/") for o in env.split(",") if o.strip()]
-    return raw if raw else ["https://a0p.replit.app"]
+    return raw if raw else [_DEFAULT_APP_ORIGIN]
 
 
 def _safe_return_url(candidate: Optional[str], fallback: str) -> str:
@@ -108,7 +108,7 @@ def _safe_return_url(candidate: Optional[str], fallback: str) -> str:
 
     Validates by parsing the URL and comparing the normalized netloc
     (host[:port]) against the allowlist, so prefix-bypass tricks such as
-    https://a0p.replit.app.evil.com/ are rejected.  Attacker-supplied values
+    https://replit.interdependentway.org.evil.com/ are rejected. Attacker-supplied values
     that target external hosts are silently replaced with the application's
     own safe default.
     """
@@ -156,15 +156,9 @@ def _user_role(request: Request) -> str:
 
 
 async def _check_admin(uid: str, email: Optional[str], conn, role: str = "user") -> bool:
-    if role == "admin":
-        return True
-    if not email:
-        return False
-    normalized = email.strip().lower()
-    row = await conn.execute(
-        text("SELECT 1 FROM admin_emails WHERE email = :email"), {"email": normalized}
-    )
-    return row.fetchone() is not None
+    # Email is unverified signup input. Only the authenticated stored role
+    # conveys admin authority; admin_emails is not proof of ownership.
+    return role == "admin"
 
 
 async def ensure_admin_emails() -> None:
@@ -181,10 +175,11 @@ async def ensure_admin_emails() -> None:
 
 
 async def _maybe_promote_ws(uid: str, email: Optional[str], current_tier: str) -> str:
-    """Auto-promote @interdependentway.org accounts to ws tier if currently free."""
-    if not email or current_tier != "free":
+    """Usage: operators set WS_USER_IDS to inspected, immutable account IDs."""
+    if current_tier != "free":
         return current_tier
-    if not email.strip().lower().endswith(f"@{_WS_DOMAIN}"):
+    allowed_ids = {value.strip() for value in os.environ.get("WS_USER_IDS", "").split(",") if value.strip()}
+    if uid not in allowed_ids:
         return current_tier
     async with engine.begin() as conn:
         await conn.execute(
@@ -329,7 +324,7 @@ async def create_donation(body: DonateBody, request: Request):
 
     stripe.api_key = STRIPE_SECRET_KEY
     allowed_origins = _allowed_origins()
-    fallback_origin = allowed_origins[0] if allowed_origins else "https://a0p.replit.app"
+    fallback_origin = allowed_origins[0] if allowed_origins else _DEFAULT_APP_ORIGIN
     return_url = _safe_return_url(body.return_url, f"{fallback_origin}{_DONATION_RETURN_PATH}")
 
     async with engine.connect() as conn:
@@ -400,7 +395,7 @@ async def customer_portal(body: PortalBody, request: Request):
         raise HTTPException(status_code=404, detail="No billing account found")
 
     allowed_origins = _allowed_origins()
-    fallback_origin = allowed_origins[0] if allowed_origins else "https://a0p.replit.app"
+    fallback_origin = allowed_origins[0] if allowed_origins else _DEFAULT_APP_ORIGIN
     safe_url = _safe_return_url(body.return_url, f"{fallback_origin}/pricing")
     session = stripe.billing_portal.Session.create(
         customer=rec["stripe_customer_id"], return_url=safe_url,
@@ -518,7 +513,7 @@ class PromoteWsBody(BaseModel):
 
 @router.post("/internal/promote-ws")
 async def internal_promote_ws(body: PromoteWsBody, request: Request):
-    """Trigger the WS-tier email-domain promotion check.
+    """Trigger the operator account-ID allowlist check.
 
     Intended to be called by the Express auth layer immediately after
     successful login and registration. Gated by the internal API secret
@@ -800,7 +795,7 @@ async def explainer_checkout(request: Request):
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
     candidate_url = body.get("return_url") if isinstance(body, dict) else None
     allowed_origins = _allowed_origins()
-    fallback_origin = allowed_origins[0] if allowed_origins else "https://a0p.replit.app"
+    fallback_origin = allowed_origins[0] if allowed_origins else _DEFAULT_APP_ORIGIN
     return_url = _safe_return_url(candidate_url, f"{fallback_origin}/transcripts?explainer_checkout=success")
 
     async with engine.connect() as conn:
@@ -858,4 +853,4 @@ async def explainer_checkout(request: Request):
 #          atomic)
 #   class: idempotency
 # === END CONTRACTS ===
-# 418:311 5:7 2:4
+# 411:313 5:7 2:4

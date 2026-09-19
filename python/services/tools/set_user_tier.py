@@ -1,4 +1,4 @@
-# 73:21 0:0 0:2
+# 72:21 0:0 0:2
 """set_user_tier — admin-only DB tier override."""
 
 # === MODULE_BUILD ===
@@ -78,8 +78,7 @@ async def handle(user_id: str = "", tier: str = "", **_) -> str:
     async with engine.connect() as conn:
         admin_row = await conn.execute(
             sa_text(
-                "SELECT 1 FROM admin_emails WHERE email = "
-                "(SELECT email FROM users WHERE id = :uid)"
+                "SELECT 1 FROM users WHERE id = :uid AND role = 'admin'"
             ),
             {"uid": caller_uid},
         )
@@ -104,4 +103,4 @@ async def handle(user_id: str = "", tier: str = "", **_) -> str:
         "email": updated["email"],
         "tier": updated["subscription_tier"],
     })
-# 73:21 0:0 0:2
+# 72:21 0:0 0:2

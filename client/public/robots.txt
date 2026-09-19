@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://a0p.replit.app/sitemap.xml
+Sitemap: https://replit.interdependentway.org/sitemap.xml

@@ -1,4 +1,4 @@
-# 124:89 2:4 1:6
+# 131:95 2:4 1:6
 # DOC module: cli
 # DOC label: CLI Keys
 # DOC description: API key management for CLI and Termux access. Users generate bearer tokens (a0k_...) used to authenticate one-shot or interactive terminal sessions without a browser session.
@@ -14,7 +14,7 @@ import hashlib
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from ..database import engine
 
@@ -74,7 +74,7 @@ async def resolve_cli_key(api_key: str) -> Optional[dict]:
 
 
 class CreateKeyBody(BaseModel):
-    label: Optional[str] = None
+    label: Optional[str] = Field(default=None, max_length=120)
 
 
 @router.post("/keys")
@@ -82,6 +82,12 @@ async def create_key(body: CreateKeyBody, request: Request):
     uid = _user_id(request)
     if not uid:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    async with engine.connect() as conn:
+        tier = (await conn.execute(
+            text("SELECT subscription_tier FROM users WHERE id = :uid"), {"uid": uid}
+        )).scalar_one_or_none() or "free"
+    if tier not in {"ws", "admin"}:
+        raise HTTPException(status_code=403, detail="CLI access requires the working-set tier")
 
     full_key, prefix, key_hash = _make_key()
 
@@ -146,9 +152,9 @@ async def revoke_key(key_id: int, request: Request):
 
 
 class CliChatBody(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=16000)
     conversation_id: Optional[int] = None
-    model: Optional[str] = None
+    model: Optional[str] = Field(default=None, max_length=120)
 
 
 @router.post("/chat")
@@ -171,6 +177,8 @@ async def cli_chat(body: CliChatBody, request: Request):
 
     uid = user["user_id"]
     tier = user["subscription_tier"] or "free"
+    if tier not in {"ws", "admin"}:
+        raise HTTPException(status_code=403, detail="CLI access requires the working-set tier")
 
     if body.conversation_id:
         conv = await storage.get_conversation(body.conversation_id)
@@ -229,12 +237,17 @@ async def cli_chat(body: CliChatBody, request: Request):
 
     # Route through the canonical adapter so CLI shares the chat seam.
     from ..services.call_fn import call_model
-    content, usage = await call_model(
-        provider_id,
-        history,
-        user_id=uid,
-        system_prompt=system_prompt or None,
-    )
+    from ..services.run_context import current_user_tier
+    token = current_user_tier.set(tier)
+    try:
+        content, usage = await call_model(
+            provider_id,
+            history,
+            user_id=uid,
+            system_prompt=system_prompt or None,
+        )
+    finally:
+        current_user_tier.reset(token)
 
     await storage.create_message({
         "conversation_id": conv_id,
@@ -250,4 +263,4 @@ async def cli_chat(body: CliChatBody, request: Request):
         "tier": tier,
         "usage": usage,
     }
-# 124:89 2:4 1:6
+# 131:95 2:4 1:6

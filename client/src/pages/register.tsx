@@ -229,7 +229,7 @@ export default function RegisterPage() {
               {showChallenges && (
                 <div className="border-t border-zinc-800 p-4 space-y-4">
                   <p className="text-[10px] text-zinc-500 leading-relaxed">
-                    Write your own questions and answers. These let you recover your passphrase without email. Answers are stored encrypted.
+                    Write your own questions and answers. These let you recover your passphrase without email. Answers are stored as one-way hashes; avoid facts other people could discover.
                   </p>
 
                   {fields.map((field, index) => (
@@ -271,7 +271,7 @@ export default function RegisterPage() {
                             <FormControl>
                               <Input
                                 type="password"
-                                placeholder="Your answer (stored encrypted)"
+                                placeholder="Your answer (stored as a one-way hash)"
                                 className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 text-xs h-8"
                                 data-testid={`input-challenge-answer-${index}`}
                                 {...field}
