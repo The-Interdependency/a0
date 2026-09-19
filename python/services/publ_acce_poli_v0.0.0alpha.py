@@ -1,22 +1,22 @@
-# 68:20 3:3 2:1
+# 84:20 3:3 2:1
 # === MODULE_BUILD ===
 # id: a0_public_provider_policy
 #   module_name: public provider policy
 #   module_kind: service
-#   summary: Keeps public free-tier inference on a bounded, configurable set of economical providers and lanes.
+#   summary: Keeps public free-tier inference on a bounded, configurable set of economical providers and lanes while preserving catalog tier gates for Fleet callers.
 #   owner: Erin Spencer
 #   public_surface: PublicAccessDenied, enforce_public_provider_policy, enforce_public_fleet_policy, public_provider_allowlist
-#   internal_surface: _positive_int_env, _DEFAULT_PUBLIC_PROVIDERS
+#   internal_surface: _positive_int_env, _DEFAULT_PUBLIC_PROVIDERS, _enforce_registered_provider_tiers
 #   auth_boundary: read
 #   storage_boundary: none
 #   network_boundary: none
 #   user_data_boundary: none
 #   admin_only: false
-#   tests: tests/test_publ_acce_poli_v0.0.0alpha.py
-#   rollout: default_enabled for free tier; environment-configurable provider allowlist and lane cap
+#   tests: tests/test_publ_acce_poli_v0.0.0alpha.py, tests/test_fleet_tier_gate_v0.0.0alpha.py
+#   rollout: default_enabled for free tier; catalog tier gates apply to every Fleet caller; environment-configurable provider allowlist and lane cap
 #   rollback: Stop calling enforce_public_provider_policy; no persistent state is written.
 # === END MODULE_BUILD ===
-"""Cost and fan-out boundary for the donation-funded public tier."""
+"""Cost, entitlement, and fan-out boundary for public Fleet inference."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from collections.abc import Iterable
 
 
 class PublicAccessDenied(PermissionError):
-    """A free-tier request exceeds the configured public inference boundary."""
+    """A public request exceeds an inference entitlement or cost boundary."""
 
 
 _DEFAULT_PUBLIC_PROVIDERS = (
@@ -94,16 +94,34 @@ def enforce_public_provider_policy(
         )
 
 
+def _enforce_registered_provider_tiers(tier: str, provider_ids: Iterable[str]) -> None:
+    """Use the model catalog's entitlement contract for already-resolved Fleet lanes."""
+    from .energy_registry import BUILTIN_PROVIDERS
+    from .model_catalog import routed_model_owner
+
+    for provider_id in provider_ids:
+        spec = BUILTIN_PROVIDERS.get(provider_id)
+        if not spec:
+            raise PublicAccessDenied(f"Unknown Fleet provider {provider_id!r}")
+        model_id = str(spec.get("model") or "").strip()
+        if not model_id:
+            raise PublicAccessDenied(f"Fleet provider {provider_id!r} has no registered model")
+        try:
+            routed_model_owner(model_id, provider_id, tier)
+        except PermissionError as exc:
+            raise PublicAccessDenied(str(exc)) from None
+
+
 def enforce_public_fleet_policy(tier: str, contestants: Iterable[object]) -> None:
-    if tier != "free":
-        return
     total_calls = 0
     for contestant in contestants:
         orch = contestant.get("orchestration_mode") or "single"
         providers = ([contestant["provider_id"]] if orch == "single" else
                      list(contestant.get("providers") or []) or [contestant["provider_id"]])
-        enforce_public_provider_policy(tier, orch, providers)
-        total_calls += orchestration_call_count(orch, len(providers))
-    if total_calls > _positive_int_env("PUBLIC_MAX_PROVIDER_LANES", 2):
+        _enforce_registered_provider_tiers(tier, providers)
+        if tier == "free":
+            enforce_public_provider_policy(tier, orch, providers)
+            total_calls += orchestration_call_count(orch, len(providers))
+    if tier == "free" and total_calls > _positive_int_env("PUBLIC_MAX_PROVIDER_LANES", 2):
         raise PublicAccessDenied("Public Fleet run exceeds the provider-call limit")
-# 68:20 3:3 2:1
+# 84:20 3:3 2:1
