@@ -1,4 +1,4 @@
-# 399:1 0:0 0:0
+# 402:2 0:0 0:0
 """Routing and catalog tests for registry-driven compatible providers."""
 
 import ast
@@ -69,16 +69,19 @@ def test_approval_replays_preserve_explicit_provider_pin() -> None:
         for call in replay_calls
     )
 
-    instance_runs = [
+    harness_calls = [
         node
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "run"
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "run_single_turn"
     ]
+    assert len(harness_calls) == 1
     assert any(
-        any(keyword.arg == "pin_requested_provider" for keyword in call.keywords)
-        for call in instance_runs
+        keyword.arg == "pin_requested_provider"
+        and isinstance(keyword.value, ast.Name)
+        and keyword.value.id == "provider_pin_requested"
+        for keyword in harness_calls[0].keywords
     )
 
     pending_writes = [
@@ -509,3 +512,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             use_tools=False,
         )
 # 399:1 0:0 0:0
+# 402:2 0:0 0:0
