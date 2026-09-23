@@ -1,4 +1,4 @@
-# 152:29 0:0 0:1
+# 153:29 0:0 0:1
 """Witnesses for the continuous A0 work harness.
 
 Usage:
@@ -195,6 +195,7 @@ async def test_agentic_transient_failure_after_tool_boundary_is_not_replayed(
             use_tools=True,
         )
     assert _FakeInstance.calls == ["seed"]
+    assert work_harness.current_tool_executions.get() == 0
 
 
 @pytest.mark.asyncio
@@ -211,4 +212,4 @@ async def test_tool_free_transient_failure_can_fall_back() -> None:
     assert content == "ok"
     assert provider == "fallback-provider"
     assert usage["harness"]["fallback_count"] == 1
-# 152:29 0:0 0:1
+# 153:29 0:0 0:1
