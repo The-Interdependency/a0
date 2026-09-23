@@ -1,4 +1,4 @@
-# 399:164 0:0 16:15
+# 400:164 0:0 16:15
 # === MODULE_BUILD ===
 # id: a0_service_inference
 #   module_name: inference
@@ -79,6 +79,7 @@ from .attachments import build_provider_messages as _build_provider_messages
 # Single source of truth for provider specs — loaded from python/config/providers.json.
 # Replaces the old hardcoded PROVIDER_ENDPOINTS dict per the no-string-literals doctrine.
 from .energy_registry import BUILTIN_PROVIDERS
+from .provider_failure import mark_provider_failure
 
 _log = logging.getLogger("a0p.inference")
 
@@ -240,7 +241,7 @@ def _sanitize_provider_error(provider: str, exc: BaseException) -> str:
         if isinstance(exc, _genai_errors.APIError):
             code = getattr(exc, "code", None) or getattr(exc, "status", None) or "?"
             msg = _safe_error_snippet(getattr(exc, "message", None) or str(exc))
-            return f"[{provider} error: {code} {msg}]".rstrip(" ]") + "]"
+            return mark_provider_failure(f"[{provider} error: {code} {msg}]".rstrip(" ]") + "]", provider, exc)
     except ImportError:
         pass
 
@@ -265,17 +266,17 @@ def _sanitize_provider_error(provider: str, exc: BaseException) -> str:
             body_msg = ""
         body_msg = _safe_error_snippet(body_msg)
         if body_msg:
-            return f"[{provider} error: HTTP {code} {body_msg}]"
-        return f"[{provider} error: HTTP {code}]"
+            return mark_provider_failure(f"[{provider} error: HTTP {code} {body_msg}]", provider, exc)
+        return mark_provider_failure(f"[{provider} error: HTTP {code}]", provider, exc)
     if isinstance(exc, httpx.TimeoutException):
-        return f"[{provider} error: request timed out]"
+        return mark_provider_failure(f"[{provider} error: request timed out]", provider, exc)
     if isinstance(exc, httpx.HTTPError):
-        return f"[{provider} error: network error]"
+        return mark_provider_failure(f"[{provider} error: network error]", provider, exc)
     # Generic — include the type plus a sanitized message snippet if non-empty.
     snippet = _safe_error_snippet(str(exc))
     if snippet:
-        return f"[{provider} error: {type(exc).__name__}: {snippet}]"
-    return f"[{provider} error: {type(exc).__name__}]"
+        return mark_provider_failure(f"[{provider} error: {type(exc).__name__}: {snippet}]", provider, exc)
+    return mark_provider_failure(f"[{provider} error: {type(exc).__name__}]", provider, exc)
 
 
 def _canonical_tool_calls(tool_calls: list[dict]) -> str:
@@ -625,6 +626,4 @@ async def _call_anthropic(
         max_tokens=max_tokens, use_tools=use_tools,
         reasoning_effort=reasoning_effort,
         enable_caching=enable_caching)
-
-
-# 399:164 0:0 16:15
+# 400:164 0:0 16:15
