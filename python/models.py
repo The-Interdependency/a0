@@ -1,4 +1,4 @@
-# 358:22 0:0 5:0
+# 361:23 0:0 5:0
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float, DateTime, JSON,
     ARRAY, ForeignKey, UniqueConstraint, Index, text
@@ -55,6 +55,9 @@ class Conversation(Base):
     archived = Column(Boolean, nullable=False, server_default=text("false"))
     agent_id = Column(Integer)
     enabled_tools = Column(JSONB)
+    max_tool_rounds = Column(Integer)
+    inference_mode = Column(String(20), server_default="agentic")
+    harness_state = Column(JSONB)
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
@@ -448,3 +451,4 @@ class GeneratedImage(Base):
     tags = Column(JSONB, server_default=text("'[]'::jsonb"))
     skill_origin = Column(Text)
 # 358:22 0:0 5:0
+# 361:23 0:0 5:0
