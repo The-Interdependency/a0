@@ -1,4 +1,4 @@
-# 677:186 2:7 2:16
+# 677:185 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -947,5 +947,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   then: the route removes its staged message and returns HTTP 403 instead of leaving a dangling turn or returning 500
 #   class: security
 # === END CONTRACTS ===
-# 685:192 2:7 2:16
-# 677:186 2:7 2:16
+# 677:185 2:7 2:16
