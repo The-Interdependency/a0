@@ -1,4 +1,4 @@
-# 393:53 0:0 4:2
+# 399:58 0:0 4:2
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from sqlalchemy import select, update, delete, func, desc, asc, or_
@@ -115,6 +115,18 @@ class _CoreStorage:
             await session.execute(
                 update(Conversation).where(Conversation.id == id)
                 .values(title=title, updated_at=datetime.utcnow())
+            )
+
+    async def update_conversation_harness_state(self, id: int, state: Dict[str, Any]) -> None:
+        """Persist the bounded continuity state for one conversation.
+
+        Usage: work_harness prepares the state; chat owns authorization and calls
+        this only after it has resolved the conversation to the authenticated owner.
+        """
+        async with get_session() as session:
+            await session.execute(
+                update(Conversation).where(Conversation.id == id)
+                .values(harness_state=state, updated_at=datetime.utcnow())
             )
 
     async def delete_conversation(self, id: int) -> None:
@@ -505,3 +517,4 @@ class _CoreStorage:
 #   class: security
 # === END CONTRACTS ===
 # 393:53 0:0 4:2
+# 399:58 0:0 4:2
