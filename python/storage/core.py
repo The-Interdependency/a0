@@ -1,4 +1,4 @@
-# 399:58 0:0 4:2
+# 399:57 0:0 4:2
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from sqlalchemy import select, update, delete, func, desc, asc, or_
@@ -516,5 +516,4 @@ class _CoreStorage:
 #          owner field from the request body)
 #   class: security
 # === END CONTRACTS ===
-# 393:53 0:0 4:2
-# 399:58 0:0 4:2
+# 399:57 0:0 4:2
