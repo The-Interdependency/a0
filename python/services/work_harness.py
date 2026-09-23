@@ -1,4 +1,4 @@
-# 232:82 0:0 1:3
+# 298:82 0:0 1:3
 """Continuous A0 work harness.
 
 The conversation is the durable work identity. Model/provider selection is an
@@ -84,6 +84,7 @@ import httpx
 from .agent_instance import AgentInstance
 from .energy_registry import cheap_provider
 from .model_catalog import list_models_for_user
+from .provider_failure import ProviderCallFailure, ProviderFailureText
 from .run_context import current_tool_executions
 
 
@@ -231,9 +232,33 @@ def _transient_transport_failure(exc: BaseException) -> bool:
 
 
 def _safe_to_replay(exc: BaseException, *, tool_executions: int) -> bool:
+    if isinstance(exc, ProviderCallFailure):
+        return tool_executions == 0
     if _preflight_failure(exc):
         return True
     return tool_executions == 0 and _transient_transport_failure(exc)
+
+
+def _marked_failure(content: str, usage: dict[str, Any]) -> Optional[ProviderCallFailure]:
+    if isinstance(content, ProviderFailureText):
+        return ProviderCallFailure(content, usage)
+    return None
+
+
+def _boundary_result(
+    *, provider: str, attempts: list[str], tool_executions: int,
+    reason: str, usage: Optional[dict[str, Any]] = None,
+) -> tuple[str, dict[str, Any], str]:
+    traced = dict(usage or {})
+    traced["harness"] = {
+        "mode": "continuous-auto",
+        "attempted_models": list(attempts),
+        "fallback_count": max(0, len(attempts) - 1),
+        "actual_provider": provider,
+        "tool_executions": tool_executions,
+        "status": "hmmm",
+    }
+    return f"hmmm: {reason}", traced, provider
 
 
 async def _fallback_candidates(user_id: Optional[str], seed_provider: Optional[str]) -> list[str]:
@@ -293,16 +318,29 @@ async def run_single_turn(
                 enforce_routed_tier=True,
             )
             actual_provider = primary.provider_id or seed_provider
+            marked = _marked_failure(content, usage)
+            if marked is not None and not pin_requested_provider:
+                raise marked
         except Exception as first_exc:
             if pin_requested_provider:
                 raise
             executed = current_tool_executions.get()
             if not _safe_to_replay(first_exc, tool_executions=executed):
-                if executed > 0 and _transient_transport_failure(first_exc):
-                    raise RuntimeError(
-                        "hmmm: provider failed after a tool execution boundary; "
-                        "automatic provider replay was withheld to avoid duplicate side effects"
-                    ) from first_exc
+                if executed > 0 and (
+                    isinstance(first_exc, ProviderCallFailure)
+                    or _transient_transport_failure(first_exc)
+                ):
+                    return _boundary_result(
+                        provider=getattr(first_exc, "provider", seed_provider),
+                        attempts=attempts,
+                        tool_executions=executed,
+                        reason=(
+                            "provider failure followed a tool execution boundary; automatic "
+                            "replay was withheld because the preceding tool may have mutated state. "
+                            "Conversation state is preserved for continuation."
+                        ),
+                        usage=getattr(first_exc, "usage", None),
+                    )
                 raise
 
             last_exc: BaseException = first_exc
@@ -326,19 +364,51 @@ async def run_single_turn(
                         enforce_routed_tier=True,
                     )
                     actual_provider = inst.provider_id or await inst.ensure_resolved()
+                    marked = _marked_failure(content, usage)
+                    if marked is not None:
+                        raise marked
                     break
                 except Exception as exc:
                     last_exc = exc
                     executed = current_tool_executions.get()
                     if not _safe_to_replay(exc, tool_executions=executed):
-                        if executed > 0 and _transient_transport_failure(exc):
-                            raise RuntimeError(
-                                "hmmm: fallback provider failed after a tool execution boundary; "
-                                "further replay was withheld to avoid duplicate side effects"
-                            ) from exc
+                        if executed > 0 and (
+                            isinstance(exc, ProviderCallFailure)
+                            or _transient_transport_failure(exc)
+                        ):
+                            return _boundary_result(
+                                provider=getattr(exc, "provider", inst.provider_id or fallback_model),
+                                attempts=attempts,
+                                tool_executions=executed,
+                                reason=(
+                                    "fallback provider failure followed a tool execution boundary; "
+                                    "further replay was withheld because the preceding tool may "
+                                    "have mutated state. Conversation state is preserved for continuation."
+                                ),
+                                usage=getattr(exc, "usage", None),
+                            )
                         raise
             else:
-                raise last_exc
+                if isinstance(last_exc, ProviderCallFailure):
+                    return _boundary_result(
+                        provider=last_exc.provider,
+                        attempts=attempts,
+                        tool_executions=current_tool_executions.get(),
+                        reason=(
+                            "every eligible provider failed before a tool execution boundary; "
+                            f"last sanitized provider response was {last_exc.safe_text}"
+                        ),
+                        usage=last_exc.usage,
+                    )
+                return _boundary_result(
+                    provider=seed_provider,
+                    attempts=attempts,
+                    tool_executions=current_tool_executions.get(),
+                    reason=(
+                        "every eligible provider failed before a tool execution boundary; "
+                        f"last failure type was {type(last_exc).__name__}"
+                    ),
+                )
 
         tool_executions = current_tool_executions.get()
     finally:
@@ -353,4 +423,4 @@ async def run_single_turn(
         "tool_executions": tool_executions,
     }
     return content, traced, actual_provider
-# 232:82 0:0 1:3
+# 298:82 0:0 1:3
