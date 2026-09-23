@@ -1,4 +1,4 @@
-# 190:66 0:0 1:1
+# 191:66 0:0 1:1
 """Native google-genai SDK adapter for Gemini 2.5 and Gemini 3.
 
 Replaces the OpenAI-compat HTTP path for Gemini providers. Unlocks:
@@ -37,6 +37,8 @@ import asyncio
 import json
 import os
 from typing import Any, Optional
+
+from .provider_failure import mark_provider_failure
 
 from google import genai
 from google.genai import types as gtypes
@@ -242,7 +244,7 @@ async def call_gemini_native(
                 config=config,
             )
         except Exception as exc:
-            return f"[gemini error: {type(exc).__name__}]", accumulated
+            return mark_provider_failure(f"[gemini error: {type(exc).__name__}]", "gemini", exc), accumulated
 
         _accumulate_usage(getattr(resp, "usage_metadata", None), accumulated)
 
@@ -293,4 +295,4 @@ async def call_gemini_native(
 
     # Loop exit safeguard (shouldn't reach here).
     return "[gemini: tool loop exhausted]", accumulated
-# 190:66 0:0 1:1
+# 191:66 0:0 1:1
