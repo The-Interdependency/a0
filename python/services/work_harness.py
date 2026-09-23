@@ -232,11 +232,11 @@ def _transient_transport_failure(exc: BaseException) -> bool:
 
 
 def _safe_to_replay(exc: BaseException, *, tool_executions: int) -> bool:
-    if isinstance(exc, ProviderCallFailure):
-        return tool_executions == 0
-    if _preflight_failure(exc):
+    if tool_executions != 0:
+        return False
+    if isinstance(exc, ProviderCallFailure) or _preflight_failure(exc):
         return True
-    return tool_executions == 0 and _transient_transport_failure(exc)
+    return _transient_transport_failure(exc)
 
 
 def _marked_failure(content: str, usage: dict[str, Any]) -> Optional[ProviderCallFailure]:
@@ -377,7 +377,7 @@ async def run_single_turn(
                             or _transient_transport_failure(exc)
                         ):
                             return _boundary_result(
-                                provider=getattr(exc, "provider", inst.provider_id or fallback_model),
+                                provider=getattr(exc, "provider", fallback_model),
                                 attempts=attempts,
                                 tool_executions=executed,
                                 reason=(
