@@ -1,4 +1,4 @@
-# 153:29 0:0 0:1
+# 167:29 0:0 0:1
 """Witnesses for the continuous A0 work harness.
 
 Usage:
@@ -37,7 +37,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from python.services import work_harness
+from python.services import tool_executor, work_harness
 
 
 def _messages(n: int) -> list[dict]:
@@ -120,6 +120,26 @@ def _fake_instances(monkeypatch: pytest.MonkeyPatch):
             }]
         }),
     )
+
+
+
+
+
+@pytest.mark.asyncio
+async def test_registry_dispatch_marks_execution_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_dispatch(name: str, **kwargs):
+        return f"ok:{name}"
+
+    token = work_harness.current_tool_executions.set(0)
+    monkeypatch.setattr(tool_executor, "_registry_dispatch", fake_dispatch)
+    try:
+        result = await tool_executor._execute_tool_inner("harness_probe", {})
+        assert result == "ok:harness_probe"
+        assert work_harness.current_tool_executions.get() == 1
+    finally:
+        work_harness.current_tool_executions.reset(token)
 
 
 @pytest.mark.asyncio
@@ -212,4 +232,4 @@ async def test_tool_free_transient_failure_can_fall_back() -> None:
     assert content == "ok"
     assert provider == "fallback-provider"
     assert usage["harness"]["fallback_count"] == 1
-# 153:29 0:0 0:1
+# 167:29 0:0 0:1
