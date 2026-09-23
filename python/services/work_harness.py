@@ -32,7 +32,7 @@ from __future__ import annotations
 #   auth_boundary: none
 #   storage_boundary: read
 #   network_boundary: external
-#   user_data_boundary: read
+#   user_data_boundary: write
 #   admin_only: false
 #   tests: tests/test_work_harness_v0.0.0alpha.py
 #   rollout: default_enabled
@@ -44,11 +44,11 @@ from __future__ import annotations
 
 # === BOUNDARIES ===
 # id: work_harness_runtime_boundary
-#   summary: Reads user conversation text and may call configured external model providers; it performs no persistence itself.
-#   auth_boundary: none
+#   summary: Reads conversation state and may invoke configured providers; tool-enabled calls can cross downstream mutating-tool boundaries while this service itself performs no persistence.
+#   auth_boundary: delegates tier enforcement and tool approvals to existing runtime gates
 #   storage_boundary: read
 #   network_boundary: external
-#   user_data_boundary: read
+#   user_data_boundary: write
 #   admin_only: false
 #   pii: possible
 #   secrets: none
@@ -72,8 +72,8 @@ from __future__ import annotations
 #   class: correctness
 #
 # id: harness_auto_fallback_replays_only_safe_turns
-#   given: an unpinned call fails before provider execution, or a tool-free call fails transiently
-#   then: the harness may retry an entitled configured provider; tool-capable post-dispatch failures are not automatically replayed
+#   given: an unpinned call fails before any registry tool executes, including a transient provider quota or transport failure
+#   then: the harness may retry an entitled configured provider; after a registry tool executes, transient failures are not automatically replayed
 #   class: safety
 # === END CONTRACTS ===
 
