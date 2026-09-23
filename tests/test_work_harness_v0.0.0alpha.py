@@ -1,4 +1,4 @@
-# 167:29 0:0 0:1
+# 206:29 0:0 0:1
 """Witnesses for the continuous A0 work harness.
 
 Usage:
@@ -38,6 +38,7 @@ import httpx
 import pytest
 
 from python.services import tool_executor, work_harness
+from python.services.provider_failure import ProviderFailureText, mark_provider_failure
 
 
 def _messages(n: int) -> list[dict]:
@@ -142,6 +143,46 @@ async def test_registry_dispatch_marks_execution_boundary(
         work_harness.current_tool_executions.reset(token)
 
 
+def test_provider_failure_marker_is_string_compatible() -> None:
+    marker = mark_provider_failure("[seed error: quota]", "seed-provider", RuntimeError("quota"))
+    assert isinstance(marker, str)
+    assert isinstance(marker, ProviderFailureText)
+    assert marker.provider == "seed-provider"
+    assert marker.error_type == "RuntimeError"
+    assert str(marker) == "[seed error: quota]"
+
+
+@pytest.mark.asyncio
+async def test_auto_mode_falls_back_on_typed_provider_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def marked_run(self, messages, **kwargs):
+        self.calls.append(self.model_id)
+        if self.model_id == "seed":
+            return (
+                mark_provider_failure(
+                    "[seed error: RateLimitError]", "seed-provider", RuntimeError("quota")
+                ),
+                {"input_tokens": 1},
+            )
+        self.provider_id = "fallback-provider"
+        return "ok", {"input_tokens": 1, "output_tokens": 1}
+
+    monkeypatch.setattr(_FakeInstance, "run", marked_run)
+    content, usage, provider = await work_harness.run_single_turn(
+        model_id="seed",
+        messages=[{"role": "user", "content": "continue"}],
+        user_id="u1",
+        system_prompt=None,
+        pin_requested_provider=False,
+        use_tools=True,
+    )
+    assert content == "ok"
+    assert provider == "fallback-provider"
+    assert _FakeInstance.calls == ["seed", "fallback"]
+    assert usage["harness"]["fallback_count"] == 1
+
+
 @pytest.mark.asyncio
 async def test_auto_mode_falls_back_on_preflight_failure() -> None:
     _FakeInstance.failures["seed"] = RuntimeError(
@@ -205,15 +246,18 @@ async def test_agentic_transient_failure_after_tool_boundary_is_not_replayed(
         raise httpx.TimeoutException("timed out")
 
     monkeypatch.setattr(_FakeInstance, "run", unsafe_run)
-    with pytest.raises(RuntimeError, match="hmmm: provider failed after a tool execution boundary"):
-        await work_harness.run_single_turn(
-            model_id="seed",
-            messages=[{"role": "user", "content": "continue"}],
-            user_id="u1",
-            system_prompt=None,
-            pin_requested_provider=False,
-            use_tools=True,
-        )
+    content, usage, provider = await work_harness.run_single_turn(
+        model_id="seed",
+        messages=[{"role": "user", "content": "continue"}],
+        user_id="u1",
+        system_prompt=None,
+        pin_requested_provider=False,
+        use_tools=True,
+    )
+    assert content.startswith("hmmm:")
+    assert "may have mutated state" in content
+    assert provider == "seed-provider"
+    assert usage["harness"]["status"] == "hmmm"
     assert _FakeInstance.calls == ["seed"]
     assert work_harness.current_tool_executions.get() == 0
 
@@ -232,4 +276,4 @@ async def test_tool_free_transient_failure_can_fall_back() -> None:
     assert content == "ok"
     assert provider == "fallback-provider"
     assert usage["harness"]["fallback_count"] == 1
-# 167:29 0:0 0:1
+# 206:29 0:0 0:1
