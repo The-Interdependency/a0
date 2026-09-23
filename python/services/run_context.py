@@ -1,4 +1,4 @@
-# 74:33 0:0 9:0
+# 78:33 0:0 9:0
 # N:M
 """Run-scoped ContextVars for ZFAE recursion tracking.
 
@@ -59,6 +59,9 @@ current_user_tier: contextvars.ContextVar[str] = contextvars.ContextVar(
 )
 current_max_tool_rounds: contextvars.ContextVar[Optional[int]] = contextvars.ContextVar(
     "a0p_max_tool_rounds", default=None,
+)
+current_tool_executions: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "a0p_tool_executions", default=0,
 )
 current_approval_gate_scopes: contextvars.ContextVar[frozenset[str]] = contextvars.ContextVar(
     "approval_gate_scopes", default=frozenset(),
@@ -128,7 +131,8 @@ def snapshot() -> dict:
         "orchestration_mode": current_orchestration_mode.get(),
         "user_tier": current_user_tier.get(),
         "max_tool_rounds": current_max_tool_rounds.get(),
+        "tool_executions": current_tool_executions.get(),
         "approval_gate_scopes": sorted(current_approval_gate_scopes.get()),
     }
 # N:M
-# 74:33 0:0 9:0
+# 78:33 0:0 9:0
