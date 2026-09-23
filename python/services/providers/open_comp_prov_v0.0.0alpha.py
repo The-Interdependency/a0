@@ -1,4 +1,4 @@
-# 364:67 0:0 2:5
+# 365:67 0:0 2:5
 """Generic OpenAI-compatible provider transport.
 
 Provider identity, endpoint, credential name, model, API family, reasoning
@@ -74,6 +74,7 @@ from typing import Any, Callable, Optional
 from openai import AsyncOpenAI
 
 from ._resolver import resolve_model_for_role
+from ..provider_failure import mark_provider_failure
 
 
 def _accumulate_usage(total: dict, usage: dict | None) -> None:
@@ -90,7 +91,7 @@ def _safe_provider_error(provider_name: str, exc: BaseException, api_key: str) -
     from ..inference import _safe_error_snippet
 
     raw = str(exc).replace(api_key, "[redacted]") if api_key else str(exc)
-    return f"[{provider_name} error: {type(exc).__name__}: {safe}]" if (safe := _safe_error_snippet(raw)) else f"[{provider_name} error: {type(exc).__name__}]"
+    return mark_provider_failure(f"[{provider_name} error: {type(exc).__name__}: {safe}]" if (safe := _safe_error_snippet(raw)) else f"[{provider_name} error: {type(exc).__name__}]", provider_name, exc)
 
 
 def _normalize_reasoning_effort(spec: dict, effort: Optional[str]) -> Optional[str]:
@@ -477,4 +478,4 @@ async def call(
         )
     finally:
         reset_caller_provider(caller_provider_token)
-# 364:67 0:0 2:5
+# 365:67 0:0 2:5

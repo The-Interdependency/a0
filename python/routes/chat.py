@@ -1,4 +1,4 @@
-# 685:192 2:7 2:16
+# 677:185 2:7 2:16
 import time
 import traceback
 from fastapi import APIRouter, HTTPException, Request
@@ -710,25 +710,14 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
         prior_msgs = await storage.get_messages(conv_id)
         msg_ids = [m["id"] for m in prior_msgs if m["role"] in ("user", "assistant")]
         att_map = await storage.get_attachments_for_messages(msg_ids) if msg_ids else {}
-        history: list[dict] = []
-        for m in prior_msgs:
-            if m["role"] not in ("user", "assistant"):
-                continue
-            entry: dict = {"role": m["role"], "content": m["content"]}
-            atts = att_map.get(m["id"], [])
-            if atts:
-                entry["attachments"] = [
-                    {"storage_url": a.get("storage_url"), "mime_type": a.get("mime_type")}
-                    for a in atts
-                ]
-            history.append(entry)
-
-        # Cap context window: keep first message (task anchor) + last N-1 messages.
-        # Prevents runaway input costs on long write-heavy sessions (e.g. website
-        # construction) where assistant messages accumulate large file content.
-        _MAX_HISTORY = 40
-        if len(history) > _MAX_HISTORY:
-            history = history[:1] + history[-(_MAX_HISTORY - 1):]
+        from ..services.work_harness import prepare_continuity
+        history, harness_state = prepare_continuity(
+            prior_msgs,
+            att_map,
+            conv.get("harness_state"),
+        )
+        if harness_state is not None:
+            await storage.update_conversation_harness_state(conv_id, harness_state)
 
         from ..services.tool_executor import (
             set_approval_scope_user_id,
@@ -802,28 +791,19 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
                 # execution would use agent_inst.model_id. agent_inst's
                 # role is purely persona/metadata loading (already folded
                 # into system_prompt via build_system_prompt above).
-                inst = AgentInstance.from_model(
+                from ..services.work_harness import run_single_turn
+                _turn_tools = _inf_mode != "direct"
+                if agent_inst is not None and not agent_inst.use_tools:
+                    _turn_tools = False
+                content, usage, provider_id = await run_single_turn(
                     model_id=model_id,
+                    messages=history,
                     user_id=uid or None,
-                    enforce_tier=False,
-                    enforce_enabled=False,
-                )
-                if _inf_mode == "direct":
-                    inst.use_tools = False
-                elif agent_inst is not None and not agent_inst.use_tools:
-                    # Forge agent has no tools configured — propagate that
-                    # to the executor so the provider never sees tool schemas.
-                    inst.use_tools = False
-                content, usage = await inst.run(
-                    history,
-                    system_prompt_override=system_prompt or None,
+                    system_prompt=system_prompt or None,
                     pin_requested_provider=provider_pin_requested,
-                    enforce_routed_tier=True,
+                    use_tools=_turn_tools,
                 )
-                print(f"[chat-dbg] provider={inst.provider_id!r} hist_len={len(history)} content_len={len(content or '')} content_preview={repr((content or '')[:80])}")
-                # Use the resolved provider_id from the instance — for forge
-                # agents whose model_id is "gpt-5-mini" this is "openai".
-                provider_id = inst.provider_id or provider_id
+                print(f"[chat-dbg] provider={provider_id!r} hist_len={len(history)} content_len={len(content or '')} content_preview={repr((content or '')[:80])}")
                 usage = dict(usage or {})
                 usage.setdefault("orchestration_mode", "single")
                 usage.setdefault("providers", [provider_id])
@@ -864,6 +844,11 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
             current_user_tier.reset(_t_ut)
             current_max_tool_rounds.reset(_t_mr)
             current_client_run_id.reset(_t_cri)
+
+        if harness_state is not None:
+            from ..services.work_harness import continuity_state_summary
+            usage = dict(usage or {})
+            usage["harness_continuity"] = continuity_state_summary(harness_state)
 
         if usage.get("approval_state") == "pending":
             _store_pending_gate(conv_id, approval_gate_service.pending_gate_entry(
@@ -962,4 +947,4 @@ async def send_message(conv_id: int, body: SendMessage, request: Request):
 #   then: the route removes its staged message and returns HTTP 403 instead of leaving a dangling turn or returning 500
 #   class: security
 # === END CONTRACTS ===
-# 685:192 2:7 2:16
+# 677:185 2:7 2:16

@@ -1,4 +1,4 @@
-# 397:101 0:0 12:4
+# 398:101 0:0 12:4
 """ZFAE Tool Executor — thin shim over the per-tool registry.
 
 Tools live in `python/services/tools/*.py` (one file per tool, self-declared
@@ -56,7 +56,7 @@ from .tool_distill import (
 from .tools import dispatch as _registry_dispatch
 from .tools import registry as _registry
 from .tools import tool_schemas_chat as _registry_schemas
-from .run_context import current_user_tier
+from .run_context import current_user_tier, current_tool_executions
 
 # ---------------------------------------------------------------------------
 # Per-conversation tool allow-list ContextVar.
@@ -537,6 +537,7 @@ async def _execute_tool_inner(name: str, arguments: dict) -> str:
         if not _tool_tier_allows(name):
             return f"[tool denied — {name} is not available for this account tier]"
         await _approval_denial(name)
+        current_tool_executions.set(current_tool_executions.get() + 1)
         try:
             return await _registry_dispatch(name, **args)
         except KeyError:
@@ -568,4 +569,4 @@ __all__ = [
     "get_active_chat_schemas",
     "get_active_responses_schemas",
 ]
-# 397:101 0:0 12:4
+# 398:101 0:0 12:4
