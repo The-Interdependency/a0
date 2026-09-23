@@ -1,4 +1,4 @@
-# 402:2 0:0 0:0
+# 396:1 0:0 0:0
 """Routing and catalog tests for registry-driven compatible providers."""
 
 import ast
@@ -70,19 +70,13 @@ def test_approval_replays_preserve_explicit_provider_pin() -> None:
     )
 
     harness_calls = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "run_single_turn"
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "run_single_turn"
     ]
     assert len(harness_calls) == 1
-    assert any(
-        keyword.arg == "pin_requested_provider"
-        and isinstance(keyword.value, ast.Name)
-        and keyword.value.id == "provider_pin_requested"
-        for keyword in harness_calls[0].keywords
-    )
+    pin_kw = next(k for k in harness_calls[0].keywords if k.arg == "pin_requested_provider")
+    assert isinstance(pin_kw.value, ast.Name)
+    assert pin_kw.value.id == "provider_pin_requested"
 
     pending_writes = [
         node
@@ -511,5 +505,4 @@ async def test_catalog_resolver_pricing_and_missing_key_are_fail_closed(
             provider_id="deepseek",
             use_tools=False,
         )
-# 399:1 0:0 0:0
-# 402:2 0:0 0:0
+# 396:1 0:0 0:0
