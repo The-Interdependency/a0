@@ -1,4 +1,4 @@
-# 218:82 0:0 1:3
+# 236:82 0:0 1:3
 """Continuous A0 work harness.
 
 The conversation is the durable work identity. Model/provider selection is an
@@ -84,6 +84,7 @@ import httpx
 from .agent_instance import AgentInstance
 from .energy_registry import cheap_provider
 from .model_catalog import list_models_for_user
+from .run_context import current_tool_executions
 
 
 EXACT_HISTORY_LIMIT = 40
@@ -229,10 +230,10 @@ def _transient_transport_failure(exc: BaseException) -> bool:
     return any(token in text for token in ("rate limit", "quota", "overloaded", "timed out", "timeout"))
 
 
-def _safe_to_replay(exc: BaseException, *, use_tools: bool) -> bool:
+def _safe_to_replay(exc: BaseException, *, tool_executions: int) -> bool:
     if _preflight_failure(exc):
         return True
-    return not use_tools and _transient_transport_failure(exc)
+    return tool_executions == 0 and _transient_transport_failure(exc)
 
 
 async def _fallback_candidates(user_id: Optional[str], seed_provider: Optional[str]) -> list[str]:
@@ -272,6 +273,7 @@ async def run_single_turn(
     because replay could duplicate an external side effect.
     """
     attempts: list[str] = [model_id]
+    tool_token = current_tool_executions.set(0)
     primary = AgentInstance.from_model(
         model_id=model_id,
         user_id=user_id,
@@ -293,13 +295,17 @@ async def run_single_turn(
         actual_provider = primary.provider_id or seed_provider
     except Exception as first_exc:
         if pin_requested_provider:
+            current_tool_executions.reset(tool_token)
             raise
-        if not _safe_to_replay(first_exc, use_tools=use_tools):
-            if use_tools and _transient_transport_failure(first_exc):
+        executed = current_tool_executions.get()
+        if not _safe_to_replay(first_exc, tool_executions=executed):
+            if executed > 0 and _transient_transport_failure(first_exc):
+                current_tool_executions.reset(tool_token)
                 raise RuntimeError(
-                    "hmmm: provider failed after tool-capable execution began; "
+                    "hmmm: provider failed after a tool execution boundary; "
                     "automatic provider replay was withheld to avoid duplicate side effects"
                 ) from first_exc
+            current_tool_executions.reset(tool_token)
             raise
 
         last_exc: BaseException = first_exc
@@ -326,17 +332,29 @@ async def run_single_turn(
                 break
             except Exception as exc:
                 last_exc = exc
-                if not _safe_to_replay(exc, use_tools=use_tools):
+                executed = current_tool_executions.get()
+                if not _safe_to_replay(exc, tool_executions=executed):
+                    if executed > 0 and _transient_transport_failure(exc):
+                        current_tool_executions.reset(tool_token)
+                        raise RuntimeError(
+                            "hmmm: fallback provider failed after a tool execution boundary; "
+                            "further replay was withheld to avoid duplicate side effects"
+                        ) from exc
+                    current_tool_executions.reset(tool_token)
                     raise
         else:
+            current_tool_executions.reset(tool_token)
             raise last_exc
 
+    tool_executions = current_tool_executions.get()
+    current_tool_executions.reset(tool_token)
     traced = dict(usage or {})
     traced["harness"] = {
         "mode": "explicit-pin" if pin_requested_provider else "continuous-auto",
         "attempted_models": attempts,
         "fallback_count": max(0, len(attempts) - 1),
         "actual_provider": actual_provider,
+        "tool_executions": tool_executions,
     }
     return content, traced, actual_provider
-# 218:82 0:0 1:3
+# 236:82 0:0 1:3
