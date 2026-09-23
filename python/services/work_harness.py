@@ -1,4 +1,4 @@
-# 236:82 0:0 1:3
+# 232:82 0:0 1:3
 """Continuous A0 work harness.
 
 The conversation is the durable work identity. Model/provider selection is an
@@ -267,13 +267,12 @@ async def run_single_turn(
 ) -> tuple[str, dict[str, Any], str]:
     """Run one turn while keeping provider substitution behind the harness.
 
-    Explicit pins never fall back. Auto mode may recover from failures known to
-    occur before dispatch. A tool-free call may also recover from transient
-    transport/quota errors. Tool-capable post-dispatch failures remain hmmm
+    Explicit pins never fall back. Auto mode may recover from pre-dispatch
+    failures, including transient quota/transport failures before any registry
+    tool executes. After a tool boundary, transient failure remains hmmm
     because replay could duplicate an external side effect.
     """
     attempts: list[str] = [model_id]
-    tool_token = current_tool_executions.set(0)
     primary = AgentInstance.from_model(
         model_id=model_id,
         user_id=user_id,
@@ -282,72 +281,69 @@ async def run_single_turn(
     )
     primary.use_tools = use_tools
     seed_provider = await primary.ensure_resolved()
-
+    tool_token = current_tool_executions.set(0)
     try:
-        content, usage = await primary.run(
-            messages,
-            system_prompt_override=system_prompt,
-            max_tokens=max_tokens,
-            reasoning_effort=reasoning_effort,
-            pin_requested_provider=pin_requested_provider,
-            enforce_routed_tier=True,
-        )
-        actual_provider = primary.provider_id or seed_provider
-    except Exception as first_exc:
-        if pin_requested_provider:
-            current_tool_executions.reset(tool_token)
-            raise
-        executed = current_tool_executions.get()
-        if not _safe_to_replay(first_exc, tool_executions=executed):
-            if executed > 0 and _transient_transport_failure(first_exc):
-                current_tool_executions.reset(tool_token)
-                raise RuntimeError(
-                    "hmmm: provider failed after a tool execution boundary; "
-                    "automatic provider replay was withheld to avoid duplicate side effects"
-                ) from first_exc
-            current_tool_executions.reset(tool_token)
-            raise
-
-        last_exc: BaseException = first_exc
-        candidates = await _fallback_candidates(user_id, seed_provider)
-        for fallback_model in candidates:
-            attempts.append(fallback_model)
-            inst = AgentInstance.from_model(
-                model_id=fallback_model,
-                user_id=user_id,
-                enforce_tier=True,
-                enforce_enabled=True,
+        try:
+            content, usage = await primary.run(
+                messages,
+                system_prompt_override=system_prompt,
+                max_tokens=max_tokens,
+                reasoning_effort=reasoning_effort,
+                pin_requested_provider=pin_requested_provider,
+                enforce_routed_tier=True,
             )
-            inst.use_tools = use_tools
-            try:
-                content, usage = await inst.run(
-                    messages,
-                    system_prompt_override=system_prompt,
-                    max_tokens=max_tokens,
-                    reasoning_effort=reasoning_effort,
-                    pin_requested_provider=True,
-                    enforce_routed_tier=True,
-                )
-                actual_provider = inst.provider_id or await inst.ensure_resolved()
-                break
-            except Exception as exc:
-                last_exc = exc
-                executed = current_tool_executions.get()
-                if not _safe_to_replay(exc, tool_executions=executed):
-                    if executed > 0 and _transient_transport_failure(exc):
-                        current_tool_executions.reset(tool_token)
-                        raise RuntimeError(
-                            "hmmm: fallback provider failed after a tool execution boundary; "
-                            "further replay was withheld to avoid duplicate side effects"
-                        ) from exc
-                    current_tool_executions.reset(tool_token)
-                    raise
-        else:
-            current_tool_executions.reset(tool_token)
-            raise last_exc
+            actual_provider = primary.provider_id or seed_provider
+        except Exception as first_exc:
+            if pin_requested_provider:
+                raise
+            executed = current_tool_executions.get()
+            if not _safe_to_replay(first_exc, tool_executions=executed):
+                if executed > 0 and _transient_transport_failure(first_exc):
+                    raise RuntimeError(
+                        "hmmm: provider failed after a tool execution boundary; "
+                        "automatic provider replay was withheld to avoid duplicate side effects"
+                    ) from first_exc
+                raise
 
-    tool_executions = current_tool_executions.get()
-    current_tool_executions.reset(tool_token)
+            last_exc: BaseException = first_exc
+            candidates = await _fallback_candidates(user_id, seed_provider)
+            for fallback_model in candidates:
+                attempts.append(fallback_model)
+                try:
+                    inst = AgentInstance.from_model(
+                        model_id=fallback_model,
+                        user_id=user_id,
+                        enforce_tier=True,
+                        enforce_enabled=True,
+                    )
+                    inst.use_tools = use_tools
+                    content, usage = await inst.run(
+                        messages,
+                        system_prompt_override=system_prompt,
+                        max_tokens=max_tokens,
+                        reasoning_effort=reasoning_effort,
+                        pin_requested_provider=True,
+                        enforce_routed_tier=True,
+                    )
+                    actual_provider = inst.provider_id or await inst.ensure_resolved()
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    executed = current_tool_executions.get()
+                    if not _safe_to_replay(exc, tool_executions=executed):
+                        if executed > 0 and _transient_transport_failure(exc):
+                            raise RuntimeError(
+                                "hmmm: fallback provider failed after a tool execution boundary; "
+                                "further replay was withheld to avoid duplicate side effects"
+                            ) from exc
+                        raise
+            else:
+                raise last_exc
+
+        tool_executions = current_tool_executions.get()
+    finally:
+        current_tool_executions.reset(tool_token)
+
     traced = dict(usage or {})
     traced["harness"] = {
         "mode": "explicit-pin" if pin_requested_provider else "continuous-auto",
@@ -357,4 +353,4 @@ async def run_single_turn(
         "tool_executions": tool_executions,
     }
     return content, traced, actual_provider
-# 236:82 0:0 1:3
+# 232:82 0:0 1:3
