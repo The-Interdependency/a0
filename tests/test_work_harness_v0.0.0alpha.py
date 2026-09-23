@@ -1,4 +1,4 @@
-# 131:29 0:0 0:1
+# 152:29 0:0 0:1
 """Witnesses for the continuous A0 work harness.
 
 Usage:
@@ -159,9 +159,33 @@ async def test_explicit_pin_never_falls_back() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_capable_transient_failure_is_not_replayed() -> None:
+async def test_agentic_transient_failure_before_tools_can_fall_back() -> None:
     _FakeInstance.failures["seed"] = httpx.TimeoutException("timed out")
-    with pytest.raises(RuntimeError, match="hmmm: provider failed"):
+    content, usage, provider = await work_harness.run_single_turn(
+        model_id="seed",
+        messages=[{"role": "user", "content": "continue"}],
+        user_id="u1",
+        system_prompt=None,
+        pin_requested_provider=False,
+        use_tools=True,
+    )
+    assert content == "ok"
+    assert provider == "fallback-provider"
+    assert _FakeInstance.calls == ["seed", "fallback"]
+    assert usage["harness"]["tool_executions"] == 0
+
+
+@pytest.mark.asyncio
+async def test_agentic_transient_failure_after_tool_boundary_is_not_replayed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def unsafe_run(self, messages, **kwargs):
+        self.calls.append(self.model_id)
+        work_harness.current_tool_executions.set(1)
+        raise httpx.TimeoutException("timed out")
+
+    monkeypatch.setattr(_FakeInstance, "run", unsafe_run)
+    with pytest.raises(RuntimeError, match="hmmm: provider failed after a tool execution boundary"):
         await work_harness.run_single_turn(
             model_id="seed",
             messages=[{"role": "user", "content": "continue"}],
@@ -187,4 +211,4 @@ async def test_tool_free_transient_failure_can_fall_back() -> None:
     assert content == "ok"
     assert provider == "fallback-provider"
     assert usage["harness"]["fallback_count"] == 1
-# 131:29 0:0 0:1
+# 152:29 0:0 0:1
