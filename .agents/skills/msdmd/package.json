@@ -1,0 +1,6 @@
+{
+  "name": "msdmd-native-reader-runtime",
+  "private": true,
+  "description": "Pinned syntax-only TypeScript parser for MSDMD; never loads inspected projects",
+  "dependencies": {"typescript": "5.8.3"}
+}

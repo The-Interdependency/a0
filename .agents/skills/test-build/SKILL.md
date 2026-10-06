@@ -1,21 +1,35 @@
 ---
 name: test-build
-description: Self-declaring contract tests built on msdmd. Source modules own behavior obligations in `# === CONTRACTS ===` blocks; test modules own executable evidence in `# === CHECKS ===` blocks. Load this when adding tests that ride the msdmd convention, when refactoring a module with CONTRACTS/CHECKS declarations, or when authoring a contract/check audit or executor.
+description: Native-first contract evidence built on msdmd. Source owners declare behavior obligations and test owners declare accountable witnesses through supported native conventions or supplemental CONTRACTS and CHECKS blocks. Preserve explicit claim linkage and no-exec audit boundaries. Load this when adding tests that use msdmd, refactoring CONTRACTS/CHECKS declarations, or authoring a contract/check audit or executor.
 ---
 
 # test-build — Contract tests on msdmd
 
 `test-build` is an application of [msdmd](../msdmd/SKILL.md). The
-foundational skill defines the comment-block convention, the universal
-parser, and the visible-gap requirement; this skill applies the
-convention to behavior contracts and their executable witnesses.
+foundation defines native-first ingestion, supplemental block syntax, reader
+support and information coverage; this skill applies those contracts to
+behavior obligations and accountable executable witnesses.
 
-Read `msdmd/SKILL.md` first if you haven't — the block syntax,
-parser contract, and visibility rules below are inherited from there
-and not redefined.
+Read `msdmd/SKILL.md` first. For the ratified source/test ownership split,
+see [`doctrine/msdmd-checks.md`](../doctrine/msdmd-checks.md).
 
-For the ratified doctrine behind this split, see
-[`doctrine/msdmd-checks.md`](../doctrine/msdmd-checks.md).
+## Native-first coverage
+
+Source-owned native contracts/assertions and test-owned witness declarations
+may supply evidence-graph inputs through explicit, tested mappings. Keep each
+obligation and witness attributable to its actual owner. A native witness needs
+no CHECKS copy when the supported mapping provides the required linkage,
+execution target and safety information. Test names, markers and examples alone
+do not establish a `proves` relationship or a passing execution result.
+
+Native fields retain their own schemas; the block schemas below constrain
+supplemental entries. They do not require native sources to manufacture MSDMD
+IDs or strings. Preserve qualified source identities and unresolved mappings.
+
+Implementation status: the examples and bundled RepoLOTO audit/check path use
+CONTRACTS/CHECKS blocks. Native contract/witness readers and a unified native
+evidence reconciler are not shipped by this skill revision. A block-only audit
+must disclose that scope, and cannot call required native scope complete.
 
 ## The split
 
@@ -26,13 +40,13 @@ audit reconciles the witness list against the obligation list.
 ```
 
 Source modules own promises. Test modules own evidence. Neither owns
-the other's declarations.
+the other's declarations. Native ingestion preserves this ownership split.
 
 ## Source block: CONTRACTS
 
-Every module that promises behavior declares those obligations in a
-`CONTRACTS` block. A contract says what must remain true; it does not
-name the test topology.
+Source owners declare promised behavior through supported native contracts or
+supplemental `CONTRACTS` entries. A contract says what must remain true; it does
+not name the test topology. Supplement unexpressed obligations as follows:
 
 ```python
 # === CONTRACTS ===
@@ -50,7 +64,7 @@ name the test topology.
 
 ### CONTRACTS field schema
 
-Required:
+Required for a supplemental CONTRACTS entry:
 
 | Field | Meaning |
 |---|---|
@@ -68,13 +82,13 @@ Optional:
 | `deprecated` | If present, the runner skips and reports the entry as deprecated. |
 
 `call:` is not a CONTRACTS field in skill-lib. The call belongs to the
-CHECKS entry that owns the executable evidence.
+CHECKS entry or native witness that owns the executable evidence.
 
 ## Test block: CHECKS
 
-A test module declares the checks it contributes in a `CHECKS` block.
-A check is an evidentiary procedure: an executable claim to prove one
-or more named contracts.
+Use `CHECKS` for witness information not adequately expressed by a supported
+native source. A check is an evidentiary procedure: an executable claim to prove
+one or more named contracts.
 
 ```python
 # === CHECKS ===
@@ -98,7 +112,7 @@ or more named contracts.
 
 ### CHECKS field schema
 
-Required:
+Required for a supplemental CHECKS entry:
 
 | Field | Meaning |
 |---|---|
@@ -121,28 +135,27 @@ as a defect, not diligence.
 
 ## The contract for check functions
 
-A check function:
+A check function in the block executor contract:
 
 - Is resolvable at the path declared in `call:`.
 - Takes no required arguments. The executor does not inject fixtures
   or context; the check is self-contained or pulls from the language's
   standard environment (env vars, a known service URL, etc.).
 - Returns `None` on pass.
-- Raises `AssertionError` on behavior violation. The runner reports
-  this as `FAIL`.
-- Lets unexpected exceptions escape. The runner reports these as
-  `ERROR` (infrastructure/harness failure) rather than `FAIL`
-  (contract violation).
-- Cleans up any persistent state it creates. Isolation is the check's
-  responsibility unless the runner explicitly provides a fixture.
+- Raises `AssertionError` on behavior violation. The runner reports `FAIL`.
+- Lets unexpected exceptions escape. The runner reports `ERROR`
+  (infrastructure/harness failure), not `FAIL` (contract violation).
+- Cleans up persistent state. Isolation belongs to the check unless the runner
+  explicitly supplies a fixture.
+
+A native framework adapter must separately declare its actual calling and
+fixture conventions rather than pretending every native test has this shape.
 
 ## Authoring an audit
 
-Audit is the cheapest runner mode: reconcile declarations without
-executing checks. Resolve `self::fn` against the declaring file's
-**parsed** function definitions — never by importing it or reading
-loaded callables, since import executes module top level and an audit
-that executes is not an audit:
+Audit reconciles declarations without executing checks. Resolve `self::fn`
+against the declaring file's **parsed** definitions — never by importing the
+module, since importing executes its top level:
 
 ```python
 import ast
@@ -164,12 +177,10 @@ def resolve_self_call(spec: str, defined: set[str]) -> str:
     return name
 ```
 
-(The bundled `tests/test_repo_loto.py` reads `globals()` instead — it
-can, because its audit runs *as* that module, so its own `def`s are
-already in scope. A central audit walking other test files has no such
-shortcut and must parse, as above.)
+The bundled `tests/test_repo_loto.py` may read `globals()` because its audit runs
+as that module; a central audit of other test files has no such shortcut.
 
-An audit MUST report, at minimum:
+For an explicitly block-only audit, the existing diagnostics are:
 
 ```text
 GAP  <contract>  has no CHECKS entry claiming to prove it
@@ -178,34 +189,37 @@ GAP  <check> call does not resolve: <reason>
 GAP  executable check <fn> has no resolving CHECKS declaration
 ```
 
-Exit nonzero on any gap. A reconciler that has only ever said
-"closed" is itself unverified; negative-test it by planting an orphan
-contract, a phantom `proves` target, and an unresolvable call, then
-observing the GAP.
+A native-capable audit applies the same semantic obligations to supported native
+witnesses as well. Missing CHECKS syntax alone is not missing evidence. Required
+unsupported mappings are unresolved coverage and fail a strict audit; they must
+not be reported as proof that no witness exists.
+
+Exit nonzero on genuine evidence gaps. Negative-test the audit with an orphan
+contract, a phantom `proves` target and an unresolvable call. A reconciler that
+has only ever reported closed is unverified.
 
 ## Authoring an executor
 
-A full executor runs after audit or as part of the same command. It
-should:
+A full executor should:
 
-1. Parse source `CONTRACTS` and test `CHECKS` using the msdmd parser.
-2. Reconcile the graph before execution.
+1. Extract supported native obligations/witnesses and parse supplemental
+   source `CONTRACTS` and test `CHECKS` using the msdmd parser. An existing
+   block-only executor must disclose its narrower scope.
+2. Reconcile the evidence graph before execution; refuse required unresolved scope.
 3. Refuse execution when consumed `requires` fields are unmet.
 4. Apply consumed `timeout` fields to the actual spawned work.
-5. Report per-check `PASS`, `FAIL`, and `ERROR` without aborting the
-   remaining checks on a single harness error.
-6. Surface source contracts with no proving checks, checks proving
-   unknown contracts, and executable checks with no declaration.
+5. Report per-check `PASS`, `FAIL` and `ERROR` without concealing harness failures.
+6. Surface contracts without accountable witnesses, orphan witness claims and
+   tests lacking required linkage, without requiring duplicate native declarations.
 
-The visibility-of-gaps requirement is mandatory per msdmd. Drop it and
-the runner stops being a msdmd application.
+The visibility-of-gaps requirement is mandatory per msdmd. Report information
+and evidence coverage, supported extraction and block adoption separately.
 
 ## Semantics of "proves"
 
 `proves:` means claims-to-prove. Audit verifies linkage and call
 resolution. A passing check demonstrates the declared witness ran
-successfully. It does not prove the check is sensitive to every
-possible breakage of the contract.
+successfully. It does not prove sensitivity to every possible breakage.
 
 Status vocabulary:
 
@@ -217,34 +231,36 @@ Status vocabulary:
 
 Do not claim one rung above the evidence.
 
+## Validation
+
+Native-only witness fixtures need explicit source-linked obligations, executable
+targets and safety metadata, with no invented `proves` edges or CHECKS copies.
+Pair these future reader tests with orphan, unsupported-reader, unsafe-import
+and wrong-revision-report cases. Existing block audit fixtures remain required.
+
 ## Anti-patterns
 
-- **Contracts in test files instead of source files.** The contract
-  belongs to the module that promises the behavior; the test file owns
-  the check.
-- **`call:` in CONTRACTS.** Source modules should not know test
-  topology. Put executable targets in CHECKS.
-- **Executable tests with no CHECKS entry.** They may still run through
-  ad hoc tooling, but they are invisible to the msdmd evidence graph.
-- **CHECKS proving unknown CONTRACTS.** This is an orphan witness; fix
-  the target id or declare the source contract.
-- **Implementation-shaped ids.** `chat_create_returns_200` tells you
-  little; `chat_create_owner_isolation` tells you what's protected.
-- **Importing during audit.** Python imports execute module top level.
-  Use no-exec resolution such as `self::fn`, or make import execution
-  an explicit non-audit mode.
-- **Catching unexpected exceptions in the check to "make it pass".**
-  Let the exception escape so the runner can mark `ERROR` honestly.
+- **Contracts in test files instead of source files.** The promise belongs to
+  its source owner; the test file owns the check.
+- **`call:` in CONTRACTS.** Put executable targets with their accountable witnesses.
+- **Executable tests with no CHECKS entry.** Do not label them untracked until
+  eligible native witness mappings have been inspected; missing required mapping
+  is unresolved coverage, not permission to invent evidence.
+- **CHECKS proving unknown CONTRACTS.** Repair the orphan target or source obligation.
+- **Implementation-shaped ids.** `chat_create_returns_200` says less about the
+  protected capability than `chat_create_owner_isolation`.
+- **Importing during audit.** Use no-exec resolution or a separately authorized execution mode.
+- **Catching unexpected exceptions to make a check pass.** Preserve `ERROR` honestly.
 
 ## Versioning
 
-The `CONTRACTS` block name remains stable for source-owned
-obligations. `CHECKS` is the paired test-owned evidence block.
-Field additions are non-breaking only when they are additive and
-consumed by a runner. Field renames or removals are breaking; bump the
-major version and note the migration in the lib README.
+The `CONTRACTS` block name remains stable for source-owned obligations.
+`CHECKS` remains the paired test-owned evidence block. Field additions are
+non-breaking only when additive and consumed by a runner; renames or removals
+require a major version and migration note. Native schema migration is separate.
 
 hmmm
-- The block type for harness/infrastructure tests that prove no product contract remains unnamed is still unsettled.
-- Mutation-level verification is defined but not yet generalized across skills.
-- Slow/flaky/quarantined states should enter only when a runner consumes them rather than as decorative labels.
+- native contract/witness readers and qualified evidence identities remain implementation work
+- the block type for harness tests that prove no product contract remains unsettled
+- mutation-level verification is not yet generalized across skills
+- slow/flaky/quarantined states need actual consumers before becoming schema fields

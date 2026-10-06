@@ -1,4 +1,27 @@
 // ratios: loc_comments=hmmm imports_exports=hmmm calls_definitions=hmmm
+// === MODULE_BUILD ===
+// id: msdmd_typescript_reference_parser
+//   module_name: universal
+//   module_kind: instrument
+//   summary: parses canonical line-comment metadata without executing inspected source
+//   owner: The Interdependency skill-lib
+//   public_surface: Entry, WalkOptions, COMMENT_MARKERS, RATIO_IDS, markerFor, parseText, parseFile, walkTree, parseRatios, parseRatiosFile, ratiosPlacement
+//   internal_surface: marker and block matching helpers
+//   auth_boundary: none
+//   storage_boundary: read
+//   network_boundary: none
+//   user_data_boundary: read
+//   admin_only: false
+//   tests: tests/test_universal_parser.py::test_typescript_parser_field_contract
+//   rollout: exact-pinned reference parser propagation
+//   rollback: restore a previously accepted exact parser identity
+// === END MODULE_BUILD ===
+// === CONTRACTS ===
+// id: msdmd_typescript_parser_preserves_field_names
+//   given: a valid metadata entry uses lowercase snake-case field names containing digits
+//   then: parsed entries retain those field names and string values without executing the inspected source
+//   class: evidence
+// === END CONTRACTS ===
 /**
  * Universal msdmd parser — pure Node stdlib (fs, path).
  *
@@ -61,7 +84,7 @@ export const COMMENT_MARKERS: Record<string, string> = {
 };
 
 const DEFAULT_SKIP = new Set([
-  "__pycache__", "node_modules", ".git", ".venv", "venv",
+  "__pycache__", "node_modules", ".git", ".agents", ".venv", "venv",
   "dist", "build", ".next", ".nuxt", "target", ".pytest_cache",
   ".mypy_cache", ".tox",
 ]);
@@ -86,7 +109,7 @@ export function parseText(
     "gm",
   );
   const idRe = new RegExp(`^\\s*${m}\\s*id:\\s*(\\S+)\\s*$`);
-  const fieldRe = new RegExp(`^\\s*${m}\\s+([a-z_]+):\\s*(.+?)\\s*$`);
+  const fieldRe = new RegExp(`^\\s*${m}\\s+([a-z_][a-z0-9_]*):\\s*(.+?)\\s*$`);
 
   const entries: Entry[] = [];
   let match: RegExpExecArray | null;
@@ -185,7 +208,7 @@ function ratiosLineRe(marker: string): RegExp {
 
 export function parseRatios(text: string, marker: string = "#"): Entry[] {
   const lineRe = ratiosLineRe(marker);
-  const tokenRe = /([a-z_]+)=(\S+)/g;
+  const tokenRe = /([a-z_][a-z0-9_]*)=(\S+)/g;
   const out: Entry[] = [];
   for (const raw of text.split("\n")) {
     const lm = lineRe.exec(raw.replace(/\s+$/, ""));

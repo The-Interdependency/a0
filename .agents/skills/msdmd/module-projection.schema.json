@@ -1,0 +1,337 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:the-interdependency:msdmd:module-projection:1",
+  "title": "MSDMD per-module projection record",
+  "description": "Schema for each line in a deterministic MSDMD Python module JSONL projection. The first line must be a module record; following lines are symbol, metadata, or diagnostic records.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/module"
+    },
+    {
+      "$ref": "#/$defs/symbol"
+    },
+    {
+      "$ref": "#/$defs/metadata"
+    },
+    {
+      "$ref": "#/$defs/diagnostic"
+    }
+  ],
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "line",
+        "column",
+        "byte"
+      ],
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based Unicode character offset within the line."
+        },
+        "byte": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based UTF-8 byte offset in the decoded source-text projection; source_sha256 identifies the authoritative raw bytes."
+        }
+      }
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/position"
+        },
+        "end": {
+          "$ref": "#/$defs/position"
+        }
+      }
+    },
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_type",
+        "schema",
+        "schema_version",
+        "schema_sha256",
+        "repo",
+        "source_revision",
+        "source_path",
+        "source_sha256",
+        "source_encoding",
+        "reader",
+        "reader_version",
+        "reader_sha256",
+        "reader_manifest_sha256",
+        "python_implementation",
+        "python_version",
+        "ast_feature_version",
+        "freshness_key_sha256",
+        "module_id",
+        "status",
+        "hmmm"
+      ],
+      "properties": {
+        "record_type": {
+          "const": "module"
+        },
+        "schema": {
+          "const": "urn:the-interdependency:msdmd:module-projection:1"
+        },
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "repo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_encoding": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reader": {
+          "const": "the-interdependency.msdmd.python-ast-tokenize"
+        },
+        "reader_version": {
+          "const": "1.0.0"
+        },
+        "reader_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reader_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "python_implementation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "python_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "ast_feature_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$"
+        },
+        "freshness_key_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "module_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "complete",
+            "invalid"
+          ]
+        },
+        "hmmm": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "symbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_type",
+        "id",
+        "kind",
+        "qualified_name",
+        "parent",
+        "signature",
+        "signature_sha256",
+        "decorators",
+        "standing",
+        "source_span"
+      ],
+      "properties": {
+        "record_type": {
+          "const": "symbol"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "class",
+            "function",
+            "async_function",
+            "method",
+            "async_method"
+          ]
+        },
+        "qualified_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signature_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "decorators": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "standing": {
+          "const": "syntactically_observed"
+        },
+        "source_span": {
+          "$ref": "#/$defs/span"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_type",
+        "metadata_kind",
+        "convention",
+        "subject",
+        "subject_kind",
+        "attachment",
+        "standing",
+        "text",
+        "source_span"
+      ],
+      "properties": {
+        "record_type": {
+          "const": "metadata"
+        },
+        "metadata_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "convention": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attachment": {
+          "enum": [
+            "native_docstring",
+            "leading_trivia",
+            "nearest_enclosing_symbol",
+            "module_convention",
+            "module_scope"
+          ]
+        },
+        "standing": {
+          "enum": [
+            "declared",
+            "syntactically_observed"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "source_span": {
+          "$ref": "#/$defs/span"
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "record_type",
+        "code",
+        "severity",
+        "message",
+        "source_path"
+      ],
+      "properties": {
+        "record_type": {
+          "const": "diagnostic"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "hmmm"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "column": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}
