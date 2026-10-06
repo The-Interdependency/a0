@@ -1,15 +1,21 @@
 ---
 name: meta-module-build
-description: Metadata-first module build skill built on msdmd. Use this when turning a capability idea into a bounded module manifest, file plan, public/internal surface, permission boundary, tests, docs, rollout, and rollback notes before implementation.
+description: Native-first module planning built on msdmd. Consume existing manifests, schemas and design declarations; supplemental MODULE_BUILD blocks record remaining purpose, surface, boundary, test, rollout and rollback obligations. Load this when turning a capability idea into a bounded module manifest and file plan before implementation.
 ---
-
-GPT generated; context, prompt Erin Spencer
 
 # meta-module-build — Metadata-first module scaffolding
 
-`meta-module-build` is an application of [msdmd](../msdmd/SKILL.md). It uses self-declared metadata to keep a proposed module's purpose, surfaces, dependencies, boundaries, tests, and rollout notes visible beside the files that implement it.
+GPT generated; context, prompt Erin Spencer
 
-Read `msdmd/SKILL.md` first. This skill inherits the block syntax, parser contract, and visible gap-reporting requirement.
+`meta-module-build` is an application of [msdmd](../msdmd/SKILL.md). It
+keeps proposed purpose, surfaces, dependencies, boundaries, tests and rollout
+notes attributable to the sources that own them.
+
+Read `msdmd/SKILL.md` first. This skill inherits its source/provenance, native
+reader support, supplemental block and information-coverage contracts.
+Implementation status: this is a consuming-repo planning/runner contract. The
+MSDMD schema-2 collector preserves JSON and TOML manifest trees, but this repo
+does not ship a complete MODULE_BUILD obligation/policy runner.
 
 ## Doctrine
 
@@ -21,9 +27,21 @@ intent -> manifest -> file plan -> tests -> scaffold -> reviewable change
 
 If a field is not known, write `hmmm`. Do not guess certainty into the manifest.
 
+## Native-first coverage
+
+Consume existing package/module manifests, schemas, source-owned design
+records and explicit rollout/test declarations before requesting supplemental
+metadata. Preserve owning scope and source references. A package manifest is
+not automatically a module plan: map only information it actually expresses.
+
+The build's semantic obligations remain required, but their native owners need
+no MODULE_BUILD copies. Supplement genuinely unexpressed intent. Unsupported
+mapping is unresolved coverage, not absence. Semantic planning mappings beyond
+the shipped structured-source preservation remain implementation work.
+
 ## The block
 
-A module owns its build declaration in a `MODULE_BUILD` block:
+A module may supplement its build declaration with a `MODULE_BUILD` block:
 
 ```python
 # === MODULE_BUILD ===
@@ -47,7 +65,9 @@ A module owns its build declaration in a `MODULE_BUILD` block:
 
 ## Field schema
 
-Required:
+This syntax governs supplemental MODULE_BUILD entries. Native sources retain
+their own schemas and must satisfy the applicable planning obligations without
+invented IDs or copied fields. Required for a supplemental entry:
 
 | Field | Meaning |
 |---|---|
@@ -62,7 +82,7 @@ Required:
 | `rollout` | How the module becomes active. |
 | `rollback` | How to disable or remove it cleanly. |
 
-Boundary fields are required because module generation often crosses hidden lines:
+Boundary information is required because module generation often crosses hidden lines:
 
 | Field | Meaning |
 |---|---|
@@ -139,21 +159,31 @@ Do not use raw factorization sentinels for A0-facing claims when a scoped envelo
 
 A `MODULE_BUILD` runner should:
 
-1. parse all `MODULE_BUILD` blocks using the msdmd universal parser;
-2. validate required fields;
-3. report boundary fields visibly;
-4. report modules without `MODULE_BUILD` as coverage gaps;
-5. optionally fail in strict mode when required build metadata is missing;
+1. extract supported native planning metadata and parse supplemental
+   `MODULE_BUILD` blocks using the msdmd universal parser;
+2. validate native mappings and supplemental fields under their own schemas;
+3. report boundary information and its owning sources visibly;
+4. report genuinely absent required planning information only after capable
+   inspection; keep missing blocks separate as adoption observations;
+5. fail strict mode on missing information, required unsupported extraction or
+   unresolved conflicts, rather than accepting incomplete coverage;
 6. emit a review summary grouped by `module_kind` and boundary risk.
+
+## Validation
+
+A supported native planning fixture must satisfy the information it actually
+expresses without a MODULE_BUILD copy. Include missing rollback, unresolved
+boundary, unsupported mapping and same-name/different-scope cases.
 
 ## Anti-patterns
 
 - Building code first and writing the manifest after.
-- Omitting boundary fields because the module feels small.
+- Omitting boundary information because the module feels small.
 - Marking unknowns as solved instead of `hmmm`.
 - Using implementation-shaped ids that do not explain the protected capability.
 - Adding UI or route behavior without declaring metadata expectations.
 - Treating frontier-domain UCNS results as absolute claims.
+- Demanding a second MODULE_BUILD copy of already-owned native information.
 
 ## Completion criteria
 
@@ -169,10 +199,13 @@ or
 scaffold PR with tests and docs
 ```
 
-It is incomplete if it only produces an idea, a patch with no manifest, or a module with no boundary/test plan.
+The manifest may be composed from source-linked native declarations and
+supplemental entries. An idea alone, a patch with no manifest, or a module with
+no boundary/test plan remains incomplete.
 
 ## hmmm
 
+Native planning-obligation mappings remain consuming-repo implementation work.
 Default unresolved items for new modules:
 
 ```text
