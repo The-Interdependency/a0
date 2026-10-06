@@ -1,4 +1,4 @@
-# ratios: loc_comments=195:14 imports_exports=15:3 calls_definitions=83:3
+# ratios: loc_comments=200:16 imports_exports=15:3 calls_definitions=84:3
 """Syntax-aware code readers for the unified collection.
 
 Usage: registry calls read_python/read_typescript with bounded bytes and context.
@@ -167,8 +167,15 @@ def read_typescript(path: Path, data: bytes, context: dict[str, Any]) -> tuple[l
     result = subprocess.run(['node', str(helper)], input=json.dumps({'path': str(path), 'text': data.decode('utf-8-sig')}),
         capture_output=True, text=True, cwd=helper.parent, env=env, check=False)
     if result.returncode:
-        return [], [], [_diagnostic(context, reader_id=rid, code='typescript_reader_unavailable',
-            message='trusted TypeScript worker failed; install Node and run npm ci --prefix msdmd', status='unsupported')]
+        if "Cannot find module 'typescript'" in result.stderr:
+            return [], [], [_diagnostic(context, reader_id=rid, code='typescript_reader_unavailable',
+                message='TypeScript compiler package not installed for the trusted worker; run npm ci --prefix <msdmd skill dir>',
+                status='unsupported')]
+        # Any other worker failure is a reader error, not a missing runtime. Worker
+        # stderr is not published because it can quote inspected source text.
+        return [], [], [_diagnostic(context, reader_id=rid, code='typescript_reader_failed',
+            message=f'trusted TypeScript worker exited with status {result.returncode}; input not extracted',
+            status='invalid', severity='error')]
     parsed = json.loads(result.stdout)
     context = dict(context, convention_version=parsed['version'], dialect='typescript-compiler-jsdoc')
     facts: list = []
@@ -217,4 +224,4 @@ def read_typescript(path: Path, data: bytes, context: dict[str, Any]) -> tuple[l
         for target in targets or [fallback]:
             edges.append(_edge(fact['subject']['address'], target, 'exports:' + item['exported_name']))
     return facts, edges, diagnostics
-# ratios: loc_comments=195:14 imports_exports=15:3 calls_definitions=83:3
+# ratios: loc_comments=200:16 imports_exports=15:3 calls_definitions=84:3

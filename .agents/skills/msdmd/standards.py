@@ -1,4 +1,4 @@
-# ratios: loc_comments=254:13 imports_exports=8:2 calls_definitions=146:5
+# ratios: loc_comments=265:18 imports_exports=8:2 calls_definitions=149:5
 """Semantic projections for native metadata documents, preserving owning trees.
 
 Usage: registry invokes read_standards(path, bytes, context). The JSON/YAML/TOML
@@ -196,10 +196,14 @@ def read_standards(path: Path, data: bytes, context: dict[str, Any]) -> tuple[li
             components(value.get('components', []), '/components')
     statement = value
     statement_pointer = ''
+    envelope_fact = None
     if value.get('payloadType') == 'application/vnd.in-toto+json' and isinstance(value.get('payload'), str):
         statement = parse_json(base64.b64decode(value['payload'], validate=True))
         statement_pointer = '/payload'
-        emit('dsse.envelope', 'v1', 'signed-envelope', '', value, scope='attestation', standing='reported-evidence')
+        # The decoded statement is published (redacted) at /payload; never also
+        # publish the raw base64 payload, which would reverse that redaction.
+        envelope = dict(value, payload={'$withheld': True, 'reason': 'decoded-statement-projected', 'pointer': '/payload'})
+        envelope_fact = emit('dsse.envelope', 'v1', 'signed-envelope', '', envelope, scope='attestation', standing='reported-evidence')
         unsupported('unverified_signature', 'envelope parsed; signature verification was not requested or performed', status='unverified')
     if isinstance(statement, dict) and str(statement.get('_type', '')).startswith('https://in-toto.io/Statement/'):
         version = str(statement['_type'])
@@ -212,6 +216,18 @@ def read_standards(path: Path, data: bytes, context: dict[str, Any]) -> tuple[li
             for i, subject in enumerate(statement.get('subject', [])):
                 emit('in-toto.statement', version, 'attested-subject', statement_pointer + pointer('subject', i), subject,
                     scope='artifact', identity=subject.get('name', str(i)), native_id=subject.get('name'), standing='reported-evidence')
+    elif envelope_fact is not None:
+        # Declared in-toto payload that is not a Statement: keep the decoded
+        # (redacted) payload as its own fact rather than claiming a statement.
+        unsupported('dsse_payload_not_in_toto_statement',
+            'payloadType declares in-toto JSON but the decoded payload has no in-toto Statement _type; payload kept unprojected',
+            status='ambiguous')
+        fact = emit('dsse.envelope', 'v1', 'signed-payload', '/payload', statement, scope='attestation', standing='reported-evidence')
+        fact['projection'] = {'mapping_version': 'dsse-base64-json@1', 'loss': 'decoded payload not interpreted; signature not verified'}
+    if envelope_fact is not None:
+        # Supersede the generic syntax view only once a decoded replacement exists.
+        envelope_fact['projection'] = {'mapping_version': 'dsse-envelope@1', 'supersedes': 'structured-document',
+            'loss': 'raw base64 payload withheld; decoded payload published at /payload'}
     if path.name in {'package-lock.json', 'npm-shrinkwrap.json'}:
         version = str(value.get('lockfileVersion', 'hmmm'))
         emit('npm.lockfile', version, 'lockfile', '', value, scope='package')
@@ -281,4 +297,4 @@ def read_standards(path: Path, data: bytes, context: dict[str, Any]) -> tuple[li
                 code='duplicate_native_identifier', message='duplicate native ID in ' + namespace,
                 status='invalid', severity='error'))
     return facts, edges, diagnostics
-# ratios: loc_comments=254:13 imports_exports=8:2 calls_definitions=146:5
+# ratios: loc_comments=265:18 imports_exports=8:2 calls_definitions=149:5

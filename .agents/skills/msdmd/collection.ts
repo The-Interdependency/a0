@@ -10,6 +10,14 @@
  *   native facts and must never receive a silent lossy projection.
  */
 
+/**
+ * Schema-2 shape revision of this helper. The collector refuses to write a
+ * schema-2 artifact against a helper whose revision is older than it renders
+ * (exit 4), so a stale vendored helper cannot fail tsc after regeneration.
+ * Revision 1 adds `runtime-unavailable` reader runs and submodule ledger entries.
+ */
+export const MSDMD_COLLECTION_HELPER_VERSION = 1;
+
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
@@ -146,7 +154,7 @@ export interface MsdmdReaderRun {
   reader_id: string;
   reader_version: string;
   support: MsdmdReaderManifest["support"];
-  status: "applied" | "not-applicable";
+  status: "applied" | "not-applicable" | "runtime-unavailable";
   files_matched: number;
   facts_emitted: number;
 }
@@ -156,9 +164,11 @@ export interface MsdmdDiscoveryEntry {
   status: "supported" | "partial" | "unsupported" | "invalid" | "excluded" | "unreadable";
   reader_ids: string[];
   content_sha256: string;
-  entry_kind?: "file" | "subtree" | "output";
+  entry_kind?: "file" | "subtree" | "output" | "submodule";
   size?: number;
   reason?: string;
+  /** Pinned gitlink commit for an excluded git submodule. */
+  commit?: string;
 }
 
 export interface MsdmdEdgeV2 {
