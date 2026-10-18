@@ -6,6 +6,26 @@
 
 ---
 
+## Research abstract
+
+Description dated 2026-10-14; published 2026-10-18. This is a research description, not a new verification, release, or promotion of claim status.
+
+### a0: A Persistent Agent Runtime and Research Instrument
+
+**a0** is an experimental platform for maintaining agent identity, memory, and coordinated activity across changes in computational provider and execution session. Its central architectural distinction separates the continuing agent from the models it uses: language models supply replaceable inference resources, while a0 provides orchestration, lifecycle management, state persistence, and operational boundaries. The implementation hosts **ZFAE** as its persistent agent; its public-facing instance, **a0p**, is designated a research instrument.
+
+The runtime combines memory management, model and tool routing, approval-gated execution, periodic state maintenance, and parallel sub-agent activity. Sub-agents can fork computational state and return results through defined merge operations. A metadata-driven console exposes backend capabilities through their declared interfaces, making the conversational surface one means of interacting with the system rather than the definition of the agent itself. These components support investigation of continuity between dialogue, retained experience, and consequential action.
+
+The current construction integrates the producer-owned PTCNA neural runtime and its associated UCNS construction through explicitly identified dependencies. a0 owns the persistence and agent-state binding rather than duplicating the underlying mathematical implementation. Checkpoints preserve numerical state, identity fields, inference counters, and routing history; inference records distinguish the requested backend from the backend actually used. These mechanisms make restart behavior and fallback attribution inspectable, without establishing that the experimental representation improves reasoning or task performance.
+
+The proposed contribution is an operational framework for studying **persistent agency without identifying the agent with any single inference model**. Relevant evaluations concern whether continuity survives provider changes and restarts, whether delegation preserves authority boundaries, and whether retained state improves useful task completion. Public operation adds distinct requirements for privacy, consent, resource accounting, and cross-user isolation; implementation evidence alone does not establish deployment readiness.
+
+**hmmm:** Comparative usefulness, generalization of the experimental neural construction, and production privacy remain unresolved. Persistent computational identity is an operational property—not, by itself, evidence of consciousness.
+
+**Usage guidance:** Read this abstract for the research question and intended contribution. Use the scope, evidence, commands, and limitations in the rest of this README before relying on the work; retain the unresolved conditions above when quoting the description.
+
+Public repository context: [Public release gate](https://github.com/The-Interdependency/a0/blob/b5be72523b687c2fbf5fb45893d1d5643c086700/PUBLIC_RELEASE.md).
+
 ## The Agent
 
 ZFAE (`a0(zeta fun alpha echo)`) is the single persistent agent running on the instrument. Large language models (GPT-5 mini, Gemini 2.5 Flash, Claude Sonnet 4.5, Grok 4 Fast, DeepSeek V4.1 Flash) are treated as **energy providers** — they supply computational energy for each response but are not the agent itself.
