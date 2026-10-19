@@ -1,0 +1,35 @@
+{
+  "schema": "the-interdependency.stack-manifest",
+  "version": "1.0.0",
+  "work_graph_sha256": "549703d0096a9ba499bca23f614bcd667da0a98ac3e5a87fb9fdd28ceff9b133",
+  "repositories": [
+    {
+      "repository": "The-Interdependency/The-Interdependency.github.io",
+      "commit": "c955f2f9c36e69a68b8d3a7e0acb70e8fca6c36b",
+      "authority": "human publication and browser envelope",
+      "relation": "request producer"
+    },
+    {
+      "repository": "The-Interdependency/skill-lib",
+      "commit": "83aef7813dbd040a67ddc07bbb8845f51eb38a3e",
+      "authority": "canonical registry and skill instructions",
+      "relation": "instruction source"
+    },
+    {
+      "repository": "The-Interdependency/a0",
+      "commit": "b5be72523b687c2fbf5fb45893d1d5643c086700",
+      "authority": "auth and execution lifecycle; inspected pre-patch base",
+      "relation": "executor consumer"
+    }
+  ],
+  "boundaries": {
+    "authority_transfer": false,
+    "proof_status_transfer": false,
+    "measurement_status_transfer": false,
+    "semantic_mapping": "declared mapping",
+    "agent_scope": "cross-repository-work-graph",
+    "hmmm": [
+      "Dormant validation only; authenticated retrieval, per-user authorization, caller-bound dispatch, execution receipts, and live deployment remain unresolved."
+    ]
+  }
+}

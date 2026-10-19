@@ -1,0 +1,36 @@
+{
+  "skill": {
+    "name": "wdll",
+    "kind": "procedural",
+    "depends_on": [],
+    "description": "Executive job selection and falsifiable completion under uncertainty and constraint. Load this when a spawn or newly scoped unit of work must choose consequential work, establish the required scope, or define what completion proves. Do not load for a fixed-scope operation whose target state and verification are already explicit.",
+    "human_title": "Executive job selection and falsifiable completion under uncertainty and constraint",
+    "canonical_path": "wdll/SKILL.md",
+    "canonical_url": "https://github.com/The-Interdependency/skill-lib/blob/83aef7813dbd040a67ddc07bbb8845f51eb38a3e/wdll/SKILL.md"
+  },
+  "required_skills": [
+    {
+      "name": "wdll",
+      "kind": "procedural",
+      "depends_on": [],
+      "description": "Executive job selection and falsifiable completion under uncertainty and constraint. Load this when a spawn or newly scoped unit of work must choose consequential work, establish the required scope, or define what completion proves. Do not load for a fixed-scope operation whose target state and verification are already explicit.",
+      "human_title": "Executive job selection and falsifiable completion under uncertainty and constraint",
+      "canonical_path": "wdll/SKILL.md",
+      "canonical_url": "https://github.com/The-Interdependency/skill-lib/blob/83aef7813dbd040a67ddc07bbb8845f51eb38a3e/wdll/SKILL.md"
+    }
+  ],
+  "skill_registry": {
+    "registry_version": 1,
+    "skill_count": 45,
+    "source_skill_count": 45,
+    "public_scope": "all registered skill-lib skills",
+    "source": {
+      "repository": "The-Interdependency/skill-lib",
+      "commit": "83aef7813dbd040a67ddc07bbb8845f51eb38a3e",
+      "path": "skills.json",
+      "sha256": "09f8259f61f2ea22ce9150ff6ab6d7baf4f6d0ab605c926bd7d64fb0d78581a9"
+    },
+    "fallback": false,
+    "hmmm": []
+  }
+}
