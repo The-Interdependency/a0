@@ -1,17 +1,9 @@
-# 207:11
+# 207:4
 """Offline witnesses: python -m unittest discover -s tests -p test_webmcp_validation.py -v.
 
 Load only the dormant module, not services.__init__ and its database dependencies.
 Synthetic fixture bytes test protocol semantics, not remote source authenticity.
 """
-# === CHECKS ===
-# id: check_webmcp_validation
-#   proves: webmcp_source_identity, webmcp_target_freshness, webmcp_validation_is_not_execution
-#   call: self::check_webmcp_validation
-#   mutates: none
-#   cleanup: none
-# === END CHECKS ===
-
 import copy
 from dataclasses import FrozenInstanceError
 import hashlib
@@ -241,4 +233,4 @@ def check_webmcp_validation():
 
 if __name__ == "__main__":
     unittest.main()
-# 207:11
+# 207:4

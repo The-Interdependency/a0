@@ -76,12 +76,15 @@ website's fallback snapshot is corrupt.
 
 ```sh
 python -m unittest discover -s tests -p test_webmcp_validation.py -v
-python scripts/annotate.py python/services/webmcp_validation.py tests/test_webmcp_validation.py
+python -m python.tests.contract_runner --only check_webmcp_validation
+python scripts/annotate.py python/services/webmcp_validation.py tests/test_webmcp_validation.py python/tests/contracts/webmcp_validation_checks.py
 git diff --check
 ```
 
 These tests require only Python's standard library. They load this module in
 isolation because importing `python.services` loads existing service dependencies.
+The test-owned CHECKS declaration lives under `python/tests/contracts`, the
+existing contract runner's discovery root, and calls the same offline suite.
 They do not require a database, provider credential, VM or network. Tests cover
 source substitution, raw-byte mismatch, type confusion, malformed JSON/UTF-8,
 path and closure tampering, cyclic/missing dependencies, stale/unlisted targets,
