@@ -41,7 +41,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python dependencies
-        run: uv sync --frozen
+        run: uv sync --locked
 
       - name: Run provider contracts
         run: |
@@ -97,7 +97,7 @@ jobs:
         run: npm ci
 
       - name: Install Python dependencies
-        run: uv sync --frozen
+        run: uv sync --locked
 
       - name: Apply database schema
         run: npm run db:push

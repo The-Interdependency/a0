@@ -74,17 +74,32 @@ The only productized service is the **EDCMbone transcript explainer** — a one-
 
 ## Local Development
 
-**Prerequisites:** Node.js 20+, Python 3.12+, PostgreSQL
+**Prerequisites:** Node.js 20.19+ or 22.12+, Python 3.12+, uv, and PostgreSQL for the full application. CI and the container use Node 22.
 
 ```bash
-npm install
-pip install -e .
+npm ci
+uv sync --locked
+
+# No server, production database, provider key, or paid inference is needed.
+# Prints the database/live suites that are not covered by this command.
+python scripts/subm_chec_offl_v0.0.0alpha.py
+```
+
+The complete application is separate from these offline checks. Configure an isolated PostgreSQL database, apply the schema, and supply the required environment variables before starting it. The legacy development launcher terminates processes on its fixed ports; normal startup also changes database schema/data and starts background services. Do not run it against an existing database or on a shared workstation without reviewing those effects.
+
+```bash
+# Only after the full-application prerequisites and side effects are reviewed:
+export PATH="$PWD/.venv/bin:$PATH"
 
 # Start all three processes (Express :5000, Vite :5001, Python :8001)
 bash scripts/start-dev.sh
 ```
 
 In development `scripts/start-dev.sh` generates a shared `INTERNAL_API_SECRET` automatically.
+
+For a locked production build without starting the application, run `bash scripts/build-prod.sh`. It installs runtime Python dependencies only; run `uv sync --locked` again before running the offline development checks.
+
+Hackathon preparation, source-evidence limits, and the still-outstanding working-demo gates are recorded in the [candidate runbook](docs/hackathon/demo_runb_v0.0.0alpha.md). Neither a successful build nor a source archive establishes Replit parity or a qualifying Amazon-track demo.
 
 ### Standalone a0 / Termux with DeepSeek
 

@@ -32,14 +32,14 @@ scripts/start-dev.sh
 npm run dev                # = NODE_ENV=development tsx server/index.ts
 
 # Production build (Vite → dist/public/, esbuild → dist/index.cjs)
-npm run build              # = tsx script/build.ts
+npm run build              # = node --import tsx script/build.ts
 
-# Full prod bootstrap: npm install + pip install -e . + npm run build
+# Locked prod bootstrap: npm ci + uv sync --locked --no-dev + npm run build
 scripts/build-prod.sh
 
 # Production start (Express :5000 + uvicorn :8001)
-npm start                  # Express only (dist/index.cjs)
-scripts/start-prod.sh      # both processes
+npm start                  # canonical scripts/start-prod.sh launcher
+scripts/start-prod.sh      # Express owns the sole uvicorn child; uses locked .venv
 
 # TypeScript type checking
 npm run check              # = tsc
@@ -58,6 +58,10 @@ python scripts/annotate.py <file ...> # single-file mode (preserves C:D / I:O)
 # Python test suite (pytest, asyncio auto-mode)
 uv run pytest tests/ -v
 uv run pytest tests/ -v --ignore=tests/test_live_server.py   # skip live-server smoke
+
+# Credential-free offline checks, with database/live exclusions printed explicitly
+# Requires npm ci and uv sync --locked (including Python dev dependencies)
+python scripts/subm_chec_offl_v0.0.0alpha.py
 
 # Contract runner — walks python/ for "# === CONTRACTS ===" blocks and runs them
 python -m python.tests.contract_runner
