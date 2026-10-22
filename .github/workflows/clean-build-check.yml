@@ -27,13 +27,13 @@ jobs:
         run: npm ci
 
       - name: Build without REPL_ID
-        run: env -u REPL_ID NODE_ENV=production npx tsx script/build.ts
+        run: env -u REPL_ID NODE_ENV=production npm run build
 
       - name: Check for @replit references in client bundle
         run: |
           MATCHES=$( (grep -r "@replit" dist/public/assets/ || true) )
           if [ -n "$MATCHES" ]; then
-            echo "::error::@replit packages leaked into the client bundle. Run 'env -u REPL_ID NODE_ENV=production npx tsx script/build.ts' locally and check vite.config.ts for static @replit imports."
+            echo "::error::@replit packages leaked into the client bundle. Run 'env -u REPL_ID NODE_ENV=production npm run build' locally and check vite.config.ts for static @replit imports."
             echo "$MATCHES"
             exit 1
           fi

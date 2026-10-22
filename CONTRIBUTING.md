@@ -18,10 +18,10 @@ Useful contributions include:
 
 Use these versions for local development unless a task-specific issue says otherwise:
 
-- **Node.js 20+** — `README.md` lists Node.js 20+ for local development, and `package.json` pins `@types/node` to the 20.x line.
+- **Node.js 20.19+ or 22.12+** — matches the locked Vite version; CI and the container use Node 22. See `package.json` engines.
 - **Python 3.12+** — `README.md` lists Python 3.12+, and `pyproject.toml` declares `requires-python = ">=3.12"`.
 - **npm** — JavaScript and TypeScript commands are exposed through `package.json` scripts such as `npm run build`, `npm run check`, and `npm run db:push`.
-- **pip or an equivalent PEP 517 installer** — the README uses `pip install -e .`; Python package metadata lives in `pyproject.toml`.
+- **uv** — use `uv sync --locked` for development and the committed `uv.lock`. The production build uses `uv sync --locked --no-dev`; package metadata still uses standard PEP 508 direct Git references.
 - **PostgreSQL** — required for the full local stack and contract suite paths described in `README.md`.
 
 Grounding files: `README.md`, `package.json`, `pyproject.toml`.
