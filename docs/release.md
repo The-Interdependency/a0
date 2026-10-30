@@ -11,8 +11,8 @@ Released: 2026-10-30 on VM `a0-prod-1.us-west1-a.c.cs-poc-ab8uzg6ej7vv4vwtyywhbw
 
 | Component | Identity |
 | --- | --- |
-| Published HEAD (GitHub main) | `eabdce5a23ed2875ea6dfe37e84d02f3baf741da` (`fix: resolve issue #118 audit findings F01-F16…`) |
-| Deployed HEAD on VM | same commit (see `/opt/a0` `git rev-parse HEAD` and `/api/health` build field) |
+| Published HEAD (GitHub main) | `bda763c0337363f98b2385124fde1ed11eabdd02` (`fix: resolve issue #118 audit findings F01-F16…` + rollback exec bit) |
+| Deployed HEAD on VM | `bda763c0337363f98b2385124fde1ed11eabdd02` (see `/api/health` build field) |
 | Previous release commits | implementation `3eef4b088aa0c4e826f657f74cc6cfe0738062f3`, docs `1885b975c83f5a74c36afb0294121a5e26ca48ea` |
 | Harness | `a0-harness/1.0.0` |
 | Node runtime | v18.19.1 (`/usr/bin/node`) |
