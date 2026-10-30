@@ -1,42 +1,44 @@
-# A0 release record
+# A0 release record (issue #118 corrective release)
 
 Released: 2026-10-30 on VM `a0-prod-1.us-west1-a.c.cs-poc-ab8uzg6ej7vv4vwtyywhbwn.internal` (GCP project `cs-poc-ab8uzg6ej7vv4vwtyywhbwn`, external IP 35.212.252.101).
 
 ## Public surface
 
-- **HTTPS URL: https://35.212.252.101.nip.io** (primary) and https://35.212.252.101.sslip.io (fallback). Real Let's Encrypt certificates obtained automatically by Caddy; HTTP redirects to HTTPS.
-- Only ingress ports 80/443 are published by Caddy. PostgreSQL (127.0.0.1:5432), OpenBao (127.0.0.1:8200), and the A0 app (127.0.0.1:8787) stay private to the host.
+- **HTTPS URL: https://35.212.252.101.nip.io** (primary) and https://35.212.252.101.sslip.io (fallback). Real Let's Encrypt certificates; HTTP redirects to HTTPS.
+- CSP header now served: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`.
 
 ## Deployed identities
 
 | Component | Identity |
 | --- | --- |
-| A0 source commit | `3eef4b088aa0c4e826f657f74cc6cfe0738062f3` (`build: implement A0 VM website…`) |
-| Docs/acceptance commit | `1885b975c83f5a74c36afb0294121a5e26ca48ea` |
-| Deployed HEAD on VM | `2f2763f8620be481b7c407cf08502193f8dd1a46` (at `/opt/a0`, main) |
+| Published HEAD (GitHub main) | `eabdce5a23ed2875ea6dfe37e84d02f3baf741da` (`fix: resolve issue #118 audit findings F01-F16…`) |
+| Deployed HEAD on VM | same commit (see `/opt/a0` `git rev-parse HEAD` and `/api/health` build field) |
+| Previous release commits | implementation `3eef4b088aa0c4e826f657f74cc6cfe0738062f3`, docs `1885b975c83f5a74c36afb0294121a5e26ca48ea` |
 | Harness | `a0-harness/1.0.0` |
-| Node runtime | v18.19.1 (`/usr/bin/node`) with npm lockfile committed |
-| OpenBao fork | The-Interdependency/openbao @ `4a8f475e88e4fa0c76ae1645a22faffe5596d361`; built binary reports `OpenBao v2.0.0-HEAD` at `/opt/openbao/openbao` |
+| Node runtime | v18.19.1 (`/usr/bin/node`) |
+| OpenBao | The-Interdependency/openbao @ `4a8f475e88e4fa0c76ae1645a22faffe5596d361`; binary `OpenBao v2.0.0-HEAD` at `/opt/openbao/openbao` |
 | Caddy | v2.11.7 at `/opt/caddy/caddy` |
-| PostgreSQL | existing cluster 16 (`postgresql@16-main`); app DB `a0app` (role `a0_app`), vault DB `openbao` (role `openbao`) |
-| App schema | migration `0001_initial` applied |
+| PostgreSQL | existing cluster 16; app DB `a0app` (role `a0_app`), vault DB `openbao` (role `openbao`) |
+| App schema | migration `0001_initial` |
 | Services | `a0.service`, `openbao.service`, `a0-caddy.service` — enabled, active, restart on-failure |
 
-## Readiness / restart evidence
+## Verification results
 
-- `curl -s https://35.212.252.101.nip.io/api/health` → `{"ok":true,"name":"a0","harness":"a0-harness/1.0.0",...}` over public HTTPS.
-- A14 PASS: conversation persisted across `systemctl restart a0`.
-- A12 PASS: vault canary persisted across `systemctl restart openbao`.
-- Streaming/cancellation exercised through the public HTTPS URL by the acceptance runner (SSE over fetch).
+- Acceptance A01–A24 final ledger: **21 PASS, 1 FAIL (A04), 2 BLOCKED (A17/A18), 0 NOT RUN** — see docs/acceptance.md.
+- A04: openai/xai/deepseek real test requests PASS; anthropic BLOCKED (no key). A04 stays FAIL until all four providers pass.
+- F01: `tests/frontend/run.js` — all adversarial fixtures inert; safe links preserved. CSP live.
+- A13: GnuPG backup + isolated restore + restored-Bao canary OK. Tampered backup fails decryption (exit 2) before extraction.
+- A24: served-source issue-#118 checks all pass; rollback `--check` rehearsal passed.
+- `/api/health` now reports `build.commit`, `build.dirty`, `build.builtAt` so the running build is bound to its source identity.
 
 ## Backup / restore / rollback
 
-- Backup: `sudo operations/backup.sh` → `/srv/a0/backups/a0-backup-<stamp>.tar.gz.enc` (AES-256-CBC, key `/etc/a0/backup.key`).
-- Restore verified: `sudo operations/restore.sh … verify1` restored both databases and media into isolated targets (users=1, conversations=0, media_files=22, bao_kv_rows=53).
-- Rollback: `cd /opt/a0 && sudo git checkout <previous-good-commit> && sudo systemctl restart a0`. Source rollback does not undo database migrations or external tool effects; restore the pre-update backup for data-affecting migrations. Full instructions in operations/README.md.
+- Backup: `sudo operations/backup.sh` → `/srv/a0/backups/a0-backup-<stamp>.tar.gz.gpg` (GnuPG AES256, integrity-protected, with SHA-256 manifest + OpenBao canary).
+- Restore: `sudo operations/restore.sh <backup> <suffix>` — decrypts, verifies manifest, restores isolated DBs/media, then starts a second OpenBao against the restored store and reads the original canary.
+- Rollback: `sudo operations/rollback.sh --check <backup>` (rehearsal; passed) and `--apply <backup>` (maintenance-state restore + redeploy of the recorded commit). Full procedures in operations/README.md.
 
 ## Operator handover
 
-- Owner sign-in: username `erin`; the one-time setup code was consumed during acceptance; the current owner password is delivered separately. Change it in About after first sign-in.
-- Provider keys: DeepSeek, xAI, OpenAI keys imported from the VM's existing environment into OpenBao. Anthropic needs a key. OpenAI's existing key returns 401 and must be rotated in Settings → Providers.
-- Recovery material lives only on the VM (and in off-VM copies the operator makes): `/etc/openbao/init.json`, `/etc/openbao/seal.key`, `/etc/a0/backup.key`, `/etc/a0/a0.env`, `/etc/a0/db-passwords.env`. None are committed to the repository.
+- Owner account `erin` remains the only user. The owner password was changed by the operator during phone sign-in and is not recorded here; recovery via the website About → Change password, or privately documented operator recovery.
+- Provider keys in OpenBao: openai, deepseek, xai configured; anthropic needs a key. OpenAI's earlier 401 was traced to a test placeholder overwriting the real key; the real key was re-imported and now passes.
+- Recovery material stays only on the VM (and off-VM copies the operator makes): `/etc/openbao/init.json`, `/etc/openbao/seal.key`, `/etc/a0/backup.key`, `/etc/a0/a0.env`, `/etc/a0/db-passwords.env`. None are committed.
