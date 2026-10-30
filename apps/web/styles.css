@@ -162,3 +162,38 @@ body {
   .drawer { position: static; transform: none; }
   .compare-pane { flex-basis: 420px; }
 }
+
+/* Issue #118 fixes */
+#aboutBox { min-inline-size: 0; }
+#aboutBox pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-inline-size: 100%;
+  background: #0a0f1e;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.about-password { margin-top: 12px; }
+.chat-head { flex-wrap: wrap; }
+#chatProjectSelect { max-width: 140px; }
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 90px;
+  transform: translateX(-50%);
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+  z-index: 60;
+  max-width: 92vw;
+}
+.toast.error { border-color: var(--danger); color: var(--danger); }
+.chip-x { background: transparent; border: none; color: var(--danger); cursor: pointer; font-size: 12px; }
+.msg-speak { display: inline-block; margin-left: 6px; padding: 2px 6px; font-size: 12px; }
+#retryBar { display: flex; align-items: center; gap: 8px; }
+.list-item { width: 100%; text-align: left; }
+#contextSelectionList .tool-proposal pre { max-height: 120px; overflow-y: auto; }

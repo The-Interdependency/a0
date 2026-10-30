@@ -62,16 +62,19 @@
         <section id="view-chat" class="view hidden">
           <div class="chat-head">
             <div class="chat-title" id="chatTitle">New conversation</div>
-            <div class="chat-controls">
-              <button id="contextPolicyBtn" class="chip" title="Which responses enter future context">Context: All</button>
-            </div>
+            <select id="chatProjectSelect" class="chip" aria-label="Project for this conversation"></select>
+            <button id="contextPolicyBtn" class="chip" title="Which responses enter future context">Context: All</button>
           </div>
           <div id="messages" class="messages" aria-live="polite"></div>
           <div id="compareWrap" class="compare-wrap hidden"></div>
           <div id="typingBar" class="typing hidden">
             <span class="spinner"></span>
             <span id="typingText">Working…</span>
-            <button id="stopBtn" class="chip danger">Stop</button>
+            <button id="stopBtn" class="chip danger hidden">Stop</button>
+          </div>
+          <div id="retryBar" class="typing hidden">
+            <span id="retryText" class="muted">Your draft is preserved.</span>
+            <button id="retryBtn" class="chip">Retry</button>
           </div>
           <div class="composer-wrap">
             <div id="attachmentChips" class="chips"></div>
@@ -81,18 +84,18 @@
                 <button type="button" id="attachBtn" class="icon-btn" aria-label="Attach files">📎</button>
                 <input id="fileInput" type="file" multiple hidden>
                 <button type="button" id="voiceBtn" class="icon-btn" aria-label="Dictate">🎤</button>
-                <div class="participant-picker" id="participantPicker"></div>
-                <button type="submit" id="sendBtn" class="send-btn">➤</button>
+                <div class="participant-picker" id="participantPicker" role="group" aria-label="Choose participants"></div>
+                <button type="submit" id="sendBtn" class="send-btn" aria-label="Send message">➤</button>
               </div>
             </form>
-            <div id="voiceStatus" class="voice-status hidden"></div>
+            <div id="voiceStatus" class="voice-status hidden" role="status"></div>
           </div>
         </section>
 
         <!-- Providers -->
         <section id="view-providers" class="view hidden">
           <h2>Provider keys</h2>
-          <p class="muted">Keys are stored server-side in OpenBao and never returned. DeepSeek starts selected.</p>
+          <p class="muted">Keys are stored server-side in OpenBao and never returned. DeepSeek starts selected. "Test request" sends one minimal real request and reports the provider's actual response.</p>
           <div id="providerCards" class="cards"></div>
         </section>
 
@@ -122,7 +125,8 @@
           <form id="mcpForm" class="inline-form">
             <input id="mcpName" placeholder="Name">
             <input id="mcpUrl" placeholder="https://server.example/mcp" inputmode="url">
-            <input id="mcpAuth" placeholder="Authorization header (optional)">
+            <input id="mcpAuth" type="password" placeholder="Authorization header (optional)" autocomplete="off">
+            <label class="checkbox"><input id="mcpReveal" type="checkbox"> Reveal authorization header</label>
             <label class="checkbox"><input id="mcpPrivate" type="checkbox"> Allow private network</label>
             <button class="primary-btn" type="submit">Add</button>
           </form>
@@ -132,7 +136,7 @@
         <!-- Projects -->
         <section id="view-projects" class="view hidden">
           <h2>Projects</h2>
-          <p class="muted">Conversations attach to projects. Project instructions are shown to models verbatim with an inspectable marker.</p>
+          <p class="muted">Select a project in the sidebar to scope the next new conversation. Project instructions are shown to models verbatim with an inspectable marker; use the chat header selector to move a conversation between projects.</p>
           <form id="projectForm" class="inline-form">
             <input id="projectName" placeholder="Project name">
             <button class="primary-btn" type="submit">Create</button>
@@ -144,7 +148,7 @@
         <section id="view-about" class="view hidden">
           <h2>About &amp; harness</h2>
           <div id="aboutBox" class="card">Loading…</div>
-          <div class="card" style="margin-top:12px">
+          <div class="card about-password">
             <h3>Change owner password</h3>
             <form id="passwordForm">
               <input id="currentPassword" type="password" placeholder="Current password" autocomplete="current-password">
@@ -154,6 +158,32 @@
           </div>
         </section>
       </main>
+    </div>
+  </div>
+
+  <div id="switchModal" class="modal hidden">
+    <div class="modal-card">
+      <h3>Switch participants</h3>
+      <p class="muted">You changed the participant selection in an existing conversation. Choose how to proceed with <span id="switchTarget"></span>.</p>
+      <div class="modal-actions">
+        <button id="switchNewBtn" class="primary-btn">New conversation</button>
+        <button id="switchContinueBtn" class="primary-btn">One answer / continue</button>
+        <button id="switchCompareBtn" class="primary-btn">Compare models</button>
+        <button id="switchCancelBtn" class="chip">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="contextModal" class="modal hidden">
+    <div class="modal-card">
+      <h3>Responses included in future context</h3>
+      <p class="muted">Selected responses enter future context for every participant equally. Excluded responses stay saved.</p>
+      <div id="contextSelectionList"></div>
+      <div class="modal-actions">
+        <button id="contextSaveBtn" class="primary-btn">Save selection</button>
+        <button id="contextAllBtn" class="chip">Include all</button>
+        <button id="contextCancelBtn" class="chip">Cancel</button>
+      </div>
     </div>
   </div>
 

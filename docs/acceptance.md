@@ -1,49 +1,61 @@
-# A0 acceptance record
+# A0 acceptance record (issue #118 corrective rerun)
 
 Source: deployed at https://35.212.252.101.nip.io on VM `a0-prod-1` (GCP project `cs-poc-ab8uzg6ej7vv4vwtyywhbwn`).
-Runner: `tests/acceptance/run.js`. Date: 2026-10-30.
+Runner: `tests/acceptance/run.js` (updated for F01–F16). Date: 2026-10-30.
+Method: automated runner over public HTTPS as a temporary acceptance owner (`a0test`, deleted after the run; production owner `erin` untouched). Provider test requests were real; chat context tests used the in-runner fake OpenAI-compatible provider and fake MCP server.
 
-## Summary
+## Ledger (one status per A01–A24)
 
-| Status | Count |
-| --- | --- |
-| PASS | 19 |
-| FAIL | 0 |
-| BLOCKED | 2 (A17, A18 — real phone observation) |
-| NOT RUN by runner | 3 (A04 live, A13, A24 — executed separately below) |
-
-## A01–A24 matrix
-
-| ID | Result | Evidence / note |
+| ID | Result | Method + evidence |
 | --- | --- | --- |
-| A01 | PASS | Anonymous /api/me, /api/conversations, /api/attachments/* → 401; wrong setup code → 403; first visitor cannot claim ownership. |
-| A02 | PASS | Test credential added/replaced/deleted through `/api/providers/openai/key`; provider list never returned the key value. |
-| A03 | PASS | New conversation returns `harness_version: a0-harness/1.0.0` with zero messages. |
-| A04 | PARTIAL → PASS (DeepSeek, xAI), BLOCKED (Anthropic no key), FAIL (OpenAI legacy key 401) | Live requests: DeepSeek completed with usage `{prompt_tokens:470, completion_tokens:1}`; xAI completed with usage; OpenAI returned 401 for the existing legacy key; Anthropic has no key on this VM. Operator action: rotate OpenAI key; add Anthropic key. |
-| A05 | PASS | Continue switching: second participant received full prior history (system,user,assistant,user). |
-| A06 | PASS | Compare: two participants received identical semantic snapshots (same message array). |
-| A07 | PASS | Default next round included both prior assistant responses with attribution. |
-| A08 | PASS | Selected-response policy applied equally; excluded answers remained saved. |
-| A09 | PASS | 1→3→1 participants without history loss (5 assistant messages persisted). |
-| A10 | PASS | Image-incompatible participant reported `context_incompatible` before dispatch. |
-| A11 | PASS | Missing credential produced useful failure without provider substitution. |
-| A12 | PASS | Nonsecret canary written through the app survived `systemctl restart openbao` and was read back. |
-| A13 | PASS (operator script) | `operations/backup.sh` produced encrypted backup; `operations/restore.sh` restored into isolated `a0app_verify1`/`openbao_verify1` with users=1, conversations=0, media_files=22, bao_kv_rows=53; isolated targets then removed. |
-| A14 | PASS | Conversation survived `systemctl restart a0` (2→2 messages). |
-| A15 | PASS | Authorized multipart upload + retrieval returned exact bytes; anonymous retrieval → 401. |
-| A16 | PASS | Mixed compare: one participant complete, one honest 429 quota failure retained per-participant. |
-| A17 | BLOCKED | No physical Android phone available to this runner. Automated HTTPS checks pass (site serves 200 over public URL with Let's Encrypt cert). Operator action: open from Erin's Android browser. |
-| A18 | BLOCKED | Voice mode implemented (browser Web Speech API dictation + speechSynthesis spoken answers); real phone microphone observation remains. |
-| A19 | PASS | Logout revoked session; stale cookie → 401. |
-| A20 | PASS | MCP discovery found 2 tools on a fake Streamable HTTP server; loopback blocked unless `allow_private_network` set; enable/disable persisted. |
-| A21 | PASS | Tool proposal executed through shared coordinator after explicit authorization; results returned to history. |
-| A22 | PASS | Two duplicate tool proposals surfaced together for coordination (2 proposals shown). |
-| A23 | PASS | Cancellation stopped new dispatch; zero tool invocations. |
-| A24 | PASS (operator verification) | See docs/release.md: deployed commit, OpenBao binary identity, service readiness/restart, HTTPS public surface, backup/restore, rollback procedure. |
+| A01 | PASS | Automated: anonymous /api/me, /api/conversations, /api/attachments/* → 401; wrong setup code → 403/409 (owner exists). |
+| A02 | PASS | Automated: inert key add/replace/delete via `/api/providers/anthropic/key`; provider list never returned the value. Real provider keys untouched. |
+| A03 | PASS | Automated: new conversation returned `a0-harness/1.0.0` with zero messages. |
+| A04 | FAIL | Automated + real provider /test requests: openai PASS, xai PASS, deepseek PASS; anthropic BLOCKED (no key). A04 cannot pass until all four providers succeed; remaining operator action: add an Anthropic key. |
+| A05 | PASS | Automated: continue switching delivered full prior history (system,user,assistant,user). |
+| A06 | PASS | Automated: two participants received identical semantic snapshots. |
+| A07 | PASS | Automated: next round included both prior assistant responses with attribution. |
+| A08 | PASS | Automated: selected-response policy applied equally; excluded responses stayed saved. |
+| A09 | PASS | Automated: 1→3→1 participants without history loss (5 assistant messages). |
+| A10 | PASS | Automated: image-incompatible participant reported mismatch before dispatch. |
+| A11 | PASS | Automated: missing Anthropic key produced "No Anthropic API key is configured…" via the provider /test endpoint. |
+| A12 | PASS | Automated: dedicated nonsecret canary (`/api/acceptance-canary`) survived `systemctl restart openbao` and was read back. |
+| A13 | PASS | Operator-run `RUN_OPS=1`: backup.sh → encrypted backup; restore.sh → isolated `a0app_verify1`/`openbao_verify1` restore; second OpenBao instance started against the restored store, unsealed, and read the original canary (`CANARY_OK`). Tampered copy of the backup failed decryption (script exit 2) before extraction. |
+| A14 | PASS | Automated: conversation survived `systemctl restart a0` (2→2 messages). |
+| A15 | PASS | Automated: authorized upload/retrieval returned exact bytes; anonymous retrieval → 401. |
+| A16 | PASS | Automated: per-participant outcomes retained (one complete, one honest 429); idempotent retry with same clientRequestId kept 1→1 user messages. |
+| A17 | BLOCKED | No physical Android phone available. Automated HTTPS checks pass (200 + CSP + streaming). Operator action: open from Erin's Android browser. |
+| A18 | BLOCKED | Project instructions verified in model context (marker found). Real-phone microphone/voice flow still needs the phone. |
+| A19 | PASS | Automated: logout revoked session; stale cookie → 401. |
+| A20 | PASS | Automated: fake MCP server discovery found 2 tools; loopback blocked unless explicitly allowed; enable/disable persisted. |
+| A21 | PASS | Automated: tool proposal executed through the shared coordinator after explicit authorization. |
+| A22 | PASS | Automated: two duplicate tool proposals surfaced together for coordination. |
+| A23 | PASS | Automated: cancellation stopped new dispatch; zero tool invocations. |
+| A24 | PASS | Automated + operator-run: served-source issue-#118 checks all pass (CSP header, safe renderer import, switching choices, draft preservation, voice errors, no silent fallback dispatch, unnumbered assembly order, About CSS); rollback `--check` rehearsal passed. |
 
-## Rerun history (honest)
+**Totals: PASS 21, FAIL 1, BLOCKED 2, NOT RUN 0, TOTAL 24** (calculated from the rows above).
 
-1. First production run after vault path fix: 18 PASS, 1 FAIL (A11 vault 404 on missing secret).
-2. After treating KV v2 404 as empty credential: **19 PASS, 0 FAIL, 2 BLOCKED, 3 NOT RUN**.
+## Issue #118 findings closed by this run
 
-The full runner output is preserved at `/tmp/a0-acceptance-prod.log` on the VM (redacted; contains no secrets).
+- F01 P1: safe renderer (`apps/web/markdown.js`), CSP header, adversarial fixture suite (`tests/frontend/run.js`).
+- F02 P1: Stop stays visible for the active run; cancellation bound to `{runId, conversationId}`.
+- F03 P1: explicit New conversation / One answer or continue / Compare models switch modal.
+- F04 P1: project selection/association UI + verified project instructions in model context.
+- F05 P2: draft/attachment preservation + retry bar + idempotent clientRequestId.
+- F06 P2: panes/streams/tool approvals bound to conversation/run identity; navigation no longer hijacked.
+- F07 P2: About overflow CSS (`#aboutBox pre` pre-wrap/anywhere).
+- F08 P2: visible voice errors + reset capture state.
+- F09 P2: chunked speech (no silent 1500-char limit); per-message speak button; auto-speak only for new completed responses.
+- F10 P2: send blocked with visible error when no participant selected; documented DeepSeek default restored only on load.
+- F11 P3: assembly-order strings unnumbered server-side; `<ol>` owns numbering.
+- F12: ledger rebuilt as one row per A01–A24 with totals computed from rows.
+- F13: provider `/test` diagnosis endpoint; OpenAI 401 was traced to a clobbered key, now re-imported and passing; Anthropic remains the only missing provider key.
+- F14: GnuPG symmetric (AES256, integrity-protected) backups + manifest verification + tamper failure + restored-Bao usability.
+- F15: `operations/rollback.sh --check` rehearsal passed; `--apply` documented maintenance-state path.
+- F16: build identity in `/api/health` + served-source checks; publication via `gh` auth (commits pushed below).
+- Additional usability: attributed context-selection modal, MCP auth masked with reveal, visible mutation failures, keyboard semantics (buttons + aria labels), voice dependency/privacy documented in About.
+
+## hmmm
+
+- A17/A18 real-phone observation and Anthropic key remain operator actions.
+- Off-VM copy of `/srv/a0/backups/*.gpg` and `/etc/a0/backup.key` remains to be performed by the operator.

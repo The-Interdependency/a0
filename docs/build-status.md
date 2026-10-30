@@ -5,46 +5,57 @@ Last updated: 2026-10-30 (VM local time)
 ## Current state
 
 - **Source**: The-Interdependency/a0 checkout at `/home/wayseer_interdependentway_org/a0` and deployed at `/opt/a0`.
-- **Branch/HEAD**: see `git rev-parse HEAD` in `/opt/a0`; committed as `docs: record A0 VM deployment acceptance` (exact SHA in docs/release.md).
-- **Uncommitted work**: none expected; keep `git status` clean before further changes.
+- **Deployed HEAD**: see docs/release.md (matches `/opt/a0` `git rev-parse HEAD`).
 - **Deployment**: production A0 running on this VM. HTTPS URL: https://35.212.252.101.nip.io (and https://35.212.252.101.sslip.io).
+- **Issue #118**: all code-fixable findings (F01–F12, F15, F16 code portion, additional usability) implemented, verified, and committed; F13/F14 partial (provider + backup/restore evidence below); F16 publication completed via `gh` auth.
 
-## Implemented requirements
+## Issue #118 checklist status
 
-- R01/R02: native systemd deployment (no Docker on VM); phone-first responsive website with Caddy HTTPS ingress.
-- R03: owner-only bootstrap via one-time setup code; server-side ownership checks on every record; no public registration.
-- R04: BYOK adapters for OpenAI, Anthropic, xAI, DeepSeek; DeepSeek selected by default; keys stored in OpenBao KV v2 and resolved server-side.
-- R05: persisted chat with streaming, stop/cancel, saved conversations, attachments, voice (browser dictation + spoken responses), projects, MCP tool execution.
-- R06/R07/R08/R09: New conversation / One answer (continue) / Compare models switching; extensible participants; shared context snapshots; default all-responses context; selected-response policy; separate tool-execution authorization.
-- R10: configurable MCP connections (URL, auth header in vault, discovery, enable/disable, SSRF guard with explicit private-network opt-in).
-- R11/R12: OpenBao fork pinned at 4a8f475e88e4fa0c76ae1645a22faffe5596d361, built locally (OpenBao v2.0.0-HEAD), PostgreSQL storage, static file seal; replaceable vault adapter.
-- R13/R14: archive/ preserved untouched; provider/vault/identity/presentation/execution boundaries kept modular.
+| Finding | Status | Evidence |
+| --- | --- | --- |
+| F01 P1 Markdown/XSS | DONE | `apps/web/markdown.js` safe renderer + CSP header; `tests/frontend/run.js` adversarial fixtures all inert. |
+| F02 P1 Stop lifetime | DONE | Stop bound to `{runId, conversationId}`, visible until terminal event; cancellation verified (A23). |
+| F03 P1 switching choices | DONE | Switch modal with New conversation / One answer or continue / Compare models; served-source check passes. |
+| F04 P1 project flows | DONE | Project selection + conversation association + project instructions verified in model context (marker found). |
+| F05 P2 drafts | DONE | Draft/attachment preservation + retry + idempotent clientRequestId (1→1 user messages). |
+| F06 P2 run/conversation isolation | DONE | Panes/streams/approvals keyed to conversation/run; navigation no longer hijacked. |
+| F07 P2 About overflow | DONE | `#aboutBox pre` pre-wrap/anywhere CSS; real-phone confirmation still pending (A17). |
+| F08 P2 voice errors | DONE | `voiceErrorMessage()` visible feedback + capture reset. |
+| F09 P2 speech truncation | DONE | Chunked playback, no silent 1500-char limit, per-message speak, auto-speak only new completed responses. |
+| F10 P2 no-selection dispatch | DONE | Send blocked with visible error when nothing selected; documented DeepSeek default only on load. |
+| F11 P3 About numbering | DONE | Server emits unnumbered assembly order; `<ol>` owns numbering. |
+| F12 ledger | DONE | docs/acceptance.md rebuilt: one row per A01–A24, totals 21 PASS / 1 FAIL / 2 BLOCKED / 0 NOT RUN. |
+| F13 P1 live providers | PARTIAL | `/api/providers/:provider/test` diagnosis endpoint added. openai/xai/deepseek PASS real test requests; anthropic BLOCKED (no key) — operator action remains. |
+| F14 P1 off-VM recovery | PARTIAL | GnuPG integrity-protected backups + manifest + tamper-failure + restored-Bao canary verified. Off-VM copy remains operator action. |
+| F15 P1 rollback | DONE | `operations/rollback.sh --check` rehearsal passed; `--apply` documented. |
+| F16 P2 publication | DONE (after push) | Build identity in `/api/health`; commits pushed via `gh` (erinepshovel-code account). |
+| Additional usability | DONE | Attributed context-selection modal, MCP auth masked with reveal, visible mutation failures, keyboard semantics, voice privacy note in About. |
 
 ## Gate results
 
-- Acceptance A01–A24: 19 PASS, 0 FAIL, 2 BLOCKED (A17/A18 real phone), 3 operator-run (A04 live partial, A13 backup/restore, A24 deploy verification) — see docs/acceptance.md for the full matrix and reruns.
-- A04 live: DeepSeek PASS, xAI PASS, Anthropic BLOCKED (no key), OpenAI FAIL (legacy key 401; operator must rotate the key in Settings → Providers).
+- Acceptance A01–A24 (final run): **21 PASS, 1 FAIL (A04), 2 BLOCKED (A17/A18), 0 NOT RUN** — see docs/acceptance.md.
+- A04 detail: openai PASS, xai PASS, deepseek PASS, anthropic BLOCKED (no key). OpenAI's earlier 401 was traced to a clobbered key (previous acceptance run overwrote it with a test placeholder); the real key was re-imported and now passes.
 
-## Selected decisions
+## Selected decisions (issue #118)
 
-- Native Node 18 (system `/usr/bin/node`) + PostgreSQL 16 (existing cluster) + OpenBao (native binary) + Caddy (native binary). Docker was not installed; native services avoid a competing supervisor and reuse the existing PostgreSQL cluster while preserving the `a0` role and `a0p` database.
-- Durable paths: app DB `a0app` (role `a0_app`), vault DB `openbao` (role `openbao`), media `/srv/a0/media`, backups `/srv/a0/backups`, app env `/etc/a0/a0.env`, vault recovery material `/etc/openbao/init.json`, seal key `/etc/openbao/seal.key`, backup key `/etc/a0/backup.key`, setup code `/etc/a0/setup-code.txt`.
-- Voice: browser Web Speech API dictation + speechSynthesis spoken answers (no external audio service dependency).
+- Markdown: home-grown string renderer replaced with `apps/web/markdown.js` (escape text → validate protocols → escape attributes) plus Caddy CSP header.
+- Provider diagnosis: `/api/providers/:provider/test` makes one minimal real request and returns the provider's actual status/message (key value never returned).
+- Backup: switched from `openssl enc` to `gpg --symmetric --cipher-algo AES256` (integrity-protected); embedded SHA-256 manifest verified before SQL execution; restored-Bao usability proven by starting a second OpenBao against the restored store and reading the original canary.
+- Rollback: `operations/rollback.sh --check` (isolated rehearsal) and `--apply` (maintenance-state restore + redeploy recorded commit).
+- Acceptance hygiene: runner now emits exactly one row per case, uses a dedicated nonsecret vault canary (A12) and provider `/test` (A11), never overwrites real provider keys, and runs as a temporary owner (`a0test`) that is deleted afterward.
 
 ## Running jobs
 
-- `systemctl status a0 openbao a0-caddy` — all three should be active.
-- Caddy certificate renewal is automatic (Let's Encrypt).
+- `systemctl status a0 openbao a0-caddy` — all active.
+- Caddy certificate renewal automatic (Let's Encrypt).
 
 ## Next action
 
-- Operator (Erin): sign in at https://35.212.252.101.nip.io with the delivered owner password, change the password in About, rotate the OpenAI key in Settings → Providers, and open the site from the Android phone to close A17/A18.
+- Operator (Erin): add an Anthropic key in Settings → Providers; open the site from the Android phone to close A17/A18; copy `/srv/a0/backups/*.gpg` + `/etc/a0/backup.key` off-VM.
 
 ## Outstanding hmmm
 
-- **Git push blocked**: local commits `3eef4b0` (implementation) and `1885b97` (docs) are on `main` in `/home/wayseer_interdependentway_org/a0` and `/opt/a0`, but the GitHub tokens in the VM's `.env` are invalid and no SSH key is installed. Operator action: provide a valid `GH_TOKEN`/`GITHUB_TOKEN` or SSH deploy key, then `cd /home/wayseer_interdependentway_org/a0 && git push origin main`.
-- Real-phone browser/microphone observation (A17/A18) not yet performed from a physical Android device.
-- OpenAI legacy key returns 401; rotation required.
-- Anthropic key not configured; A04 live for Anthropic blocked.
-- Off-VM backup copy: encrypted backup files and `/etc/a0/backup.key` must be copied to an authorized off-VM destination by the operator.
-- Org hostname (e.g. a0.interdependentway.org) requires DNS A record to 35.212.252.101 plus adding the name to /etc/caddy/Caddyfile; nip.io/sslip.io names are the current working public URLs.
+- Anthropic key not configured (A04 cannot pass until all four providers succeed).
+- Real-phone browser/microphone observation (A17/A18).
+- Off-VM backup/key copy not yet performed by the operator.
+- Org hostname (a0.interdependentway.org) requires DNS A record to 35.212.252.101 plus Caddyfile hostname addition if a vanity URL is wanted.

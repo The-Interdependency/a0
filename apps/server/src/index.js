@@ -27,6 +27,7 @@ import {
   defaultModelFor,
   defaultCapabilitiesFor,
   providerInfo,
+  resolveApiKey,
 } from './providers.js';
 import { HARNESS_VERSION, systemPromptFor } from './harness.js';
 import {
@@ -93,7 +94,21 @@ export async function start() {
 
   // --- Public bootstrap / auth -------------------------------------------------
   app.get('/api/health', asyncRoute(async (req, res) => {
-    res.json({ ok: true, name: 'a0', harness: HARNESS_VERSION, time: new Date().toISOString() });
+    let build = null;
+    try {
+      const raw = await fs.promises.readFile('/opt/a0/build-info.json', 'utf8');
+      build = JSON.parse(raw);
+    } catch {
+      build = null;
+    }
+    res.json({
+      ok: true,
+      name: 'a0',
+      harness: HARNESS_VERSION,
+      time: new Date().toISOString(),
+      build: build || { commit: 'unrecorded' },
+      servedFrom: config.nodeEnv,
+    });
   }));
 
   app.get('/api/bootstrap/status', asyncRoute(async (req, res) => {
@@ -162,11 +177,11 @@ export async function start() {
       harness: {
         version: HARNESS_VERSION,
         assemblyOrder: [
-          '1. fixed A0 system prompt',
-          '2. optional project instructions (verbatim, marker-prefixed)',
-          '3. frozen conversation messages in chronological order with provider/model attribution',
-          '4. attachment references hydrated from durable media',
-          '5. tool history and results in shared conversation history',
+          'fixed A0 system prompt',
+          'optional project instructions (verbatim, marker-prefixed)',
+          'frozen conversation messages in chronological order with provider/model attribution',
+          'attachment references hydrated from durable media',
+          'tool history and results in shared conversation history',
         ],
         systemPrompt: systemPromptFor({}),
       },
@@ -402,6 +417,38 @@ export async function start() {
     res.json({ provider: req.params.provider, hasKey: Boolean(secret?.api_key), vaultPath: def.secretPath });
   }));
 
+  // Minimal real request used to diagnose credential vs adapter failures (F13).
+  // Returns the provider's actual HTTP status/message with the key value redacted.
+  app.post('/api/providers/:provider/test', asyncRoute(async (req, res) => {
+    const def = providerInfo(req.params.provider);
+    const apiKey = await resolveApiKey(vault, req.params.provider);
+    const model = defaultModelFor(req.params.provider);
+    try {
+      if (def.kind === 'anthropic') {
+        const r = await fetch(`${def.defaultBaseUrl}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...def.authHeader(apiKey) },
+          body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }),
+          signal: AbortSignal.timeout(20000),
+        });
+        const text = await r.text().catch(() => '');
+        res.json({ provider: req.params.provider, ok: r.ok, status: r.status, message: text.slice(0, 300) });
+      } else {
+        const base = def.defaultBaseUrl.replace(/\/$/, '');
+        const r = await fetch(`${base}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...def.authHeader(apiKey) },
+          body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }),
+          signal: AbortSignal.timeout(20000),
+        });
+        const text = await r.text().catch(() => '');
+        res.json({ provider: req.params.provider, ok: r.ok, status: r.status, message: text.slice(0, 300) });
+      }
+    } catch (err) {
+      res.status(502).json({ provider: req.params.provider, ok: false, status: 0, message: `Adapter transport error: ${err.message}` });
+    }
+  }));
+
   // --- Attachments ---------------------------------------------------------------
   app.post('/api/attachments', asyncRoute(async (req, res) => {
     let parsed;
@@ -516,6 +563,22 @@ export async function start() {
     res.json({ limits: config.defaults, voice: { mode: 'dictation_and_spoken_responses', engine: 'browser-web-speech-api' } });
   }));
 
+  // Nonsecret acceptance canary for vault persistence checks (A12). Kept
+  // separate from provider keys so acceptance never touches real credentials.
+  app.post('/api/acceptance-canary', asyncRoute(async (req, res) => {
+    const { value } = req.body || {};
+    if (!value || typeof value !== 'string' || value.length > 200) {
+      return res.status(400).json({ error: 'validation', message: 'Provide a short nonsecret canary value.' });
+    }
+    await vault.writeSecret('acceptance-canary', { value, written_at: new Date().toISOString() });
+    res.json({ ok: true });
+  }));
+
+  app.get('/api/acceptance-canary', asyncRoute(async (req, res) => {
+    const secret = await vault.readSecret('acceptance-canary').catch(() => null);
+    res.json({ canary: secret?.value || null });
+  }));
+
   // --- Runs (SSE) -----------------------------------------------------------------
   app.post('/api/conversations/:id/runs', asyncRoute(async (req, res) => {
     const conversationId = req.params.id;
@@ -542,13 +605,27 @@ export async function start() {
           return res.status(400).json({ error: 'validation', message: 'One or more attachments were not found.' });
         }
       }
-      const userMsg = await query(
-        `INSERT INTO messages (conversation_id, role, content, content_type, status, round, meta)
-         VALUES ($1,'user',$2,'text','complete',0,$3) RETURNING id`,
-        [conversationId, message.content || '', JSON.stringify({ attachmentIds: attIds })],
-      );
-      for (const att of attachmentRows) {
-        await query(`UPDATE attachments SET message_id = $2, conversation_id = $3 WHERE id = $1`, [att.id, userMsg.rows[0].id, conversationId]);
+      // Idempotent retry (F05): a clientRequestId that already produced a user
+      // message must not insert a duplicate billable message.
+      const clientRequestId = message.clientRequestId || null;
+      let userMsgId = null;
+      if (clientRequestId) {
+        const existing = await query(
+          `SELECT id FROM messages WHERE conversation_id = $1 AND meta->>'clientRequestId' = $2 LIMIT 1`,
+          [conversationId, clientRequestId],
+        );
+        if (existing.rows.length) userMsgId = existing.rows[0].id;
+      }
+      if (!userMsgId) {
+        const userMsg = await query(
+          `INSERT INTO messages (conversation_id, role, content, content_type, status, round, meta)
+           VALUES ($1,'user',$2,'text','complete',0,$3) RETURNING id`,
+          [conversationId, message.content || '', JSON.stringify({ attachmentIds: attIds, clientRequestId })],
+        );
+        userMsgId = userMsg.rows[0].id;
+        for (const att of attachmentRows) {
+          await query(`UPDATE attachments SET message_id = $2, conversation_id = $3 WHERE id = $1`, [att.id, userMsgId, conversationId]);
+        }
       }
     }
 

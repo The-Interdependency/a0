@@ -1,4 +1,6 @@
 // A0 phone-first web client. Vanilla ES modules; same-origin API with cookies.
+import { renderMarkdown } from './markdown.js';
+
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
@@ -7,17 +9,36 @@ const state = {
   csrf: '',
   conversations: [],
   currentConversationId: null,
+  currentConversation: null,
   participants: [],
   selectedParticipantIds: [],
   providers: {},
   projects: [],
   mcp: [],
+  activeProjectId: null,
   attachments: [],
-  activeRunId: null,
   spokenAnswers: false,
-  comparePanes: new Map(),
+  speechToken: 0,
+  activeRun: null, // { runId, conversationId }
   pendingProposals: null,
+  pendingSwitch: null, // { participantIds }
+  draft: null, // { content, attachmentIds, clientRequestId }
 };
+
+function toast(message, isError = false) {
+  let el = $('#toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.className = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.className = 'toast' + (isError ? ' error' : '');
+  el.classList.remove('hidden');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.add('hidden'), 4000);
+}
 
 const api = {
   async request(method, path, body, { raw = false } = {}) {
@@ -47,17 +68,8 @@ const api = {
   del: (path) => api.request('DELETE', path),
 };
 
-// ---------- Markdown (safe by construction: escape first) ----------
-function renderMarkdown(text) {
-  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  let t = esc(text || '');
-  t = t.replace(/```([\s\S]*?)```/g, (m, code) => `<pre>${code.replace(/\n$/, '')}</pre>`);
-  t = t.replace(/`([^`\n]+)`/g, (m, code) => `<code>${code}</code>`);
-  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  t = t.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  t = t.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  t = t.split(/\n{2,}/).map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
-  return t;
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ---------- Views ----------
@@ -124,28 +136,50 @@ function renderConversations() {
   const list = $('#conversationList');
   list.innerHTML = '';
   for (const c of state.conversations) {
-    const item = document.createElement('div');
+    const item = document.createElement('button');
+    item.type = 'button';
     item.className = 'list-item' + (c.id === state.currentConversationId ? ' active' : '');
-    item.innerHTML = `<span>${escapeHtml(c.title)}</span><span class="muted">${c.message_count}</span>`;
+    const title = document.createElement('span');
+    title.textContent = c.title;
+    const count = document.createElement('span');
+    count.className = 'muted';
+    count.textContent = c.message_count;
+    item.append(title, count);
+    item.setAttribute('aria-label', `Open conversation ${c.title}`);
     item.onclick = () => openConversation(c.id);
     list.appendChild(item);
   }
 }
 
 async function openConversation(id) {
+  clearConversationView();
   state.currentConversationId = id;
   const data = await api.get(`/api/conversations/${id}`);
-  state.conversation = data.conversation;
+  state.currentConversation = data.conversation;
+  state.activeProjectId = data.conversation.project_id || null;
   renderMessages(data.messages);
-  const title = $('#chatTitle');
-  title.textContent = data.conversation.title;
+  $('#chatTitle').textContent = data.conversation.title;
   renderContextPolicy(data.conversation.context_policy);
+  renderChatProjectSelector();
   renderConversations();
   showView('chat');
 }
 
+function clearConversationView() {
+  $('#compareWrap').classList.add('hidden');
+  $('#compareWrap').innerHTML = '';
+  $('#messages').innerHTML = '';
+  showTyping(false);
+  state.activeRun = null;
+  state.pendingProposals = null;
+  hideToolModal();
+  hideSwitchModal();
+}
+
 async function newConversation() {
-  const data = await api.post('/api/conversations', { title: 'New conversation' });
+  const body = { title: 'New conversation' };
+  if (state.activeProjectId) body.projectId = state.activeProjectId;
+  const data = await api.post('/api/conversations', body);
   await loadConversations();
   await openConversation(data.conversation.id);
 }
@@ -154,30 +188,77 @@ function renderContextPolicy(policy) {
   const btn = $('#contextPolicyBtn');
   const mode = policy?.mode || 'all';
   btn.textContent = `Context: ${mode === 'all' ? 'All responses' : 'Selected only'}`;
-  btn.onclick = async () => {
-    if (!state.currentConversationId) return;
-    const nextMode = mode === 'all' ? 'selected' : 'all';
-    const selectedMessageIds = nextMode === 'selected'
-      ? await pickContextMessages()
-      : [];
-    await api.patch(`/api/conversations/${state.currentConversationId}`, {
-      contextPolicy: { mode: nextMode, selectedMessageIds },
-    });
-    state.conversation.context_policy = { mode: nextMode, selectedMessageIds };
-    renderContextPolicy(state.conversation.context_policy);
-  };
+  btn.onclick = () => openContextSelection();
 }
 
-async function pickContextMessages() {
+async function openContextSelection() {
+  if (!state.currentConversationId) return;
   const data = await api.get(`/api/conversations/${state.currentConversationId}`);
   const assistants = data.messages.filter((m) => m.role === 'assistant');
-  if (!assistants.length) return [];
-  const chosen = [];
-  for (const m of assistants) {
-    const ok = confirm(`Include this response in future context?\n\n${m.content.slice(0, 180)}…\n\nOK = include, Cancel = exclude.`);
-    if (ok) chosen.push(m.id);
+  const policy = data.conversation.context_policy || { mode: 'all', selectedMessageIds: [] };
+  const modal = $('#contextModal');
+  modal.classList.remove('hidden');
+  const list = $('#contextSelectionList');
+  list.innerHTML = '';
+  if (!assistants.length) {
+    list.innerHTML = '<p class="muted">No assistant responses to select yet.</p>';
   }
-  return chosen;
+  const selected = new Set(policy.selectedMessageIds || []);
+  for (const m of assistants) {
+    const label = document.createElement('label');
+    label.className = 'tool-proposal';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.id = m.id;
+    checkbox.checked = policy.mode === 'all' || selected.has(m.id);
+    const info = document.createElement('div');
+    const attribution = `${m.provider || 'assistant'}${m.model ? ' · ' + m.model : ''}${m.participant_id ? ' · ' + (participantName(m.participant_id) || 'participant') : ''} · ${new Date(m.created_at).toLocaleString()}`;
+    info.innerHTML = `<strong>${escapeHtml(attribution)}</strong><p class="muted">${escapeHtml((m.content || '').slice(0, 400))}</p>`;
+    label.append(checkbox, info);
+    list.appendChild(label);
+  }
+  $('#contextSaveBtn').onclick = async () => {
+    const ids = [...list.querySelectorAll('input:checked')].map((i) => i.dataset.id);
+    await api.patch(`/api/conversations/${state.currentConversationId}`, {
+      contextPolicy: { mode: 'selected', selectedMessageIds: ids },
+    });
+    state.currentConversation.context_policy = { mode: 'selected', selectedMessageIds: ids };
+    renderContextPolicy(state.currentConversation.context_policy);
+    hideContextModal();
+  };
+  $('#contextAllBtn').onclick = async () => {
+    await api.patch(`/api/conversations/${state.currentConversationId}`, {
+      contextPolicy: { mode: 'all', selectedMessageIds: [] },
+    });
+    state.currentConversation.context_policy = { mode: 'all', selectedMessageIds: [] };
+    renderContextPolicy(state.currentConversation.context_policy);
+    hideContextModal();
+  };
+  $('#contextCancelBtn').onclick = hideContextModal;
+}
+
+function hideContextModal() {
+  $('#contextModal').classList.add('hidden');
+}
+
+function renderChatProjectSelector() {
+  const sel = $('#chatProjectSelect');
+  sel.innerHTML = '<option value="">No project</option>';
+  for (const p of state.projects) {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.name;
+    if (p.id === state.activeProjectId) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  sel.onchange = async () => {
+    const projectId = sel.value || null;
+    await api.patch(`/api/conversations/${state.currentConversationId}`, { projectId });
+    state.activeProjectId = projectId;
+    state.currentConversation.project_id = projectId;
+    toast(projectId ? 'Conversation moved to project.' : 'Conversation removed from project.');
+    await loadProjects();
+  };
 }
 
 // ---------- Messages ----------
@@ -191,23 +272,59 @@ function renderMessages(messages) {
 function messageElement(m) {
   const el = document.createElement('div');
   el.className = `msg ${m.role}` + (m.status === 'failed' ? ' failed' : '');
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  body.innerHTML = renderMarkdown(m.content || (m.status === 'streaming' ? '…' : ''));
+  el.appendChild(body);
+  if (m.status === 'failed') {
+    const err = document.createElement('div');
+    err.className = 'error';
+    err.textContent = 'Failed: ' + (m.meta?.error || 'unknown error');
+    el.appendChild(err);
+  }
+  if (m.status === 'stopped') {
+    const s = document.createElement('div');
+    s.className = 'muted';
+    s.textContent = 'Stopped.';
+    el.appendChild(s);
+  }
+  if (m.attachments?.length) {
+    const atts = document.createElement('div');
+    atts.className = 'attachments';
+    for (const a of m.attachments) {
+      if (a.mime?.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.src = `/api/attachments/${a.id}`;
+        img.alt = a.filename;
+        img.loading = 'lazy';
+        atts.appendChild(img);
+      } else {
+        const link = document.createElement('a');
+        link.href = `/api/attachments/${a.id}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = `📄 ${a.filename}`;
+        atts.appendChild(link);
+      }
+    }
+    el.appendChild(atts);
+  }
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
   const roleLabel = m.role === 'assistant'
     ? `${m.provider || 'assistant'}${m.model ? ' · ' + m.model : ''}${m.participant_id ? ' · ' + (participantName(m.participant_id) || 'participant') : ''}`
     : m.role;
-  let contentHtml = renderMarkdown(m.content || (m.status === 'streaming' ? '…' : ''));
-  if (m.status === 'failed') contentHtml += `<div class="error">Failed: ${escapeHtml(m.meta?.error || 'unknown error')}</div>`;
-  if (m.status === 'stopped') contentHtml += `<div class="muted">Stopped.</div>`;
-  if (m.attachments?.length) {
-    contentHtml += `<div class="attachments">${m.attachments.map((a) => a.mime?.startsWith('image/')
-      ? `<img src="/api/attachments/${a.id}" alt="${escapeHtml(a.filename)}">`
-      : `<a href="/api/attachments/${a.id}" target="_blank">📄 ${escapeHtml(a.filename)}</a>`).join('')}</div>`;
-  }
-  el.innerHTML = contentHtml;
-  const meta = document.createElement('div');
-  meta.className = 'msg-meta';
   meta.textContent = `${roleLabel} · ${new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  if (m.role === 'assistant' && m.status === 'complete' && m.content) {
+    const speakBtn = document.createElement('button');
+    speakBtn.type = 'button';
+    speakBtn.className = 'icon-btn msg-speak';
+    speakBtn.textContent = '🔊';
+    speakBtn.setAttribute('aria-label', 'Speak this answer');
+    speakBtn.onclick = () => speak(m.content);
+    meta.appendChild(speakBtn);
+  }
   el.appendChild(meta);
-  if (m.role === 'assistant' && state.spokenAnswers && m.status === 'complete') speak(m.content);
   return el;
 }
 
@@ -215,17 +332,14 @@ function participantName(id) {
   return state.participants.find((p) => p.id === id)?.name || '';
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 // ---------- Participants ----------
 async function loadParticipants() {
   const data = await api.get('/api/participants');
   state.participants = data.participants;
   if (!state.selectedParticipantIds.length && state.participants.length) {
-    const deepseek = state.participants.find((p) => p.provider === 'deepseek');
-    state.selectedParticipantIds = [deepseek?.id || state.participants[0].id];
+    const deepseek = state.participants.find((p) => p.provider === 'deepseek') || state.participants[0];
+    state.selectedParticipantIds = [deepseek.id];
+    toast(`Default participant: ${deepseek.name}`);
   }
   renderParticipantPicker();
   renderParticipantCards();
@@ -238,15 +352,63 @@ function renderParticipantPicker() {
     const pill = document.createElement('button');
     pill.type = 'button';
     pill.className = 'participant-pill' + (state.selectedParticipantIds.includes(p.id) ? ' selected' : '');
-    pill.textContent = `${p.name}`;
-    pill.onclick = () => {
-      const idx = state.selectedParticipantIds.indexOf(p.id);
-      if (idx >= 0) state.selectedParticipantIds.splice(idx, 1);
-      else state.selectedParticipantIds.push(p.id);
-      renderParticipantPicker();
-    };
+    pill.textContent = p.name;
+    pill.setAttribute('aria-pressed', String(state.selectedParticipantIds.includes(p.id)));
+    pill.onclick = () => toggleParticipant(p.id);
     box.appendChild(pill);
   }
+}
+
+function toggleParticipant(id) {
+  const idx = state.selectedParticipantIds.indexOf(id);
+  const next = [...state.selectedParticipantIds];
+  if (idx >= 0) next.splice(idx, 1);
+  else next.push(id);
+  const conversationHasMessages = (state.currentConversation?.messages_count ?? 0) > 0 || conversationHasHistory();
+  if (state.currentConversationId && conversationHasMessages) {
+    state.pendingSwitch = { participantIds: next };
+    showSwitchModal(next);
+    return;
+  }
+  state.selectedParticipantIds = next;
+  renderParticipantPicker();
+}
+
+function conversationHasHistory() {
+  // Cheap client-side check; authoritative check happens on the server.
+  return state.currentConversation?.message_count > 0;
+}
+
+function showSwitchModal(nextIds) {
+  $('#switchModal').classList.remove('hidden');
+  const names = nextIds.map((id) => participantName(id) || id).join(', ');
+  $('#switchTarget').textContent = names || '(none)';
+  $('#switchNewBtn').onclick = async () => {
+    hideSwitchModal();
+    state.selectedParticipantIds = nextIds;
+    renderParticipantPicker();
+    await newConversation();
+  };
+  $('#switchContinueBtn').onclick = () => {
+    hideSwitchModal();
+    state.selectedParticipantIds = nextIds;
+    renderParticipantPicker();
+    toast(nextIds.length > 1 ? 'Continue with comparison of the selected participants.' : 'Continue with the selected participant.');
+  };
+  $('#switchCompareBtn').onclick = () => {
+    hideSwitchModal();
+    state.selectedParticipantIds = nextIds;
+    renderParticipantPicker();
+    toast('Compare models with the selected participants.');
+  };
+  $('#switchCancelBtn').onclick = () => {
+    hideSwitchModal();
+    renderParticipantPicker();
+  };
+}
+
+function hideSwitchModal() {
+  $('#switchModal').classList.add('hidden');
 }
 
 function renderParticipantCards() {
@@ -255,15 +417,28 @@ function renderParticipantCards() {
   for (const p of state.participants) {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = `
-      <h3>${escapeHtml(p.name)}</h3>
-      <div class="muted">${escapeHtml(p.provider)} · ${escapeHtml(p.model)}</div>
-      <div class="row"><button class="chip danger" data-del="${p.id}">Delete</button></div>`;
-    card.querySelector(`[data-del]`).onclick = async () => {
-      await api.del(`/api/participants/${p.id}`);
-      state.selectedParticipantIds = state.selectedParticipantIds.filter((id) => id !== p.id);
-      await loadParticipants();
+    const h = document.createElement('h3');
+    h.textContent = p.name;
+    const sub = document.createElement('div');
+    sub.className = 'muted';
+    sub.textContent = `${p.provider} · ${p.model}`;
+    const row = document.createElement('div');
+    row.className = 'row';
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'chip danger';
+    del.textContent = 'Delete';
+    del.onclick = async () => {
+      try {
+        await api.del(`/api/participants/${p.id}`);
+        state.selectedParticipantIds = state.selectedParticipantIds.filter((id) => id !== p.id);
+        await loadParticipants();
+      } catch (err) {
+        toast(err.message, true);
+      }
     };
+    row.appendChild(del);
+    card.append(h, sub, row);
     box.appendChild(card);
   }
 }
@@ -281,24 +456,61 @@ function renderProviderCards() {
   for (const [key, p] of Object.entries(state.providers)) {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = `
-      <h3>${p.label} ${p.selectedByDefault ? '<span class="ok">(default)</span>' : ''}</h3>
-      <div class="muted">${p.hasKey ? '✅ Key configured' : '⚠️ No key configured'} · default model ${escapeHtml(p.defaultModel)}</div>
-      <input type="password" placeholder="Paste API key (write-only)" data-key="${key}">
-      <div class="row">
-        <button class="primary-btn" data-save="${key}">Save key</button>
-        <button class="chip danger" data-delete="${key}" ${p.hasKey ? '' : 'disabled'}>Delete</button>
-      </div>`;
-    card.querySelector(`[data-save]`).onclick = async () => {
-      const input = card.querySelector(`[data-key]`);
-      await api.request('PUT', `/api/providers/${key}/key`, { apiKey: input.value });
-      input.value = '';
-      await loadProviders();
+    const h = document.createElement('h3');
+    h.innerHTML = `${escapeHtml(p.label)} ${p.selectedByDefault ? '<span class="ok">(default)</span>' : ''}`;
+    const sub = document.createElement('div');
+    sub.className = 'muted';
+    sub.textContent = `${p.hasKey ? '✅ Key configured' : '⚠️ No key configured'} · default model ${p.defaultModel}`;
+    const input = document.createElement('input');
+    input.type = 'password';
+    input.placeholder = 'Paste API key (write-only)';
+    input.autocomplete = 'off';
+    const row = document.createElement('div');
+    row.className = 'row';
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'primary-btn';
+    save.textContent = 'Save key';
+    save.onclick = async () => {
+      try {
+        await api.request('PUT', `/api/providers/${key}/key`, { apiKey: input.value });
+        input.value = '';
+        toast(`${p.label} key stored in OpenBao.`);
+        await loadProviders();
+      } catch (err) {
+        toast(err.message, true);
+      }
     };
-    card.querySelector(`[data-delete]`).onclick = async () => {
-      await api.del(`/api/providers/${key}/key`);
-      await loadProviders();
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'chip danger';
+    del.textContent = 'Delete';
+    del.disabled = !p.hasKey;
+    del.onclick = async () => {
+      try {
+        await api.del(`/api/providers/${key}/key`);
+        toast(`${p.label} key deleted.`);
+        await loadProviders();
+      } catch (err) {
+        toast(err.message, true);
+      }
     };
+    const test = document.createElement('button');
+    test.type = 'button';
+    test.className = 'chip';
+    test.textContent = 'Test request';
+    test.disabled = !p.hasKey;
+    test.onclick = async () => {
+      toast(`Testing ${p.label}…`);
+      try {
+        const res = await api.post(`/api/providers/${key}/test`);
+        toast(`${p.label}: ${res.ok ? 'OK' : 'failed'} — ${res.message || ''}`, !res.ok);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    };
+    row.append(save, del, test);
+    card.append(h, sub, input, row);
     box.appendChild(card);
   }
 }
@@ -316,32 +528,43 @@ function renderMcpCards() {
   for (const c of state.mcp) {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = `
-      <h3>${escapeHtml(c.name)}</h3>
-      <div class="muted">${escapeHtml(c.url)}</div>
-      <div class="muted">Status: ${c.status}${c.last_error ? ` · ${escapeHtml(c.last_error)}` : ''} · ${(c.tools || []).length} tools</div>
-      <div class="row">
-        <button class="chip" data-discover="${c.id}">Discover</button>
-        <button class="chip" data-toggle="${c.id}">${c.enabled ? 'Disable' : 'Enable'}</button>
-        <button class="chip danger" data-del="${c.id}">Delete</button>
-      </div>`;
-    card.querySelector(`[data-discover]`).onclick = async () => {
-      try {
-        const res = await api.post(`/api/mcp/${c.id}/discover`);
-        alert(`Discovered ${res.tools.length} tools.`);
-      } catch (err) {
-        alert(`Discovery failed: ${err.message}`);
-      }
-      await loadMcp();
-    };
-    card.querySelector(`[data-toggle]`).onclick = async () => {
-      await api.patch(`/api/mcp/${c.id}`, { enabled: !c.enabled });
-      await loadMcp();
-    };
-    card.querySelector(`[data-del]`).onclick = async () => {
-      await api.del(`/api/mcp/${c.id}`);
-      await loadMcp();
-    };
+    const h = document.createElement('h3');
+    h.textContent = c.name;
+    const sub = document.createElement('div');
+    sub.className = 'muted';
+    sub.textContent = `${c.url}`;
+    const status = document.createElement('div');
+    status.className = 'muted';
+    status.textContent = `Status: ${c.status}${c.last_error ? ` · ${c.last_error}` : ''} · ${(c.tools || []).length} tools`;
+    const row = document.createElement('div');
+    row.className = 'row';
+    for (const [label, fn] of [
+      ['Discover', async () => {
+        try {
+          const res = await api.post(`/api/mcp/${c.id}/discover`);
+          toast(`Discovered ${res.tools.length} tools.`);
+        } catch (err) {
+          toast(`Discovery failed: ${err.message}`, true);
+        }
+        await loadMcp();
+      }],
+      [c.enabled ? 'Disable' : 'Enable', async () => {
+        await api.patch(`/api/mcp/${c.id}`, { enabled: !c.enabled });
+        await loadMcp();
+      }],
+      ['Delete', async () => {
+        await api.del(`/api/mcp/${c.id}`);
+        await loadMcp();
+      }],
+    ]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip' + (label === 'Delete' ? ' danger' : '');
+      b.textContent = label;
+      b.onclick = fn;
+      row.appendChild(b);
+    }
+    card.append(h, sub, status, row);
     box.appendChild(card);
   }
 }
@@ -357,9 +580,16 @@ function renderProjects() {
   const list = $('#projectList');
   list.innerHTML = '';
   for (const p of state.projects) {
-    const item = document.createElement('div');
-    item.className = 'list-item';
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'list-item' + (p.id === state.activeProjectId ? ' active' : '');
     item.innerHTML = `<span>${escapeHtml(p.name)}</span>`;
+    item.setAttribute('aria-label', `Select project ${p.name}`);
+    item.onclick = () => {
+      state.activeProjectId = p.id;
+      toast(`Project "${p.name}" selected for the next new conversation.`);
+      renderProjects();
+    };
     list.appendChild(item);
   }
   const box = $('#projectCards');
@@ -367,21 +597,41 @@ function renderProjects() {
   for (const p of state.projects) {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = `
-      <h3>${escapeHtml(p.name)}</h3>
-      <textarea data-instructions placeholder="Project instructions (shown to models verbatim)">${escapeHtml(p.instructions || '')}</textarea>
-      <div class="row">
-        <button class="primary-btn" data-save="${p.id}">Save instructions</button>
-        <button class="chip danger" data-del="${p.id}">Delete</button>
-      </div>`;
-    card.querySelector(`[data-save]`).onclick = async () => {
-      await api.patch(`/api/projects/${p.id}`, { instructions: card.querySelector('textarea').value });
-      await loadProjects();
+    const h = document.createElement('h3');
+    h.textContent = p.name;
+    const ta = document.createElement('textarea');
+    ta.placeholder = 'Project instructions (shown to models verbatim)';
+    ta.value = p.instructions || '';
+    const row = document.createElement('div');
+    row.className = 'row';
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'primary-btn';
+    save.textContent = 'Save instructions';
+    save.onclick = async () => {
+      try {
+        await api.patch(`/api/projects/${p.id}`, { instructions: ta.value });
+        toast('Project instructions saved.');
+        await loadProjects();
+      } catch (err) {
+        toast(err.message, true);
+      }
     };
-    card.querySelector(`[data-del]`).onclick = async () => {
-      await api.del(`/api/projects/${p.id}`);
-      await loadProjects();
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'chip danger';
+    del.textContent = 'Delete';
+    del.onclick = async () => {
+      try {
+        await api.del(`/api/projects/${p.id}`);
+        if (state.activeProjectId === p.id) state.activeProjectId = null;
+        await loadProjects();
+      } catch (err) {
+        toast(err.message, true);
+      }
     };
+    row.append(save, del);
+    card.append(h, ta, row);
     box.appendChild(card);
   }
 }
@@ -389,21 +639,41 @@ function renderProjects() {
 // ---------- About ----------
 async function loadAbout() {
   const me = await api.get('/api/me');
-  $('#aboutBox').innerHTML = `
-    <h3>Harness ${me.harness.version}</h3>
-    <p class="muted">Assembly order:</p>
-    <ol>${me.harness.assemblyOrder.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>
-    <pre>${escapeHtml(me.harness.systemPrompt)}</pre>
-    <p class="muted">Signed in as ${escapeHtml(me.user.username)}.</p>`;
+  const box = $('#aboutBox');
+  box.innerHTML = '';
+  const h = document.createElement('h3');
+  h.textContent = `Harness ${me.harness.version}`;
+  const orderTitle = document.createElement('p');
+  orderTitle.className = 'muted';
+  orderTitle.textContent = 'Assembly order:';
+  const ol = document.createElement('ol');
+  for (const s of me.harness.assemblyOrder) {
+    const li = document.createElement('li');
+    li.textContent = s;
+    ol.appendChild(li);
+  }
+  const pre = document.createElement('pre');
+  pre.textContent = me.harness.systemPrompt;
+  const voice = document.createElement('p');
+  voice.className = 'muted';
+  voice.textContent = 'Voice uses the browser SpeechRecognition and speechSynthesis APIs. Depending on the browser, recognition audio may be sent to the browser vendor\'s speech service (Chrome can send it to Google servers); A0 does not verify or claim local/offline processing. Microphone permission is controlled by the browser.';
+  const who = document.createElement('p');
+  who.className = 'muted';
+  who.textContent = `Signed in as ${me.user.username}.`;
+  box.append(h, orderTitle, ol, pre, voice, who);
 }
 
 // ---------- Attachments ----------
 async function uploadAttachment(file) {
-  const fd = new FormData();
-  fd.append('file', file);
-  const data = await api.request('POST', '/api/attachments', fd, { raw: true });
-  state.attachments.push(data.attachment);
-  renderAttachmentChips();
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const data = await api.request('POST', '/api/attachments', fd, { raw: true });
+    state.attachments.push(data.attachment);
+    renderAttachmentChips();
+  } catch (err) {
+    toast(`Upload failed: ${err.message}`, true);
+  }
 }
 
 function renderAttachmentChips() {
@@ -412,103 +682,172 @@ function renderAttachmentChips() {
   for (const a of state.attachments) {
     const chip = document.createElement('span');
     chip.className = 'chip';
-    chip.innerHTML = `${a.mime.startsWith('image/') ? '🖼️' : '📄'} ${escapeHtml(a.filename)} <a href="#" data-rm="${a.id}" style="color:var(--danger)">✕</a>`;
-    chip.querySelector(`[data-rm]`).onclick = (e) => {
-      e.preventDefault();
+    const label = document.createElement('span');
+    label.textContent = `${a.mime.startsWith('image/') ? '🖼️' : '📄'} ${a.filename}`;
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'chip-x';
+    rm.textContent = '✕';
+    rm.setAttribute('aria-label', `Remove ${a.filename}`);
+    rm.onclick = () => {
       state.attachments = state.attachments.filter((x) => x.id !== a.id);
       renderAttachmentChips();
     };
+    chip.append(label, rm);
     box.appendChild(chip);
   }
+}
+
+// ---------- Draft preservation ----------
+function saveDraft(content) {
+  state.draft = {
+    content,
+    attachmentIds: state.attachments.map((a) => a.id),
+    clientRequestId: crypto.randomUUID(),
+  };
+}
+
+function restoreDraft() {
+  if (!state.draft) return;
+  $('#composerInput').value = state.draft.content;
+  autoGrow();
+  state.attachments = state.draft.attachments.map((id) => ({ id }));
+  renderAttachmentChips();
+  const retry = $('#retryBar');
+  retry.classList.remove('hidden');
+  $('#retryText').textContent = 'Your draft is preserved.';
+}
+
+function clearDraft() {
+  state.draft = null;
+  $('#retryBar').classList.add('hidden');
 }
 
 // ---------- Streaming run ----------
 async function sendMessage(content) {
   if (!state.currentConversationId) await newConversation();
   const conversationId = state.currentConversationId;
-  const participantIds = state.selectedParticipantIds.length ? state.selectedParticipantIds : [state.participants[0]?.id].filter(Boolean);
-  if (!participantIds.length) {
-    alert('Create a participant first (Settings → Participants).');
+  if (!state.selectedParticipantIds.length) {
+    toast('Select a participant before sending.', true);
     return;
   }
+  const participantIds = [...state.selectedParticipantIds];
   const mode = participantIds.length > 1 ? 'compare' : 'single';
+  const clientRequestId = state.draft?.clientRequestId || crypto.randomUUID();
   const body = {
     mode,
     participantIds,
-    message: { content, attachmentIds: state.attachments.map((a) => a.id) },
+    message: { content, attachmentIds: state.attachments.map((a) => a.id), clientRequestId },
   };
-  state.attachments = [];
-  renderAttachmentChips();
+  saveDraft(content);
   $('#composerInput').value = '';
   autoGrow();
+  renderAttachmentChips();
 
-  // Append optimistic user message.
+  // Optimistic user message.
   const box = $('#messages');
   const userEl = document.createElement('div');
   userEl.className = 'msg user';
-  userEl.innerHTML = renderMarkdown(content);
+  const userBody = document.createElement('div');
+  userBody.className = 'msg-body';
+  userBody.innerHTML = renderMarkdown(content);
+  userEl.appendChild(userBody);
   box.appendChild(userEl);
   box.scrollTop = box.scrollHeight;
 
-  const compareWrap = $('#compareWrap');
-  compareWrap.classList.add('hidden');
-  compareWrap.innerHTML = '';
-  state.comparePanes.clear();
+  $('#compareWrap').classList.add('hidden');
+  $('#compareWrap').innerHTML = '';
+  state.pendingProposals = null;
+  hideToolModal();
 
   showTyping(true);
-  const res = await fetch(`/api/conversations/${conversationId}/runs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-A0-CSRF': state.csrf },
-    body: JSON.stringify(body),
-    credentials: 'same-origin',
-  });
-  showTyping(false);
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    alert(data.message || 'Run failed to start.');
-    await openConversation(conversationId);
+  let res;
+  try {
+    res = await fetch(`/api/conversations/${conversationId}/runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-A0-CSRF': state.csrf },
+      body: JSON.stringify(body),
+      credentials: 'same-origin',
+    });
+  } catch (err) {
+    showTyping(false);
+    restoreDraft();
+    toast(`Network error: ${err.message}`, true);
     return;
   }
-  state.activeRunId = null;
+  if (!res.ok) {
+    showTyping(false);
+    restoreDraft();
+    const data = await res.json().catch(() => ({}));
+    toast(data.message || 'Run failed to start.', true);
+    return;
+  }
   await readSseStream(res, conversationId, mode);
-  await openConversation(conversationId);
+  if (state.currentConversationId === conversationId) {
+    await openConversation(conversationId);
+  }
 }
 
 function showTyping(on) {
   $('#typingBar').classList.toggle('hidden', !on);
   $('#typingText').textContent = on ? 'Working…' : '';
+  if (!on) $('#stopBtn').classList.add('hidden');
+}
+
+function setActiveRun(runId, conversationId) {
+  state.activeRun = { runId, conversationId };
+  $('#typingBar').classList.remove('hidden');
+  $('#stopBtn').classList.remove('hidden');
+}
+
+function clearActiveRun(runId) {
+  if (state.activeRun?.runId === runId) {
+    state.activeRun = null;
+    $('#stopBtn').classList.add('hidden');
+  }
 }
 
 async function readSseStream(res, conversationId, mode) {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  const messageEls = new Map(); // participantId -> message element (for live update)
+  let pendingEvent = 'message';
+  const messageEls = new Map();
   const paneEls = new Map();
 
   const appendLiveMessage = (participantId, name) => {
+    if (state.currentConversationId !== conversationId) return;
     const box = $('#messages');
     const el = document.createElement('div');
     el.className = 'msg assistant';
-    el.innerHTML = `<div class="pane-body" data-live="${participantId}"></div><div class="msg-meta">${escapeHtml(name)}</div>`;
+    const live = document.createElement('div');
+    live.className = 'pane-body';
+    live.dataset.live = participantId;
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = name;
+    el.append(live, meta);
     box.appendChild(el);
-    messageEls.set(participantId, el.querySelector(`[data-live]`));
+    messageEls.set(participantId, live);
   };
 
   const ensurePane = (participantId, name) => {
     if (!paneEls.has(participantId)) {
       const wrap = $('#compareWrap');
-      wrap.classList.remove('hidden');
+      if (state.currentConversationId === conversationId) wrap.classList.remove('hidden');
       const pane = document.createElement('div');
       pane.className = 'compare-pane';
-      pane.innerHTML = `<h4>${escapeHtml(name)}</h4><div class="pane-body"></div>`;
-      wrap.appendChild(pane);
-      paneEls.set(participantId, pane.querySelector('.pane-body'));
+      const h = document.createElement('h4');
+      h.textContent = name;
+      const body = document.createElement('div');
+      body.className = 'pane-body';
+      pane.append(h, body);
+      if (state.currentConversationId === conversationId) wrap.appendChild(pane);
+      paneEls.set(participantId, body);
     }
     return paneEls.get(participantId);
   };
 
-  let pendingEvent = 'message';
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -526,55 +865,63 @@ async function readSseStream(res, conversationId, mode) {
       if (!raw) { pendingEvent = 'message'; continue; }
       let payload;
       try { payload = JSON.parse(raw); } catch { continue; }
-      handleSseEvent(pendingEvent, payload, { mode, appendLiveMessage, ensurePane, messageEls, paneEls });
+      handleSseEvent(pendingEvent, payload, { conversationId, mode, appendLiveMessage, ensurePane, messageEls, paneEls });
       pendingEvent = 'message';
     }
   }
 }
 
 function handleSseEvent(event, payload, ctx) {
-  const { mode, appendLiveMessage, ensurePane } = ctx;
+  const { conversationId, mode, appendLiveMessage, ensurePane, messageEls, paneEls } = ctx;
+  const isCurrent = state.currentConversationId === conversationId;
+
   if (event === 'run_start') {
-    state.activeRunId = payload.runId;
+    setActiveRun(payload.runId, conversationId);
+    if (!isCurrent) return;
     for (const p of payload.participants) {
       if (mode === 'compare') ensurePane(p.id, `${p.name} · ${p.model}`);
       else appendLiveMessage(p.id, `${p.name} · ${p.model}`);
     }
   } else if (event === 'chunk') {
-    const pane = ctx.paneEls.get(payload.participantId);
-    if (pane) {
-      pane.innerHTML = renderMarkdown((pane.dataset.text || '') + payload.text);
-      pane.dataset.text = (pane.dataset.text || '') + payload.text;
-      pane.scrollTop = pane.scrollHeight;
-    } else {
-      const live = ctx.messageEls.get(payload.participantId);
-      if (live) {
-        live.innerHTML = renderMarkdown((live.dataset.text || '') + payload.text);
-        live.dataset.text = (live.dataset.text || '') + payload.text;
-      }
+    if (!isCurrent) return;
+    const pane = paneEls.get(payload.participantId);
+    const live = messageEls.get(payload.participantId);
+    const target = pane || live;
+    if (target) {
+      target.dataset.text = (target.dataset.text || '') + payload.text;
+      target.innerHTML = renderMarkdown(target.dataset.text);
+      const scrollBox = pane ? pane : $('#messages');
+      scrollBox.scrollTop = scrollBox.scrollHeight;
     }
-    $('#messages').scrollTop = $('#messages').scrollHeight;
   } else if (event === 'participant_done') {
-    if (payload.status === 'failed') {
-      const pane = ctx.paneEls.get(payload.participantId);
-      if (pane) pane.innerHTML += `<div class="error">Failed: ${escapeHtml(payload.error || 'error')}</div>`;
-      else {
-        const live = ctx.messageEls.get(payload.participantId);
-        if (live) live.innerHTML += `<div class="error">Failed: ${escapeHtml(payload.error || 'error')}</div>`;
+    if (isCurrent) {
+      if (payload.status === 'failed') {
+        const pane = paneEls.get(payload.participantId);
+        const live = messageEls.get(payload.participantId);
+        const err = document.createElement('div');
+        err.className = 'error';
+        err.textContent = `Failed: ${payload.error || 'error'}`;
+        (pane || live)?.appendChild(err);
+      } else if (payload.status === 'complete' && state.spokenAnswers) {
+        const live = messageEls.get(payload.participantId) || paneEls.get(payload.participantId);
+        if (live?.dataset.text) speak(live.dataset.text);
       }
     }
+    if (mode === 'single') clearActiveRun(payload.runId || state.activeRun?.runId);
   } else if (event === 'tool_proposals') {
+    if (!isCurrent) return;
     state.pendingProposals = payload.proposals;
     showToolModal(payload.proposals);
   } else if (event === 'tool_result') {
-    const msg = `Tool ${payload.toolName}: ${payload.status}${payload.error ? ' — ' + payload.error : ''}${payload.text ? '\n' + payload.text : ''}`;
+    if (!isCurrent) return;
     const box = $('#messages');
     const el = document.createElement('div');
     el.className = 'msg tool';
-    el.innerHTML = renderMarkdown(msg);
+    el.innerHTML = renderMarkdown(`Tool ${payload.toolName}: ${payload.status}${payload.error ? ' — ' + payload.error : ''}${payload.text ? '\n' + payload.text : ''}`);
     box.appendChild(el);
   } else if (event === 'run_complete' || event === 'run_error' || event === 'tools_cancelled') {
-    state.activeRunId = null;
+    clearActiveRun(payload.runId || state.activeRun?.runId);
+    showTyping(false);
     state.pendingProposals = null;
     hideToolModal();
   }
@@ -589,30 +936,30 @@ function showToolModal(proposals) {
   for (const p of proposals) {
     const row = document.createElement('label');
     row.className = 'tool-proposal';
-    row.innerHTML = `
-      <input type="checkbox" data-id="${p.id}" checked>
-      <div>
-        <div><strong>${escapeHtml(p.toolName)}</strong> <span class="muted">requested by ${escapeHtml(participantName(p.participantId) || p.participantId)}</span></div>
-        <pre>${escapeHtml(JSON.stringify(p.arguments, null, 2))}</pre>
-      </div>`;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.dataset.id = p.id;
+    const info = document.createElement('div');
+    info.innerHTML = `<strong>${escapeHtml(p.toolName)}</strong> <span class="muted">requested by ${escapeHtml(participantName(p.participantId) || p.participantId)}</span><pre>${escapeHtml(JSON.stringify(p.arguments, null, 2))}</pre>`;
+    row.append(cb, info);
     list.appendChild(row);
   }
   $('#toolAllBtn').onclick = async () => {
-    const ids = proposals.map((p) => p.id);
-    await authorizeTools(ids);
+    await authorizeTools(proposals.map((p) => p.id));
   };
   $('#toolSelectedBtn').onclick = async () => {
     const ids = [...list.querySelectorAll('input:checked')].map((i) => i.dataset.id);
     await authorizeTools(ids);
   };
   $('#toolNoneBtn').onclick = async () => {
-    await api.post(`/api/runs/${state.activeRunId}/tool-authorize`, { actionIds: [], cancel: true });
+    await api.post(`/api/runs/${state.activeRun?.runId}/tool-authorize`, { actionIds: [], cancel: true });
     hideToolModal();
   };
 }
 
 async function authorizeTools(ids) {
-  await api.post(`/api/runs/${state.activeRunId}/tool-authorize`, { actionIds: ids, cancel: false });
+  await api.post(`/api/runs/${state.activeRun?.runId}/tool-authorize`, { actionIds: ids, cancel: false });
   hideToolModal();
 }
 
@@ -654,9 +1001,11 @@ function initVoice() {
   };
   recognition.onerror = (event) => {
     recognizing = false;
-    $('#voiceStatus').classList.add('hidden');
-    $('#voiceStatus').textContent = `Voice error: ${event.error}`;
+    const status = $('#voiceStatus');
+    status.textContent = voiceErrorMessage(event.error);
+    status.classList.remove('hidden');
     $('#voiceBtn').textContent = '🎤';
+    $('#voiceBtn').disabled = false;
   };
   $('#voiceBtn').onclick = () => {
     if (recognizing) {
@@ -664,21 +1013,70 @@ function initVoice() {
       return;
     }
     $('#composerInput').dataset.dictated = $('#composerInput').value;
-    $('#voiceStatus').textContent = 'Listening… speak now.';
-    $('#voiceStatus').classList.remove('hidden');
+    const status = $('#voiceStatus');
+    status.textContent = 'Listening… speak now.';
+    status.classList.remove('hidden');
     $('#voiceBtn').textContent = '⏹';
     recognizing = true;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (err) {
+      recognizing = false;
+      status.textContent = `Voice start failed: ${err.message}`;
+      status.classList.remove('hidden');
+      $('#voiceBtn').textContent = '🎤';
+    }
   };
 }
 
+function voiceErrorMessage(code) {
+  switch (code) {
+    case 'not-allowed':
+    case 'service-not-allowed':
+      return 'Microphone permission was denied. Allow microphone access in the browser, then try again.';
+    case 'audio-capture':
+      return 'No microphone was found. Connect a microphone and try again.';
+    case 'network':
+      return 'Voice recognition failed because of a network problem. Check your connection and try again.';
+    case 'no-speech':
+      return 'No speech was detected. Tap the microphone and speak again.';
+    default:
+      return `Voice recognition error: ${code || 'unknown'}. You can type instead.`;
+  }
+}
+
 function speak(text) {
-  if (!('speechSynthesis' in window)) return;
-  const clean = text.replace(/```[\s\S]*?```/g, ' code block omitted ').replace(/[#*_`>]/g, '').slice(0, 1500);
-  const u = new SpeechSynthesisUtterance(clean);
-  u.rate = 1.02;
+  if (!('speechSynthesis' in window)) {
+    toast('Spoken answers are not supported in this browser.', true);
+    return;
+  }
+  const clean = text.replace(/```[\s\S]*?```/g, ' code block omitted. ').replace(/[#*_`>]/g, '');
+  const token = ++state.speechToken;
   speechSynthesis.cancel();
-  speechSynthesis.speak(u);
+  const chunks = splitForSpeech(clean, 200);
+  for (const chunk of chunks) {
+    const u = new SpeechSynthesisUtterance(chunk);
+    u.rate = 1.02;
+    u.onend = () => {
+      if (state.speechToken !== token) speechSynthesis.cancel();
+    };
+    speechSynthesis.speak(u);
+  }
+}
+
+function splitForSpeech(text, size) {
+  const sentences = text.match(/[^.!?\n]+[.!?\n]*/g) || [text];
+  const chunks = [];
+  let current = '';
+  for (const s of sentences) {
+    if ((current + s).length > size && current) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    current += s;
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks;
 }
 
 // ---------- UI wiring ----------
@@ -695,7 +1093,10 @@ function bindNav() {
   $('#voiceReadBtn').onclick = () => {
     state.spokenAnswers = !state.spokenAnswers;
     $('#voiceReadBtn').textContent = state.spokenAnswers ? '🔊' : '🔇';
-    if (!state.spokenAnswers && 'speechSynthesis' in window) speechSynthesis.cancel();
+    if (!state.spokenAnswers && 'speechSynthesis' in window) {
+      state.speechToken += 1;
+      speechSynthesis.cancel();
+    }
   };
 }
 
@@ -739,8 +1140,16 @@ async function bindForms() {
   });
   $('#composerInput').addEventListener('input', autoGrow);
   $('#stopBtn').onclick = async () => {
-    if (state.activeRunId) await api.post(`/api/runs/${state.activeRunId}/stop`, {});
-    showTyping(false);
+    if (state.activeRun?.runId) {
+      await api.post(`/api/runs/${state.activeRun.runId}/stop`, {});
+      toast('Stopping the active run…');
+    }
+  };
+  $('#retryBtn').onclick = async () => {
+    const content = $('#composerInput').value.trim();
+    if (!content && !state.attachments.length) return;
+    $('#retryBar').classList.add('hidden');
+    sendMessage(content || '');
   };
   $('#attachBtn').onclick = () => $('#fileInput').click();
   $('#fileInput').onchange = async () => {
@@ -748,18 +1157,27 @@ async function bindForms() {
     $('#fileInput').value = '';
   };
   $('#seedParticipantsBtn').onclick = async () => {
-    await api.post('/api/participants/seed-defaults', {});
-    await loadParticipants();
+    try {
+      await api.post('/api/participants/seed-defaults', {});
+      await loadParticipants();
+    } catch (err) {
+      toast(err.message, true);
+    }
   };
   $('#participantForm').onsubmit = async (e) => {
     e.preventDefault();
-    await api.post('/api/participants', {
-      name: $('#pName').value.trim() || undefined,
-      provider: $('#pProvider').value,
-      model: $('#pModel').value.trim() || undefined,
-    });
-    $('#pName').value = ''; $('#pModel').value = '';
-    await loadParticipants();
+    try {
+      await api.post('/api/participants', {
+        name: $('#pName').value.trim() || undefined,
+        provider: $('#pProvider').value,
+        model: $('#pModel').value.trim() || undefined,
+      });
+      $('#pName').value = '';
+      $('#pModel').value = '';
+      await loadParticipants();
+    } catch (err) {
+      toast(err.message, true);
+    }
   };
   $('#mcpForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -771,17 +1189,26 @@ async function bindForms() {
         authHeader: $('#mcpAuth').value || undefined,
         allowPrivateNetwork: $('#mcpPrivate').checked,
       });
-      $('#mcpName').value = ''; $('#mcpUrl').value = ''; $('#mcpAuth').value = '';
+      $('#mcpName').value = '';
+      $('#mcpUrl').value = '';
+      $('#mcpAuth').value = '';
       await loadMcp();
     } catch (err) {
-      alert(err.message);
+      toast(err.message, true);
     }
+  };
+  $('#mcpReveal').onchange = () => {
+    $('#mcpAuth').type = $('#mcpReveal').checked ? 'text' : 'password';
   };
   $('#projectForm').onsubmit = async (e) => {
     e.preventDefault();
-    await api.post('/api/projects', { name: $('#projectName').value });
-    $('#projectName').value = '';
-    await loadProjects();
+    try {
+      await api.post('/api/projects', { name: $('#projectName').value });
+      $('#projectName').value = '';
+      await loadProjects();
+    } catch (err) {
+      toast(err.message, true);
+    }
   };
   $('#passwordForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -790,10 +1217,10 @@ async function bindForms() {
         currentPassword: $('#currentPassword').value,
         newPassword: $('#newPassword').value,
       });
-      alert('Password changed. Other sessions were signed out; please sign in again.');
-      location.reload();
+      toast('Password changed. Other sessions were signed out; please sign in again.');
+      setTimeout(() => location.reload(), 1200);
     } catch (err) {
-      alert(err.message);
+      toast(err.message, true);
     }
   };
 }
