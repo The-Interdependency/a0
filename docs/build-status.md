@@ -42,6 +42,7 @@ Last updated: 2026-10-30 (VM local time)
 
 ## Outstanding hmmm
 
+- **Git push blocked**: local commits `3eef4b0` (implementation) and `1885b97` (docs) are on `main` in `/home/wayseer_interdependentway_org/a0` and `/opt/a0`, but the GitHub tokens in the VM's `.env` are invalid and no SSH key is installed. Operator action: provide a valid `GH_TOKEN`/`GITHUB_TOKEN` or SSH deploy key, then `cd /home/wayseer_interdependentway_org/a0 && git push origin main`.
 - Real-phone browser/microphone observation (A17/A18) not yet performed from a physical Android device.
 - OpenAI legacy key returns 401; rotation required.
 - Anthropic key not configured; A04 live for Anthropic blocked.
