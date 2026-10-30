@@ -1,19 +1,19 @@
 {
   "schema": "the-interdependency.stack-manifest",
   "version": "1.0.0",
-  "work_graph_sha256": "bd55ec72e2c6cd6de80ae4e799ebb125fdcedab48366886a50d6d6249458314c",
+  "work_graph_sha256": "9fc2e011bfb5413814e41a65494d0cb69864a1c161ad1db4905c83f3066ea26c",
   "repositories": [
     {
       "repository": "The-Interdependency/a0",
-      "commit": "330772cc84574b031fe15238ae7556f2c7087f71",
+      "commit": "d1b3169bd55ac67342505c940b9f548d56060d25",
       "authority": "Replacement specification destination and historical A0 source boundary.",
-      "relation": "Input baseline for this documentation-only handoff; output identity is the commit containing this manifest."
+      "relation": "Published specification input for this VM/website revision; output identity is the commit containing this manifest."
     },
     {
       "repository": "The-Interdependency/openbao",
       "commit": "4a8f475e88e4fa0c76ae1645a22faffe5596d361",
       "authority": "Vault implementation and fork-specific metadata integration; no A0 application or deployment proof.",
-      "relation": "Selected replaceable vault component; source support informs the unverified Replit proposal."
+      "relation": "Selected replaceable vault component; pinned source support informs the unverified VM deployment proposal."
     },
     {
       "repository": "The-Interdependency/skill-lib",
@@ -35,8 +35,8 @@
     "semantic_mapping": "external-provenance; vault and build-doctrine references do not transfer their runtime, semantic, mathematical, empirical, or certification standing to A0",
     "agent_scope": "cross-repository-work-graph",
     "hmmm": [
-      "Replit is the fixed application/backend host; VM checkout is only a handoff/work location.",
-      "The replacement application, production vault execution, device acceptance, and live provider/tool tests are not implemented or verified by this documentation commit.",
+      "The latest owner instruction selects the existing VM as host and an authenticated responsive website as access; actual VM identity and hostname/TLS authority remain to be discovered.",
+      "The replacement application, production vault execution, phone-browser acceptance, and live provider/tool tests are not implemented or verified by this documentation commit.",
       "Deployment topology is a proposal pending resource, startup, storage, overlap, recovery, and authorization evidence.",
       "User-data permissions and runtime authority do not transfer from source visibility or metadata inspection.",
       "Unresolved product/configuration choices are enumerated in the specification; no silent defaults claim user approval."

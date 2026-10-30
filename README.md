@@ -1,14 +1,14 @@
 # A0 — replacement specification and preserved history
 
-**Start with the [replacement implementation specification](docs/a0-replacement-spec.md).** It records the complete known phone-first web/Android, four-provider BYOK, comparison, OpenBao, and MCP scope, its proposed Replit deployment, and acceptance gates.
+**Start with the [Deep Code VM build handoff](docs/deep-code-vm-handoff.md) and [complete specification](docs/a0-replacement-spec.md).** Build A0 on the existing VM and access it through an authenticated, phone-first HTTPS website. The full scope includes four-provider BYOK, comparison, files/images, voice, projects, OpenBao, and configurable MCP tools.
 
-Status: specification published; replacement application and deployment remain unimplemented/unverified. Replit is the selected application/backend host. The VM is a checkout/work destination for this handoff.
+Status at this handoff: specification and execution instructions published; replacement application and deployment remain unimplemented/unverified. The latest owner instruction makes the VM the host and the website the required client. Earlier Replit hosting and native Android packaging requirements are superseded.
 
 The old A0 implementation is deprecated at the owner's request and retained under archive/ for historical inspection and reproducibility. Its retirement does not prohibit building the fresh successor defined by the new specification. This repository remains active.
 
 ## Builder and VM handoff
 
-Read [AGENTS.md](AGENTS.md) and [the spec](docs/a0-replacement-spec.md); the [source work graph](docs/work-graphs/a0-replacement-spec.json) records the inspected inputs.
+Give the builder [the Deep Code handoff](docs/deep-code-vm-handoff.md). Read [AGENTS.md](AGENTS.md) and [the spec](docs/a0-replacement-spec.md); the [source work graph](docs/work-graphs/a0-replacement-spec.json) records the inspected inputs. The assignment continues through a working VM deployment and acceptance, with exact external blockers recorded honestly.
 
 For a new checkout on the VM:
 
@@ -16,7 +16,7 @@ For a new checkout on the VM:
 git clone https://github.com/The-Interdependency/a0.git a0
 cd a0
 git rev-parse HEAD
-less docs/a0-replacement-spec.md
+less docs/deep-code-vm-handoff.md
 ~~~
 
 Use an existing clean checkout's normal fetch/fast-forward workflow if already cloned; preserve unrelated work. Record the checked-out commit before building. These commands retrieve documentation and do not start an application.

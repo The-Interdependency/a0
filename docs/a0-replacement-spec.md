@@ -1,14 +1,15 @@
 ---
 title: A0 replacement implementation specification
 spec_id: a0.replacement/1
-version: 1.0.0
+version: 1.1.0
 status: specification
 implementation_status: not_implemented
 deployment_status: not_verified
 owner: Erin Spencer
 date: "2026-10-29"
 timezone: America/Los_Angeles
-hosting_requirement: Replit
+hosting_requirement: existing_VM
+access_requirement: authenticated_responsive_website
 ---
 
 # A0 replacement — complete build specification
@@ -17,9 +18,9 @@ GPT generated; context, prompt Erin Spencer.
 
 ## 1. Standing and usage
 
-This is the implementation handoff for the fresh A0 application. It consolidates the October 27 product brief, the subsequent OpenBao fork decision, and the October 29 Replit hosting clarification. It records the complete known scope; unresolved choices remain explicit. A specification is not an implementation, a successful test, or a deployment receipt.
+This is the implementation specification for the fresh A0 application. It consolidates the October 27 product brief, the OpenBao fork decision, and the latest October 29 instruction to build to completion on the VM with website access. That instruction supersedes the earlier Replit deployment requirement and separate native Android delivery gate. It records the complete known scope; unresolved choices remain explicit. A specification is not an implementation, a successful test, or a deployment receipt.
 
-**Replit hosts the application and backend. Android is a client of that deployment.** Erin's instruction to put this checkout on the VM is treated as a development/handoff destination. It does not supersede the explicit Replit hosting requirement.
+**The existing VM hosts A0; Erin accesses it through an authenticated, phone-first HTTPS website.** Android's browser is the primary phone surface. A native APK and Replit deployment are not required for completion. Browser installation as a PWA is optional and must not gate ordinary website access. Start execution with the [Deep Code VM handoff](deep-code-vm-handoff.md).
 
 For the builder:
 
@@ -46,8 +47,8 @@ The user-facing product should use ordinary language. These engineering labels b
 
 | ID | REQUIREMENT |
 | --- | --- |
-| R01 | Host the fresh A0 website and backend on Replit. Replit remains the selected host after retirement of the older Replit implementation. |
-| R02 | Provide a phone-first website and an Android app. Use ChatGPT's mobile website and Android app as interaction references, respectively. A developer playground is not the design reference. |
+| R01 | Host the fresh A0 website and backend on the existing VM, with a reachable HTTPS website as the access surface. Verify the actual VM and deployment configuration before activating services. |
+| R02 | Provide a responsive, phone-first website usable in Erin's Android browser and on desktop. Use ChatGPT's mobile interaction patterns as references; a developer playground is not the design reference. Native Android packaging is no longer a delivery gate. |
 | R03 | Initial access is Erin's account only. Keep identity and ownership modular enough for later multiuser support; a public release or subscription business is not part of this iteration. |
 | R04 | Support BYOK for OpenAI, Anthropic, xAI, and DeepSeek. Initially select DeepSeek. The exact provider models are configurable and are not settled here. |
 | R05 | Include chat, file/image attachments, voice, projects, and tool execution in the delivered scope. Build stages do not remove any of these capabilities. |
@@ -128,7 +129,7 @@ The application must not claim arbitrary shell/code execution is isolated merely
 
 DERIVED CONTRACT: enforce the initial owner on the server using a stable verified identity. Every conversation, project, file, credential, and MCP operation must authorize its owner; hiding UI controls is insufficient. The first sign-in must not allow an arbitrary visitor to seize ownership.
 
-Use replaceable authentication/session integration. Establish session expiry/revocation, browser request protection, Android login return handling, and recovery. Exact identity provider and recovery mechanics remain hmmm; password invention or a hard-coded development bypass is not a completion shortcut.
+Use replaceable authentication/session integration. Establish session expiry/revocation, browser request protection, browser login return handling, and recovery. Exact identity provider and recovery mechanics remain hmmm; password invention or a hard-coded development bypass is not a completion shortcut.
 
 ### 5.2 Persistent state
 
@@ -136,7 +137,7 @@ PROPOSAL: versioned database records for User, Project, Conversation, Participan
 
 Each record has stable identity, ownership where applicable, timestamps, and explicit state. Runs bind harness version, context snapshot, participants, model/settings, and tool authorization. Store references to secrets, not their values.
 
-Use transactional updates where a partial write would change conversation or authorization meaning. Keep app migrations separate from OpenBao-owned tables. File metadata belongs in the database; media bytes belong in durable object storage.
+Use transactional updates where a partial write would change conversation or authorization meaning. Keep app migrations separate from OpenBao-owned tables. File metadata belongs in the database; media bytes belong behind a replaceable durable-storage interface. A protected persistent VM volume is the initial proposal; another object store may replace it without changing ownership contracts. Back up the media together with its database references.
 
 Define deletion, retention, export, cross-client synchronization, and offline/resume behavior before their acceptance gates. They are not permission to migrate or delete historical private data.
 
@@ -145,7 +146,7 @@ Define deletion, retention, export, cross-client synchronization, and offline/re
 - Attachments: authenticated upload/retrieval, ownership, supported types/size checks, durable storage, visible processing state, and provider-specific delivery. An accepted upload must not silently disappear from a model's context.
 - Voice: microphone permissions, visible capture/processing state, interruption/error feedback, and persistence of the resulting conversation. Dictation/read-aloud versus continuous interruptible voice and exact audio services remain hmmm. Do not claim full voice scope by shipping an empty microphone control.
 - Projects: create/select/manage projects and consistently attach conversations/files to their project. Project context loading and any project instructions must have explicit, inspectable rules.
-- Web and Android: share authoritative server state and stable identities. Verify keyboard-open composition, comparison readability, file selection, microphone use, sign-in, reconnect, and saved-history retrieval on Erin's phone.
+- Website: use authoritative server state and stable identities across browser sessions/devices. Verify keyboard-open composition, comparison readability, file selection, microphone use, sign-in, reconnect, and saved-history retrieval in Erin's Android browser. Do not require a terminal, APK, or developer console for ordinary use.
 - PROPOSAL: readable side-by-side comparison with horizontally scrollable panes and an expanded reading view on narrow screens. Validate usability rather than treating a layout mockup as acceptance.
 
 ## 6. Component boundaries and proposed file plan
@@ -162,53 +163,55 @@ This is a proposed decomposition, not a claim that these modules exist. The nati
 | media | Uploads, attachment delivery, voice integration | User files/audio + storage/provider capabilities; A15/A18 |
 | mcp | Connections, discovery, permissions, execution coordination | External tools + authorized side effects; A20–A23 |
 | web | Phone-first website and settings | Authenticated API presentation; A17/A18 |
-| android | Installable client using the same backend | Device permissions + session return + connectivity; A17/A18 |
-| operations | Startup, health, deployment, migration, backup/recovery, observability | Replit environment + operational privileges; A12–A14/A24 |
+| operations | Startup, health, deployment, migration, backup/recovery, observability | Existing VM + operational privileges; A12–A14/A24 |
 
 PROPOSED active layout, to finalize with the implementation framework:
 
 - apps/web: website and shared UI.
 - apps/server: authenticated API and streaming endpoints.
-- apps/android: Android client/build configuration.
 - packages/contracts: versioned data/API schemas and context contracts.
 - packages/providers, packages/secrets, packages/mcp: replaceable adapters/coordinator.
-- operations: Replit process/deployment/backup instructions and automation.
+- operations: VM deployment, HTTPS, supervision, migration, backup/restore, and rollback instructions and automation.
 - tests: contract, integration, deployment, and client acceptance witnesses.
 - docs: source-linked specifications and operator guidance.
 
 Keep route namespace, permission tier, data schema, editable/read-only fields, empty/error states, and renderer expectations declared in owning native schemas or appropriate supplemental metadata. A rendered field or route name is not evidence that its backend exists. Exact framework, versions, registry names, endpoints, and test paths are hmmm until implemented.
 
-## 7. Replit deployment proposal and vault bootstrap
+## 7. VM deployment proposal and vault bootstrap
 
-All items in this section are PROPOSALS pending an executable deployment check.
+All topology choices in this section are PROPOSALS pending inspection and executable verification. VM hosting and website access are requirements.
 
 ### 7.1 Proposed topology
 
-- One Replit Reserved VM deployment runs the A0 backend and the pinned OpenBao build under explicit process supervision.
-- Only the authenticated application port is public. OpenBao binds to loopback and is accessed by the backend through the secrets adapter.
-- Production PostgreSQL holds durable application state and OpenBao encrypted data in separately owned tables. Development and production credentials/data remain distinct.
-- Replit App Storage holds attachments/media. Do not make a deployment-local file the sole durable copy of chats, uploads, vault data, or recovery material.
-- Replit production Secrets supplies bootstrap configuration, including the vault wrapping key and required connection/auth material. Provider keys remain in OpenBao.
-- This trust design depends on the Replit deployment and its injected secrets. It does not protect secrets from an attacker controlling that host/runtime.
+- Inspect the existing VM's identity, operating system, resources, service manager, listeners, reverse proxy, DNS/TLS route, and authorized deployment account. Preserve unrelated services and data. Reuse a suitable existing proxy/runtime; otherwise use one dedicated Docker Compose project.
+- The proposed project contains HTTPS ingress, the A0 application, PostgreSQL, and the pinned OpenBao build. A same-origin website/API keeps ordinary use in the browser. Caddy is the default proxy proposal when no suitable proxy already exists; its normal public-hostname setup needs correct DNS, reachable HTTP/HTTPS ports, and persistent certificate state.
+- Publish only the ingress needed for the website. PostgreSQL and OpenBao have no public or published host ports. Separate containers communicate over explicitly scoped private service networks: OpenBao listens on its private container interface and the application uses its service name. Container-local loopback does not connect separate containers. Native processes on one host may instead use loopback with verified process/file permissions.
+- Use separate database ownership and credentials for application records and OpenBao's encrypted store. Keep migrations separate. Persist PostgreSQL, authenticated media storage, and certificate state in named volumes or deliberately managed host paths outside disposable containers.
+- Use production builds, pinned artifact identities, explicit dependency health/readiness checks, and a verified startup/restart policy. Verify the container daemon or native service manager starts on boot; do not make competing supervisors own the same process. Provider outages remain visible per-provider failures, not reasons to bypass identity or vault controls.
+- Mount the static vault wrapping key from an owner-protected host file read-only into the vault process/container only, using the selected fork's documented static file seal. Give the application a separate narrowly scoped vault identity. Provider keys stay in OpenBao.
+- The VM host and its administrators are the bootstrap trust boundary. File-mounted Compose secrets are controlled file delivery, not an independent encrypted secret manager or protection against a compromised host. Do not expose the Docker control socket or host secrets to the application or MCP tools.
 
-The pinned fork documents PostgreSQL storage and static automatic unsealing, including an environment-supplied wrapping key. This establishes source support, not binary, resource-fit, or deployment verification.
+The pinned fork documents PostgreSQL storage and static automatic unsealing with a 32-byte key supplied through a file or environment variable. This establishes source support, not binary, resource-fit, permission, or VM deployment verification. See the primary references below and the execution order in the [handoff](deep-code-vm-handoff.md).
 
 ### 7.2 Startup, initialization, and permissions
 
-- Start OpenBao against the explicitly selected database. Initialize only after positively establishing the intended store is genuinely uninitialized; an unavailable or wrong database must not cause a fresh vault to be silently created.
-- OpenBao cannot retrieve its own unlocking key from itself while sealed. Inject the wrapping key from Replit's bootstrap trust. Restrict its delivery to the vault process where practical; the application uses a narrowly scoped vault identity.
-- Establish recovery material and replace the initial root token with scoped application credentials. Do not retain a root token as the ordinary application credential.
-- Readiness requires the expected vault identity, durable store, authorization policy, and active/unsealed state. Startup errors must leave the service visibly unavailable rather than enable a development bypass.
-- Verify deployment replacement behavior. A single configured VM is not proof that old and new vault processes never overlap during republishing. Establish serialized replacement or supported storage locking/fencing before allowing concurrent writers.
+- Start OpenBao against the explicitly selected store. Initialize only after positively establishing that the intended store is genuinely uninitialized; an unavailable, mistaken, or empty replacement store must not silently create a new vault.
+- OpenBao cannot fetch its unlocking key from itself while sealed. Create bootstrap material once through an authorized private administrative path, preserve its identity, and never regenerate it automatically during redeploy. Protect permissions and mount scope; do not print secrets, embed them in command lines, or commit them.
+- Establish recoverable owner-held material and replace the initial root token with scoped application credentials. A root token is not an ordinary application credential. Document scoped credential renewal/replacement.
+- Readiness requires the expected vault identity, durable store, authorization policy, and active/unsealed state. Startup errors leave the affected service visibly unavailable; they do not enable a development bypass.
+- Serialize vault replacement, or prove the selected storage locking/fencing before permitting overlapping writers. An app-only update must not recreate the vault/database unnecessarily.
 - No live provider or vault secret may appear in client bundles, client-facing responses, model context, tool payloads, logs, repositories, or test fixtures. Authenticated server-side vault/provider transport and deliberately inert test credentials are permitted.
+- Keep uploaded files behind authorized retrieval. Validate MCP endpoint/authorization discovery and redirects against unwanted access to cloud metadata, loopback, or private administrative services; intentionally authorized private MCP connections need explicit scoped rules. Local tool execution requires an independently tested permission boundary, not a claim that private networking alone is isolation.
 
 ### 7.3 Recovery, updates, and rollback
 
-- A database backup alone is not sufficient to recover the vault. Preserve the applicable static wrapping key and any historical wrapping keys needed to decrypt that backup, together with separately required recovery authorization material, through an owner-accessible recovery path independent of the deployed app. Recovery shares cannot replace a lost auto-unseal wrapping key. Never put this material in the repository.
-- Document and test backup/restore, wrapping-key rotation, provider-key rotation/deletion, and migration to another vault while preserving or explicitly migrating credential references.
-- Before storage/migration changes, record the source build, schema version, vault version, snapshot, and recovery prerequisites. Test rollback compatibility; a source rollback does not reverse a database migration or external tool effect.
-- A safe application rollback returns to a compatible previously tested successor version or an unavailable maintenance state. It must not reactivate the retired A0 implementation.
-- Deploy/republish only the exact reviewed source build, with production configuration and observed readiness. Development preview success is not production proof.
+- Retain encrypted backups in an authorized location independent of the running VM. Include application and vault stores, media with consistent database references, and reproducible database roles/grants. Select schedule, retention, and recovery objectives explicitly. A persistent volume or an untested dump does not prove recovery.
+- A database backup alone cannot recover the vault. Preserve the applicable static wrapping key and any historical wrapping keys required by that backup, together with required recovery authorization, through an owner-accessible path independent of the deployed app. Recovery shares cannot replace a lost auto-unseal wrapping key. None of this material belongs in GitHub.
+- Restore into an isolated target and verify application records, attachments, vault identity, and a nonsecret canary. Test provider-key rotation/deletion, wrapping-key rotation, and replacement of the vault adapter while preserving or explicitly migrating credential references.
+- Before migration/update, record source/build/configuration identities, app schema, vault version, backups, and recovery prerequisites. Test rollback compatibility: source rollback does not undo a database migration or external tool effect.
+- A safe rollback uses a compatible, previously tested successor build or an unavailable maintenance state. It never reactivates archived A0. Avoid destructive volume-removal operations during ordinary updates.
+- Verify service restart and release replacement. Demonstrate VM reboot recovery when the host can safely be rebooted within authority; otherwise retain that exact observation as BLOCKED and verify all nondisruptive startup evidence. Do not reboot shared workloads merely to manufacture a pass.
+- Verify streaming, cancellation, owner sign-in, and data access through the actual HTTPS website from outside the VM. A healthy backend port, local preview, or successful merge is not the public-site acceptance result.
 
 ## 8. Build stages and completion
 
@@ -217,15 +220,15 @@ These stages organize work; all R01–R14 remain delivery obligations.
 | Stage | Deliverable | Exit evidence |
 | --- | --- | --- |
 | B0 | Fresh implementation scaffold, owner identity, schemas, and versioned harness plan | Source/build identities recorded; archive remains isolated; A01/A03 design translated into executable checks |
-| B1 | Replit runtime + vault adapter + durable storage | Nonsecret canary survives process restart and republish; missing/wrong unlock material refuses access; A02/A12/A13 |
+| B1 | VM runtime + vault adapter + durable storage | Nonsecret canary survives service restart and release replacement; missing/wrong unlock material refuses access; A02/A12/A13 |
 | B2 | One persisted DeepSeek conversation through the real adapter | Authenticated phone request, streamed response, close/reopen/continue; A03–A05/A14 |
 | B3 | All four providers and extensible comparison | Real configured-provider calls and exact intended-context checks; A04/A06–A11/A16 |
 | B4 | Attachments, voice, projects, and MCP coordination | A15/A18/A20–A23; no placeholder controls or unverified tool effects |
-| B5 | Android package and integrated release | Installable client, real-phone evidence, restart/recovery and final acceptance; A17/A19/A24 plus all applicable earlier cases |
+| B5 | Integrated HTTPS website release on the VM | Owner sign-in, real-phone browser evidence, restart/recovery and final acceptance; A17/A19/A24 plus all applicable earlier cases |
 
 Frontend, adapter contract, and schema work may proceed alongside B1 using clearly identified test doubles. A fake provider/vault can prove local handling but cannot satisfy a live provider or production persistence gate.
 
-Scope for this documentation push is the spec/handoff only. No application build, paid service provisioning, provider call, deployment, historical runtime restart, data migration, or retirement action is performed or certified by this commit.
+Scope for this documentation update is the spec and Deep Code handoff. The builder is tasked with implementing and deploying the successor to completion on the existing VM within available authority. This documentation commit itself performs or certifies no application build, provider call, deployment, historical runtime restart, private-data migration, or retirement action. The handoff distinguishes ordinary build work from unavailable access, new paid resources, and destructive/shared-host changes.
 
 ## 9. Acceptance matrix
 
@@ -244,19 +247,19 @@ All cases below are **NOT RUN for the replacement**. These are required witnesse
 | A09 | Move between one, two, three, and back to one participant without losing history | Schema/UI/coordinator assumes exactly two or destroys stored answers |
 | A10 | Context/content incompatibility is reported before affected dispatch | Automatic truncation/summary or unsupported-content omission masquerades as full context |
 | A11 | Missing/invalid/revoked credential gives a useful failure without provider substitution | A different provider is silently used or a key leaks |
-| A12 | Nonsecret vault canary survives process restart and republish; wrong/missing wrapping key refuses access | State is lost, a new store is silently initialized, or a development bypass opens |
+| A12 | Nonsecret vault canary survives service restart and release replacement; wrong/missing wrapping key refuses access | State is lost, a new store is silently initialized, or a development bypass opens |
 | A13 | Restore an encrypted backup with its applicable current/historical wrapping keys and required recovery authorization; verify identity and data, then test rotation/migration | Backup exists but cannot be restored, recovery shares are assumed to replace a lost wrapping key, or rotation loses the store |
-| A14 | Saved conversation/project/file references survive app restart and redeploy; both clients read consistent state | Cache/local process state is the only copy or restart silently drops data |
+| A14 | Saved conversation/project/file references survive app restart and redeploy; separate browser sessions/devices read consistent state | Cache/local process state is the only copy or restart silently drops data |
 | A15 | Upload, authorize, retrieve, and deliver supported attachments; unsupported inputs have visible outcomes | Files cross owners, disappear, or are reported delivered when omitted |
 | A16 | Rate limit, participant failure, disconnect, retry, and cancel retain honest per-participant outcomes | Partial/unknown results are labeled successful or duplicate billable requests are hidden |
-| A17 | Website and installed Android client work on Erin's phone with keyboard, login, comparison, and reconnection | Desktop preview or an unsigned/uninstalled artifact is claimed as device acceptance |
-| A18 | Projects and the explicitly documented voice mode complete their real flows on both clients | Static controls or undisclosed feature reductions count as completion |
-| A19 | Session expiry/revocation, request protection, Android login return, and recovery enforce owner access | A stale/bypassed session exposes data or recovery bypasses authorization |
+| A17 | HTTPS website works in Erin's Android browser with keyboard, login, comparison, and reconnection | Desktop preview/emulation alone is claimed as real-phone acceptance, or ordinary use requires an APK/terminal |
+| A18 | Projects and the explicitly documented voice mode complete their real website flows on the target phone browser | Static controls or undisclosed feature reductions count as completion |
+| A19 | Session expiry/revocation, request protection, browser login return, and recovery enforce owner access | A stale/bypassed session exposes data or recovery bypasses authorization |
 | A20 | Configure/authenticate/discover/enable/disable an MCP server and expose truthful capability/call status | A catalog entry is mistaken for a working authorized connection |
 | A21 | Chat does not force an executor choice; actionable tools offer one/subset/all/cancel for the displayed run | Chat/context selection authorizes effects or nonselected actions are dispatched |
 | A22 | Duplicate/conflicting actions, retries, and disconnects are coordinated with real receipts/idempotency limits | Duplicate irreversible effects occur silently or unknown outcomes are retried blindly |
 | A23 | Cancellation stops new dispatch; actual earlier effects and untrusted-tool boundaries are reported | Cancellation is claimed to undo effects or same-user local processes are called sandboxed |
-| A24 | Exact source/build/configuration identities, public surface, readiness, storage recovery, and rollback are verified in the Replit deployment | A merge/preview/green documentation check is presented as a healthy deployed application |
+| A24 | Exact source/build/configuration identities, public surface, readiness, storage recovery, and rollback are verified on the VM's HTTPS website deployment | A merge/preview/green documentation check is presented as a healthy deployed application |
 
 Each execution receipt should include case ID, exact source/build identity, environment, observation, test result, and redacted evidence location. Use PASS, FAIL, BLOCKED, or NOT RUN. No provider credentials, private message bodies, or recovery material belong in public receipts.
 
@@ -264,17 +267,17 @@ Each execution receipt should include case ID, exact source/build identity, envi
 
 | Source | Exact identity / role |
 | --- | --- |
-| This repository before this spec | The-Interdependency/a0 at 330772cc84574b031fe15238ae7556f2c7087f71; historical boundary and destination for replacement requirements |
+| Prior published specification | The-Interdependency/a0 at d1b3169bd55ac67342505c940b9f548d56060d25; baseline for this VM/website revision; the original documentation baseline was 330772cc84574b031fe15238ae7556f2c7087f71 |
 | Historical A0 source | f68304130f66b5afb73dde3352f24d8096bf21b9; preserved archive tree 573843696f7090e5164488f782e38eaccc5b64bd |
 | Selected OpenBao fork | The-Interdependency/openbao at 4a8f475e88e4fa0c76ae1645a22faffe5596d361; candidate vault implementation and fork-specific metadata work |
 | Canonical build doctrine | The-Interdependency/skill-lib at d71a3a938cb6d646ffc0b59186452117e4a37d13 |
 | OpenBao's vendored reader source | skill-lib at 6bdbfe9c574e6b497f056ebd92655241fc56f681; distinct from the current doctrine pin; honor the consumer policy for metadata replay |
 | Original product brief | a0-interface-build-brief-2026-10-27.md; SHA-256 dfed7c92135722269238ec4f040edb3a642adc66400cdaf6458132151f5970fb; owner decisions and proposals as captured on October 27 |
-| Later owner decisions | OpenBao fork/MSDMD request; October 29 Replit hosting clarification; October 29 request to push this specification to GitHub for a VM handoff |
+| Later owner decisions | OpenBao fork/MSDMD request; October 29 Replit hosting instruction and GitHub publication; latest superseding hosting/access instruction: "handoff for deep code to build a0 to completion on the vm. access should be a website thing." |
 
 The [work graph](work-graphs/a0-replacement-spec.json) binds the inspected repositories and explicit non-transfer boundaries. It pins the input baseline; the commit containing this document identifies its published output. A digest detects content change and is not a signature.
 
-This spec supersedes the original brief only where subsequent owner instructions resolve it: OpenBao is now the selected fork, and Replit is fixed as the application/backend host. The VM is not silently promoted to the production host. Technical deployment proposals remain proposals. No mathematical, semantic, empirical, measurement, security certification, or runtime correctness status transfers from another project into A0.
+This spec supersedes earlier requirements only where later owner instructions resolve them: OpenBao is the selected fork; the existing VM is now the application/backend host; website access replaces native Android packaging as the delivery requirement. All other R01–R14 scope remains. Technical deployment choices remain proposals until selected and verified by the builder. No mathematical, semantic, empirical, measurement, security certification, or runtime correctness status transfers from another project into A0.
 
 Maintain upstream license and attribution obligations when importing component code. OpenBao retains its own MPL-2.0 obligations. This documentation change does not select a new successor-code license or alter historical licenses; resolve license/notice placement before distributing new binaries.
 
@@ -284,10 +287,11 @@ Maintain upstream license and attribution obligations when importing component c
 - [Pinned PostgreSQL backend documentation](https://github.com/The-Interdependency/openbao/blob/4a8f475e88e4fa0c76ae1645a22faffe5596d361/website/content/docs/configuration/storage/postgresql.mdx)
 - [Pinned static unseal documentation](https://github.com/The-Interdependency/openbao/blob/4a8f475e88e4fa0c76ae1645a22faffe5596d361/website/content/docs/configuration/seal/static.mdx)
 - [Pinned seal/recovery-key distinction](https://github.com/The-Interdependency/openbao/blob/4a8f475e88e4fa0c76ae1645a22faffe5596d361/website/content/docs/concepts/seal.mdx)
-- [Replit deployment types](https://docs.replit.com/features/publishing/deployment-types)
-- [Replit SQL database](https://docs.replit.com/features/data-and-storage/sql-database)
-- [Replit App Storage](https://docs.replit.com/features/data-and-storage/object-storage)
-- [Replit Secrets](https://docs.replit.com/core-concepts/project-editor/app-setup/secrets)
+- [Compose deployment on a server](https://docs.docker.com/compose/how-tos/production/), [startup/readiness](https://docs.docker.com/compose/how-tos/startup-order/), [restart policy](https://docs.docker.com/engine/containers/start-containers-automatically/), and [persistent volumes](https://docs.docker.com/engine/storage/volumes/)
+- [Compose file-mounted secrets](https://docs.docker.com/compose/how-tos/use-secrets/) and [Docker daemon security](https://docs.docker.com/engine/security/)
+- [Caddy HTTPS](https://caddyserver.com/docs/automatic-https) and [reverse proxy/streaming](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
+- [PostgreSQL backup/restore](https://www.postgresql.org/docs/current/backup.html)
+- [MCP security guidance](https://modelcontextprotocol.io/docs/2026-07-28/tutorials/security/security_best_practices)
 - [MCP architecture](https://modelcontextprotocol.io/docs/learn/architecture) and [tool contract](https://modelcontextprotocol.io/specification/latest/server/tools)
 - Provider API/cache capability documentation: [OpenAI](https://developers.openai.com/api/docs/guides/prompt-caching), [Anthropic](https://platform.claude.com/docs/en/build-with-claude/prompt-caching), [xAI](https://docs.x.ai/developers/advanced-api-usage/prompt-caching), [DeepSeek](https://api-docs.deepseek.com/guides/kv_cache).
 
@@ -297,18 +301,18 @@ These live documentation links are navigation, not frozen runtime evidence. Rech
 
 | Open item | Consequence / resolution point |
 | --- | --- |
-| Actual Replit vault execution | Prove binary startup, process supervision, database permissions/connectivity, replacement overlap behavior, resource fit, unsealing, restart, and republish at B1. |
+| Actual VM execution and website address | Inspect the VM, existing services/proxy, resources, DNS/domain and TLS access; prove startup, private networking, storage, vault unsealing, serialized replacement, restart and restore. No address or VM identity is invented by this handoff. |
 | Framework and concrete module/API contracts | Select supported versions, lock dependencies, and link source/test ownership at B0. |
 | Default provider models and capabilities | Inspect current APIs, account access, file limits, context capacities, streaming/tool differences, and usage accounting before B2/B3. |
 | Standard harness context | Resolve authoritative runtime instructions, memory inputs, assembly order, and version identity before context tests. |
-| Identity and recovery | Select authentication integration, stable owner bootstrap, session storage and Android return flow before private release. |
+| Identity and recovery | Select authentication integration, stable owner bootstrap, session storage and browser return flow before private release. |
 | Voice definition | Set dictation/read-aloud versus continuous interruptible interaction and audio-provider behavior before voice acceptance. |
 | Storage lifecycle and clients | Define retention/deletion/export, project context, synchronization, offline/resume, and active-stream switching behavior before corresponding acceptance cases. |
 | MCP servers and effect coordination | Verify actual endpoints, credentials, grants, idempotency/reconciliation, cancellation, and execution isolation before tool release. |
 | Limits and operating cost | Set concurrency/tool-step/spending limits from real quotas and owner constraints; do not invent a budget or conflate rate caps with participant-model limits. |
-| Successor license and distribution | Resolve new-code license placement, upstream notices, Android signing and delivery before distribution. |
+| Successor license and distribution | Resolve new-code license placement and upstream notices before distributing code/binaries. Native Android signing and store delivery are outside this website release. |
 | Live acceptance | Real provider credentials and a real-phone pass remain unverified. Use secure setup surfaces; do not request secrets in a chat or commit them. |
 | Legacy operations | Remaining hosted retirement/private-data receipts are separate work. They neither prove this successor exists nor authorize stopping shared hosts. |
 
-No unresolved item above reopens Replit hosting, the four providers, phone-first design, general MCP, or the included attachments/voice/projects/tool scope.
+No unresolved item above reopens VM hosting, website access, the four providers, phone-first design, general MCP, or the included attachments/voice/projects/tool scope.
 
