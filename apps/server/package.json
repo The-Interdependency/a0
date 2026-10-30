@@ -1,0 +1,18 @@
+{
+  "name": "@a0/server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "migrate": "node src/migrate.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "busboy": "^1.6.0",
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "zod": "^4.6.7"
+  }
+}

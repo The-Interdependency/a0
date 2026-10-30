@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <title>A0</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="manifest" href="/manifest.json">
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="topbar">
+      <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
+      <div class="topbar-title">A0</div>
+      <div class="topbar-actions">
+        <button id="voiceReadBtn" class="icon-btn" aria-label="Toggle spoken answers" title="Spoken answers">🔇</button>
+        <button id="logoutBtn" class="icon-btn" aria-label="Sign out">⎋</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav id="drawer" class="drawer" aria-label="Main">
+        <div class="drawer-section">
+          <button id="newChatBtn" class="primary-btn">＋ New conversation</button>
+        </div>
+        <div class="drawer-section">
+          <div class="drawer-heading">Projects</div>
+          <div id="projectList" class="list"></div>
+        </div>
+        <div class="drawer-section">
+          <div class="drawer-heading">History</div>
+          <div id="conversationList" class="list"></div>
+        </div>
+        <div class="drawer-section drawer-nav">
+          <button class="nav-btn" data-view="chat">💬 Chat</button>
+          <button class="nav-btn" data-view="providers">🔑 Providers</button>
+          <button class="nav-btn" data-view="participants">🧩 Participants</button>
+          <button class="nav-btn" data-view="mcp">🔌 MCP tools</button>
+          <button class="nav-btn" data-view="projects">📁 Projects</button>
+          <button class="nav-btn" data-view="about">ℹ️ About &amp; harness</button>
+        </div>
+      </nav>
+
+      <main class="content">
+        <!-- Setup / login -->
+        <section id="view-auth" class="view hidden">
+          <div class="auth-card">
+            <h1 id="authTitle">Set up A0</h1>
+            <p id="authSub" class="muted">Create the owner account. This works only once.</p>
+            <form id="authForm">
+              <label>Username<input id="authUsername" type="text" autocomplete="username" required></label>
+              <label>Password (10+ characters)<input id="authPassword" type="password" autocomplete="current-password" minlength="10" required></label>
+              <label id="setupCodeWrap">Setup code<input id="authSetupCode" type="password" autocomplete="off"></label>
+              <button class="primary-btn" type="submit" id="authSubmit">Continue</button>
+            </form>
+            <p id="authError" class="error hidden"></p>
+          </div>
+        </section>
+
+        <!-- Chat -->
+        <section id="view-chat" class="view hidden">
+          <div class="chat-head">
+            <div class="chat-title" id="chatTitle">New conversation</div>
+            <div class="chat-controls">
+              <button id="contextPolicyBtn" class="chip" title="Which responses enter future context">Context: All</button>
+            </div>
+          </div>
+          <div id="messages" class="messages" aria-live="polite"></div>
+          <div id="compareWrap" class="compare-wrap hidden"></div>
+          <div id="typingBar" class="typing hidden">
+            <span class="spinner"></span>
+            <span id="typingText">Working…</span>
+            <button id="stopBtn" class="chip danger">Stop</button>
+          </div>
+          <div class="composer-wrap">
+            <div id="attachmentChips" class="chips"></div>
+            <form id="composerForm" class="composer">
+              <textarea id="composerInput" rows="1" placeholder="Message A0…" aria-label="Message"></textarea>
+              <div class="composer-actions">
+                <button type="button" id="attachBtn" class="icon-btn" aria-label="Attach files">📎</button>
+                <input id="fileInput" type="file" multiple hidden>
+                <button type="button" id="voiceBtn" class="icon-btn" aria-label="Dictate">🎤</button>
+                <div class="participant-picker" id="participantPicker"></div>
+                <button type="submit" id="sendBtn" class="send-btn">➤</button>
+              </div>
+            </form>
+            <div id="voiceStatus" class="voice-status hidden"></div>
+          </div>
+        </section>
+
+        <!-- Providers -->
+        <section id="view-providers" class="view hidden">
+          <h2>Provider keys</h2>
+          <p class="muted">Keys are stored server-side in OpenBao and never returned. DeepSeek starts selected.</p>
+          <div id="providerCards" class="cards"></div>
+        </section>
+
+        <!-- Participants -->
+        <section id="view-participants" class="view hidden">
+          <h2>Participants</h2>
+          <p class="muted">A participant is a provider + model combination. Several can join one comparison.</p>
+          <button id="seedParticipantsBtn" class="primary-btn">Create defaults for all four providers</button>
+          <div id="participantCards" class="cards"></div>
+          <form id="participantForm" class="inline-form">
+            <input id="pName" placeholder="Name">
+            <select id="pProvider">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="xai">xAI</option>
+              <option value="deepseek">DeepSeek</option>
+            </select>
+            <input id="pModel" placeholder="Model (blank = default)">
+            <button class="primary-btn" type="submit">Add participant</button>
+          </form>
+        </section>
+
+        <!-- MCP -->
+        <section id="view-mcp" class="view hidden">
+          <h2>MCP tools</h2>
+          <p class="muted">Configure remote MCP servers. Private/loopback endpoints are blocked unless explicitly allowed. Local shell execution is not exposed.</p>
+          <form id="mcpForm" class="inline-form">
+            <input id="mcpName" placeholder="Name">
+            <input id="mcpUrl" placeholder="https://server.example/mcp" inputmode="url">
+            <input id="mcpAuth" placeholder="Authorization header (optional)">
+            <label class="checkbox"><input id="mcpPrivate" type="checkbox"> Allow private network</label>
+            <button class="primary-btn" type="submit">Add</button>
+          </form>
+          <div id="mcpCards" class="cards"></div>
+        </section>
+
+        <!-- Projects -->
+        <section id="view-projects" class="view hidden">
+          <h2>Projects</h2>
+          <p class="muted">Conversations attach to projects. Project instructions are shown to models verbatim with an inspectable marker.</p>
+          <form id="projectForm" class="inline-form">
+            <input id="projectName" placeholder="Project name">
+            <button class="primary-btn" type="submit">Create</button>
+          </form>
+          <div id="projectCards" class="cards"></div>
+        </section>
+
+        <!-- About -->
+        <section id="view-about" class="view hidden">
+          <h2>About &amp; harness</h2>
+          <div id="aboutBox" class="card">Loading…</div>
+          <div class="card" style="margin-top:12px">
+            <h3>Change owner password</h3>
+            <form id="passwordForm">
+              <input id="currentPassword" type="password" placeholder="Current password" autocomplete="current-password">
+              <input id="newPassword" type="password" placeholder="New password (10+ characters)" autocomplete="new-password" minlength="10">
+              <button class="primary-btn" type="submit">Change password</button>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div id="toolModal" class="modal hidden">
+    <div class="modal-card">
+      <h3>Tool actions proposed</h3>
+      <p class="muted">Choose which proposed actions to execute. Selection never authorizes effects beyond this run.</p>
+      <div id="toolProposalList"></div>
+      <div class="modal-actions">
+        <button id="toolAllBtn" class="primary-btn">All</button>
+        <button id="toolNoneBtn" class="chip danger">Cancel</button>
+        <button id="toolSelectedBtn" class="primary-btn">Run selected</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

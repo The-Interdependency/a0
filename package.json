@@ -1,0 +1,18 @@
+{
+  "name": "a0",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A0 replacement: authenticated phone-first BYOK chat website with comparison, attachments, voice, projects, OpenBao, and configurable MCP tools.",
+  "type": "module",
+  "workspaces": [
+    "apps/server"
+  ],
+  "scripts": {
+    "start": "npm run start --workspace apps/server",
+    "test": "node tests/acceptance/run.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "UNLICENSED"
+}

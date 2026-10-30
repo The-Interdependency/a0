@@ -1,8 +1,10 @@
-# A0 — replacement specification and preserved history
+# A0 — phone-first BYOK chat website with comparison, files, voice, projects, OpenBao, and MCP tools
 
-**Start with the [Deep Code VM build handoff](docs/deep-code-vm-handoff.md) and [complete specification](docs/a0-replacement-spec.md).** Build A0 on the existing VM and access it through an authenticated, phone-first HTTPS website. The full scope includes four-provider BYOK, comparison, files/images, voice, projects, OpenBao, and configurable MCP tools.
+**Live URL (this VM): https://35.212.252.101.nip.io** — authenticated, responsive HTTPS website; owner sign-in only. See [docs/release.md](docs/release.md) for the deployed identities, [docs/acceptance.md](docs/acceptance.md) for A01–A24 results, and [operations/README.md](operations/README.md) for operator instructions.
 
-Status at this handoff: specification and execution instructions published; replacement application and deployment remain unimplemented/unverified. The latest owner instruction makes the VM the host and the website the required client. Earlier Replit hosting and native Android packaging requirements are superseded.
+The original [specification](docs/a0-replacement-spec.md) and [Deep Code handoff](docs/deep-code-vm-handoff.md) own the product contracts; the implementation is committed in this repository under `apps/`, `packages/`, `operations/`, and `tests/`.
+
+Status: **implemented and deployed on the VM** (2026-10-30). Four-provider BYOK (OpenAI, Anthropic, xAI, DeepSeek; DeepSeek default), persisted chat, full-context switching, extensible comparison, attachments, voice (browser dictation + spoken responses), projects, OpenBao secrets (pinned fork), and configurable MCP tools with execution selection. Remaining operator actions (real-phone observation A17/A18, OpenAI key rotation, Anthropic key, off-VM backup copy, org hostname DNS) are listed in [docs/build-status.md](docs/build-status.md).
 
 The old A0 implementation is deprecated at the owner's request and retained under archive/ for historical inspection and reproducibility. Its retirement does not prohibit building the fresh successor defined by the new specification. This repository remains active.
 

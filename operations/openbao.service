@@ -1,0 +1,29 @@
+[Unit]
+Description=OpenBao secrets vault for A0 (pinned The-Interdependency fork)
+After=network-online.target postgresql@16-main.service
+Wants=network-online.target
+Requires=postgresql@16-main.service
+
+[Service]
+Type=simple
+User=openbao
+Group=openbao
+WorkingDirectory=/opt/openbao
+ExecStart=/opt/openbao/openbao server -config=/etc/openbao/config.hcl
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# The static seal key is delivered by file reference in config.hcl; the file is
+# root:openbao 0640 and never appears in a command line or environment.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/openbao
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=027
+
+[Install]
+WantedBy=multi-user.target
