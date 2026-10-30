@@ -13,7 +13,7 @@ Released: 2026-10-30 on VM `a0-prod-1.us-west1-a.c.cs-poc-ab8uzg6ej7vv4vwtyywhbw
 | --- | --- |
 | A0 source commit | `3eef4b088aa0c4e826f657f74cc6cfe0738062f3` (`build: implement A0 VM website…`) |
 | Docs/acceptance commit | `1885b975c83f5a74c36afb0294121a5e26ca48ea` |
-| Deployed HEAD on VM | `5430453a665efba92dfd24d9b1e5af650ad964f7` (at `/opt/a0`, main) |
+| Deployed HEAD on VM | `2f2763f8620be481b7c407cf08502193f8dd1a46` (at `/opt/a0`, main) |
 | Harness | `a0-harness/1.0.0` |
 | Node runtime | v18.19.1 (`/usr/bin/node`) with npm lockfile committed |
 | OpenBao fork | The-Interdependency/openbao @ `4a8f475e88e4fa0c76ae1645a22faffe5596d361`; built binary reports `OpenBao v2.0.0-HEAD` at `/opt/openbao/openbao` |
