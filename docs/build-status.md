@@ -59,3 +59,18 @@ Last updated: 2026-10-30 (VM local time)
 - Real-phone browser/microphone observation (A17/A18).
 - Off-VM backup/key copy not yet performed by the operator.
 - Org hostname (a0.interdependentway.org) requires DNS A record to 35.212.252.101 plus Caddyfile hostname addition if a vanity URL is wanted.
+
+## Issue #119 reactivation — in-progress record (2026-10-30)
+
+Scope amendment FR0–FR4 accepted. **FR0 and FR1 are implemented, verified, and live on this VM.** FR2–FR4 remain pending producer integrations (PTCNA/Forge/temp modules/AHBG) and are recorded honestly below; no scaffold is promoted as a pass.
+
+| Area | Status | Evidence |
+| --- | --- | --- |
+| FR0 OpenAI calls | DONE (text path) | Current GPT-6 catalogue in providers.js; distinct `/v1/responses` streaming transport; complete output-item replay + `call_id` tool continuation; cache/reasoning usage columns; in-place participant model upgrade (UI + API); Settings Test uses the same adapter and exact selected model. `tests/fr0-fr1/run.js` all PASS; live `gpt-6-luna` text smoke PASS on the deployed site. |
+| FR1 context editor | DONE (backend + phone editor) | Structured source-attributed blocks (harness/project/history/tool), immutable revisions, single preview/dispatch assembler, conflict 409, forecast-labeled cache estimate, editor modal in the website. RC01/RC02/RC05 PASS; RC03/RC04 remain operator/live-observation. |
+| FR2 agents/tools + PTCNA/Forge | NOT RUN | Requires the retained PTCNA cores (`c5fa9a59…`), Forge eight-template catalogue, and excluded-component isolation (Jury/Bandit/Meta-13/ZFAE). No scaffold shipped. |
+| FR3 temporary modules | NOT RUN | Requires FR2's agent/module lifecycle. Archived form/schema is reference-only; no working hot-swap loader is claimed. |
+| FR4 AHBG | NOT RUN | Requires Stack `ahbg/` runtime + successor adapter + UCNS geometry pin reconciliation. |
+| RD/RP/RU/RA/RM/RG/RX gates | NOT RUN | Blocked on FR2–FR4; will be run when those features exist. |
+
+A01–A24 ledger after FR0/FR1: unchanged at **21 PASS / 1 FAIL (A04) / 2 BLOCKED / 0 NOT RUN** (see docs/acceptance.md). RO01/RO02 PASS; RO03 partial; RO04 partial (text smoke only); RC01/RC02/RC05 PASS; RC03/RC04 NOT RUN.

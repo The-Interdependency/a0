@@ -424,6 +424,45 @@ function renderParticipantCards() {
     sub.textContent = `${p.provider} · ${p.model}`;
     const row = document.createElement('div');
     row.className = 'row';
+    // FR0: in-place model edit/upgrade for OpenAI participants.
+    const models = p.provider === 'openai' ? state.providers?.openai?.models : null;
+    if (models?.length) {
+      const sel = document.createElement('select');
+      sel.className = 'select';
+      for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = `${m.id} · ${m.label}`;
+        opt.selected = m.id === p.model;
+        sel.appendChild(opt);
+      }
+      const upgrade = document.createElement('button');
+      upgrade.type = 'button';
+      upgrade.className = 'primary-btn';
+      upgrade.textContent = 'Upgrade model';
+      upgrade.onclick = async () => {
+        try {
+          await api.request('POST', `/api/participants/${p.id}/upgrade-model`, { model: sel.value });
+          toast(`Upgraded ${p.name} to ${sel.value} (identity/history preserved).`);
+          await loadParticipants();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      };
+      const test = document.createElement('button');
+      test.type = 'button';
+      test.className = 'chip';
+      test.textContent = 'Test this model';
+      test.onclick = async () => {
+        try {
+          const res = await api.request('POST', `/api/providers/${p.provider}/test`, { model: sel.value });
+          toast(`${sel.value} test: ${res.ok ? 'PASS' : 'FAIL'} · ${res.message || res.finishReason || ''}`);
+        } catch (err) {
+          toast(`${sel.value} test failed: ${err.message}`, true);
+        }
+      };
+      row.append(sel, upgrade, test);
+    }
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'chip danger';
@@ -1229,3 +1268,109 @@ boot().then(() => {
   bindForms();
   initVoice();
 });
+
+// ---------- FR1 context editor ----------
+let contextEditorState = { conversationId: null, revision: 0, blocks: [], editing: false };
+
+async function openContextEditor() {
+  if (!state.currentConversationId) {
+    toast('Create or open a conversation first.');
+    return;
+  }
+  const data = await api.get(`/api/conversations/${state.currentConversationId}/context`);
+  contextEditorState = {
+    conversationId: state.currentConversationId,
+    revision: data.revision || 0,
+    blocks: data.blocks || [],
+    editing: true,
+  };
+  renderContextEditor();
+  $('#contextEditorModal').classList.remove('hidden');
+}
+
+function renderContextEditor() {
+  const badge = $('#contextRevisionBadge');
+  badge.textContent = contextEditorState.revision ? `revision ${contextEditorState.revision}` : 'working draft';
+  const list = $('#contextBlockList');
+  list.innerHTML = '';
+  for (const [idx, block] of contextEditorState.blocks.entries()) {
+    const item = document.createElement('div');
+    item.className = 'context-block';
+    const head = document.createElement('div');
+    head.className = 'row';
+    const label = document.createElement('strong');
+    label.textContent = `${idx + 1}. ${block.label} (${block.source || block.type})`;
+    head.appendChild(label);
+    if (!block.editable) {
+      const ro = document.createElement('span');
+      ro.className = 'muted';
+      ro.textContent = `read-only — ${block.readonlyReason || 'fixed'}`;
+      head.appendChild(ro);
+    }
+    item.appendChild(head);
+    if (block.editable) {
+      const textarea = document.createElement('textarea');
+      textarea.className = 'context-textarea';
+      textarea.value = block.content || '';
+      textarea.dataset.blockId = block.id;
+      item.appendChild(textarea);
+      const inc = document.createElement('label');
+      inc.className = 'checkbox';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = block.included !== false;
+      cb.dataset.blockId = block.id;
+      cb.dataset.field = 'included';
+      inc.append(cb, document.createTextNode(' include in next context'));
+      item.appendChild(inc);
+    } else {
+      const preview = document.createElement('pre');
+      preview.className = 'context-preview';
+      preview.textContent = String(block.content || '').slice(0, 400) + (String(block.content || '').length > 400 ? '…' : '');
+      item.appendChild(preview);
+      if (block.type === 'history') {
+        const inc = document.createElement('label');
+        inc.className = 'checkbox';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = block.included !== false;
+        cb.dataset.blockId = block.id;
+        cb.dataset.field = 'included';
+        inc.append(cb, document.createTextNode(' include this message'));
+        item.appendChild(inc);
+      }
+    }
+    list.appendChild(item);
+  }
+}
+
+$('#contextEditorBtn').onclick = () => openContextEditor().catch((e) => toast(e.message, true));
+$('#contextEditorCancelBtn').onclick = () => {
+  contextEditorState.editing = false;
+  $('#contextEditorModal').classList.add('hidden');
+};
+$('#contextEditorSaveBtn').onclick = async () => {
+  if (!contextEditorState.editing) return;
+  const blocks = contextEditorState.blocks.map((b) => {
+    const textarea = document.querySelector(`#contextBlockList textarea[data-block-id="${CSS.escape(b.id)}"]`);
+    const checkbox = document.querySelector(`#contextBlockList input[data-field="included"][data-block-id="${CSS.escape(b.id)}"]`);
+    return {
+      id: b.id,
+      content: textarea ? textarea.value : undefined,
+      included: checkbox ? checkbox.checked : b.included,
+    };
+  });
+  try {
+    const data = await api.request('POST', `/api/conversations/${contextEditorState.conversationId}/context-revisions`, {
+      blocks,
+      note: 'website context editor',
+      expectedRevision: contextEditorState.revision || null,
+    });
+    contextEditorState.revision = data.revision;
+    contextEditorState.blocks = data.blocks;
+    renderContextEditor();
+    toast(`Context revision ${data.revision} saved. Cache estimate: reusable prefix ≈ ${data.cacheEstimate?.estimatedReusablePrefixChars ?? 0} chars (forecast, not observed).`);
+  } catch (err) {
+    toast(err.message, true);
+  }
+};

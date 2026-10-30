@@ -87,11 +87,11 @@ export async function insertRun({ conversationId, userId, mode, participantIds }
     [conversationId],
   );
   const round = roundRes.rows[0].next;
-  const { id: snapshotId, snapshot } = await freezeSnapshot(conversationId, round);
+  const { id: snapshotId, snapshot, revisionId } = await freezeSnapshot(conversationId, userId, round);
   const run = await query(
-    `INSERT INTO runs (conversation_id, user_id, round, harness_version, snapshot_id, mode)
-     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [conversationId, userId, round, snapshot.harnessVersion, snapshotId, mode],
+    `INSERT INTO runs (conversation_id, user_id, round, harness_version, snapshot_id, mode, context_revision_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [conversationId, userId, round, snapshot.harnessVersion, snapshotId, mode, revisionId],
   );
   for (const pid of participantIds) {
     await query(
@@ -99,7 +99,7 @@ export async function insertRun({ conversationId, userId, mode, participantIds }
       [run.rows[0].id, pid],
     );
   }
-  return { run: run.rows[0], snapshot, round };
+  return { run: run.rows[0], snapshot, round, revisionId };
 }
 
 export async function dispatchParticipant({
@@ -110,6 +110,7 @@ export async function dispatchParticipant({
   vault,
   signal,
   onChunk,
+  continuation = null,
 }) {
   const provider = participant.provider;
   const model = participant.model;
@@ -127,6 +128,8 @@ export async function dispatchParticipant({
   }
 
   const tools = buildToolsForConnections(connections);
+  const settings = { ...(participant.settings || {}) };
+  if (continuation) settings.continuation = continuation;
   const result = await streamProvider({
     provider,
     model,
@@ -137,8 +140,16 @@ export async function dispatchParticipant({
     onChunk: (chunk) => onChunk({ participantId: participant.id, ...chunk }),
     timeoutMs: 120000,
     baseUrl: participant.settings?.baseUrl || undefined,
+    settings,
   });
-  return { text: result.text, toolCalls: result.toolCalls || [], usage: usageFromProvider(result.usage), finishReason: result.finishReason };
+  return {
+    text: result.text,
+    toolCalls: result.toolCalls || [],
+    usage: usageFromProvider(result.usage),
+    finishReason: result.finishReason,
+    outputItems: result.outputItems || [],
+    incompleteReason: result.incompleteReason || null,
+  };
 }
 
 export async function executeCoordinatedTool({ connection, authHeader, toolName, args, signal }) {
@@ -163,9 +174,11 @@ export async function updateMessageContent(messageId, content, status) {
 export async function recordUsage({ runId, participantId, provider, model, usage }) {
   if (!usage) return;
   await query(
-    `INSERT INTO usage_observations (run_id, participant_id, provider, model, prompt_tokens, completion_tokens, total_tokens)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [runId, participantId, provider, model, usage.prompt_tokens, usage.completion_tokens, usage.total_tokens],
+    `INSERT INTO usage_observations (run_id, participant_id, provider, model, prompt_tokens, completion_tokens, total_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, raw_usage)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+    [runId, participantId, provider, model, usage.prompt_tokens, usage.completion_tokens, usage.total_tokens,
+     usage.cache_read_tokens ?? null, usage.cache_write_tokens ?? null, usage.reasoning_tokens ?? null,
+     JSON.stringify(usage.raw || null)],
   );
 }
 

@@ -1,7 +1,10 @@
 // Versioned standard harness context. Assembly order and identity are
 // inspectable; repository agent instructions are NOT runtime system prompts.
+// FR1: the frozen snapshot is assembled from immutable context revisions via
+// contexts.js, so preview and dispatch share one canonical assembler.
 import { config } from './config.js';
 import { query } from './db.js';
+import { getOrCreateRevision, assembleBlocks, buildBlocks, latestRevision, createRevision } from './contexts.js';
 
 export const HARNESS_VERSION = config.harness.version;
 
@@ -75,32 +78,25 @@ export async function loadIntendedContext(conversationId) {
 
 // Freeze one semantic context snapshot per comparison round. All participants
 // in the round receive this exact snapshot; adapters may only encode it.
-// Attachment bytes are referenced by storage key here; the run coordinator
-// hydrates them from durable media before dispatch.
-export async function freezeSnapshot(conversationId, round, extraSystem = '') {
-  const ctx = await loadIntendedContext(conversationId);
+// FR1: the snapshot is assembled from the current immutable context revision.
+export async function freezeSnapshot(conversationId, userId, round, extraSystem = '') {
+  // A run freezes the CURRENT intended context. If messages/project changed
+  // since the latest revision, create a new immutable revision; otherwise
+  // reuse the latest one (edits only affect the next request).
+  const fresh = await buildBlocks(conversationId, userId);
+  const latest = await latestRevision(conversationId, userId);
+  let revision = latest;
+  if (!latest || JSON.stringify(latest.blocks) !== JSON.stringify(fresh.blocks)) {
+    revision = await createRevision(conversationId, userId, { blocks: fresh.blocks, note: `run round ${round}` });
+  }
+  const assembled = await assembleBlocks(revision.blocks || [], {});
   const snapshot = {
     harnessVersion: HARNESS_VERSION,
-    system: systemPromptFor({ projectInstructions: ctx.projectInstructions }) + (extraSystem ? `\n\n${extraSystem}` : ''),
-    messages: ctx.messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      contentType: m.content_type,
-      status: m.status,
-      provider: m.provider,
-      model: m.model,
-      participantId: m.participant_id,
-      round: m.round,
-      meta: m.meta,
-      attachments: m.attachments.map((a) => ({
-        id: a.id,
-        kind: a.kind,
-        mime: a.mime,
-        filename: a.filename,
-        storageKey: a.storage_key,
-      })),
-    })),
+    contextRevisionId: revision.id,
+    contextRevision: revision.revision,
+    system: assembled.system + (extraSystem ? `\n\n${extraSystem}` : ''),
+    messages: assembled.messages,
+    blocks: revision.blocks || [],
     frozenAt: new Date().toISOString(),
   };
   const { rows } = await query(
@@ -110,7 +106,7 @@ export async function freezeSnapshot(conversationId, round, extraSystem = '') {
      RETURNING id`,
     [conversationId, round, HARNESS_VERSION, JSON.stringify(snapshot)],
   );
-  return { id: rows[0].id, snapshot };
+  return { id: rows[0].id, snapshot, revisionId: revision.id };
 }
 
 export function nextRoundFor(conversationId) {

@@ -262,16 +262,16 @@ async function main() {
   const provider = startFakeProvider();
   const mcp = startFakeMcp();
   await sleep(250);
-  // Ensure the openai-compatible fake participants have a key to resolve,
-  // without overwriting a real openai key.
-  const openaiStatus = await apiRequest(cookie, csrf, 'GET', '/api/providers/openai/status');
-  if (!openaiStatus.data.hasKey) {
-    await apiRequest(cookie, csrf, 'PUT', '/api/providers/openai/key', { apiKey: 'test-inert-key-123' });
+  // FR0: OpenAI now uses the Responses transport, so the fake chat participants
+  // use the openai-compatible xAI path (Chat Completions) with a local baseUrl.
+  const xaiStatus = await apiRequest(cookie, csrf, 'GET', '/api/providers/xai/status');
+  if (!xaiStatus.data.hasKey) {
+    await apiRequest(cookie, csrf, 'PUT', '/api/providers/xai/key', { apiKey: 'test-inert-key-123' });
   }
   const mkParticipant = async (name, model, extra = {}) => {
     const res = await apiRequest(cookie, csrf, 'POST', '/api/participants', {
       name,
-      provider: 'openai',
+      provider: 'xai',
       model,
       settings: { baseUrl: `http://127.0.0.1:${FAKE_PROVIDER_PORT}/v1`, ...extra },
     });

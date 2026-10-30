@@ -59,3 +59,21 @@ Method: automated runner over public HTTPS as a temporary acceptance owner (`a0t
 
 - A17/A18 real-phone observation and Anthropic key remain operator actions.
 - Off-VM copy of `/srv/a0/backups/*.gpg` and `/etc/a0/backup.key` remains to be performed by the operator.
+
+## Issue #119 FR0/FR1 added gates (2026-10-30)
+
+Runner: `tests/fr0-fr1/run.js` (offline Responses fixtures) + `/tmp/fr1-check.mjs` (production checks as temporary owner) + live OpenAI Responses smoke.
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| RO01 | PASS | seed-defaults upgraded the saved OpenAI participant to `gpt-6-luna` preserving identity; provider list exposes `gpt-6-luna`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-astra`; Settings Test ran against the selected model. |
+| RO02 | PASS | Offline fixtures: typed text+image input preserved, fragmented function-call deltas accumulated with `call_id` correlation, incomplete/failed/EOF outcomes distinguished, Stop aborts the body read, reasoning.effort validation rejects Sol with `none`. |
+| RO03 | PASS (partial) | Chat and Responses usage shapes normalize to input/output/total + cache_read/cache_write/reasoning tokens with raw preserved; live run recorded `prompt_tokens=117, completion_tokens=5, cache_read_tokens=0, reasoning_tokens=0`. Continuation-state replay across edits/forks is enforced by `store:false` + per-run revision binding; full replay gate remains on RO04 live tool smoke. |
+| RO04 | PARTIAL | Live text smoke via the deployed website: OpenAI participant `gpt-6-luna` returned `ok` with usage. Image and authorized-tool-to-answer smoke checks need an image-enabled, MCP-attached live run and remain operator actions. |
+| RC01 | PASS | `/api/conversations/:id/context` preview and run assembly share `contexts.js`; project edit reached both preview and frozen revision; latest revision persists across reads. |
+| RC02 | PASS | Edited project block without history messages did not corrupt segmentation; saved revision is immutable; cache estimate labeled a forecast with earliest changed block. |
+| RC03 | NOT RUN (partial) | Deterministic serialization and actual provider cache observations require live multi-round runs; absent usage remains unknown by construction. |
+| RC04 | NOT RUN | Editing during a stream requires the real-phone/UI observation; frozen revisions are used per run so next run sees the new revision. |
+| RC05 | PASS | Stale `expectedRevision` returned 409 with the current revision; unauthorized callers are blocked by owner checks (A01). |
+
+A01–A24 rerun after FR0/FR1: unchanged at **21 PASS, 1 FAIL (A04), 2 BLOCKED (A17/A18), 0 NOT RUN** (RUN_OPS=1 run).

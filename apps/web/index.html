@@ -64,6 +64,7 @@
             <div class="chat-title" id="chatTitle">New conversation</div>
             <select id="chatProjectSelect" class="chip" aria-label="Project for this conversation"></select>
             <button id="contextPolicyBtn" class="chip" title="Which responses enter future context">Context: All</button>
+            <button id="contextEditorBtn" class="chip" title="Inspect and edit the ordered context the app intends to send">Edit context</button>
           </div>
           <div id="messages" class="messages" aria-live="polite"></div>
           <div id="compareWrap" class="compare-wrap hidden"></div>
@@ -183,6 +184,18 @@
         <button id="contextSaveBtn" class="primary-btn">Save selection</button>
         <button id="contextAllBtn" class="chip">Include all</button>
         <button id="contextCancelBtn" class="chip">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="contextEditorModal" class="modal hidden">
+    <div class="modal-card wide">
+      <h3>Context editor <span id="contextRevisionBadge" class="muted"></span></h3>
+      <p class="muted">Ordered, source-attributed blocks the app intends to send. Fixed sections are read-only. Edits create an immutable revision; the next run uses the new revision.</p>
+      <div id="contextBlockList" class="scroll"></div>
+      <div class="modal-actions">
+        <button id="contextEditorSaveBtn" class="primary-btn">Save revision</button>
+        <button id="contextEditorCancelBtn" class="chip">Cancel</button>
       </div>
     </div>
   </div>

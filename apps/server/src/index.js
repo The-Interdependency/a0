@@ -28,8 +28,19 @@ import {
   defaultCapabilitiesFor,
   providerInfo,
   resolveApiKey,
+  modelInfo,
+  capabilitiesForModel,
+  streamProvider,
 } from './providers.js';
 import { HARNESS_VERSION, systemPromptFor } from './harness.js';
+import {
+  buildBlocks,
+  latestRevision,
+  createRevision,
+  assembleBlocks,
+  estimateCachePrefix,
+  describeBlockType,
+} from './contexts.js';
 import {
   insertRun,
   dispatchParticipant,
@@ -350,19 +361,54 @@ export async function start() {
   }));
 
   app.post('/api/participants/seed-defaults', asyncRoute(async (req, res) => {
-    const existing = await query('SELECT provider FROM participants WHERE user_id = $1', [req.user.id]);
-    const have = new Set(existing.rows.map((r) => r.provider));
+    const existing = await query('SELECT id, provider FROM participants WHERE user_id = $1', [req.user.id]);
+    const have = new Map(existing.rows.map((r) => [r.provider, r]));
     const created = [];
+    const updated = [];
     for (const [provider, def] of Object.entries(PROVIDER_DEFS)) {
-      if (have.has(provider)) continue;
-      const { rows } = await query(
-        `INSERT INTO participants (user_id, name, provider, model, settings, capabilities)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-        [req.user.id, def.label, provider, defaultModelFor(provider), JSON.stringify({}), JSON.stringify(defaultCapabilitiesFor(provider))],
-      );
-      created.push(rows[0]);
+      if (!have.has(provider)) {
+        const { rows } = await query(
+          `INSERT INTO participants (user_id, name, provider, model, settings, capabilities)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+          [req.user.id, def.label, provider, defaultModelFor(provider), JSON.stringify({}), JSON.stringify(defaultCapabilitiesFor(provider))],
+        );
+        created.push(rows[0]);
+      } else if (provider === 'openai') {
+        // FR0: a changed default must update the saved OpenAI participant
+        // without losing its identity/history.
+        const { rows } = await query(
+          `UPDATE participants SET model = $3, capabilities = $4::jsonb, updated_at = now()
+            WHERE id = $1 AND user_id = $2 RETURNING *`,
+          [have.get(provider).id, req.user.id, defaultModelFor(provider), JSON.stringify(defaultCapabilitiesFor(provider))],
+        );
+        updated.push(rows[0]);
+      }
     }
-    res.status(201).json({ created, selectedByDefault: 'deepseek' });
+    res.status(201).json({ created, updated, selectedByDefault: 'deepseek' });
+  }));
+
+  // FR0: upgrade an existing participant's OpenAI model in place, preserving
+  // identity/history. Capabilities follow the selected model catalogue entry.
+  app.post('/api/participants/:id/upgrade-model', asyncRoute(async (req, res) => {
+    const { model } = req.body || {};
+    const existing = await query('SELECT * FROM participants WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!existing.rows.length) return res.status(404).json({ error: 'not_found', message: 'Participant not found.' });
+    const participant = existing.rows[0];
+    const provider = participant.provider;
+    if (provider !== 'openai') {
+      return res.status(400).json({ error: 'validation', message: 'In-place model upgrade currently applies to OpenAI participants.' });
+    }
+    const info = modelInfo(provider, model);
+    if (!info) {
+      return res.status(400).json({ error: 'validation', message: `Unknown ${provider} model: ${model}` });
+    }
+    const capabilities = capabilitiesForModel(provider, model);
+    const { rows } = await query(
+      `UPDATE participants SET model = $3, capabilities = $4::jsonb, updated_at = now()
+        WHERE id = $1 AND user_id = $2 RETURNING *`,
+      [req.params.id, req.user.id, model, JSON.stringify(capabilities)],
+    );
+    res.json({ participant: rows[0] });
   }));
 
   // --- Provider keys (BYOK) -----------------------------------------------------
@@ -383,6 +429,7 @@ export async function start() {
         capabilities: def.defaultCapabilities,
         selectedByDefault: Boolean(def.selectedByDefault),
         hasKey,
+        models: def.models ? Object.entries(def.models).map(([id, info]) => ({ id, ...info })) : null,
       };
     }
     res.json({ providers: out, note: 'Keys are write-only/masked in normal settings and resolved server-side through OpenBao.' });
@@ -417,14 +464,43 @@ export async function start() {
     res.json({ provider: req.params.provider, hasKey: Boolean(secret?.api_key), vaultPath: def.secretPath });
   }));
 
-  // Minimal real request used to diagnose credential vs adapter failures (F13).
-  // Returns the provider's actual HTTP status/message with the key value redacted.
+  // Minimal real request used to diagnose credential vs adapter failures.
+  // OpenAI uses the same Responses adapter as inference (FR0); optional `model`
+  // lets the website test the exact selected model. Key value stays redacted.
   app.post('/api/providers/:provider/test', asyncRoute(async (req, res) => {
     const def = providerInfo(req.params.provider);
     const apiKey = await resolveApiKey(vault, req.params.provider);
-    const model = defaultModelFor(req.params.provider);
+    const model = (req.body?.model) || defaultModelFor(req.params.provider);
     try {
-      if (def.kind === 'anthropic') {
+      if (def.kind === 'openai-responses') {
+        const info = modelInfo(req.params.provider, model);
+        if (!info) {
+          return res.status(400).json({ provider: req.params.provider, ok: false, status: 0, message: `Unknown OpenAI model: ${model}` });
+        }
+        const snapshot = { system: 'A0 settings test.', messages: [{ role: 'user', content: 'ping', attachments: [] }] };
+        let chunks = 0;
+        const result = await streamProvider({
+          provider: req.params.provider,
+          model,
+          apiKey,
+          snapshot,
+          tools: [],
+          signal: new AbortController().signal,
+          onChunk: () => { chunks += 1; },
+          timeoutMs: 20000,
+          settings: { maxOutputTokens: 256 },
+        });
+        res.json({
+          provider: req.params.provider,
+          ok: result.finishReason === 'stop',
+          status: 200,
+          model,
+          chunks,
+          finishReason: result.finishReason,
+          incompleteReason: result.incompleteReason || null,
+          message: result.text.slice(0, 120),
+        });
+      } else if (def.kind === 'anthropic') {
         const r = await fetch(`${def.defaultBaseUrl}/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...def.authHeader(apiKey) },
@@ -432,7 +508,7 @@ export async function start() {
           signal: AbortSignal.timeout(20000),
         });
         const text = await r.text().catch(() => '');
-        res.json({ provider: req.params.provider, ok: r.ok, status: r.status, message: text.slice(0, 300) });
+        res.json({ provider: req.params.provider, ok: r.ok, status: r.status, model, message: text.slice(0, 300) });
       } else {
         const base = def.defaultBaseUrl.replace(/\/$/, '');
         const r = await fetch(`${base}/chat/completions`, {
@@ -442,10 +518,11 @@ export async function start() {
           signal: AbortSignal.timeout(20000),
         });
         const text = await r.text().catch(() => '');
-        res.json({ provider: req.params.provider, ok: r.ok, status: r.status, message: text.slice(0, 300) });
+        res.json({ provider: req.params.provider, ok: r.ok, status: r.status, model, message: text.slice(0, 300) });
       }
     } catch (err) {
-      res.status(502).json({ provider: req.params.provider, ok: false, status: 0, message: `Adapter transport error: ${err.message}` });
+      const status = err.status || 502;
+      res.status(status).json({ provider: req.params.provider, ok: false, status: status === 502 ? 0 : status, model, message: `${err.code || 'adapter_error'}: ${err.message}` });
     }
   }));
 
@@ -563,6 +640,79 @@ export async function start() {
     res.json({ limits: config.defaults, voice: { mode: 'dictation_and_spoken_responses', engine: 'browser-web-speech-api' } });
   }));
 
+  // --- FR1 context revisions -------------------------------------------------------
+  // The editor preview and the run assembler share contexts.js, so a preview
+  // reflects exactly what the next run will dispatch (RC01).
+  app.get('/api/conversations/:id/context', asyncRoute(async (req, res) => {
+    const conv = await query('SELECT id FROM conversations WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!conv.rows.length) return res.status(404).json({ error: 'not_found', message: 'Conversation not found.' });
+    const latest = await latestRevision(req.params.id, req.user.id);
+    const current = latest || { blocks: (await buildBlocks(req.params.id, req.user.id)).blocks, revision: 0, id: null, note: 'working draft' };
+    res.json({
+      conversationId: req.params.id,
+      revision: current.revision,
+      revisionId: current.id,
+      note: current.note,
+      blocks: current.blocks,
+      preview: await assembleBlocks(current.blocks || [], {}),
+    });
+  }));
+
+  app.get('/api/context-revisions/:id', asyncRoute(async (req, res) => {
+    const rev = await query('SELECT * FROM context_revisions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!rev.rows.length) return res.status(404).json({ error: 'not_found', message: 'Context revision not found.' });
+    res.json({ revision: rev.rows[0] });
+  }));
+
+  app.post('/api/conversations/:id/context-revisions', asyncRoute(async (req, res) => {
+    const { blocks, note = '', expectedRevision } = req.body || {};
+    if (!Array.isArray(blocks)) {
+      return res.status(400).json({ error: 'validation', message: 'Provide a blocks array.' });
+    }
+    const conv = await query('SELECT id FROM conversations WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!conv.rows.length) return res.status(404).json({ error: 'not_found', message: 'Conversation not found.' });
+    // Validate against the canonical block identity set for this conversation.
+    const canonical = await buildBlocks(req.params.id, req.user.id);
+    const allowed = new Map(canonical.blocks.map((b) => [b.id, b]));
+    const seen = new Set();
+    for (const block of blocks) {
+      if (!allowed.has(block.id)) {
+        return res.status(400).json({ error: 'validation', message: `Unknown or unauthorized block: ${block.id}` });
+      }
+      if (seen.has(block.id)) {
+        return res.status(400).json({ error: 'validation', message: `Duplicate block: ${block.id}` });
+      }
+      seen.add(block.id);
+      const original = allowed.get(block.id);
+      if (!original.editable && block.content !== undefined) {
+        return res.status(400).json({ error: 'validation', message: `${block.id} is read-only (${original.readonlyReason || describeBlockType(original.type).readonlyReason}).` });
+      }
+    }
+    // Rebase onto canonical order; edits only to editable fields.
+    const ordered = canonical.blocks.map((original) => {
+      const incoming = blocks.find((b) => b.id === original.id);
+      if (!incoming) return original;
+      return {
+        ...original,
+        included: incoming.included !== undefined ? Boolean(incoming.included) : original.included,
+        content: original.editable ? (incoming.content ?? original.content) : original.content,
+      };
+    });
+    const revision = await createRevision(req.params.id, req.user.id, { blocks: ordered, note, expectedRevision });
+    const changedIndex = ordered.findIndex((b, i) => {
+      const prev = canonical.blocks[i];
+      return !prev || prev.included !== b.included || (prev.editable && prev.content !== b.content);
+    });
+    res.status(201).json({
+      revision: revision.revision,
+      revisionId: revision.id,
+      blocks: revision.blocks,
+      preview: await assembleBlocks(revision.blocks, {}),
+      cacheEstimate: estimateCachePrefix(ordered, changedIndex < 0 ? 0 : changedIndex),
+      note,
+    });
+  }));
+
   // Nonsecret acceptance canary for vault persistence checks (A12). Kept
   // separate from provider keys so acceptance never touches real credentials.
   app.post('/api/acceptance-canary', asyncRoute(async (req, res) => {
@@ -663,7 +813,7 @@ export async function start() {
       res.end();
     };
 
-    const dispatchOne = async (participant) => {
+    const dispatchOne = async (participant, continuation = null) => {
       const messageRow = await createAssistantMessage({
         conversationId,
         participant,
@@ -681,6 +831,7 @@ export async function start() {
           connections,
           vault,
           signal: controller.signal,
+          continuation,
           onChunk: ({ text }) => {
             state.content += text;
             send('chunk', { participantId: participant.id, messageId: state.messageId, text });
@@ -713,38 +864,13 @@ export async function start() {
     try {
       const results = await Promise.all(participants.rows.map((p) => dispatchOne(p)));
 
-      // Map any returned tool calls to configured MCP connections.
-      const proposals = [];
-      for (const r of results) {
-        if (!r.result?.toolCalls?.length) continue;
-        for (const tc of r.result.toolCalls) {
-          const target = mapToolNameToConnection(tc.name, connections);
-          if (!target) continue;
-          let args = {};
-          try {
-            args = JSON.parse(tc.arguments || '{}');
-          } catch {
-            args = { _raw: tc.arguments };
-          }
-          const id = crypto.randomUUID();
-          proposals.push({
-            id,
-            providerToolCallId: tc.id,
-            participantId: r.participant.id,
-            toolName: target.toolName,
-            connectionId: target.conn.id,
-            arguments: args,
-            rawName: tc.name,
-          });
-          await query(
-            `INSERT INTO tool_actions (run_id, conversation_id, requester_participant_id, mcp_connection_id, tool_name, arguments, status, idempotency_key)
-             VALUES ($1,$2,$3,$4,$5,$6::jsonb,'proposed',$7)`,
-            [run.id, conversationId, r.participant.id, target.conn.id, target.toolName, JSON.stringify(args), crypto.randomUUID()],
-          );
-        }
-      }
+      // FR0 actual tool loop: authorize and execute proposals, then return
+      // function_call_output items to OpenAI Responses participants until the
+      // model answers or the step/stop budget is exhausted.
+      const MAX_TOOL_STEPS = parseInt(process.env.A0_MAX_TOOL_STEPS || '6', 10);
 
-      if (proposals.length && !controller.signal.aborted) {
+      const authorizeAndExecute = async (proposals) => {
+        if (!proposals.length || controller.signal.aborted) return { executed: [], cancelled: true };
         send('tool_proposals', {
           runId: run.id,
           proposals: proposals.map((p) => ({ id: p.id, participantId: p.participantId, toolName: p.toolName, connectionId: p.connectionId, arguments: p.arguments })),
@@ -755,30 +881,106 @@ export async function start() {
         if (selection.cancel || !selection.actionIds?.length) {
           await query(`UPDATE tool_actions SET status = 'cancelled', updated_at = now() WHERE run_id = $1 AND status = 'proposed'`, [run.id]);
           send('tools_cancelled', { runId: run.id });
-        } else {
-          const chosen = proposals.filter((p) => selection.actionIds.includes(p.id));
-          const coordinated = coordinateToolSelections(chosen, { actionIds: selection.actionIds });
-          for (const item of coordinated) {
-            const conn = (await query('SELECT * FROM mcp_connections WHERE id = $1 AND user_id = $2', [item.connectionId, req.user.id])).rows[0];
-            if (!conn) {
-              await query(`UPDATE tool_actions SET status = 'failed', error = 'MCP connection not found.', updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds]);
-              send('tool_result', { actionIds: item.actionIds, toolName: item.toolName, status: 'failed', error: 'MCP connection not found.' });
-              continue;
-            }
-            const secret = conn.vault_ref ? await vault.readSecret(conn.vault_ref).catch(() => null) : null;
-            const authHeader = secret?.auth_header || '';
-            try {
-              await query(`UPDATE tool_actions SET status = 'executing', updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds]);
-              const result = await executeCoordinatedTool({ connection: conn, authHeader, toolName: item.toolName, args: item.arguments, signal: controller.signal });
-              await appendToolResult(conversationId, round, run.id, item, result);
-              await query(`UPDATE tool_actions SET status = 'complete', result = $2::jsonb, updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds, JSON.stringify({ text: result.text?.slice(0, 5000), isError: Boolean(result.isError) })]);
-              send('tool_result', { actionIds: item.actionIds, toolName: item.toolName, status: result.isError ? 'failed' : 'complete', text: result.text?.slice(0, 5000) });
-            } catch (err) {
-              await query(`UPDATE tool_actions SET status = 'failed', error = $2, updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds, err.message.slice(0, 500)]);
-              send('tool_result', { actionIds: item.actionIds, toolName: item.toolName, status: 'failed', error: err.message });
-            }
+          return { executed: [], cancelled: true };
+        }
+        const chosen = proposals.filter((p) => selection.actionIds.includes(p.id));
+        const coordinated = coordinateToolSelections(chosen, { actionIds: selection.actionIds });
+        const executed = [];
+        for (const item of coordinated) {
+          const conn = (await query('SELECT * FROM mcp_connections WHERE id = $1 AND user_id = $2', [item.connectionId, req.user.id])).rows[0];
+          if (!conn) {
+            await query(`UPDATE tool_actions SET status = 'failed', error = 'MCP connection not found.', updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds]);
+            send('tool_result', { actionIds: item.actionIds, toolName: item.toolName, status: 'failed', error: 'MCP connection not found.' });
+            executed.push({ item, error: 'MCP connection not found.', providerToolCallId: item.providerToolCallId });
+            continue;
+          }
+          const secret = conn.vault_ref ? await vault.readSecret(conn.vault_ref).catch(() => null) : null;
+          const authHeader = secret?.auth_header || '';
+          try {
+            await query(`UPDATE tool_actions SET status = 'executing', updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds]);
+            const result = await executeCoordinatedTool({ connection: conn, authHeader, toolName: item.toolName, args: item.arguments, signal: controller.signal });
+            await appendToolResult(conversationId, round, run.id, item, result);
+            await query(`UPDATE tool_actions SET status = 'complete', result = $2::jsonb, updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds, JSON.stringify({ text: result.text?.slice(0, 5000), isError: Boolean(result.isError) })]);
+            send('tool_result', { actionIds: item.actionIds, toolName: item.toolName, status: result.isError ? 'failed' : 'complete', text: result.text?.slice(0, 5000) });
+            executed.push({ item, result, providerToolCallId: item.providerToolCallId });
+          } catch (err) {
+            await query(`UPDATE tool_actions SET status = 'failed', error = $2, updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds, err.message.slice(0, 500)]);
+            send('tool_result', { actionIds: item.actionIds, toolName: item.toolName, status: 'failed', error: err.message });
+            executed.push({ item, error: err.message, providerToolCallId: item.providerToolCallId });
           }
         }
+        return { executed, cancelled: false };
+      };
+
+      const buildProposals = async (roundResults) => {
+        const proposals = [];
+        for (const r of roundResults) {
+          if (!r.result?.toolCalls?.length) continue;
+          for (const tc of r.result.toolCalls) {
+            const target = mapToolNameToConnection(tc.name, connections);
+            if (!target) continue;
+            let args = {};
+            try {
+              args = JSON.parse(tc.arguments || '{}');
+            } catch {
+              args = { _raw: tc.arguments };
+            }
+            const id = crypto.randomUUID();
+            proposals.push({
+              id,
+              providerToolCallId: tc.id,
+              participantId: r.participant.id,
+              toolName: target.toolName,
+              connectionId: target.conn.id,
+              arguments: args,
+              rawName: tc.name,
+            });
+            await query(
+              `INSERT INTO tool_actions (run_id, conversation_id, requester_participant_id, mcp_connection_id, tool_name, arguments, status, idempotency_key)
+               VALUES ($1,$2,$3,$4,$5,$6::jsonb,'proposed',$7)`,
+              [run.id, conversationId, r.participant.id, target.conn.id, target.toolName, JSON.stringify(args), crypto.randomUUID()],
+            );
+          }
+        }
+        return proposals;
+      };
+
+      // Round 1 proposals from the initial dispatch.
+      const firstProposals = await buildProposals(results);
+      let step = 0;
+      let executedAll = await authorizeAndExecute(firstProposals);
+
+      // OpenAI Responses continuation: feed function_call_output back to the
+      // same participant until an answer, budget, stop or failure.
+      while (!controller.signal.aborted && !executedAll.cancelled && step < MAX_TOOL_STEPS) {
+        const openaiWithCalls = results.filter((r) => r.result?.toolCalls?.length && r.participant.provider === 'openai');
+        if (!openaiWithCalls.length) break;
+        step += 1;
+        const roundResults = [];
+        for (const r of openaiWithCalls) {
+          const outputItems = r.result.outputItems || [];
+          const continuation = [];
+          for (const tc of r.result.toolCalls) {
+            const executed = executedAll.executed.find((e) => e.providerToolCallId === tc.id);
+            const callItem = outputItems.find((i) => i.type === 'function_call' && (i.call_id === tc.id || i.id === tc.id)) || { type: 'function_call', call_id: tc.id, name: tc.name, arguments: tc.arguments };
+            continuation.push(callItem);
+            continuation.push({
+              type: 'function_call_output',
+              call_id: tc.id,
+              output: JSON.stringify(executed?.result || { error: executed?.error || 'not executed' }),
+            });
+          }
+          const contResult = await dispatchOne(r.participant, continuation);
+          roundResults.push(contResult);
+        }
+        for (const r of roundResults) {
+          const idx = results.findIndex((x) => x.participant.id === r.participant.id);
+          if (idx >= 0) results[idx] = r;
+          else results.push(r);
+        }
+        const nextProposals = await buildProposals(roundResults);
+        if (!nextProposals.length) break;
+        executedAll = await authorizeAndExecute(nextProposals);
       }
       await finish();
     } catch (err) {

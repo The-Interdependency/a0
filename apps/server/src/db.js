@@ -216,6 +216,30 @@ const MIGRATIONS = [
     );
     `,
   },
+  {
+    version: '0002_context_and_usage',
+    up: `
+    ALTER TABLE usage_observations ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER;
+    ALTER TABLE usage_observations ADD COLUMN IF NOT EXISTS cache_write_tokens INTEGER;
+    ALTER TABLE usage_observations ADD COLUMN IF NOT EXISTS reasoning_tokens INTEGER;
+    ALTER TABLE usage_observations ADD COLUMN IF NOT EXISTS raw_usage JSONB;
+
+    CREATE TABLE context_revisions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      revision INTEGER NOT NULL,
+      parent_revision_id UUID REFERENCES context_revisions(id) ON DELETE SET NULL,
+      blocks JSONB NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(conversation_id, revision)
+    );
+    CREATE INDEX context_revisions_conversation_idx ON context_revisions(conversation_id, revision DESC);
+
+    ALTER TABLE runs ADD COLUMN IF NOT EXISTS context_revision_id UUID REFERENCES context_revisions(id) ON DELETE SET NULL;
+    `,
+  },
 ];
 
 export async function migrate() {

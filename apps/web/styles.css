@@ -197,3 +197,8 @@ body {
 #retryBar { display: flex; align-items: center; gap: 8px; }
 .list-item { width: 100%; text-align: left; }
 #contextSelectionList .tool-proposal pre { max-height: 120px; overflow-y: auto; }
+
+/* FR1 context editor */
+.context-block { margin: 0.5rem 0; padding: 0.5rem; border: 1px solid var(--line); border-radius: 10px; }
+.context-textarea { width: 100%; min-height: 4rem; margin-top: 0.25rem; }
+.context-preview { max-height: 8rem; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; }

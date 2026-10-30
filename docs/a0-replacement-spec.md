@@ -316,3 +316,16 @@ These live documentation links are navigation, not frozen runtime evidence. Rech
 
 No unresolved item above reopens VM hosting, website access, the four providers, phone-first design, general MCP, or the included attachments/voice/projects/tool scope.
 
+
+## Amendment: issue #119 reactivation scope (2026-10-30)
+
+The successor's earlier blanket exclusion of archive reuse is superseded for the four requested capabilities and their exact archived agent descriptions/code owners, per issue #119:
+
+1. Cache-aware context editing (FR1) — implemented.
+2. Agent instantiation and tool use (FR2) — pending retained PTCNA/Forge integration.
+3. Temporary module creation/display/hot swapping on agent spawn (FR3) — pending FR2.
+4. AHBG in the authenticated website (FR4) — pending Stack adapter work.
+
+FR0 (current OpenAI model calls) is part of this amendment: OpenAI now uses the Responses transport with the current catalogue (`gpt-6-luna`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-astra`), and saved OpenAI participants can be edited in place without losing identity/history.
+
+Excluded components remain Jury, Bandit, Meta-13 and ZFAE. Retained components are PTCNA memory cores, Phi/Psi/Omega cores and the complete Forge eight-template catalogue. See docs/acceptance.md and docs/build-status.md for gate evidence; this spec amendment is authoritative for the active build scope.
