@@ -89,7 +89,7 @@ export async function buildBlocks(conversationId, userId) {
         messageId: m.id,
         role: m.role,
         status: m.status,
-        attachments: atts.rows.map((a) => ({ id: a.id, kind: a.kind, mime: a.mime, filename: a.filename })),
+        attachments: atts.rows.map((a) => ({ id: a.id, kind: a.kind, mime: a.mime, filename: a.filename, storageKey: a.storage_key })),
       },
     });
   }
@@ -159,6 +159,19 @@ export async function latestRevision(conversationId, userId) {
     [conversationId, userId],
   );
   return rows[0] || null;
+}
+
+// C04: carry the latest saved revision forward while appending new history
+// blocks. Owner edits/exclusions stay effective; new messages join the tail.
+export function mergeRevisionWithFresh(latestBlocks, freshBlocks) {
+  const blocks = Array.isArray(latestBlocks) && latestBlocks.length ? latestBlocks.map((b) => ({ ...b })) : [];
+  const existing = new Set(blocks.map((b) => b.id));
+  const freshHistory = freshBlocks.filter((b) => b.type === 'history' && !existing.has(b.id));
+  if (!freshHistory.length) return blocks;
+  const toolsIdx = blocks.findIndex((b) => b.type === 'tool');
+  const insertAt = toolsIdx >= 0 ? toolsIdx : blocks.length;
+  blocks.splice(insertAt, 0, ...freshHistory);
+  return blocks;
 }
 
 export async function getOrCreateRevision(conversationId, userId) {

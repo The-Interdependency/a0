@@ -137,7 +137,10 @@ export function coordinateToolSelections(proposals, selection) {
     const representative = actions[0];
     dispatch.push({
       actionIds: actions.map((a) => a.id),
-      requesters: actions.map((a) => a.requesterParticipantId),
+      requesters: actions.map((a) => a.participantId || a.requesterParticipantId),
+      providerToolCallIds: actions.map((a) => a.providerToolCallId).filter(Boolean),
+      participantId: representative.participantId || representative.requesterParticipantId,
+      providerToolCallId: representative.providerToolCallId || null,
       connectionId: representative.connectionId,
       toolName: representative.toolName,
       arguments: representative.arguments,

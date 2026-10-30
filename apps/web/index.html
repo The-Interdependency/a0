@@ -149,6 +149,16 @@
         <section id="view-about" class="view hidden">
           <h2>About &amp; harness</h2>
           <div id="aboutBox" class="card">Loading…</div>
+          <div class="card">
+            <h3>Preferences (owner defaults)</h3>
+            <div class="inline-form model-row">
+              <label>Text size <select id="prefTextSize" class="select"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option></select></label>
+              <label>Enter to send <select id="prefEnter" class="select"><option value="on">On</option><option value="off" selected>Off (Enter = newline)</option></select></label>
+              <label>Voice rate <select id="prefVoiceRate" class="select"><option value="0.8">0.8</option><option value="1.0" selected>1.0</option><option value="1.2">1.2</option></select></label>
+              <label>Auto-speak answers <select id="prefAutoSpeak" class="select"><option value="on">On</option><option value="off" selected>Off</option></select></label>
+              <label>Comparison layout <select id="prefLayout" class="select"><option value="stacked" selected>Stacked</option><option value="side">Side-by-side</option></select></label>
+            </div>
+          </div>
           <div class="card about-password">
             <h3>Change owner password</h3>
             <form id="passwordForm">

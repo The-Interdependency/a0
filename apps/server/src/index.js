@@ -293,7 +293,7 @@ export async function start() {
         GROUP BY m.id ORDER BY m.created_at ASC, m.round ASC`,
       [req.params.id],
     );
-    res.json({ conversation: conv.rows[0], messages: msgs.rows });
+    res.json({ conversation: conv.rows[0], messages: msgs.rows, messageCount: msgs.rows.length });
   }));
 
   app.patch('/api/conversations/:id', asyncRoute(async (req, res) => {
@@ -338,8 +338,23 @@ export async function start() {
 
   app.patch('/api/participants/:id', asyncRoute(async (req, res) => {
     const { name, provider, model, settings, capabilities } = req.body || {};
+    let validatedSettings;
+    try {
+      validatedSettings = settings !== undefined ? validateParticipantSettings(settings) : undefined;
+    } catch (err) {
+      return res.status(400).json({ error: 'validation', message: err.message, code: err.code });
+    }
     const existing = await query('SELECT * FROM participants WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
     if (!existing.rows.length) return res.status(404).json({ error: 'not_found', message: 'Participant not found.' });
+    const current = existing.rows[0];
+    const nextModel = model ?? current.model;
+    const nextProvider = provider ?? current.provider;
+    // C11/C12: a model change recomputes capability declarations from the
+    // catalogue for that provider; custom IDs keep provider-wide caps.
+    let nextCapabilities = capabilities ?? current.capabilities;
+    if (model && model !== current.model) {
+      nextCapabilities = capabilitiesForModel(nextProvider, nextModel);
+    }
     const { rows } = await query(
       `UPDATE participants
           SET name = COALESCE($3, name),
@@ -349,7 +364,7 @@ export async function start() {
               capabilities = COALESCE($7::jsonb, capabilities),
               updated_at = now()
         WHERE id = $1 AND user_id = $2 RETURNING *`,
-      [req.params.id, req.user.id, name ?? null, provider ?? null, model ?? null, settings ? JSON.stringify(settings) : null, capabilities ? JSON.stringify(capabilities) : null],
+      [req.params.id, req.user.id, name ?? null, provider ?? null, model ?? null, validatedSettings !== undefined ? JSON.stringify(validatedSettings) : null, JSON.stringify(nextCapabilities)],
     );
     res.json({ participant: rows[0] });
   }));
@@ -361,34 +376,59 @@ export async function start() {
   }));
 
   app.post('/api/participants/seed-defaults', asyncRoute(async (req, res) => {
-    const existing = await query('SELECT id, provider FROM participants WHERE user_id = $1', [req.user.id]);
-    const have = new Map(existing.rows.map((r) => [r.provider, r]));
+    const existing = await query('SELECT provider FROM participants WHERE user_id = $1', [req.user.id]);
+    const have = new Set(existing.rows.map((r) => r.provider));
     const created = [];
-    const updated = [];
     for (const [provider, def] of Object.entries(PROVIDER_DEFS)) {
-      if (!have.has(provider)) {
-        const { rows } = await query(
-          `INSERT INTO participants (user_id, name, provider, model, settings, capabilities)
-           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-          [req.user.id, def.label, provider, defaultModelFor(provider), JSON.stringify({}), JSON.stringify(defaultCapabilitiesFor(provider))],
-        );
-        created.push(rows[0]);
-      } else if (provider === 'openai') {
-        // FR0: a changed default must update the saved OpenAI participant
-        // without losing its identity/history.
-        const { rows } = await query(
-          `UPDATE participants SET model = $3, capabilities = $4::jsonb, updated_at = now()
-            WHERE id = $1 AND user_id = $2 RETURNING *`,
-          [have.get(provider).id, req.user.id, defaultModelFor(provider), JSON.stringify(defaultCapabilitiesFor(provider))],
-        );
-        updated.push(rows[0]);
-      }
+      if (have.has(provider)) continue; // C02: defaults never overwrite a deliberate choice.
+      const { rows } = await query(
+        `INSERT INTO participants (user_id, name, provider, model, settings, capabilities)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [req.user.id, def.label, provider, defaultModelFor(provider), JSON.stringify({}), JSON.stringify(defaultCapabilitiesFor(provider))],
+      );
+      created.push(rows[0]);
     }
-    res.status(201).json({ created, updated, selectedByDefault: 'deepseek' });
+    res.status(201).json({ created, selectedByDefault: 'deepseek' });
   }));
 
   // FR0: upgrade an existing participant's OpenAI model in place, preserving
   // identity/history. Capabilities follow the selected model catalogue entry.
+  const ALLOWED_PARTICIPANT_SETTINGS = {
+    baseUrl: 'string',
+    reasoningEffort: 'string',
+    maxOutputTokens: 'number',
+    verbosity: 'string',
+    outputBudget: 'number',
+    promptCacheKey: 'string',
+    timeoutMs: 'number',
+  };
+  const validateParticipantSettings = (settings) => {
+    if (settings == null) return {};
+    if (typeof settings !== 'object' || Array.isArray(settings)) {
+      const err = new Error('settings must be an object of supported choices.');
+      err.status = 400;
+      throw err;
+    }
+    const out = {};
+    for (const [key, value] of Object.entries(settings)) {
+      if (!(key in ALLOWED_PARTICIPANT_SETTINGS)) {
+        const err = new Error(`Unsupported setting "${key}". Supported: ${Object.keys(ALLOWED_PARTICIPANT_SETTINGS).join(', ')}.`);
+        err.status = 400;
+        err.code = 'unsupported_setting';
+        throw err;
+      }
+      const type = ALLOWED_PARTICIPANT_SETTINGS[key];
+      if (type === 'number' ? (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) : (typeof value !== 'string' || !value.trim())) {
+        const err = new Error(`Setting "${key}" must be a ${type}.`);
+        err.status = 400;
+        err.code = 'invalid_setting';
+        throw err;
+      }
+      out[key] = value;
+    }
+    return out;
+  };
+
   app.post('/api/participants/:id/upgrade-model', asyncRoute(async (req, res) => {
     const { model } = req.body || {};
     const existing = await query('SELECT * FROM participants WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
@@ -636,8 +676,30 @@ export async function start() {
   }));
 
   // --- Settings -------------------------------------------------------------------
+  const OWNER_SETTINGS_KEYS = ['voiceRate', 'autoSpeak', 'enterToSend', 'textSize', 'comparisonLayout'];
   app.get('/api/settings', asyncRoute(async (req, res) => {
-    res.json({ limits: config.defaults, voice: { mode: 'dictation_and_spoken_responses', engine: 'browser-web-speech-api' } });
+    const user = await query('SELECT settings FROM users WHERE id = $1', [req.user.id]);
+    res.json({
+      limits: config.defaults,
+      owner: user.rows[0]?.settings || {},
+      voice: { mode: 'dictation_and_spoken_responses', engine: 'browser-web-speech-api' },
+    });
+  }));
+
+  app.put('/api/settings', asyncRoute(async (req, res) => {
+    const body = req.body || {};
+    const out = {};
+    for (const [key, value] of Object.entries(body)) {
+      if (!OWNER_SETTINGS_KEYS.includes(key)) {
+        return res.status(400).json({ error: 'validation', message: `Unsupported owner setting "${key}". Supported: ${OWNER_SETTINGS_KEYS.join(', ')}.` });
+      }
+      if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+        return res.status(400).json({ error: 'validation', message: `Owner setting "${key}" must be a string, number or boolean.` });
+      }
+      out[key] = value;
+    }
+    await query('UPDATE users SET settings = settings || $2::jsonb, updated_at = now() WHERE id = $1', [req.user.id, JSON.stringify(out)]);
+    res.json({ ok: true, owner: (await query('SELECT settings FROM users WHERE id = $1', [req.user.id])).rows[0].settings });
   }));
 
   // --- FR1 context revisions -------------------------------------------------------
@@ -749,6 +811,9 @@ export async function start() {
     let attachmentRows = [];
     if (message?.content || message?.attachmentIds?.length) {
       const attIds = message.attachmentIds || [];
+      if (attIds.length > (config.defaults.maxAttachmentCount || 8)) {
+        return res.status(400).json({ error: 'validation', message: `Too many attachments (max ${config.defaults.maxAttachmentCount}).` });
+      }
       if (attIds.length) {
         attachmentRows = (await query('SELECT * FROM attachments WHERE id = ANY($1::uuid[]) AND user_id = $2', [attIds, req.user.id])).rows;
         if (attachmentRows.length !== attIds.length) {
@@ -799,10 +864,10 @@ export async function start() {
     const hydrated = await hydrateSnapshotForRun(snapshot);
     const connections = (await query('SELECT * FROM mcp_connections WHERE user_id = $1 AND enabled = true', [req.user.id])).rows;
 
-    const finish = async () => {
+    const finish = async (overallStatus = 'complete') => {
       unregisterRun(run.id);
-      await query(`UPDATE runs SET status = 'complete', finished_at = now() WHERE id = $1`, [run.id]);
-      send('run_complete', { runId: run.id, round });
+      await query(`UPDATE runs SET status = $2, finished_at = now() WHERE id = $1`, [run.id, overallStatus]);
+      send('run_complete', { runId: run.id, round, status: overallStatus });
       res.end();
     };
 
@@ -839,11 +904,18 @@ export async function start() {
         });
         state.content = result.text;
         state.usage = result.usage;
-        state.status = 'complete';
-        await updateMessageContent(state.messageId, state.content, 'complete');
+        // C10: failed/incomplete provider outcomes must not become complete.
+        if (result.finishReason === 'failed') state.status = 'failed';
+        else if (result.finishReason === 'incomplete') state.status = 'incomplete';
+        else state.status = 'complete';
+        await updateMessageContent(state.messageId, state.content, state.status);
+        if (state.status !== 'complete') {
+          await query(`UPDATE messages SET meta = jsonb_set(meta, '{error}', to_jsonb($3::text), true) WHERE id = $1 AND conversation_id = $2`,
+            [state.messageId, conversationId, result.incompleteReason || `provider_${state.status}`]);
+        }
         await recordUsage({ runId: run.id, participantId: participant.id, provider: participant.provider, model: participant.model, usage: result.usage });
-        await query(`UPDATE run_participants SET status = 'complete', usage = $3::jsonb, finished_at = now() WHERE run_id = $1 AND participant_id = $2`, [run.id, participant.id, JSON.stringify(result.usage || null)]);
-        send('participant_done', { participantId: participant.id, messageId: state.messageId, status: 'complete', usage: result.usage });
+        await query(`UPDATE run_participants SET status = $3, usage = $4::jsonb, finished_at = now() WHERE run_id = $1 AND participant_id = $2`, [run.id, participant.id, state.status, JSON.stringify(result.usage || null)]);
+        send('participant_done', { participantId: participant.id, messageId: state.messageId, status: state.status, usage: result.usage, incompleteReason: result.incompleteReason || null });
         return { participant, result, state };
       } catch (err) {
         if (controller.signal.aborted) {
@@ -854,6 +926,8 @@ export async function start() {
         } else {
           state.status = 'failed';
           await updateMessageContent(state.messageId, state.content || '', 'failed');
+          await query(`UPDATE messages SET meta = jsonb_set(jsonb_set(meta, '{error}', to_jsonb($3::text), true), '{code}', to_jsonb($4::text), true) WHERE id = $1 AND conversation_id = $2`,
+            [state.messageId, conversationId, err.message.slice(0, 1000), err.code || 'provider_error']);
           await query(`UPDATE run_participants SET status = 'failed', error = $3, finished_at = now() WHERE run_id = $1 AND participant_id = $2`, [run.id, participant.id, err.message.slice(0, 1000)]);
           send('participant_done', { participantId: participant.id, messageId: state.messageId, status: 'failed', error: err.message, code: err.code });
         }
@@ -887,11 +961,11 @@ export async function start() {
         const coordinated = coordinateToolSelections(chosen, { actionIds: selection.actionIds });
         const executed = [];
         for (const item of coordinated) {
-          const conn = (await query('SELECT * FROM mcp_connections WHERE id = $1 AND user_id = $2', [item.connectionId, req.user.id])).rows[0];
+          const conn = (await query('SELECT * FROM mcp_connections WHERE id = $1 AND user_id = $2 AND enabled = true', [item.connectionId, req.user.id])).rows[0];
           if (!conn) {
-            await query(`UPDATE tool_actions SET status = 'failed', error = 'MCP connection not found.', updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds]);
-            send('tool_result', { actionIds: item.actionIds, toolName: item.toolName, status: 'failed', error: 'MCP connection not found.' });
-            executed.push({ item, error: 'MCP connection not found.', providerToolCallId: item.providerToolCallId });
+            await query(`UPDATE tool_actions SET status = 'failed', error = 'MCP connection not found or disabled.', updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds]);
+            send('tool_result', { actionIds: item.actionIds, toolName: item.toolName, status: 'failed', error: 'MCP connection not found or disabled.' });
+            executed.push({ item, error: 'MCP connection not found or disabled.', providerToolCallIds: item.providerToolCallIds || [item.providerToolCallId] });
             continue;
           }
           const secret = conn.vault_ref ? await vault.readSecret(conn.vault_ref).catch(() => null) : null;
@@ -902,11 +976,11 @@ export async function start() {
             await appendToolResult(conversationId, round, run.id, item, result);
             await query(`UPDATE tool_actions SET status = 'complete', result = $2::jsonb, updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds, JSON.stringify({ text: result.text?.slice(0, 5000), isError: Boolean(result.isError) })]);
             send('tool_result', { actionIds: item.actionIds, toolName: item.toolName, status: result.isError ? 'failed' : 'complete', text: result.text?.slice(0, 5000) });
-            executed.push({ item, result, providerToolCallId: item.providerToolCallId });
+            executed.push({ item, result, providerToolCallIds: item.providerToolCallIds || [item.providerToolCallId] });
           } catch (err) {
             await query(`UPDATE tool_actions SET status = 'failed', error = $2, updated_at = now() WHERE id = ANY($1::uuid[])`, [item.actionIds, err.message.slice(0, 500)]);
             send('tool_result', { actionIds: item.actionIds, toolName: item.toolName, status: 'failed', error: err.message });
-            executed.push({ item, error: err.message, providerToolCallId: item.providerToolCallId });
+            executed.push({ item, error: err.message, providerToolCallIds: item.providerToolCallIds || [item.providerToolCallId] });
           }
         }
         return { executed, cancelled: false };
@@ -936,9 +1010,9 @@ export async function start() {
               rawName: tc.name,
             });
             await query(
-              `INSERT INTO tool_actions (run_id, conversation_id, requester_participant_id, mcp_connection_id, tool_name, arguments, status, idempotency_key)
-               VALUES ($1,$2,$3,$4,$5,$6::jsonb,'proposed',$7)`,
-              [run.id, conversationId, r.participant.id, target.conn.id, target.toolName, JSON.stringify(args), crypto.randomUUID()],
+              `INSERT INTO tool_actions (id, run_id, conversation_id, requester_participant_id, mcp_connection_id, tool_name, arguments, status, idempotency_key)
+               VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,'proposed',$8)`,
+              [id, run.id, conversationId, r.participant.id, target.conn.id, target.toolName, JSON.stringify(args), crypto.randomUUID()],
             );
           }
         }
@@ -951,18 +1025,26 @@ export async function start() {
       let executedAll = await authorizeAndExecute(firstProposals);
 
       // OpenAI Responses continuation: feed function_call_output back to the
-      // same participant until an answer, budget, stop or failure.
+      // same participant until an answer, budget, stop or failure. Compatible
+      // output items accumulate per participant so later rounds never drop
+      // earlier reasoning/tool state (C10).
+      const continuationByParticipant = new Map();
+      for (const r of results) {
+        if (r.participant.provider === 'openai' && r.result?.outputItems?.length) {
+          continuationByParticipant.set(r.participant.id, r.result.outputItems);
+        }
+      }
       while (!controller.signal.aborted && !executedAll.cancelled && step < MAX_TOOL_STEPS) {
         const openaiWithCalls = results.filter((r) => r.result?.toolCalls?.length && r.participant.provider === 'openai');
         if (!openaiWithCalls.length) break;
         step += 1;
         const roundResults = [];
         for (const r of openaiWithCalls) {
-          const outputItems = r.result.outputItems || [];
-          const continuation = [];
+          const prior = continuationByParticipant.get(r.participant.id) || [];
+          const continuation = [...prior];
           for (const tc of r.result.toolCalls) {
-            const executed = executedAll.executed.find((e) => e.providerToolCallId === tc.id);
-            const callItem = outputItems.find((i) => i.type === 'function_call' && (i.call_id === tc.id || i.id === tc.id)) || { type: 'function_call', call_id: tc.id, name: tc.name, arguments: tc.arguments };
+            const executed = executedAll.executed.find((e) => (e.providerToolCallIds || []).includes(tc.id));
+            const callItem = prior.find((i) => i.type === 'function_call' && (i.call_id === tc.id || i.id === tc.id)) || { type: 'function_call', call_id: tc.id, name: tc.name, arguments: tc.arguments };
             continuation.push(callItem);
             continuation.push({
               type: 'function_call_output',
@@ -971,6 +1053,9 @@ export async function start() {
             });
           }
           const contResult = await dispatchOne(r.participant, continuation);
+          if (contResult.result?.outputItems?.length) {
+            continuationByParticipant.set(r.participant.id, [...continuation, ...contResult.result.outputItems]);
+          }
           roundResults.push(contResult);
         }
         for (const r of roundResults) {
@@ -982,7 +1067,11 @@ export async function start() {
         if (!nextProposals.length) break;
         executedAll = await authorizeAndExecute(nextProposals);
       }
-      await finish();
+      // C10: the run outcome reflects its participants, never a blanket success.
+      const overallStatus = results.some((r) => r.state?.status === 'failed') ? 'failed'
+        : results.some((r) => r.state?.status === 'incomplete') ? 'incomplete'
+        : 'complete';
+      await finish(overallStatus);
     } catch (err) {
       await failRun(err.message || 'Run failed.');
     }

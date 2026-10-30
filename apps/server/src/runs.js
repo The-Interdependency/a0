@@ -120,6 +120,12 @@ export async function dispatchParticipant({
   // Content capability check before any dispatch (A10): report the mismatch
   // for this participant rather than silently dropping unsupported content.
   const hasImages = snapshot.messages.some((m) => (m.attachments || []).some((a) => a.mime?.startsWith('image/')));
+  const missingAttachment = snapshot.messages.some((m) => (m.attachments || []).some((a) => a.hydrationError));
+  if (missingAttachment) {
+    const err = new Error('One or more attachments could not be loaded from durable media. Remove the attachment or re-upload it.');
+    err.code = 'attachment_missing';
+    throw err;
+  }
   const mismatch = hasImages ? assertCapability(provider, capabilities, 'images') : null;
   if (mismatch) {
     const err = new Error(mismatch);
@@ -138,7 +144,7 @@ export async function dispatchParticipant({
     tools,
     signal,
     onChunk: (chunk) => onChunk({ participantId: participant.id, ...chunk }),
-    timeoutMs: 120000,
+    timeoutMs: (participant.settings && participant.settings.timeoutMs) || 120000,
     baseUrl: participant.settings?.baseUrl || undefined,
     settings,
   });

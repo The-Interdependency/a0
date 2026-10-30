@@ -240,6 +240,12 @@ const MIGRATIONS = [
     ALTER TABLE runs ADD COLUMN IF NOT EXISTS context_revision_id UUID REFERENCES context_revisions(id) ON DELETE SET NULL;
     `,
   },
+  {
+    version: '0003_owner_settings',
+    up: `
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}'::jsonb;
+    `,
+  },
 ];
 
 export async function migrate() {

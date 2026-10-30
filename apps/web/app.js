@@ -156,6 +156,7 @@ async function openConversation(id) {
   state.currentConversationId = id;
   const data = await api.get(`/api/conversations/${id}`);
   state.currentConversation = data.conversation;
+  state.currentConversation.message_count = data.messageCount || 0; // C03 authoritative
   state.activeProjectId = data.conversation.project_id || null;
   renderMessages(data.messages);
   $('#chatTitle').textContent = data.conversation.title;
@@ -352,7 +353,7 @@ function renderParticipantPicker() {
     const pill = document.createElement('button');
     pill.type = 'button';
     pill.className = 'participant-pill' + (state.selectedParticipantIds.includes(p.id) ? ' selected' : '');
-    pill.textContent = p.name;
+    pill.textContent = `${p.name} · ${p.model}`;
     pill.setAttribute('aria-pressed', String(state.selectedParticipantIds.includes(p.id)));
     pill.onclick = () => toggleParticipant(p.id);
     box.appendChild(pill);
@@ -364,7 +365,8 @@ function toggleParticipant(id) {
   const next = [...state.selectedParticipantIds];
   if (idx >= 0) next.splice(idx, 1);
   else next.push(id);
-  const conversationHasMessages = (state.currentConversation?.messages_count ?? 0) > 0 || conversationHasHistory();
+  // C03: authoritative history presence from the conversation detail response.
+  const conversationHasMessages = (state.currentConversation?.message_count ?? 0) > 0;
   if (state.currentConversationId && conversationHasMessages) {
     state.pendingSwitch = { participantIds: next };
     showSwitchModal(next);
@@ -374,30 +376,36 @@ function toggleParticipant(id) {
   renderParticipantPicker();
 }
 
-function conversationHasHistory() {
-  // Cheap client-side check; authoritative check happens on the server.
-  return state.currentConversation?.message_count > 0;
-}
-
 function showSwitchModal(nextIds) {
   $('#switchModal').classList.remove('hidden');
   const names = nextIds.map((id) => participantName(id) || id).join(', ');
   $('#switchTarget').textContent = names || '(none)';
   $('#switchNewBtn').onclick = async () => {
     hideSwitchModal();
-    state.selectedParticipantIds = nextIds;
+    state.selectedParticipantIds = nextIds.length ? nextIds : state.selectedParticipantIds;
+    state.lastMode = 'new';
+    localStorage.setItem('a0.lastMode', 'new');
     renderParticipantPicker();
     await newConversation();
   };
   $('#switchContinueBtn').onclick = () => {
+    // C03: Continue is ONE selected model with full intended context.
+    const singleId = nextIds[0] || state.selectedParticipantIds[0] || (state.participants[0] && state.participants[0].id);
+    if (!singleId) { toast('Select a participant first.', true); return; }
     hideSwitchModal();
-    state.selectedParticipantIds = nextIds;
+    state.selectedParticipantIds = [singleId];
+    state.lastMode = 'continue';
+    localStorage.setItem('a0.lastMode', 'continue');
     renderParticipantPicker();
-    toast(nextIds.length > 1 ? 'Continue with comparison of the selected participants.' : 'Continue with the selected participant.');
+    toast('Continue with the selected participant (full intended context).');
   };
   $('#switchCompareBtn').onclick = () => {
+    // C03: Compare is explicitly selected participants (>=2), same semantic context.
+    if (nextIds.length < 2) { toast('Select at least two participants to compare.', true); return; }
     hideSwitchModal();
     state.selectedParticipantIds = nextIds;
+    state.lastMode = 'compare';
+    localStorage.setItem('a0.lastMode', 'compare');
     renderParticipantPicker();
     toast('Compare models with the selected participants.');
   };
@@ -424,16 +432,27 @@ function renderParticipantCards() {
     sub.textContent = `${p.provider} · ${p.model}`;
     const row = document.createElement('div');
     row.className = 'row';
-    // FR0: in-place model edit/upgrade for OpenAI participants.
+    // C01/OC02: model editing for every provider. OpenAI uses the catalogue
+    // select (with the saved value shown accurately); others use a text input
+    // for valid custom IDs with provider-wide capability validation.
     const models = p.provider === 'openai' ? state.providers?.openai?.models : null;
     if (models?.length) {
       const sel = document.createElement('select');
       sel.className = 'select';
+      sel.setAttribute('aria-label', `Model for ${p.name}`);
+      const savedKnown = models.some((m) => m.id === p.model);
+      if (!savedKnown) {
+        const cur = document.createElement('option');
+        cur.value = p.model;
+        cur.textContent = `${p.model} (current)`;
+        cur.selected = true;
+        sel.appendChild(cur);
+      }
       for (const m of models) {
         const opt = document.createElement('option');
         opt.value = m.id;
         opt.textContent = `${m.id} · ${m.label}`;
-        opt.selected = m.id === p.model;
+        if (m.id === p.model) opt.selected = true;
         sel.appendChild(opt);
       }
       const upgrade = document.createElement('button');
@@ -455,13 +474,33 @@ function renderParticipantCards() {
       test.textContent = 'Test this model';
       test.onclick = async () => {
         try {
-          const res = await api.request('POST', `/api/providers/${p.provider}/test`, { model: sel.value });
+          const res = await api.request('POST', `/api/providers/${p.provider}/test`, { model: sel.value, settings: p.settings || {} });
           toast(`${sel.value} test: ${res.ok ? 'PASS' : 'FAIL'} · ${res.message || res.finishReason || ''}`);
         } catch (err) {
           toast(`${sel.value} test failed: ${err.message}`, true);
         }
       };
       row.append(sel, upgrade, test);
+    } else {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = p.model;
+      input.setAttribute('aria-label', `Model ID for ${p.name}`);
+      input.placeholder = 'Model ID';
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'primary-btn';
+      save.textContent = 'Save model';
+      save.onclick = async () => {
+        try {
+          await api.patch(`/api/participants/${p.id}`, { model: input.value.trim() });
+          toast(`Saved model ${input.value.trim()} for ${p.name}.`);
+          await loadParticipants();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      };
+      row.append(input, save);
     }
     const del = document.createElement('button');
     del.type = 'button';
@@ -477,7 +516,7 @@ function renderParticipantCards() {
       }
     };
     row.appendChild(del);
-    card.append(h, sub, row);
+    card.append(h, sub, status, tools, row);
     box.appendChild(card);
   }
 }
@@ -487,6 +526,7 @@ async function loadProviders() {
   const data = await api.get('/api/providers');
   state.providers = data.providers;
   renderProviderCards();
+  renderParticipantCards(); // C01: controls must not depend on load order
 }
 
 function renderProviderCards() {
@@ -575,6 +615,9 @@ function renderMcpCards() {
     const status = document.createElement('div');
     status.className = 'muted';
     status.textContent = `Status: ${c.status}${c.last_error ? ` · ${c.last_error}` : ''} · ${(c.tools || []).length} tools`;
+    const tools = document.createElement('div');
+    tools.className = 'muted context-preview';
+    tools.textContent = (c.tools || []).map((t) => `${t.name}: ${t.description || 'no description'}`).join(' · ') || 'No tools discovered yet.';
     const row = document.createElement('div');
     row.className = 'row';
     for (const [label, fn] of [
@@ -741,6 +784,8 @@ function renderAttachmentChips() {
 function saveDraft(content) {
   state.draft = {
     content,
+    // C13: preserve complete attachment descriptors, not bare ids.
+    attachments: state.attachments.map((a) => ({ ...a })),
     attachmentIds: state.attachments.map((a) => a.id),
     clientRequestId: crypto.randomUUID(),
   };
@@ -750,7 +795,8 @@ function restoreDraft() {
   if (!state.draft) return;
   $('#composerInput').value = state.draft.content;
   autoGrow();
-  state.attachments = state.draft.attachments.map((id) => ({ id }));
+  // C13: restore complete descriptors; tolerate legacy {id}-only drafts.
+  state.attachments = (state.draft.attachments || (state.draft.attachmentIds || []).map((id) => ({ id }))).map((a) => ({ ...a }));
   renderAttachmentChips();
   const retry = $('#retryBar');
   retry.classList.remove('hidden');
@@ -771,7 +817,9 @@ async function sendMessage(content) {
     return;
   }
   const participantIds = [...state.selectedParticipantIds];
-  const mode = participantIds.length > 1 ? 'compare' : 'single';
+  const savedMode = state.lastMode || localStorage.getItem('a0.lastMode') || null;
+  let mode = savedMode === 'compare' ? 'compare' : savedMode === 'continue' ? 'single' : (participantIds.length > 1 ? 'compare' : 'single');
+  if (mode === 'compare' && participantIds.length < 2) mode = 'single';
   const clientRequestId = state.draft?.clientRequestId || crypto.randomUUID();
   const body = {
     mode,
@@ -944,9 +992,17 @@ function handleSseEvent(event, payload, ctx) {
       } else if (payload.status === 'complete' && state.spokenAnswers) {
         const live = messageEls.get(payload.participantId) || paneEls.get(payload.participantId);
         if (live?.dataset.text) speak(live.dataset.text);
+      } else if (payload.status === 'incomplete') {
+        const pane = paneEls.get(payload.participantId);
+        const live = messageEls.get(payload.participantId);
+        const err = document.createElement('div');
+        err.className = 'error';
+        err.textContent = `Incomplete: ${payload.incompleteReason || 'provider incomplete'}`;
+        (pane || live)?.appendChild(err);
       }
     }
-    if (mode === 'single') clearActiveRun(payload.runId || state.activeRun?.runId);
+    // C08: provider completion is NOT whole-run completion. Keep the active run
+    // (and Stop) alive until run_complete/run_error/tools_cancelled.
   } else if (event === 'tool_proposals') {
     if (!isCurrent) return;
     state.pendingProposals = payload.proposals;
@@ -1095,7 +1151,7 @@ function speak(text) {
   const chunks = splitForSpeech(clean, 200);
   for (const chunk of chunks) {
     const u = new SpeechSynthesisUtterance(chunk);
-    u.rate = 1.02;
+    u.rate = state.voiceRate || 1.02; // C15: owner-persisted rate
     u.onend = () => {
       if (state.speechToken !== token) speechSynthesis.cancel();
     };
@@ -1264,9 +1320,41 @@ async function bindForms() {
   };
 }
 
+async function initOwnerPreferences() {
+  let prefs = {};
+  try { prefs = (await api.get('/api/settings')).owner || {}; } catch {}
+  const set = (id, key) => {
+    const el = $(id);
+    if (!el) return;
+    el.value = prefs[key] ?? el.querySelector('option[selected]')?.value ?? '';
+    el.onchange = async () => {
+      await api.put('/api/settings', { [key]: el.value });
+      applyOwnerPreferences();
+      toast('Preference saved.');
+    };
+  };
+  set('#prefTextSize', 'textSize');
+  set('#prefEnter', 'enterToSend');
+  set('#prefVoiceRate', 'voiceRate');
+  set('#prefAutoSpeak', 'autoSpeak');
+  set('#prefLayout', 'comparisonLayout');
+  applyOwnerPreferences();
+}
+
+function applyOwnerPreferences() {
+  const size = $('#prefTextSize')?.value;
+  document.documentElement.style.setProperty('--base-font', size === 'large' ? '19px' : size === 'small' ? '15px' : '16px');
+  const enter = $('#prefEnter')?.value;
+  state.enterToSend = enter === 'on';
+  state.voiceRate = parseFloat($('#prefVoiceRate')?.value || '1.0');
+  state.spokenAnswers = ($('#prefAutoSpeak')?.value === 'on');
+  state.comparisonLayout = $('#prefLayout')?.value || 'stacked';
+}
+
 boot().then(() => {
   bindForms();
   initVoice();
+  initOwnerPreferences().catch(() => {});
 });
 
 // ---------- FR1 context editor ----------
@@ -1291,6 +1379,9 @@ async function openContextEditor() {
 function renderContextEditor() {
   const badge = $('#contextRevisionBadge');
   badge.textContent = contextEditorState.revision ? `revision ${contextEditorState.revision}` : 'working draft';
+  if (contextEditorState.cacheEstimate) {
+    badge.textContent += ` · cache forecast: prefix ≈ ${contextEditorState.cacheEstimate.estimatedReusablePrefixChars} chars (not observed)`;
+  }
   const list = $('#contextBlockList');
   list.innerHTML = '';
   for (const [idx, block] of contextEditorState.blocks.entries()) {
@@ -1326,7 +1417,7 @@ function renderContextEditor() {
     } else {
       const preview = document.createElement('pre');
       preview.className = 'context-preview';
-      preview.textContent = String(block.content || '').slice(0, 400) + (String(block.content || '').length > 400 ? '…' : '');
+      preview.textContent = String(block.content || ''); // C15: full content, scrollable
       item.appendChild(preview);
       if (block.type === 'history') {
         const inc = document.createElement('label');
@@ -1368,6 +1459,7 @@ $('#contextEditorSaveBtn').onclick = async () => {
     });
     contextEditorState.revision = data.revision;
     contextEditorState.blocks = data.blocks;
+    contextEditorState.cacheEstimate = data.cacheEstimate;
     renderContextEditor();
     toast(`Context revision ${data.revision} saved. Cache estimate: reusable prefix ≈ ${data.cacheEstimate?.estimatedReusablePrefixChars ?? 0} chars (forecast, not observed).`);
   } catch (err) {

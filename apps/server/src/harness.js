@@ -4,7 +4,7 @@
 // contexts.js, so preview and dispatch share one canonical assembler.
 import { config } from './config.js';
 import { query } from './db.js';
-import { getOrCreateRevision, assembleBlocks, buildBlocks, latestRevision, createRevision } from './contexts.js';
+import { getOrCreateRevision, assembleBlocks, buildBlocks, latestRevision, createRevision, mergeRevisionWithFresh } from './contexts.js';
 
 export const HARNESS_VERSION = config.harness.version;
 
@@ -80,14 +80,19 @@ export async function loadIntendedContext(conversationId) {
 // in the round receive this exact snapshot; adapters may only encode it.
 // FR1: the snapshot is assembled from the current immutable context revision.
 export async function freezeSnapshot(conversationId, userId, round, extraSystem = '') {
-  // A run freezes the CURRENT intended context. If messages/project changed
-  // since the latest revision, create a new immutable revision; otherwise
-  // reuse the latest one (edits only affect the next request).
+  // C04: freeze starts from the latest SAVED revision (preserving owner edits
+  // and exclusions), then appends any new history messages. It never rebuilds
+  // blocks from raw rows and discards the owner's saved choices.
   const fresh = await buildBlocks(conversationId, userId);
   const latest = await latestRevision(conversationId, userId);
   let revision = latest;
-  if (!latest || JSON.stringify(latest.blocks) !== JSON.stringify(fresh.blocks)) {
+  if (!latest) {
     revision = await createRevision(conversationId, userId, { blocks: fresh.blocks, note: `run round ${round}` });
+  } else {
+    const merged = mergeRevisionWithFresh(latest.blocks, fresh.blocks);
+    if (JSON.stringify(merged) !== JSON.stringify(latest.blocks)) {
+      revision = await createRevision(conversationId, userId, { blocks: merged, note: `run round ${round}` });
+    }
   }
   const assembled = await assembleBlocks(revision.blocks || [], {});
   const snapshot = {

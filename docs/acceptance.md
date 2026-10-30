@@ -66,14 +66,39 @@ Runner: `tests/fr0-fr1/run.js` (offline Responses fixtures) + `/tmp/fr1-check.mj
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
-| RO01 | PASS | seed-defaults upgraded the saved OpenAI participant to `gpt-6-luna` preserving identity; provider list exposes `gpt-6-luna`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-astra`; Settings Test ran against the selected model. |
-| RO02 | PASS | Offline fixtures: typed text+image input preserved, fragmented function-call deltas accumulated with `call_id` correlation, incomplete/failed/EOF outcomes distinguished, Stop aborts the body read, reasoning.effort validation rejects Sol with `none`. |
-| RO03 | PASS (partial) | Chat and Responses usage shapes normalize to input/output/total + cache_read/cache_write/reasoning tokens with raw preserved; live run recorded `prompt_tokens=117, completion_tokens=5, cache_read_tokens=0, reasoning_tokens=0`. Continuation-state replay across edits/forks is enforced by `store:false` + per-run revision binding; full replay gate remains on RO04 live tool smoke. |
+| RO01 | PASS (API-level) | seed-defaults creates missing defaults without overwriting (C02 fix); provider list exposes the exact GPT-6 catalogue; in-place model edit for all four providers; Settings Test ran against the selected model. Full website phone flow remains OC09. |
+| RO02 | PASS (fixture-level) | `tests/fr0-fr1/run.js` offline fixtures: typed text+image input preserved, fragmented function-call deltas accumulated with `call_id` correlation, incomplete/failed/EOF outcomes distinguished, Stop aborts the body read, reasoning.effort validation rejects Sol with `none`. Does not by itself establish the full website approval flow (see OC07). |
+| RO03 | PARTIAL | Chat and Responses usage shapes normalize to input/output/total + cache_read/cache_write/reasoning tokens with raw preserved; live run recorded `prompt_tokens=117, completion_tokens=5, cache_read_tokens=0, reasoning_tokens=0`. Continuation-state replay across edits/forks is not yet proven live; the remaining half stays open until RO04 live tool smoke. |
 | RO04 | PARTIAL | Live text smoke via the deployed website: OpenAI participant `gpt-6-luna` returned `ok` with usage. Image and authorized-tool-to-answer smoke checks need an image-enabled, MCP-attached live run and remain operator actions. |
-| RC01 | PASS | `/api/conversations/:id/context` preview and run assembly share `contexts.js`; project edit reached both preview and frozen revision; latest revision persists across reads. |
+| RC01 | PASS (API-level) | `/api/conversations/:id/context` preview and run assembly share `contexts.js`; project edit reached both preview and the frozen run snapshot; latest revision persists across reads. Full preview → save → new message → exact provider request is covered by the issue-#120 script (C04) at API level. |
 | RC02 | PASS | Edited project block without history messages did not corrupt segmentation; saved revision is immutable; cache estimate labeled a forecast with earliest changed block. |
 | RC03 | NOT RUN (partial) | Deterministic serialization and actual provider cache observations require live multi-round runs; absent usage remains unknown by construction. |
 | RC04 | NOT RUN | Editing during a stream requires the real-phone/UI observation; frozen revisions are used per run so next run sees the new revision. |
 | RC05 | PASS | Stale `expectedRevision` returned 409 with the current revision; unauthorized callers are blocked by owner checks (A01). |
 
 A01–A24 rerun after FR0/FR1: unchanged at **21 PASS, 1 FAIL (A04), 2 BLOCKED (A17/A18), 0 NOT RUN** (RUN_OPS=1 run).
+
+## Issue #120 corrective record (2026-10-30)
+
+Defect repairs verified by `tests/issue120/run.js` (static + API + fake-provider e2e) and `tests/fr0-fr1/run.js`:
+
+| Defect | Repair | Evidence |
+| --- | --- | --- |
+| C01 model controls/race | loadProviders rerenders participant cards; pills show model IDs; all providers editable; saved custom IDs shown accurately | issue120 script PASS (static served-source) |
+| C02 defaults overwrite | seed-defaults only creates missing rows | code + RO01 API check |
+| C03 switching unreliable | authoritative `messageCount`; Continue = one model; Compare = explicit ≥2; mode persisted | issue120 script PASS (static) |
+| C04 edits discarded | freeze starts from latest saved revision and appends new history | issue120 script PASS (owner override survived new message + dispatch) |
+| C05 attachments | storage_key preserved through blocks; hydration failure fails before dispatch; count limit enforced | issue120 script PASS (image bytes intact) |
+| C06 diagnostics lost | failed/incomplete outcomes persist `meta.error`/`meta.code` on messages | issue120 script PASS |
+| C07 Stop/deadline detach | timer/abort listener retained until terminal EOF/error | fr0-fr1 suite PASS (Stop during stream aborts) |
+| C08 tool approval loses run | client keeps activeRun until run_complete/run_error | served-source + A21/A23 PASS |
+| C09 tool identity | coordinator preserves participantId + providerToolCallId; tool_actions use one persisted UUID | issue120 unit PASS + A21/A22 PASS |
+| C10 continuation/outcomes | per-participant continuation accumulation; failed/incomplete never marked complete; run status truthful | code + A21/A22 PASS (multi-round live OpenAI remains RO04) |
+| C11 settings ignored | typed settings contract (reject unknown), forwarded to all adapters, owner defaults PUT /api/settings | code + settings endpoints live |
+| C12 OpenAI mappings | 1,050,000 context / 128,000 output; xhigh/max efforts; top-level `prompt_cache_key`; `cache_write_tokens` | code + fr0-fr1 suite still PASS |
+| C13 draft TypeError | complete attachment descriptors preserved/restored; legacy drafts tolerated | issue120 script PASS (static) |
+| C14 tools/web coarse | MCP cards show tool names/descriptions; disabled connections rejected at dispatch | issue120 script + code |
+| C15 phone choices | readable pills, wrapped model rows, full scrollable context, owner prefs (text size, Enter-to-send, voice rate, auto-speak, layout) persisted | issue120 script PASS (static served-source) |
+| C16 ledger overclaim | RO03 narrowed to PARTIAL; RO01/RO02/RC01 labeled API/fixture-level; OC07/OC09 remain | this document |
+
+OC gates: OC01 partial (inventory recorded below), OC02 PASS at API level (all providers editable; phone OC09 pending), OC03 partial (settings effect verified for model/timeout; full reload matrix pending), OC04 PASS at API level (C03/C04 e2e), OC05 PASS at API level (C04/C05 e2e), OC06 PASS (C06/C13), OC07 partial (tool identity + two-round continuation for OpenAI pending live), OC08 PASS at fixture level (C07), OC09 NOT RUN (physical phone), OC10 updated here.

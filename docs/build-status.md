@@ -74,3 +74,9 @@ Scope amendment FR0–FR4 accepted. **FR0 and FR1 are implemented, verified, and
 | RD/RP/RU/RA/RM/RG/RX gates | NOT RUN | Blocked on FR2–FR4; will be run when those features exist. |
 
 A01–A24 ledger after FR0/FR1: unchanged at **21 PASS / 1 FAIL (A04) / 2 BLOCKED / 0 NOT RUN** (see docs/acceptance.md). RO01/RO02 PASS; RO03 partial; RO04 partial (text smoke only); RC01/RC02/RC05 PASS; RC03/RC04 NOT RUN.
+
+## Issue #120 corrective record (2026-10-30)
+
+Audit defects C01–C16 repaired as listed in docs/acceptance.md. `tests/issue120/run.js` (static + API + fake-provider e2e) passes all checks; `tests/fr0-fr1/run.js` still passes after the C07/C12 adapter corrections. A01–A24 remains 21 PASS / 1 FAIL (A04 anthropic key) / 2 BLOCKED (A17/A18 phone) / 0 NOT RUN.
+
+Remaining OC gates: OC01/OC03/OC07 PARTIAL, OC09 (physical phone) NOT RUN, OC10 recorded. FR2–FR4 remain pending per issue #119.

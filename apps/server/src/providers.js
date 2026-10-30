@@ -7,42 +7,42 @@ import { VaultError } from './vault.js';
 export const OPENAI_MODELS = {
   'gpt-6-luna': {
     label: 'GPT-6 Luna',
-    contextWindow: 400000,
+    contextWindow: 1050000,
     maxOutputTokens: 128000,
     images: true,
     tools: true,
     reasoning: true,
-    reasoningEffort: ['none', 'low', 'medium', 'high'],
-    notes: 'Inexpensive seed model; Responses transport; reasoning-with-tools requires the Responses API.',
+    reasoningEffort: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+    notes: 'Inexpensive seed model; Responses transport; reasoning-with-tools requires the Responses API. A0 may apply a deliberate runtime budget below the model capability.',
   },
   'gpt-6.1-sol': {
     label: 'GPT-6.1 Sol',
-    contextWindow: 400000,
+    contextWindow: 1050000,
     maxOutputTokens: 128000,
     images: true,
     tools: true,
     reasoning: true,
-    reasoningEffort: ['low', 'medium', 'high'], // rejects "none"
+    reasoningEffort: ['low', 'medium', 'high', 'xhigh', 'max'], // rejects "none"
     notes: 'Requires Responses for tool calling; reasoning.effort cannot be "none".',
   },
   'gpt-6.1-terra': {
     label: 'GPT-6.1 Terra',
-    contextWindow: 400000,
+    contextWindow: 1050000,
     maxOutputTokens: 128000,
     images: true,
     tools: true,
     reasoning: true,
-    reasoningEffort: ['none', 'low', 'medium', 'high'],
+    reasoningEffort: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
     notes: 'Responses transport; supports reasoning.effort "none".',
   },
   'gpt-6-astra': {
     label: 'GPT-6 Astra',
-    contextWindow: 400000,
+    contextWindow: 1050000,
     maxOutputTokens: 128000,
     images: true,
     tools: true,
     reasoning: true,
-    reasoningEffort: ['low', 'medium', 'high'], // rejects "none"
+    reasoningEffort: ['low', 'medium', 'high', 'xhigh', 'max'], // rejects "none"
     notes: 'Requires Responses for tool calling; reasoning.effort cannot be "none".',
   },
 };
@@ -243,12 +243,12 @@ function encodeAnthropicMessages(provider, model, snapshot) {
 export async function streamProvider({ provider, model, apiKey, snapshot, tools, signal, onChunk, timeoutMs, baseUrl, settings = {} }) {
   const def = providerInfo(provider);
   if (def.kind === 'anthropic') {
-    return streamAnthropic({ provider, model, apiKey, snapshot, tools, signal, onChunk, timeoutMs, baseUrl });
+    return streamAnthropic({ provider, model, apiKey, snapshot, tools, signal, onChunk, timeoutMs, baseUrl, settings });
   }
   if (def.kind === 'openai-responses') {
     return streamOpenAIResponses({ provider, model, apiKey, snapshot, tools, signal, onChunk, timeoutMs, baseUrl, settings });
   }
-  return streamOpenAICompatible({ provider, model, apiKey, snapshot, tools, signal, onChunk, timeoutMs, baseUrl });
+  return streamOpenAICompatible({ provider, model, apiKey, snapshot, tools, signal, onChunk, timeoutMs, baseUrl, settings });
 }
 
 // FR0: OpenAI Responses streaming with complete output-item accumulation,
@@ -294,7 +294,8 @@ async function streamOpenAIResponses({ provider, model, apiKey, snapshot, tools,
     body.reasoning = { effort, summary: 'auto' };
   }
   if (settings.promptCacheKey) {
-    body.prompt_cache_options = { cache_breakpoint_token: settings.promptCacheKey };
+    // Current Responses contract: top-level prompt_cache_key (C12).
+    body.prompt_cache_key = settings.promptCacheKey;
   }
 
   const res = await fetchWithTimeout(`${base}/responses`, {
@@ -386,7 +387,7 @@ async function streamOpenAIResponses({ provider, model, apiKey, snapshot, tools,
   return result;
 }
 
-async function streamOpenAICompatible({ provider, model, apiKey, snapshot, tools, signal, onChunk, timeoutMs, baseUrl }) {
+async function streamOpenAICompatible({ provider, model, apiKey, snapshot, tools, signal, onChunk, timeoutMs, baseUrl, settings = {} }) {
   const def = providerInfo(provider);
   const base = (baseUrl || def.defaultBaseUrl).replace(/\/$/, '');
   const url = `${base}/chat/completions`;
@@ -397,6 +398,7 @@ async function streamOpenAICompatible({ provider, model, apiKey, snapshot, tools
     stream: true,
     stream_options: { include_usage: true },
   };
+  if (settings.maxOutputTokens) body.max_tokens = settings.maxOutputTokens;
   if (tools?.length) {
     body.tools = tools;
     body.tool_choice = 'auto';
@@ -457,14 +459,14 @@ async function streamOpenAICompatible({ provider, model, apiKey, snapshot, tools
   return result;
 }
 
-async function streamAnthropic({ provider, model, apiKey, snapshot, tools, signal, onChunk, timeoutMs, baseUrl }) {
+async function streamAnthropic({ provider, model, apiKey, snapshot, tools, signal, onChunk, timeoutMs, baseUrl, settings = {} }) {
   const def = providerInfo(provider);
   const base = (baseUrl || def.defaultBaseUrl).replace(/\/$/, '');
   const { messages, system } = encodeAnthropicMessages(provider, model, snapshot);
   const body = {
     model,
     messages,
-    max_tokens: 8192,
+    max_tokens: settings.maxOutputTokens || 8192,
     stream: true,
   };
   if (system) body.system = system;
@@ -554,7 +556,14 @@ async function fetchWithTimeout(url, options, timeoutMs) {
     const cleanupReader = (reader) => {
       const origRead = reader.read.bind(reader);
       reader.read = async () => {
-        try { return await origRead(); } finally { release(); }
+        try {
+          const r = await origRead();
+          if (r.done) release(); // terminal EOF only
+          return r;
+        } catch (err) {
+          release(); // terminal error/abort
+          throw err;
+        }
       };
       return reader;
     };
@@ -576,7 +585,7 @@ export function usageFromProvider(usage) {
     completion_tokens: usage.completion_tokens ?? usage.output_tokens ?? null,
     total_tokens: usage.total_tokens ?? null,
     cache_read_tokens: usage.prompt_tokens_details?.cached_tokens ?? usage.input_tokens_details?.cached_tokens ?? null,
-    cache_write_tokens: usage.prompt_cache_miss_tokens ?? usage.input_tokens_details?.cache_creation_tokens ?? null,
+    cache_write_tokens: usage.prompt_cache_miss_tokens ?? usage.input_tokens_details?.cache_write_tokens ?? null,
     reasoning_tokens: usage.completion_tokens_details?.reasoning_tokens ?? usage.output_tokens_details?.reasoning_tokens ?? null,
     raw: usage,
   };
