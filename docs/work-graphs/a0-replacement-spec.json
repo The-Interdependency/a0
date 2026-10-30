@@ -1,19 +1,25 @@
 {
   "schema": "the-interdependency.stack-manifest",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "work_graph_sha256": "9fc2e011bfb5413814e41a65494d0cb69864a1c161ad1db4905c83f3066ea26c",
   "repositories": [
     {
       "repository": "The-Interdependency/a0",
       "commit": "d1b3169bd55ac67342505c940b9f548d56060d25",
       "authority": "Replacement specification destination and historical A0 source boundary.",
-      "relation": "Published specification input for this VM/website revision; output identity is the commit containing this manifest."
+      "relation": "Published specification input for this VM/website revision."
+    },
+    {
+      "repository": "The-Interdependency/a0",
+      "commit": "3eef4b088aa0c4e826f657f74cc6cfe0738062f3",
+      "authority": "Implemented A0 successor source (apps, operations, tests).",
+      "relation": "Deployed implementation commit on the VM; later documentation commit records acceptance."
     },
     {
       "repository": "The-Interdependency/openbao",
       "commit": "4a8f475e88e4fa0c76ae1645a22faffe5596d361",
-      "authority": "Vault implementation and fork-specific metadata integration; no A0 application or deployment proof.",
-      "relation": "Selected replaceable vault component; pinned source support informs the unverified VM deployment proposal."
+      "authority": "Vault implementation and fork-specific metadata integration.",
+      "relation": "Selected replaceable vault component; built locally as OpenBao v2.0.0-HEAD and running as openbao.service."
     },
     {
       "repository": "The-Interdependency/skill-lib",
@@ -25,7 +31,7 @@
       "repository": "The-Interdependency/skill-lib",
       "commit": "d71a3a938cb6d646ffc0b59186452117e4a37d13",
       "authority": "Canonical reusable build, metadata, documentation, and work-graph discipline.",
-      "relation": "Governing methodology consumed by this specification handoff."
+      "relation": "Governing methodology consumed by this build; loaded the-interdependency, wdll, skill-usage, and the resource-run invariant."
     }
   ],
   "boundaries": {
@@ -35,11 +41,10 @@
     "semantic_mapping": "external-provenance; vault and build-doctrine references do not transfer their runtime, semantic, mathematical, empirical, or certification standing to A0",
     "agent_scope": "cross-repository-work-graph",
     "hmmm": [
-      "The latest owner instruction selects the existing VM as host and an authenticated responsive website as access; actual VM identity and hostname/TLS authority remain to be discovered.",
-      "The replacement application, production vault execution, phone-browser acceptance, and live provider/tool tests are not implemented or verified by this documentation commit.",
-      "Deployment topology is a proposal pending resource, startup, storage, overlap, recovery, and authorization evidence.",
-      "User-data permissions and runtime authority do not transfer from source visibility or metadata inspection.",
-      "Unresolved product/configuration choices are enumerated in the specification; no silent defaults claim user approval."
+      "Real-phone Android browser and microphone acceptance (A17/A18) remain unobserved from a physical device.",
+      "OpenAI legacy key returns 401 and must be rotated; Anthropic key not configured.",
+      "Off-VM encrypted backup copies and backup-key custody are operator actions still to complete.",
+      "Org hostname (a0.interdependentway.org) DNS A record to 35.212.252.101 and Caddy hostname addition remain if Erin prefers a vanity URL over the working nip.io/sslip.io names."
     ]
   }
 }
