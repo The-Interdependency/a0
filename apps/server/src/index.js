@@ -571,12 +571,15 @@ export async function start() {
         const text = await r.text().catch(() => '');
         res.json({ provider: req.params.provider, ok: r.ok, status: r.status, model, message: text.slice(0, 300) });
       } else {
-        const base = def.defaultBaseUrl.replace(/\/$/, '');
+        // C11/OC03: chat-completions diagnostics use the same adapter and the
+        // saved/selected settings (bounded output budget disclosed).
+        const saved = validateParticipantSettings(req.body?.settings || {});
+        const base = (saved.baseUrl || def.defaultBaseUrl).replace(/\/$/, '');
         const r = await fetch(`${base}/chat/completions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...def.authHeader(apiKey) },
-          body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }),
-          signal: AbortSignal.timeout(20000),
+          body: JSON.stringify({ model, max_tokens: saved.maxOutputTokens || 256, messages: [{ role: 'user', content: 'ping' }] }),
+          signal: AbortSignal.timeout(saved.timeoutMs || 20000),
         });
         const text = await r.text().catch(() => '');
         res.json({ provider: req.params.provider, ok: r.ok, status: r.status, model, message: text.slice(0, 300) });
@@ -768,6 +771,44 @@ export async function start() {
     res.json({ ok: true, status: 'retired' });
   }));
 
+  app.post('/api/agents/:id/fork', asyncRoute(async (req, res) => {
+    const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!agent.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent not found.' });
+    const childName = req.body?.name || `${agent.rows[0].name} child`;
+    const child = await query(
+      `INSERT INTO agents (user_id, name, forge_template_id, effective_instructions, original_definition, task, status, parent_id, root_id, lineage, tool_scope)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,'ready',$7,$8,$9::jsonb,$10::jsonb) RETURNING *`,
+      [req.user.id, childName, agent.rows[0].forge_template_id, agent.rows[0].effective_instructions, agent.rows[0].original_definition, agent.rows[0].task, agent.rows[0].id, agent.rows[0].root_id || agent.rows[0].id, JSON.stringify([...(agent.rows[0].lineage || []), agent.rows[0].id]), agent.rows[0].tool_scope],
+    );
+    const out = await ptcna.fork(req.params.id, child.rows[0].id);
+    const summary = ringSummary(out.state);
+    await query(`UPDATE agents SET ptcna_summary = $2::jsonb WHERE id = $1`, [child.rows[0].id, JSON.stringify(summary)]);
+    res.status(201).json({ agent: child.rows[0], receipt: out.receipt, summary });
+  }));
+
+  app.post('/api/agents/:id/absorb', asyncRoute(async (req, res) => {
+    const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!agent.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent not found.' });
+    const donorId = req.body?.donorId;
+    const donor = donorId ? await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [donorId, req.user.id]) : null;
+    if (!donor?.rows.length) return res.status(404).json({ error: 'not_found', message: 'Donor agent not found.' });
+    const out = await ptcna.absorb(req.params.id, donorId);
+    await query(`UPDATE agents SET ptcna_summary = $2::jsonb WHERE id = $1`, [req.params.id, JSON.stringify(ringSummary(out.state))]);
+    await query(`UPDATE agents SET status = 'retired', retired_at = now() WHERE id = $1`, [donorId]);
+    res.json({ receipt: out.receipt, summary: ringSummary(out.state) });
+  }));
+
+  app.post('/api/agents/:id/converge', asyncRoute(async (req, res) => {
+    const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!agent.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent not found.' });
+    const otherId = req.body?.otherId;
+    const other = otherId ? await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [otherId, req.user.id]) : null;
+    if (!other?.rows.length) return res.status(404).json({ error: 'not_found', message: 'Other agent not found.' });
+    const out = await ptcna.converge(req.params.id, otherId, Number(req.body?.alpha) || 0.5);
+    await query(`UPDATE agents SET ptcna_summary = $2::jsonb WHERE id = $1`, [req.params.id, JSON.stringify(ringSummary(out.state))]);
+    res.json({ receipt: out.receipt, summary: ringSummary(out.state) });
+  }));
+
   app.post('/api/agents/:id/ptcna/infer', asyncRoute(async (req, res) => {
     const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
     if (!agent.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent not found.' });
@@ -797,6 +838,35 @@ export async function start() {
     if (!mod.rows.length) return res.status(404).json({ error: 'not_found', message: 'Module not found.' });
     await query(`UPDATE agent_modules SET status = 'retired', retired_at = now() WHERE id = $1`, [req.params.id]);
     res.json({ ok: true, status: 'retired' });
+  }));
+
+  // --- OC01 options inventory ------------------------------------------------------
+  app.get('/api/options', asyncRoute(async (req, res) => {
+    const options = [
+      { area: 'Provider/model', label: 'Provider', supportedValues: ['openai', 'xai', 'deepseek', 'anthropic'], default: 'deepseek (seed)', scope: 'participant', persistence: 'participants', validation: 'providerInfo', effect: 'adapter selection', owner: 'providers.js' },
+      { area: 'Provider/model', label: 'Model', supportedValues: 'catalogue IDs (OpenAI) or valid custom ID (others)', default: 'gpt-6-luna / grok-4-fast / deepseek-chat / claude-sonnet-4-5', scope: 'participant', persistence: 'participants', validation: 'modelInfo/capabilitiesForModel', effect: 'request body model + capability check', owner: 'providers.js' },
+      { area: 'Model behavior', label: 'reasoningEffort', supportedValues: 'model-specific set (xhigh/max included; Sol/Astra reject none)', default: 'unset', scope: 'participant', persistence: 'participants.settings', validation: 'validateParticipantSettings + adapter reject', effect: 'reasoning.effort in Responses', owner: 'providers.js' },
+      { area: 'Model behavior', label: 'maxOutputTokens', supportedValues: 'positive integer (bounded by model)', default: '256 (diagnostic) / adapter default', scope: 'participant', persistence: 'participants.settings', validation: 'typed positive number', effect: 'max_tokens / max_output_tokens', owner: 'providers.js' },
+      { area: 'Model behavior', label: 'verbosity/outputBudget', supportedValues: 'string / positive integer', default: 'unset', scope: 'participant', persistence: 'participants.settings', validation: 'typed', effect: 'adapter-specific where supported', owner: 'providers.js' },
+      { area: 'Request/resources', label: 'timeoutMs', supportedValues: 'positive integer', default: '120000', scope: 'participant', persistence: 'participants.settings', validation: 'typed positive number', effect: 'fetch deadline through body', owner: 'runs.js' },
+      { area: 'Request/resources', label: 'toolStepBudget', supportedValues: 'A0_MAX_TOOL_STEPS (env)', default: '6', scope: 'run', persistence: 'environment', validation: 'integer', effect: 'max continuation rounds', owner: 'index.js' },
+      { area: 'Conversation switching', label: 'mode', supportedValues: ['new', 'continue (one model)', 'compare (>=2)'], default: 'continue/single', scope: 'conversation', persistence: 'localStorage a0.lastMode', validation: 'client + server participantIds', effect: 'run mode + participant set', owner: 'app.js' },
+      { area: 'Context', label: 'block inclusion/edits', supportedValues: 'included boolean; editable text for project/agent/memory', default: 'all included', scope: 'conversation revision', persistence: 'context_revisions', validation: 'canonical block ids + editable rules', effect: 'frozen snapshot for next run', owner: 'contexts.js' },
+      { area: 'Cache', label: 'promptCacheKey', supportedValues: 'string', default: 'unset', scope: 'participant', persistence: 'participants.settings', validation: 'typed string', effect: 'prompt_cache_key (Responses)', owner: 'providers.js' },
+      { area: 'Cache', label: 'cacheEstimate', supportedValues: 'forecast label + prefix chars', default: '—', scope: 'context revision', persistence: 'none (computed)', validation: 'estimate flagged', effect: 'UI display only', owner: 'contexts.js' },
+      { area: 'Tools/web', label: 'toolSelection', supportedValues: ['none', 'allowlist of discovered tool names'], default: 'all discovered', scope: 'participant', persistence: 'participants.settings', validation: 'string array', effect: 'tools offered at dispatch', owner: 'runs.js' },
+      { area: 'Tools/web', label: 'approval scope', supportedValues: 'per-run proposed action ids', default: 'cancel', scope: 'run', persistence: 'tool_actions', validation: 'action ids belong to run', effect: 'executed vs cancelled', owner: 'index.js' },
+      { area: 'Comparison/history', label: 'comparisonLayout', supportedValues: ['side', 'stacked'], default: 'stacked', scope: 'owner', persistence: 'users.settings', validation: 'enum', effect: 'compare pane layout', owner: 'app.js' },
+      { area: 'Files', label: 'attachmentIds', supportedValues: 'owned ready attachments (max count)', default: 'none', scope: 'message', persistence: 'attachments', validation: 'owner + status + count', effect: 'hydrated bytes in context', owner: 'index.js/media.js' },
+      { area: 'Voice', label: 'voiceRate', supportedValues: '0.8/1.0/1.2', default: '1.02', scope: 'owner', persistence: 'users.settings', validation: 'enum', effect: 'speechSynthesis rate', owner: 'app.js' },
+      { area: 'Voice', label: 'autoSpeak', supportedValues: ['on', 'off'], default: 'off', scope: 'owner', persistence: 'users.settings', validation: 'enum', effect: 'auto-speak completed answers', owner: 'app.js' },
+      { area: 'Presentation', label: 'textSize', supportedValues: ['small', 'normal', 'large'], default: 'normal', scope: 'owner', persistence: 'users.settings', validation: 'enum', effect: '--base-font', owner: 'app.js' },
+      { area: 'Presentation', label: 'enterToSend', supportedValues: ['on', 'off'], default: 'off', scope: 'owner', persistence: 'users.settings', validation: 'enum', effect: 'Enter sends vs newline', owner: 'app.js' },
+      { area: 'Projects', label: 'project association/instructions', supportedValues: 'project id; instructions text', default: 'no project', scope: 'conversation/project', persistence: 'projects/conversations', validation: 'owner', effect: 'project block in context', owner: 'index.js/contexts.js' },
+      { area: 'Forge/retained agents', label: 'template', supportedValues: 'eight exact Forge ids', default: 'sage', scope: 'agent', persistence: 'agents.original_definition', validation: 'forgeTemplate', effect: 'effective instructions + module', owner: 'retained/definitions.js' },
+      { area: 'Forge/retained agents', label: 'ptcna ops', supportedValues: ['infer', 'fork', 'absorb', 'converge'], default: 'infer', scope: 'agent', persistence: 'agents.ptcna_summary', validation: 'producer sidecar', effect: 'numerical ring state', owner: 'ptcna.js/sidecar' },
+    ];
+    res.json({ options });
   }));
 
   // --- Settings -------------------------------------------------------------------

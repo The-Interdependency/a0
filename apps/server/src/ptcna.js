@@ -34,6 +34,8 @@ export const ptcna = {
   reward: (id, value) => call('POST', '/reward', { id, value }),
   state: (id) => call('GET', `/state/${id}`),
   fork: (id, childId) => call('POST', '/fork', { id, childId }),
+  absorb: (id, donorId) => call('POST', '/absorb', { id, donorId }),
+  converge: (id, otherId, alpha) => call('POST', '/converge', { id, otherId, alpha }),
 };
 
 // Extract the ring summary A0 displays/uses for an agent.

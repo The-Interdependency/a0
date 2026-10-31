@@ -25,6 +25,7 @@ for p in (BASE / "ptcna", BASE / "ucns" / "src"):
         sys.path.insert(0, str(p))
 
 from ptcna import PTCNARuntime  # noqa: E402
+from ptcna.neural.merge import InstanceMerge  # noqa: E402
 
 STATE_DIR = Path(os.environ.get("A0_PTCNA_STATE_DIR", "/srv/a0/ptcna"))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -108,12 +109,35 @@ class Handler(BaseHTTPRequestHandler):
             rt = RUNTIMES.get(agent_id)
             if not rt:
                 return self._json(404, {"error": "no runtime"})
-            # Producer-object fork (deep copy). Merge algebra (absorb/converge)
-            # remains with the retained producer merge module; this boundary
-            # does not reimplement it.
-            RUNTIMES[child_id] = copy.deepcopy(rt)
+            child = copy.deepcopy(rt)
+            child_engine, receipt = InstanceMerge.fork(rt.target.neural)
+            child.target.neural = child_engine
+            RUNTIMES[child_id] = child
             save(child_id)
-            return self._json(200, {"ok": True, "state": RUNTIMES[child_id].state()})
+            return self._json(200, {"ok": True, "receipt": receipt, "state": child.state()})
+        if self.path == "/absorb":
+            dominant_id = data.get("id")
+            donor_id = data.get("donorId")
+            dominant = RUNTIMES.get(dominant_id)
+            donor = RUNTIMES.get(donor_id)
+            if not dominant or not donor:
+                return self._json(404, {"error": "no runtime"})
+            receipt = InstanceMerge.absorb(dominant.target.neural, donor.target.neural)
+            RUNTIMES.pop(donor_id, None)
+            _path(donor_id).unlink(missing_ok=True)
+            save(dominant_id)
+            return self._json(200, {"receipt": receipt, "state": dominant.state()})
+        if self.path == "/converge":
+            a_id = data.get("id")
+            b_id = data.get("otherId")
+            a = RUNTIMES.get(a_id)
+            b = RUNTIMES.get(b_id)
+            if not a or not b:
+                return self._json(404, {"error": "no runtime"})
+            receipt = InstanceMerge.converge(a.target.neural, b.target.neural, alpha=float(data.get("alpha", 0.5)))
+            save(a_id)
+            save(b_id)
+            return self._json(200, {"receipt": receipt, "state": a.state()})
         return self._json(404, {"error": "not found"})
 
 

@@ -59,6 +59,13 @@ check('RM03 hot swap changes renderer only', swap.renderer === 'agent-stats' && 
 const afterSwap = (await api('GET', `/api/agents/${a1.agent.id}`)).data;
 check('RM03 swap preserves agent/state bindings', afterSwap.module.renderer === 'agent-stats' && afterSwap.agent.ptcna_summary?.phi?.steps === a1Again.phi.steps);
 
+const fork = (await api('POST', `/api/agents/${a1.agent.id}/fork`, { name: 'Forked' })).data;
+check('RP01 producer fork creates independent child state', fork.receipt?.mode === 'fork' && Boolean(fork.summary?.phi), JSON.stringify(fork.receipt?.mode));
+const absorb = (await api('POST', `/api/agents/${a1.agent.id}/absorb`, { donorId: a2.agent.id })).data;
+check('RP01 producer absorb retires donor and merges state', absorb.receipt?.mode === 'absorb', JSON.stringify(absorb.receipt?.mode));
+const converge = (await api('POST', `/api/agents/${a1.agent.id}/converge`, { otherId: fork.agent.id, alpha: 0.5 })).data;
+check('RP01 producer converge exchanges tensors', converge.receipt?.mode === 'converge', JSON.stringify(converge.receipt?.mode));
+
 if (failures) {
   console.log(`issue #119 FR2/FR3 checks: ${failures} failures`);
   process.exit(1);

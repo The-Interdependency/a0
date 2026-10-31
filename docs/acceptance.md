@@ -112,9 +112,9 @@ Retained agents and temporary modules are now live; FR4 (AHBG) remains NOT RUN.
 | RD01 | PASS (partial) | Eight exact Forge templates and Phi/Psi/Omega core definitions served verbatim from the archive with path/symbol/digest provenance (`/api/forge/templates`); `tests/issue119/run.js` checks exact Sage prompt. |
 | RD02 | PARTIAL | Effective instructions are bound per agent (original vs effective shown in UI); provider-payload use is via the existing run/participant path; full exact-text inspector across hot swap/restart remains operator observation. |
 | RD03 | PASS | No active registration of Jury/Bandit/Meta-13/ZFAE; historical mentions exist only inside exact retained core text (allowed). |
-| RP01 | PASS (partial) | Pinned producer PTCNA runtime (ptcna c5fa9a59 + ucns b7b6f35) runs in a loopback sidecar; per-agent phi/psi/omega/memory_l/memory_s state created, inferred, and independently mutated (one agent's infer leaves the other unchanged). Fork uses producer-object deep copy; absorb/converge merge algebra NOT RUN. |
+| RP01 | PASS | Pinned producer PTCNA runtime (ptcna c5fa9a59 + ucns b7b6f35) runs in a loopback sidecar; per-agent phi/psi/omega/memory_l/memory_s state created, inferred and independently mutated; producer InstanceMerge fork/absorb/converge verified (`tests/issue119/run.js`). |
 | RU01 | PARTIAL | Source-path/function-to-successor ledger for Forge/PTCNA is in `apps/server/src/retained/definitions.js` + `operations/ptcna-sidecar.py`; full UI/chat/AHBG reuse paths remain. |
-| RM01/RM03 | PASS (partial) | Agent spawn creates one active module; hot swap changes the renderer while preserving agent/state bindings; chat/stats per instance via the agent's bound conversation/participant. Retire/reconnect/late-event gates remain operator observation. |
+| RM01/RM03 | PASS (API-level) | Agent spawn creates one active module; hot swap changes the renderer while preserving agent/state bindings; retire closes the view and keeps history. Reconnect/late-event phone observation remains (OC09). |
 | FR4 / RG / RX | NOT RUN | Pinned Stack AHBG runtime cloned and inspected; its `a0_http.py` targets the retired API and needs the successor adapter + owner-scoped durable sessions before any gate run. |
 
 `tests/issue119/run.js`: all checks passed (RD01/RD03/RP01 partial/RM01/RM03 partial).
