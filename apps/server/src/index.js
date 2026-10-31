@@ -401,6 +401,7 @@ export async function start() {
     outputBudget: 'number',
     promptCacheKey: 'string',
     timeoutMs: 'number',
+    toolSelection: 'stringArray',
   };
   const validateParticipantSettings = (settings) => {
     if (settings == null) return {};
@@ -418,7 +419,21 @@ export async function start() {
         throw err;
       }
       const type = ALLOWED_PARTICIPANT_SETTINGS[key];
-      if (type === 'number' ? (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) : (typeof value !== 'string' || !value.trim())) {
+      if (type === 'number') {
+        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+          const err = new Error(`Setting "${key}" must be a positive number.`);
+          err.status = 400;
+          err.code = 'invalid_setting';
+          throw err;
+        }
+      } else if (type === 'stringArray') {
+        if (!Array.isArray(value) || value.some((v) => typeof v !== 'string' || !v.trim())) {
+          const err = new Error(`Setting "${key}" must be an array of tool names.`);
+          err.status = 400;
+          err.code = 'invalid_setting';
+          throw err;
+        }
+      } else if (typeof value !== 'string' || !value.trim()) {
         const err = new Error(`Setting "${key}" must be a ${type}.`);
         err.status = 400;
         err.code = 'invalid_setting';
@@ -519,6 +534,10 @@ export async function start() {
         }
         const snapshot = { system: 'A0 settings test.', messages: [{ role: 'user', content: 'ping', attachments: [] }] };
         let chunks = 0;
+        // C11: diagnostic and inference share the adapter; saved settings apply,
+        // with the bounded diagnostic output budget disclosed as an override.
+        const saved = validateParticipantSettings(req.body?.settings || {});
+        const diagSettings = { ...saved, maxOutputTokens: saved.maxOutputTokens || 256 };
         const result = await streamProvider({
           provider: req.params.provider,
           model,
@@ -527,8 +546,8 @@ export async function start() {
           tools: [],
           signal: new AbortController().signal,
           onChunk: () => { chunks += 1; },
-          timeoutMs: 20000,
-          settings: { maxOutputTokens: 256 },
+          timeoutMs: saved.timeoutMs || 20000,
+          settings: diagSettings,
         });
         res.json({
           provider: req.params.provider,

@@ -261,7 +261,7 @@ async function main() {
   // Set up fake provider + participants for contract tests.
   const provider = startFakeProvider();
   const mcp = startFakeMcp();
-  await sleep(250);
+  await sleep(1000); // generous startup for loopback MCP transport
   // FR0: OpenAI now uses the Responses transport, so the fake chat participants
   // use the openai-compatible xAI path (Chat Completions) with a local baseUrl.
   const xaiStatus = await apiRequest(cookie, csrf, 'GET', '/api/providers/xai/status');

@@ -133,7 +133,15 @@ export async function dispatchParticipant({
     throw err;
   }
 
-  const tools = buildToolsForConnections(connections);
+  // C14: per-participant tool scope. 'none' or an explicit allowlist limits
+  // what the model may even propose; the approval dialog remains the grant.
+  let tools = buildToolsForConnections(connections);
+  const toolSelection = participant.settings?.toolSelection;
+  if (toolSelection === 'none') tools = [];
+  else if (Array.isArray(toolSelection)) {
+    const allow = new Set(toolSelection);
+    tools = tools.filter((t) => allow.has(t.function.name));
+  }
   const settings = { ...(participant.settings || {}) };
   if (continuation) settings.continuation = continuation;
   const result = await streamProvider({
