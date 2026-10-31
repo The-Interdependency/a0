@@ -63,6 +63,7 @@ const mcpServer = http.createServer(async (req, res) => {
   await transport.handleRequest(req, res);
 });
 await new Promise((r) => mcpServer.listen(MCP_PORT, '127.0.0.1', r));
+await sleep(500); // allow loopback MCP transport to settle
 
 // ---- authenticated flow ----------------------------------------------------
 const login = await fetch(`${BASE}/api/auth/login`, {
@@ -90,7 +91,11 @@ let parts = (await api('GET', '/api/participants')).data.participants;
 const openai = parts.find((p) => p.provider === 'openai');
 await api('PATCH', `/api/participants/${openai.id}`, { settings: { baseUrl: `http://127.0.0.1:${RESP_PORT}` } });
 
-// MCP connection (loopback opt-in required) + discovery.
+// MCP connection (loopback opt-in required) + discovery. Remove stale
+// same-named connections from prior runs so execution targets are unambiguous.
+for (const old of (await api('GET', '/api/mcp')).data.connections || []) {
+  if (old.name === 'fake') await api('DELETE', `/api/mcp/${old.id}`);
+}
 const conn = (await api('POST', '/api/mcp', { name: 'fake', url: `http://127.0.0.1:${MCP_PORT}/mcp`, allowPrivateNetwork: true })).data.connection;
 await api('POST', `/api/mcp/${conn.id}/discover`);
 
@@ -134,7 +139,9 @@ const toolResults = events.filter((e) => e.event === 'tool_result');
 const finalMessages = (await api('GET', `/api/conversations/${conv.id}`)).data.messages.filter((m) => m.role === 'assistant');
 check('OC07 two successive Responses requests', responsesRequests.length === 2, `count=${responsesRequests.length}`);
 check('OC07 continuation carries function_call_output with call_id', JSON.stringify(responsesRequests[1]?.input || []).includes('function_call_output') && JSON.stringify(responsesRequests[1]?.input || []).includes('call_loop_1'));
+const secondInput = JSON.stringify(responsesRequests[1]?.input || []);
 check('OC07 executed tool result matches original call', mcpInvocations.length === 1 && mcpInvocations[0].text === 'ping', JSON.stringify(mcpInvocations));
+check('OC07 tool output returned to the model', secondInput.includes('echo:ping'), secondInput.slice(0, 300));
 check('OC07 run completes with final answer', Boolean(doneEvent) && finalMessages.some((m) => m.content.includes('final-answer')), JSON.stringify(finalMessages.map((m) => m.content)));
 check('OC07 tool results attached to the run', toolResults.length >= 1);
 

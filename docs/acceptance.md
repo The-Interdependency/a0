@@ -101,7 +101,7 @@ Defect repairs verified by `tests/issue120/run.js` (static + API + fake-provider
 | C15 phone choices | readable pills, wrapped model rows, full scrollable context, owner prefs (text size, Enter-to-send, voice rate, auto-speak, layout) persisted | issue120 script PASS (static served-source) |
 | C16 ledger overclaim | RO03 narrowed to PARTIAL; RO01/RO02/RC01 labeled API/fixture-level; OC07/OC09 remain | this document |
 
-OC gates: OC01 partial (inventory recorded below), OC02 PASS at API level (all providers editable; phone OC09 pending), OC03 partial (settings effect verified for model/timeout; full reload matrix pending), OC04 PASS at API level (C03/C04 e2e), OC05 PASS at API level (C04/C05 e2e), OC06 PASS (C06/C13), OC07 partial (tool identity + two-round continuation for OpenAI pending live), OC08 PASS at fixture level (C07), OC09 NOT RUN (physical phone), OC10 updated here.
+OC gates: OC01 partial (inventory recorded below), OC02 PASS at API level (all providers editable; phone OC09 pending), OC03 partial (settings effect verified for model/timeout; full reload matrix pending), OC04 PASS at API level (C03/C04 e2e), OC05 PASS at API level (C04/C05 e2e), OC06 PASS (C06/C13), OC07 PASS (full offline tool lifecycle through the real server path: two Responses rounds, call_id correlation, executed MCP result returned to the model), OC08 PASS at fixture level (C07), OC09 NOT RUN (physical phone), OC10 updated here.
 
 ## Issue #119 FR2/FR3 reactivation record (2026-10-31)
 
