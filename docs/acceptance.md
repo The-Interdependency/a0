@@ -102,3 +102,19 @@ Defect repairs verified by `tests/issue120/run.js` (static + API + fake-provider
 | C16 ledger overclaim | RO03 narrowed to PARTIAL; RO01/RO02/RC01 labeled API/fixture-level; OC07/OC09 remain | this document |
 
 OC gates: OC01 partial (inventory recorded below), OC02 PASS at API level (all providers editable; phone OC09 pending), OC03 partial (settings effect verified for model/timeout; full reload matrix pending), OC04 PASS at API level (C03/C04 e2e), OC05 PASS at API level (C04/C05 e2e), OC06 PASS (C06/C13), OC07 partial (tool identity + two-round continuation for OpenAI pending live), OC08 PASS at fixture level (C07), OC09 NOT RUN (physical phone), OC10 updated here.
+
+## Issue #119 FR2/FR3 reactivation record (2026-10-31)
+
+Retained agents and temporary modules are now live; FR4 (AHBG) remains NOT RUN.
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| RD01 | PASS (partial) | Eight exact Forge templates and Phi/Psi/Omega core definitions served verbatim from the archive with path/symbol/digest provenance (`/api/forge/templates`); `tests/issue119/run.js` checks exact Sage prompt. |
+| RD02 | PARTIAL | Effective instructions are bound per agent (original vs effective shown in UI); provider-payload use is via the existing run/participant path; full exact-text inspector across hot swap/restart remains operator observation. |
+| RD03 | PASS | No active registration of Jury/Bandit/Meta-13/ZFAE; historical mentions exist only inside exact retained core text (allowed). |
+| RP01 | PASS (partial) | Pinned producer PTCNA runtime (ptcna c5fa9a59 + ucns b7b6f35) runs in a loopback sidecar; per-agent phi/psi/omega/memory_l/memory_s state created, inferred, and independently mutated (one agent's infer leaves the other unchanged). Fork uses producer-object deep copy; absorb/converge merge algebra NOT RUN. |
+| RU01 | PARTIAL | Source-path/function-to-successor ledger for Forge/PTCNA is in `apps/server/src/retained/definitions.js` + `operations/ptcna-sidecar.py`; full UI/chat/AHBG reuse paths remain. |
+| RM01/RM03 | PASS (partial) | Agent spawn creates one active module; hot swap changes the renderer while preserving agent/state bindings; chat/stats per instance via the agent's bound conversation/participant. Retire/reconnect/late-event gates remain operator observation. |
+| FR4 / RG / RX | NOT RUN | Pinned Stack AHBG runtime cloned and inspected; its `a0_http.py` targets the retired API and needs the successor adapter + owner-scoped durable sessions before any gate run. |
+
+`tests/issue119/run.js`: all checks passed (RD01/RD03/RP01 partial/RM01/RM03 partial).

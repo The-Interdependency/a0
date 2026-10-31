@@ -80,3 +80,10 @@ A01–A24 ledger after FR0/FR1: unchanged at **21 PASS / 1 FAIL (A04) / 2 BLOCKE
 Audit defects C01–C16 repaired as listed in docs/acceptance.md. `tests/issue120/run.js` (static + API + fake-provider e2e) passes all checks; `tests/fr0-fr1/run.js` still passes after the C07/C12 adapter corrections. A01–A24 remains 21 PASS / 1 FAIL (A04 anthropic key) / 2 BLOCKED (A17/A18 phone) / 0 NOT RUN.
 
 Remaining OC gates: OC01/OC03/OC07 PARTIAL, OC09 (physical phone) NOT RUN, OC10 recorded. FR2–FR4 remain pending per issue #119.
+
+## Issue #119 FR2/FR3 live (2026-10-31)
+
+- Retained Forge agents: eight exact templates + Phi/Psi/Omega cores exposed with provenance; agent creation binds a durable conversation, participant, effective instructions and one temporary stats/chat module.
+- Retained PTCNA: pinned producer runtime runs as a loopback sidecar (`a0-ptcna.service`, `operations/ptcna-sidecar.py`, ptcna c5fa9a59 + ucns b7b6f35 vendored at /opt/a0/vendor). Per-agent phi/psi/omega/memory_l/memory_s state is created, inferred and independent; fork is producer deep-copy, merge algebra not yet wired.
+- Temporary modules: spawn creates one module; hot swap changes renderer without resetting agent/state; retire closes the view and keeps history.
+- FR4 AHBG remains NOT RUN (successor adapter + durable owner-scoped sessions pending). See docs/acceptance.md for the gate record.

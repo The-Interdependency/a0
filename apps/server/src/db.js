@@ -246,6 +246,47 @@ const MIGRATIONS = [
     ALTER TABLE users ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}'::jsonb;
     `,
   },
+  {
+    version: '0004_agents_and_modules',
+    up: `
+    CREATE TABLE agents (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      forge_template_id TEXT NOT NULL,
+      effective_instructions TEXT NOT NULL,
+      original_definition JSONB NOT NULL,
+      participant_id UUID REFERENCES participants(id) ON DELETE SET NULL,
+      conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+      context_revision_id UUID REFERENCES context_revisions(id) ON DELETE SET NULL,
+      task TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'queued',
+      parent_id UUID REFERENCES agents(id) ON DELETE SET NULL,
+      root_id UUID REFERENCES agents(id) ON DELETE SET NULL,
+      lineage JSONB NOT NULL DEFAULT '[]'::jsonb,
+      tool_scope JSONB NOT NULL DEFAULT '[]'::jsonb,
+      budget JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ptcna_summary JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      retired_at TIMESTAMPTZ
+    );
+    CREATE INDEX agents_user_idx ON agents(user_id, created_at DESC);
+
+    CREATE TABLE agent_modules (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      schema_version INTEGER NOT NULL DEFAULT 1,
+      renderer TEXT NOT NULL DEFAULT 'agent-panel',
+      descriptor JSONB NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      previous_renderer TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      retired_at TIMESTAMPTZ
+    );
+    CREATE INDEX agent_modules_agent_idx ON agent_modules(agent_id, created_at DESC);
+    `,
+  },
 ];
 
 export async function migrate() {

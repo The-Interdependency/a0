@@ -1,0 +1,15 @@
+[Unit]
+Description=A0 PTCNA producer sidecar (pinned ptcna/ucns pair)
+After=network.target
+
+[Service]
+Type=simple
+User=a0app
+WorkingDirectory=/opt/a0
+Environment=A0_PTCNA_STATE_DIR=/srv/a0/ptcna
+Environment=A0_PTCNA_PORT=8791
+ExecStart=/usr/bin/python3 /opt/a0/operations/ptcna-sidecar.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

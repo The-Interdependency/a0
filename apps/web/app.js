@@ -1466,3 +1466,110 @@ $('#contextEditorSaveBtn').onclick = async () => {
     toast(err.message, true);
   }
 };
+
+// ---------- FR2 Forge agents + FR3 temporary modules ----------
+let forgeTemplates = [];
+
+async function loadForgeTemplates() {
+  if (!forgeTemplates.length) {
+    const data = await api.get('/api/forge/templates');
+    forgeTemplates = data.templates || [];
+  }
+  const sel = $('#agentTemplate');
+  sel.innerHTML = '';
+  for (const t of forgeTemplates) {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = `${t.name} (${t.id})`;
+    sel.appendChild(opt);
+  }
+}
+
+async function renderAgents() {
+  await loadForgeTemplates();
+  const box = $('#agentCards');
+  box.innerHTML = '';
+  const data = await api.get('/api/agents');
+  for (const a of data.agents) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const h = document.createElement('h3');
+    h.textContent = `${a.name} · ${a.forge_template_id} · ${a.status}`;
+    const sub = document.createElement('div');
+    sub.className = 'muted';
+    const rings = a.ptcna_summary || {};
+    sub.textContent = `task: ${a.task || '—'} · PTCNA φ=${rings.phi?.n ?? '?'} ψ=${rings.psi?.n ?? '?'} ω=${rings.omega?.n ?? '?'} ml=${rings.memory_l?.n ?? '?'} ms=${rings.memory_s?.n ?? '?'} · module ${a.renderer || 'none'}`;
+    const row = document.createElement('div');
+    row.className = 'row model-row';
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'primary-btn';
+    open.textContent = 'Open chat';
+    open.onclick = () => openConversation(a.conversation_id);
+    const infer = document.createElement('button');
+    infer.type = 'button';
+    infer.className = 'chip';
+    infer.textContent = 'PTCNA infer';
+    infer.onclick = async () => {
+      try {
+        const r = await api.post(`/api/agents/${a.id}/ptcna/infer`, { input: a.task || 'observe' });
+        toast(`PTCNA infer φ coherence ${r.summary?.phi?.coherence ?? '?'} (producer engine).`);
+        await renderAgents();
+      } catch (err) { toast(err.message, true); }
+    };
+    const swap = document.createElement('button');
+    swap.type = 'button';
+    swap.className = 'chip';
+    swap.textContent = 'Swap module';
+    swap.onclick = async () => {
+      const next = a.renderer === 'agent-panel' ? 'agent-stats' : 'agent-panel';
+      try {
+        await api.post(`/api/agent-modules/${a.module_id}/swap`, { renderer: next });
+        toast(`Module swapped to ${next}; state preserved.`);
+        await renderAgents();
+      } catch (err) { toast(err.message, true); }
+    };
+    const retire = document.createElement('button');
+    retire.type = 'button';
+    retire.className = 'chip danger';
+    retire.textContent = 'Retire';
+    retire.onclick = async () => {
+      try {
+        await api.post(`/api/agents/${a.id}/retire`);
+        await renderAgents();
+      } catch (err) { toast(err.message, true); }
+    };
+    row.append(open, infer, swap, retire);
+    const orig = document.createElement('details');
+    const sum = document.createElement('summary');
+    sum.textContent = 'Exact archived description / effective instructions';
+    const pre = document.createElement('pre');
+    pre.className = 'context-preview';
+    pre.textContent = `ORIGINAL (${a.original_definition?.source || 'archive'}):\n${a.original_definition?.system_prompt || ''}\n\nEFFECTIVE:\n${a.effective_instructions || ''}`;
+    orig.append(sum, pre);
+    card.append(h, sub, row, orig);
+    box.appendChild(card);
+  }
+}
+
+$('#agentForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    const r = await api.post('/api/agents', {
+      name: $('#agentName').value.trim(),
+      templateId: $('#agentTemplate').value,
+      provider: $('#agentProvider').value,
+      task: $('#agentTask').value.trim(),
+    });
+    toast(`Agent ${r.agent.name} created (PTCNA ${r.ptcnaError ? 'sidecar error: ' + r.ptcnaError : 'state ready'}).`);
+    $('#agentForm').reset();
+    await renderAgents();
+  } catch (err) { toast(err.message, true); }
+});
+
+// Render agents when the view opens (hook into existing view switching).
+const _origShowView = showView;
+showView = function (name) {
+  _origShowView(name);
+  if (name === 'agents') renderAgents().catch((e) => toast(e.message, true));
+};

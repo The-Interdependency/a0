@@ -37,6 +37,7 @@
           <button class="nav-btn" data-view="providers">🔑 Providers</button>
           <button class="nav-btn" data-view="participants">🧩 Participants</button>
           <button class="nav-btn" data-view="mcp">🔌 MCP tools</button>
+          <button class="nav-btn" data-view="agents">⚒️ Forge agents</button>
           <button class="nav-btn" data-view="projects">📁 Projects</button>
           <button class="nav-btn" data-view="about">ℹ️ About &amp; harness</button>
         </div>
@@ -117,6 +118,25 @@
             <input id="pModel" placeholder="Model (blank = default)">
             <button class="primary-btn" type="submit">Add participant</button>
           </form>
+        </section>
+
+        <!-- Forge agents -->
+        <section id="view-agents" class="view hidden">
+          <h2>Forge agents</h2>
+          <p class="muted">Create independently addressable agents from the exact eight-template Forge catalogue. Each agent gets a durable conversation, participant, retained PTCNA numerical state and a temporary stats/chat module. Jury, Bandit, Meta-13 and ZFAE are not active.</p>
+          <form id="agentForm" class="inline-form model-row">
+            <input id="agentName" placeholder="Agent name">
+            <select id="agentTemplate" class="select"></select>
+            <select id="agentProvider" class="select">
+              <option value="openai">OpenAI</option>
+              <option value="xai">xAI</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+            <input id="agentTask" placeholder="Task (one line)">
+            <button class="primary-btn" type="submit">Create agent</button>
+          </form>
+          <div id="agentCards" class="cards"></div>
         </section>
 
         <!-- MCP -->

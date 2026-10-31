@@ -41,6 +41,8 @@ import {
   estimateCachePrefix,
   describeBlockType,
 } from './contexts.js';
+import { FORGE_TEMPLATES, CORES, RETAINED_SOURCE, forgeTemplate, effectivePromptFor } from './retained/definitions.js';
+import { ptcna, ringSummary } from './ptcna.js';
 import {
   insertRun,
   dispatchParticipant,
@@ -692,6 +694,109 @@ export async function start() {
       await query(`UPDATE mcp_connections SET status = 'failed', last_error = $2 WHERE id = $1`, [conn.id, err.message.slice(0, 500)]);
       res.status(502).json({ error: 'discovery_failed', message: err.message });
     }
+  }));
+
+  // --- FR2 retained agents (Forge + PTCNA) ----------------------------------------
+  app.get('/api/forge/templates', asyncRoute(async (req, res) => {
+    res.json({ templates: FORGE_TEMPLATES, cores: CORES, retainedSource: RETAINED_SOURCE });
+  }));
+
+  app.post('/api/agents', asyncRoute(async (req, res) => {
+    const { name, templateId, task = '', provider = 'openai', model, parentId } = req.body || {};
+    const template = forgeTemplate(templateId);
+    if (!template) return res.status(400).json({ error: 'validation', message: `Unknown Forge template: ${templateId}` });
+    const parent = parentId
+      ? (await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [parentId, req.user.id])).rows[0]
+      : null;
+    if (parentId && !parent) return res.status(404).json({ error: 'not_found', message: 'Parent agent not found.' });
+    const effectiveInstructions = effectivePromptFor(template, {});
+    // One durable creation path: conversation + participant + agent + module.
+    const conv = await query(
+      `INSERT INTO conversations (user_id, title, harness_version) VALUES ($1,$2,$3) RETURNING *`,
+      [req.user.id, name || template.name, HARNESS_VERSION],
+    );
+    const participant = await query(
+      `INSERT INTO participants (user_id, name, provider, model, settings, capabilities)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.user.id, `${name || template.name} (${template.id})`, provider, model || defaultModelFor(provider), JSON.stringify({}), JSON.stringify(defaultCapabilitiesFor(provider))],
+    );
+    const rootId = parent?.root_id || parent?.id || null;
+    const agent = await query(
+      `INSERT INTO agents (user_id, name, forge_template_id, effective_instructions, original_definition, participant_id, conversation_id, task, status, parent_id, root_id, lineage, tool_scope)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,'ready',$9,$10,$11::jsonb,$12::jsonb) RETURNING *`,
+      [req.user.id, name || template.name, template.id, effectiveInstructions, JSON.stringify({ ...template, source: `${RETAINED_SOURCE.forgeTemplates}:ARCHETYPES`, digest: template.digest }), participant.rows[0].id, conv.rows[0].id, task, parentId || null, rootId, JSON.stringify([...(parent?.lineage || []), parentId || 'root']), JSON.stringify([])],
+    );
+    const moduleRow = await query(
+      `INSERT INTO agent_modules (user_id, agent_id, descriptor) VALUES ($1,$2,$3::jsonb) RETURNING *`,
+      [req.user.id, agent.rows[0].id, JSON.stringify({ type: 'agent-stats-chat', renderer: 'agent-panel', schemaVersion: 1, bindings: { agentId: agent.rows[0].id, conversationId: conv.rows[0].id, participantId: participant.rows[0].id } })],
+    );
+    let ptcnaSummary = null;
+    let ptcnaError = null;
+    try {
+      const created = await ptcna.newRuntime(agent.rows[0].id);
+      ptcnaSummary = ringSummary(created.state);
+      await query(`UPDATE agents SET ptcna_summary = $2::jsonb WHERE id = $1`, [agent.rows[0].id, JSON.stringify(ptcnaSummary)]);
+    } catch (err) {
+      ptcnaError = err.message;
+    }
+    res.status(201).json({ agent: agent.rows[0], module: moduleRow.rows[0], ptcnaSummary, ptcnaError });
+  }));
+
+  app.get('/api/agents', asyncRoute(async (req, res) => {
+    const { rows } = await query(
+      `SELECT a.*, m.id AS module_id, m.renderer, m.descriptor AS module_descriptor
+         FROM agents a
+         LEFT JOIN agent_modules m ON m.agent_id = a.id AND m.status = 'active'
+        WHERE a.user_id = $1 ORDER BY a.created_at DESC`,
+      [req.user.id],
+    );
+    res.json({ agents: rows });
+  }));
+
+  app.get('/api/agents/:id', asyncRoute(async (req, res) => {
+    const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!agent.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent not found.' });
+    const module = await query('SELECT * FROM agent_modules WHERE agent_id = $1 AND status = $2 ORDER BY created_at DESC LIMIT 1', [req.params.id, 'active']);
+    res.json({ agent: agent.rows[0], module: module.rows[0] || null });
+  }));
+
+  app.post('/api/agents/:id/retire', asyncRoute(async (req, res) => {
+    const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!agent.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent not found.' });
+    await query(`UPDATE agents SET status = 'retired', retired_at = now() WHERE id = $1`, [req.params.id]);
+    await query(`UPDATE agent_modules SET status = 'retired', retired_at = now() WHERE agent_id = $1 AND status = 'active'`, [req.params.id]);
+    res.json({ ok: true, status: 'retired' });
+  }));
+
+  app.post('/api/agents/:id/ptcna/infer', asyncRoute(async (req, res) => {
+    const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!agent.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent not found.' });
+    const input = String(req.body?.input || '').slice(0, 4000);
+    const out = await ptcna.infer(req.params.id, input);
+    const summary = ringSummary(out.state);
+    await query(`UPDATE agents SET ptcna_summary = $2::jsonb WHERE id = $1`, [req.params.id, JSON.stringify(summary)]);
+    res.json({ receipt: out.receipt, summary });
+  }));
+
+  app.post('/api/agent-modules/:id/swap', asyncRoute(async (req, res) => {
+    const { renderer } = req.body || {};
+    if (!['agent-panel', 'agent-stats', 'agent-chat'].includes(renderer)) {
+      return res.status(400).json({ error: 'validation', message: 'Unknown renderer.' });
+    }
+    const mod = await query('SELECT * FROM agent_modules WHERE id = $1 AND user_id = $2 AND status = $3', [req.params.id, req.user.id, 'active']);
+    if (!mod.rows.length) return res.status(404).json({ error: 'not_found', message: 'Active module not found.' });
+    const previous = mod.rows[0].renderer;
+    const descriptor = { ...mod.rows[0].descriptor, renderer };
+    await query(`UPDATE agent_modules SET renderer = $3, previous_renderer = $4, descriptor = $5::jsonb WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.user.id, renderer, previous, JSON.stringify(descriptor)]);
+    res.json({ ok: true, previousRenderer: previous, renderer, note: 'Swap changes presentation only; agent state, chat and bindings are preserved.' });
+  }));
+
+  app.post('/api/agent-modules/:id/retire', asyncRoute(async (req, res) => {
+    const mod = await query('SELECT * FROM agent_modules WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!mod.rows.length) return res.status(404).json({ error: 'not_found', message: 'Module not found.' });
+    await query(`UPDATE agent_modules SET status = 'retired', retired_at = now() WHERE id = $1`, [req.params.id]);
+    res.json({ ok: true, status: 'retired' });
   }));
 
   // --- Settings -------------------------------------------------------------------
