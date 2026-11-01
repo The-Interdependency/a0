@@ -429,6 +429,11 @@ async function main() {
   {
     const mcpUrl = `http://127.0.0.1:${FAKE_MCP_PORT}/mcp`;
     // Loopback is blocked by default; verify rejection first.
+    // Remove stale same-named connections from prior runs so tool-name mapping
+    // always targets this run's live fake server.
+    for (const old of (await apiRequest(cookie, csrf, 'GET', '/api/mcp')).data.connections || []) {
+      if (old.name === 'fake' || old.name === 'fake-blocked') await apiRequest(cookie, csrf, 'DELETE', `/api/mcp/${old.id}`);
+    }
     const blocked = await apiRequest(cookie, csrf, 'POST', '/api/mcp', { name: 'fake-blocked', url: mcpUrl });
     const allowed = await apiRequest(cookie, csrf, 'POST', '/api/mcp', { name: 'fake', url: mcpUrl, allowPrivateNetwork: true });
     let connId = allowed.data.connection?.id;

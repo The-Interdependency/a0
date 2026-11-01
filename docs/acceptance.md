@@ -110,11 +110,32 @@ Retained agents and temporary modules are now live; FR4 (AHBG) remains NOT RUN.
 | Gate | Result | Evidence |
 | --- | --- | --- |
 | RD01 | PASS (partial) | Eight exact Forge templates and Phi/Psi/Omega core definitions served verbatim from the archive with path/symbol/digest provenance (`/api/forge/templates`); `tests/issue119/run.js` checks exact Sage prompt. |
-| RD02 | PARTIAL | Effective instructions are bound per agent (original vs effective shown in UI); provider-payload use is via the existing run/participant path; full exact-text inspector across hot swap/restart remains operator observation. |
+| RD02 | PASS | Effective Forge instructions bound as an editable agent context block at spawn and verified in the real provider payload (`tests/issue119/agent-execution.js`). Full exact-text inspector across hot swap/restart remains operator observation. |
 | RD03 | PASS | No active registration of Jury/Bandit/Meta-13/ZFAE; historical mentions exist only inside exact retained core text (allowed). |
 | RP01 | PASS | Pinned producer PTCNA runtime (ptcna c5fa9a59 + ucns b7b6f35) runs in a loopback sidecar; per-agent phi/psi/omega/memory_l/memory_s state created, inferred and independently mutated; producer InstanceMerge fork/absorb/converge verified (`tests/issue119/run.js`). |
-| RU01 | PARTIAL | Source-path/function-to-successor ledger for Forge/PTCNA is in `apps/server/src/retained/definitions.js` + `operations/ptcna-sidecar.py`; full UI/chat/AHBG reuse paths remain. |
+| RU01 | PARTIAL | Source→destination reuse ledger recorded in this document; AHBG reuse remains pending. |
 | RM01/RM03 | PASS (API-level) | Agent spawn creates one active module; hot swap changes the renderer while preserving agent/state bindings; retire closes the view and keeps history. Reconnect/late-event phone observation remains (OC09). |
 | FR4 / RG / RX | NOT RUN | Pinned Stack AHBG runtime cloned and inspected; its `a0_http.py` targets the retired API and needs the successor adapter + owner-scoped durable sessions before any gate run. |
 
 `tests/issue119/run.js`: all checks passed (RD01/RD03/RP01 partial/RM01/RM03 partial).
+
+## Issue #119 remaining-gate repair record (2026-11-01)
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| RA01 | PASS | Duplicate spawn with the same `clientRequestId` returns the same agent (migration 0005); failed persistence never reports success (single synchronous creation path). |
+| RA02 | PASS (API-level) | Two agents independently addressable with isolated conversations/messages/participants; state persists in DB across reads (`tests/issue119/agent-execution.js`). |
+| RA03 | PASS (decline path) | Denied tool proposal cancels without invoking the fake MCP and emits `tools_cancelled`; approve path is OC07's full tool loop. |
+| RD02 | PASS | Effective Forge instructions are bound as an editable agent context block at spawn and reach the real provider payload (`You are The Sage…` verified in the captured request). |
+| RM02 | PASS | Two agents keep independent conversations, participants and histories. |
+| RM04 | PASS | Invalid renderer candidates rejected; the previous known-good renderer remains active. |
+| RU01 | PARTIAL | Reuse ledger below records source→destination for the retained components; AHBG reuse remains pending. |
+
+Reuse ledger (source → successor destination):
+- `archive/a0/adapters/subagents.py` (PHI/PSI/OMEGA) → `apps/server/src/retained/definitions.js` (exact strings + digests).
+- `archive/python/routes/forge_archetypes.py` (ARCHETYPES) → `apps/server/src/retained/definitions.js` (exact eight templates).
+- `ptcna` pinned `c5fa9a59` + `ucns` pinned `b7b6f35` → `/opt/a0/vendor/` + `operations/ptcna-sidecar.py` (producer runtime, infer, InstanceMerge fork/absorb/converge) + `apps/server/src/ptcna.js`.
+- `archive/python/engine/ptcna_state.py` (persistence/tamper contract) → not yet ported; producer state persisted as JSON summaries only.
+- `archive/python/services/spawn_*.py` / `agent_instance.py` (queue/lineage/caps) → successor agent creation path in `apps/server/src/index.js` (single durable path, lineage, idempotency); queue/worker modes beyond single remain NOT RUN.
+- `archive/client/src/components/*` (Forge/module UI) → `apps/web/app.js` Forge agents view + module swap.
+- Stack `ahbg/integration/a0_http.py` → NOT RUN (successor adapter pending).

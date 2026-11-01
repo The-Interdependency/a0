@@ -705,9 +705,17 @@ export async function start() {
   }));
 
   app.post('/api/agents', asyncRoute(async (req, res) => {
-    const { name, templateId, task = '', provider = 'openai', model, parentId } = req.body || {};
+    const { name, templateId, task = '', provider = 'openai', model, parentId, clientRequestId } = req.body || {};
     const template = forgeTemplate(templateId);
     if (!template) return res.status(400).json({ error: 'validation', message: `Unknown Forge template: ${templateId}` });
+    // RA01: duplicate spawn requests produce one logical agent.
+    if (clientRequestId) {
+      const dup = await query('SELECT * FROM agents WHERE user_id = $1 AND client_request_id = $2', [req.user.id, clientRequestId]);
+      if (dup.rows.length) {
+        const mod = await query('SELECT * FROM agent_modules WHERE agent_id = $1 AND status = $2 ORDER BY created_at DESC LIMIT 1', [dup.rows[0].id, 'active']);
+        return res.json({ agent: dup.rows[0], module: mod.rows[0] || null, duplicate: true });
+      }
+    }
     const parent = parentId
       ? (await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [parentId, req.user.id])).rows[0]
       : null;
@@ -725,9 +733,9 @@ export async function start() {
     );
     const rootId = parent?.root_id || parent?.id || null;
     const agent = await query(
-      `INSERT INTO agents (user_id, name, forge_template_id, effective_instructions, original_definition, participant_id, conversation_id, task, status, parent_id, root_id, lineage, tool_scope)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,'ready',$9,$10,$11::jsonb,$12::jsonb) RETURNING *`,
-      [req.user.id, name || template.name, template.id, effectiveInstructions, JSON.stringify({ ...template, source: `${RETAINED_SOURCE.forgeTemplates}:ARCHETYPES`, digest: template.digest }), participant.rows[0].id, conv.rows[0].id, task, parentId || null, rootId, JSON.stringify([...(parent?.lineage || []), parentId || 'root']), JSON.stringify([])],
+      `INSERT INTO agents (user_id, name, forge_template_id, effective_instructions, original_definition, participant_id, conversation_id, task, status, parent_id, root_id, lineage, tool_scope, client_request_id)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,'ready',$9,$10,$11::jsonb,$12::jsonb,$13) RETURNING *`,
+      [req.user.id, name || template.name, template.id, effectiveInstructions, JSON.stringify({ ...template, source: `${RETAINED_SOURCE.forgeTemplates}:ARCHETYPES`, digest: template.digest }), participant.rows[0].id, conv.rows[0].id, task, parentId || null, rootId, JSON.stringify([...(parent?.lineage || []), parentId || 'root']), JSON.stringify([]), clientRequestId || null],
     );
     const moduleRow = await query(
       `INSERT INTO agent_modules (user_id, agent_id, descriptor) VALUES ($1,$2,$3::jsonb) RETURNING *`,
@@ -741,6 +749,32 @@ export async function start() {
       await query(`UPDATE agents SET ptcna_summary = $2::jsonb WHERE id = $1`, [agent.rows[0].id, JSON.stringify(ptcnaSummary)]);
     } catch (err) {
       ptcnaError = err.message;
+    }
+    // RD02: bind the effective agent instructions into the conversation's
+    // context as an explicit, editable agent block so the run payload uses it.
+    {
+      const canonical = await buildBlocks(conv.rows[0].id, req.user.id);
+      const agentBlock = {
+        id: `agent:${agent.rows[0].id}`,
+        type: 'agent',
+        source: `forge:${template.id}`,
+        label: `Agent instructions (${name || template.name}, ${template.id})`,
+        content: effectiveInstructions,
+        editable: true,
+        included: true,
+        readonlyReason: null,
+      };
+      const blocks = [...canonical.blocks];
+      blocks.splice(1, 0, agentBlock); // right after the harness block
+      const latest = await latestRevision(conv.rows[0].id, req.user.id);
+      if (latest) {
+        await createRevision(conv.rows[0].id, req.user.id, { blocks, note: `agent spawn ${agent.rows[0].id}` });
+      } else {
+        await query(
+          `INSERT INTO context_revisions (conversation_id, user_id, revision, blocks, note) VALUES ($1,$2,1,$3::jsonb,$4)`,
+          [conv.rows[0].id, req.user.id, JSON.stringify(blocks), `agent spawn ${agent.rows[0].id}`],
+        );
+      }
     }
     res.status(201).json({ agent: agent.rows[0], module: moduleRow.rows[0], ptcnaSummary, ptcnaError });
   }));

@@ -66,6 +66,8 @@ export function buildToolsForConnections(connections) {
       });
     }
   }
+  // RC03: deterministic tool ordering and serialization for identical inputs.
+  tools.sort((a, b) => a.function.name.localeCompare(b.function.name));
   return tools;
 }
 

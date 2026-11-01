@@ -287,6 +287,13 @@ const MIGRATIONS = [
     CREATE INDEX agent_modules_agent_idx ON agent_modules(agent_id, created_at DESC);
     `,
   },
+  {
+    version: '0005_agent_idempotency',
+    up: `
+    ALTER TABLE agents ADD COLUMN IF NOT EXISTS client_request_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS agents_client_request_idx ON agents(user_id, client_request_id) WHERE client_request_id IS NOT NULL;
+    `,
+  },
 ];
 
 export async function migrate() {
