@@ -139,3 +139,16 @@ Reuse ledger (source → successor destination):
 - `archive/python/services/spawn_*.py` / `agent_instance.py` (queue/lineage/caps) → successor agent creation path in `apps/server/src/index.js` (single durable path, lineage, idempotency); queue/worker modes beyond single remain NOT RUN.
 - `archive/client/src/components/*` (Forge/module UI) → `apps/web/app.js` Forge agents view + module swap.
 - Stack `ahbg/integration/a0_http.py` → NOT RUN (successor adapter pending).
+
+## Issue #119 lifecycle-gate repair record (2026-11-02)
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| RC04 | PASS | Mid-stream context edit leaves the active run's frozen snapshot unchanged; the next run uses the new revision (`tests/issue119/lifecycle.js`). |
+| RA04 | PASS | Stop during a run preserves partial output as `stopped` and prevents further dispatch. |
+| RA05 | PASS | Unsupported run mode rejected with 400; missing Anthropic credential is a visible credential failure. |
+| RM01 | PASS | Reconnect keeps one module per agent; no duplicate agent or inference. |
+| RM03 | PASS | Module hot-swapped while a tool authorization was pending; renderer changed, tool executed, run completed. |
+| RM05 | PASS | Retire marks the agent retired and closes its module. |
+
+`tests/issue119/lifecycle.js`: all checks passed (RC04/RA04/RA05/RM01/RM03/RM05). FR4/AHBG remains NOT RUN.
