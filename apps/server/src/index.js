@@ -932,6 +932,27 @@ export async function start() {
     res.json({ session: session.rows[0], live });
   }));
 
+  app.get('/api/ahbg/sessions/:id/replay', asyncRoute(async (req, res) => {
+    const session = await query('SELECT * FROM ahbg_sessions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!session.rows.length) return res.status(404).json({ error: 'not_found', message: 'AHBG session not found.' });
+    const replay = await ahbg.replay(session.rows[0].game_session_id);
+    res.json({ match: replay.match, stateDigest: replay.state_digest, note: replay.match ? 'Persisted state replays to the live field.' : 'Replay mismatch — inspect the session.' });
+  }));
+
+  app.get('/api/ahbg/mechanics', asyncRoute(async (req, res) => {
+    res.json({ mechanics: [
+      { mechanic: 'observe', source: 'ahbg/runtime/runtime.py', implementation: 'sidecar /observe', status: 'implemented' },
+      { mechanic: 'plan', source: 'ahbg/runtime/protocol.py', implementation: 'parse_plan_payload', status: 'implemented' },
+      { mechanic: 'relocate', source: 'ahbg/runtime/protocol.py + engine', implementation: 'cycle.resolve', status: 'implemented' },
+      { mechanic: 'construct', source: 'ahbg/runtime/construction.py', implementation: 'ledger.apply_build', status: 'implemented' },
+      { mechanic: 'collision resolution (War)', source: 'stack immediate-target rules', implementation: 'engine', status: 'implemented via engine; not separately exercised' },
+      { mechanic: 'tile visitation / local seven-tile modification', source: 'stack immediate-target rules', implementation: '—', status: 'NOT RUN' },
+      { mechanic: 'communication / DM effects', source: 'stack immediate-target rules', implementation: '—', status: 'NOT RUN' },
+      { mechanic: 'diary / event persistence', source: 'stack immediate-target rules', implementation: 'sidecar state dir + ahbg_sessions.records', status: 'implemented (records); diary rules NOT RUN' },
+      { mechanic: 'subordinate-agent decision trees / loyalty transitions', source: 'stack immediate-target rules', implementation: '—', status: 'NOT RUN' },
+    ] });
+  }));
+
   app.post('/api/ahbg/sessions/:id/turn', asyncRoute(async (req, res) => {
     const session = await query('SELECT * FROM ahbg_sessions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
     if (!session.rows.length) return res.status(404).json({ error: 'not_found', message: 'AHBG session not found.' });

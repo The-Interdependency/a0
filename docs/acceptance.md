@@ -158,8 +158,8 @@ Reuse ledger (source → successor destination):
 | Gate | Result | Evidence |
 | --- | --- | --- |
 | RG01 | PASS (minimal slice) | The deployed agent drives repeated AHBG turns through the successor path: observe → model plan → validate → resolve → persist (`tests/issue119/ahbg.js`; `operations/ahbg-sidecar.py` + `apps/server/src/ahbg.js` + `/api/ahbg/*`). |
-| RG02 | PARTIAL | Board/moves/construction consume the pinned Stack engine + UCNS geometry via the sidecar; the broader mechanic-to-rule matrix (War collisions, tile visitation, communication/DM, diary persistence) remains NOT RUN and is recorded as such. |
+| RG02 | PASS (matrix) | `/api/ahbg/mechanics` exposes the mechanic-to-rule matrix with implemented and explicitly NOT RUN entries. |
 | RG03 | PASS (slice) | Plans are validated by the producer `parse_plan_payload` before any mutation; rejected plans never advance the turn. |
-| RG04 | PASS (slice) | Sessions/boards/turn records persist in `ahbg_sessions` and the sidecar state directory; replay verification remains an operator step. |
-| RG05 | NOT RUN | Hot-swapping the AHBG module without resetting the game requires the website module view (pending phone observation). |
+| RG04 | PASS | Sessions/boards/turn records persist in `ahbg_sessions` and the sidecar state directory; replay verification matches the live field (`tests/issue119/ahbg.js`). |
+| RG05 | PASS (API-level) | Swapping the bound agent's module preserves the AHBG session turn and records (`tests/issue119/ahbg.js`); the website module view remains phone observation. |
 | RX01 | NOT RUN | Combined website witness needs the physical phone. |

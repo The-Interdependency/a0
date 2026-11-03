@@ -181,6 +181,17 @@ class Handler(BaseHTTPRequestHandler):
             obs = _observation(session)
             session["observation"] = obs
             return self._json(200, {"observation": obs.as_dict()})
+        if self.path == "/replay":
+            session = SESSIONS.get(data.get("id"))
+            if not session:
+                return self._json(404, {"error": "no session"})
+            try:
+                loaded, loaded_chain = rt.load_field(session["out_dir"] / "state")
+                replayed = rt.replay(loaded_chain)
+                match = (replayed.snapshot() == session["opened"].snapshot() and loaded.snapshot() == session["opened"].snapshot())
+                return self._json(200, {"match": match, "state_digest": session["records"][-1]["state_digest"] if session["records"] else None})
+            except Exception as exc:
+                return self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
         if self.path == "/resolve":
             session = SESSIONS.get(data.get("id"))
             if not session:

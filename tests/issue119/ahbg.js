@@ -78,6 +78,18 @@ check('FR4 agent received the exact observation', seen.length >= 1 && JSON.strin
 const after = (await api('GET', `/api/ahbg/sessions/${created.session.id}`)).data;
 check('FR4 game state persisted with records', (after.session.records || []).length >= 1 && after.session.board?.turn !== undefined, JSON.stringify({ records: (after.session.records || []).length, turn: after.session.turn }));
 
+const replay = await api('GET', `/api/ahbg/sessions/${created.session.id}/replay`);
+check('RG04 replay verification matches the live field', replay.status === 200 && replay.data?.match === true, JSON.stringify(replay.data));
+
+const mechanics = (await api('GET', '/api/ahbg/mechanics')).data.mechanics;
+check('RG02 mechanic matrix exposed', Array.isArray(mechanics) && mechanics.some((m) => m.mechanic === 'relocate' && m.status === 'implemented') && mechanics.some((m) => m.status === 'NOT RUN'));
+
+// RG05: swapping the agent module must not reset the AHBG session.
+const agentDetail = (await api('GET', `/api/agents/${agent.id}`)).data;
+await api('POST', `/api/agent-modules/${agentDetail.module.id}/swap`, { renderer: 'agent-stats' });
+const afterSwap = (await api('GET', `/api/ahbg/sessions/${created.session.id}`)).data;
+check('RG05 module swap preserves AHBG session state', afterSwap.session.turn === after.session.turn && (afterSwap.session.records || []).length === (after.session.records || []).length, JSON.stringify({ turn: afterSwap.session.turn, records: (afterSwap.session.records || []).length }));
+
 server.close();
 if (failures) {
   console.log(`issue #119 AHBG checks: ${failures} failures`);

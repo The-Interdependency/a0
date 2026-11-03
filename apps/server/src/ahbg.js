@@ -33,6 +33,7 @@ export const ahbg = {
   observe: (id) => call('POST', '/observe', { id }),
   resolve: (id, plan) => call('POST', '/resolve', { id, plan }),
   state: (id) => call('GET', `/state/${id}`),
+  replay: (id) => call('POST', '/replay', { id }),
 };
 
 export const AHBG_PROTOCOL_BOOST = `## AHBG harness protocol
