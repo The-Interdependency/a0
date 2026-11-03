@@ -43,6 +43,7 @@ import {
 } from './contexts.js';
 import { FORGE_TEMPLATES, CORES, RETAINED_SOURCE, forgeTemplate, effectivePromptFor } from './retained/definitions.js';
 import { ptcna, ringSummary } from './ptcna.js';
+import { ahbg, AHBG_PROTOCOL_BOOST, parsePlanPayload } from './ahbg.js';
 import {
   insertRun,
   dispatchParticipant,
@@ -901,6 +902,72 @@ export async function start() {
       { area: 'Forge/retained agents', label: 'ptcna ops', supportedValues: ['infer', 'fork', 'absorb', 'converge'], default: 'infer', scope: 'agent', persistence: 'agents.ptcna_summary', validation: 'producer sidecar', effect: 'numerical ring state', owner: 'ptcna.js/sidecar' },
     ];
     res.json({ options });
+  }));
+
+  // --- FR4 AHBG (successor adapter through the real A0 run path) -------------------
+  app.post('/api/ahbg/sessions', asyncRoute(async (req, res) => {
+    const { agentId, seed = 1, turns = 8 } = req.body || {};
+    const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [agentId, req.user.id]);
+    if (!agent.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent not found.' });
+    const gameSessionId = crypto.randomUUID();
+    const created = await ahbg.newSession(gameSessionId, seed, turns, agent.rows[0].name);
+    const { rows } = await query(
+      `INSERT INTO ahbg_sessions (user_id, agent_id, game_session_id, seed, turns, board, provenance)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb) RETURNING *`,
+      [req.user.id, agentId, gameSessionId, seed, turns, JSON.stringify(created.board || null), JSON.stringify(created.provenance || null)],
+    );
+    res.status(201).json({ session: rows[0], summary: created });
+  }));
+
+  app.get('/api/ahbg/sessions', asyncRoute(async (req, res) => {
+    const { rows } = await query('SELECT * FROM ahbg_sessions WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
+    res.json({ sessions: rows });
+  }));
+
+  app.get('/api/ahbg/sessions/:id', asyncRoute(async (req, res) => {
+    const session = await query('SELECT * FROM ahbg_sessions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!session.rows.length) return res.status(404).json({ error: 'not_found', message: 'AHBG session not found.' });
+    let live = null;
+    try { live = await ahbg.state(session.rows[0].game_session_id); } catch { live = null; }
+    res.json({ session: session.rows[0], live });
+  }));
+
+  app.post('/api/ahbg/sessions/:id/turn', asyncRoute(async (req, res) => {
+    const session = await query('SELECT * FROM ahbg_sessions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (!session.rows.length) return res.status(404).json({ error: 'not_found', message: 'AHBG session not found.' });
+    const s = session.rows[0];
+    if (s.turn >= s.turns) return res.status(400).json({ error: 'validation', message: 'Session already reached its turn budget.' });
+    const obs = await ahbg.observe(s.game_session_id);
+    const observationText = `AHBG_OBSERVATION ${JSON.stringify(obs.observation)}`;
+    const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [s.agent_id, req.user.id]);
+    if (!agent.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent not found.' });
+    const participant = await query('SELECT * FROM participants WHERE id = $1 AND user_id = $2', [agent.rows[0].participant_id, req.user.id]);
+    if (!participant.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent participant not found.' });
+    // Assemble the frozen context and append the observation as the turn input.
+    const rev = await latestRevision(agent.rows[0].conversation_id, req.user.id);
+    const assembled = await assembleBlocks((rev?.blocks || []), {});
+    const snapshot = { ...assembled, messages: [...assembled.messages, { id: crypto.randomUUID(), role: 'user', content: AHBG_PROTOCOL_BOOST + '\n\n' + observationText, attachments: [] }] };
+    const result = await dispatchParticipant({
+      run: { id: crypto.randomUUID() },
+      participant: participant.rows[0],
+      snapshot,
+      connections: [],
+      vault,
+      signal: new AbortController().signal,
+      onChunk: () => {},
+    });
+    const plan = parsePlanPayload(result.text);
+    if (!plan) {
+      await query(`UPDATE ahbg_sessions SET status = 'plan_invalid', updated_at = now() WHERE id = $1`, [s.id]);
+      return res.status(422).json({ error: 'plan_invalid', message: 'Agent reply did not contain a valid AHBG plan JSON.', reply: result.text.slice(0, 500) });
+    }
+    const resolved = await ahbg.resolve(s.game_session_id, plan);
+    const records = [...(s.records || []), resolved.record];
+    await query(
+      `UPDATE ahbg_sessions SET turn = $2, status = $3, board = $4::jsonb, records = $5::jsonb, updated_at = now() WHERE id = $1`,
+      [s.id, resolved.summary.turn, resolved.summary.turn >= s.turns ? 'complete' : 'ready', JSON.stringify(resolved.summary.board || null), JSON.stringify(records)],
+    );
+    res.json({ turn: resolved.record, summary: resolved.summary, plan, agentReply: result.text.slice(0, 500) });
   }));
 
   // --- Settings -------------------------------------------------------------------

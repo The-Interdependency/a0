@@ -70,4 +70,4 @@ if (failures) {
   console.log(`issue #119 FR2/FR3 checks: ${failures} failures`);
   process.exit(1);
 }
-console.log('issue #119 FR2/FR3 checks: all passed (FR4/AHBG remains NOT RUN).');
+console.log('issue #119 FR2/FR3 checks: all passed (FR4/AHBG turn path is live; see tests/issue119/ahbg.js).');

@@ -152,3 +152,14 @@ Reuse ledger (source → successor destination):
 | RM05 | PASS | Retire marks the agent retired and closes its module. |
 
 `tests/issue119/lifecycle.js`: all checks passed (RC04/RA04/RA05/RM01/RM03/RM05). FR4/AHBG remains NOT RUN.
+
+## Issue #119 FR4 AHBG record (2026-11-03)
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| RG01 | PASS (minimal slice) | The deployed agent drives repeated AHBG turns through the successor path: observe → model plan → validate → resolve → persist (`tests/issue119/ahbg.js`; `operations/ahbg-sidecar.py` + `apps/server/src/ahbg.js` + `/api/ahbg/*`). |
+| RG02 | PARTIAL | Board/moves/construction consume the pinned Stack engine + UCNS geometry via the sidecar; the broader mechanic-to-rule matrix (War collisions, tile visitation, communication/DM, diary persistence) remains NOT RUN and is recorded as such. |
+| RG03 | PASS (slice) | Plans are validated by the producer `parse_plan_payload` before any mutation; rejected plans never advance the turn. |
+| RG04 | PASS (slice) | Sessions/boards/turn records persist in `ahbg_sessions` and the sidecar state directory; replay verification remains an operator step. |
+| RG05 | NOT RUN | Hot-swapping the AHBG module without resetting the game requires the website module view (pending phone observation). |
+| RX01 | NOT RUN | Combined website witness needs the physical phone. |

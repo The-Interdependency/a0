@@ -294,6 +294,27 @@ const MIGRATIONS = [
     CREATE UNIQUE INDEX IF NOT EXISTS agents_client_request_idx ON agents(user_id, client_request_id) WHERE client_request_id IS NOT NULL;
     `,
   },
+  {
+    version: '0006_ahbg_sessions',
+    up: `
+    CREATE TABLE ahbg_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      game_session_id TEXT NOT NULL,
+      seed INTEGER NOT NULL DEFAULT 1,
+      turns INTEGER NOT NULL DEFAULT 8,
+      status TEXT NOT NULL DEFAULT 'ready',
+      turn INTEGER NOT NULL DEFAULT 0,
+      board JSONB,
+      records JSONB NOT NULL DEFAULT '[]'::jsonb,
+      provenance JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX ahbg_sessions_user_idx ON ahbg_sessions(user_id, created_at DESC);
+    `,
+  },
 ];
 
 export async function migrate() {
