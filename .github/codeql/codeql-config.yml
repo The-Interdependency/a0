@@ -1,0 +1,18 @@
+# CodeQL configuration for the A0 successor.
+# Scans only the active successor code (Node/JavaScript in apps/ and tests/);
+# the preserved archive/ tree is historical material and is not part of the
+# active build surface.
+name: a0-codeql-config
+
+paths:
+  - apps
+  - tests
+
+paths-ignore:
+  - archive
+  - vendor
+  - docs
+  - operations
+
+queries:
+  - uses: security-and-quality
