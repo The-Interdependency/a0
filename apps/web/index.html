@@ -11,15 +11,16 @@
 <body>
   <div id="app" class="app">
     <header class="topbar">
-      <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
+      <button type="button" id="menuBtn" class="icon-btn" aria-label="Menu" aria-controls="drawer" aria-expanded="false">☰</button>
       <div class="topbar-title">A0</div>
       <div class="topbar-actions">
-        <button id="voiceReadBtn" class="icon-btn" aria-label="Toggle spoken answers" title="Spoken answers">🔇</button>
+        <button type="button" id="voiceReadBtn" class="icon-btn" aria-label="Toggle spoken answers" aria-pressed="false" title="Spoken answers">🔇</button>
         <button id="logoutBtn" class="icon-btn" aria-label="Sign out">⎋</button>
       </div>
     </header>
 
     <div class="layout">
+      <button type="button" id="drawerBackdrop" class="drawer-backdrop hidden" aria-label="Close menu" tabindex="-1"></button>
       <nav id="drawer" class="drawer" aria-label="Main">
         <div class="drawer-section">
           <button id="newChatBtn" class="primary-btn">＋ New conversation</button>
@@ -63,6 +64,7 @@
         <section id="view-chat" class="view hidden">
           <div class="chat-head">
             <div class="chat-title" id="chatTitle">New conversation</div>
+            <label class="comparison-choice">Answers <select id="comparisonLayout" class="chip" aria-label="Answer layout"><option value="carousel">Carousel</option><option value="side">Side by side</option><option value="stacked">Stacked</option></select></label>
             <select id="chatProjectSelect" class="chip" aria-label="Project for this conversation"></select>
             <button id="contextPolicyBtn" class="chip" title="Which responses enter future context">Context: All</button>
             <button id="contextEditorBtn" class="chip" title="Inspect and edit the ordered context the app intends to send">Edit context</button>
@@ -79,7 +81,7 @@
             <button id="retryBtn" class="chip">Retry</button>
           </div>
           <div class="composer-wrap">
-            <div id="attachmentChips" class="chips"></div>
+            <div id="attachmentChips" class="chips" role="status" aria-live="polite"></div>
             <form id="composerForm" class="composer">
               <textarea id="composerInput" rows="1" placeholder="Message A0…" aria-label="Message"></textarea>
               <div class="composer-actions">
@@ -91,6 +93,7 @@
               </div>
             </form>
             <div id="voiceStatus" class="voice-status hidden" role="status"></div>
+            <button type="button" id="stopSpeechBtn" class="chip hidden">Stop reading</button>
           </div>
         </section>
 
@@ -176,7 +179,7 @@
               <label>Enter to send <select id="prefEnter" class="select"><option value="on">On</option><option value="off" selected>Off (Enter = newline)</option></select></label>
               <label>Voice rate <select id="prefVoiceRate" class="select"><option value="0.8">0.8</option><option value="1.0" selected>1.0</option><option value="1.2">1.2</option></select></label>
               <label>Auto-speak answers <select id="prefAutoSpeak" class="select"><option value="on">On</option><option value="off" selected>Off</option></select></label>
-              <label>Comparison layout <select id="prefLayout" class="select"><option value="stacked" selected>Stacked</option><option value="side">Side-by-side</option></select></label>
+              <label>Comparison layout <select id="prefLayout" class="select"><option value="carousel" selected>Carousel</option><option value="side">Side by side</option><option value="stacked">Stacked</option></select></label>
             </div>
           </div>
           <div class="card about-password">

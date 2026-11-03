@@ -197,7 +197,11 @@ export function encodeResponsesInput(provider, model, snapshot, continuation = [
   for (const msg of snapshot.messages || []) {
     if (msg.role === 'system') continue;
     const content = [];
-    if (msg.content) content.push({ type: 'input_text', text: msg.content });
+    // Responses distinguishes replayed assistant output from new user input.
+    // This also applies to assistant history originally produced by xAI/etc.
+    if (msg.content) content.push(msg.role === 'assistant'
+      ? { type: 'output_text', text: msg.content, annotations: [] }
+      : { type: 'input_text', text: msg.content });
     for (const att of msg.attachments || []) {
       if (att.mime?.startsWith('image/')) {
         content.push({

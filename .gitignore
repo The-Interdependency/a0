@@ -8,3 +8,4 @@ docs/private/
 __pycache__/
 *.pyc
 vendor/
+test-results/

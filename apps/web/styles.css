@@ -35,7 +35,7 @@ body {
 .topbar-title { font-weight: 700; flex: 1; }
 .topbar-actions { display: flex; gap: 4px; }
 
-.layout { display: flex; flex: 1; min-height: 0; }
+.layout { display: flex; flex: 1; min-height: 0; position: relative; }
 
 .drawer {
   width: 280px; max-width: 82vw;
@@ -46,13 +46,15 @@ body {
   padding: 10px;
   transform: translateX(-105%);
   transition: transform .18s ease;
-  position: absolute; top: 49px; bottom: 0; left: 0; z-index: 30;
+  position: absolute; top: 0; bottom: 0; left: 0; z-index: 30;
 }
 .drawer.open { transform: translateX(0); box-shadow: 8px 0 30px rgba(0,0,0,.5); }
+.drawer-backdrop { position: absolute; inset: 0; z-index: 29; border: 0; background: #0008; }
 
 .content { flex: 1; min-width: 0; overflow-y: auto; }
 
 .view { padding: 12px; max-width: 980px; margin: 0 auto; }
+#view-chat { min-height: 100%; display: flex; flex-direction: column; }
 .hidden { display: none !important; }
 
 .icon-btn, .chip, .nav-btn, .send-btn {
@@ -123,7 +125,7 @@ body {
 .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.composer-wrap { position: sticky; bottom: 0; background: var(--bg); padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
+.composer-wrap { position: sticky; bottom: 0; margin-top: auto; background: var(--bg); padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
 .composer { display: flex; flex-direction: column; gap: 6px; }
 .composer textarea {
   width: 100%; resize: none; padding: 12px; min-height: 46px; max-height: 140px;
@@ -195,7 +197,7 @@ body {
 .chip-x { background: transparent; border: none; color: var(--danger); cursor: pointer; font-size: 12px; }
 .msg-speak { display: inline-block; margin-left: 6px; padding: 2px 6px; font-size: 12px; }
 #retryBar { display: flex; align-items: center; gap: 8px; }
-.list-item { width: 100%; text-align: left; }
+.list-item { width: 100%; text-align: left; color: var(--text); }
 #contextSelectionList .tool-proposal pre { max-height: 120px; overflow-y: auto; }
 
 /* FR1 context editor */
@@ -210,6 +212,23 @@ body { font-size: var(--base-font); }
 .model-row { flex-wrap: wrap; gap: 0.4rem; }
 .context-preview { max-height: 16rem; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 
-/* C15 comparison layout preference */
-.compare-wrap.side { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-.compare-wrap.stacked { display: block; }
+/* Saved and live rounds share these layouts. Scroll stays inside each round. */
+.response-group { min-width: 0; width: 100%; }
+.comparison-controls { display: flex; gap: 12px; align-items: center; justify-content: center; }
+.comparison-choice { font-size: 12px; color: var(--muted); }
+.compare-wrap { position: relative; max-width: 100%; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
+.compare-pane { min-width: 0; scroll-snap-align: start; overflow-wrap: anywhere; }
+.compare-wrap.carousel > .compare-pane { flex: 0 0 calc(100% - 24px); }
+.compare-wrap.side > .compare-pane { flex: 0 0 calc(50% - 4px); }
+.compare-wrap.stacked { flex-direction: column; }
+.compare-wrap.stacked > .compare-pane { flex: none; width: 100%; }
+.response-group .msg { max-width: 100%; width: 100%; background: transparent; padding: 4px; }
+.response-group .pane-body { max-height: none; }
+.compare-pane h4 { overflow-wrap: anywhere; }
+.chip { overflow-wrap: anywhere; }
+button:disabled { opacity: .5; cursor: default; }
+.icon-btn { min-height: 44px; min-width: 44px; }
+@media (min-width: 860px) {
+  .drawer-backdrop { display: none; }
+  .compare-wrap.carousel > .compare-pane { flex-basis: calc(50% - 4px); }
+}

@@ -4,7 +4,21 @@
 
 The original [specification](docs/a0-replacement-spec.md) and [Deep Code handoff](docs/deep-code-vm-handoff.md) own the product contracts; the implementation is committed in this repository under `apps/`, `packages/`, `operations/`, and `tests/`.
 
-Status: **implemented and deployed on the VM** (2026-10-30). Four-provider BYOK (OpenAI, Anthropic, xAI, DeepSeek; DeepSeek default), persisted chat, full-context switching, extensible comparison, attachments, voice (browser dictation + spoken responses), projects, OpenBao secrets (pinned fork), and configurable MCP tools with execution selection. Remaining operator actions (real-phone observation A17/A18, OpenAI key rotation, Anthropic key, off-VM backup copy, org hostname DNS) are listed in [docs/build-status.md](docs/build-status.md).
+Status: **VM deployment exists; phone acceptance has reported failures** (2026-11-03). The owner reported broken navigation, lost active-chat state, attachment uncertainty, and silent voice controls; the screenshot also exposed invalid OpenAI assistant-history encoding. The [mobile repair record](docs/mobile-chat-repair.md) distinguishes repaired source, isolated browser tests and outstanding deployment/phone checks. Other deployment and integration work remains tracked in [docs/build-status.md](docs/build-status.md).
+
+Mobile repair usage, once deployed: **Menu → History** reopens saved chats. **Answers → Carousel / Side by side / Stacked** changes both saved and live comparisons. File chips show uploading, ready or failed; a successful send clears only the submitted files. The microphone shows dictation/error status; each answer's speaker reads that answer, **Stop reading** cancels playback, and the top speaker toggles automatic reading. Draft recovery is scoped to the signed-in owner and browser tab; sign-out clears it. A completed upload survives reload by its server file reference; an interrupted upload asks for file selection again.
+
+Isolated regression checks (no production credentials or provider calls):
+
+```sh
+npm ci --ignore-scripts
+npx playwright install --with-deps chromium
+npm run test:offline
+npm run test:browser
+```
+
+The separate `npm test` command targets production acceptance and requires its
+documented environment; it is not the isolated regression command above.
 
 The old A0 implementation is deprecated at the owner's request and retained under archive/ for historical inspection and reproducibility. Its retirement does not prohibit building the fresh successor defined by the new specification. This repository remains active.
 

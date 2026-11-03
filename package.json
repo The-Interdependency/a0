@@ -9,10 +9,15 @@
   ],
   "scripts": {
     "start": "npm run start --workspace apps/server",
-    "test": "node tests/acceptance/run.js"
+    "test": "node tests/acceptance/run.js",
+    "test:offline": "node tests/frontend/run.js && node tests/fr0-fr1/run.js",
+    "test:browser": "node --test tests/frontend/browser.test.js"
   },
   "engines": {
     "node": ">=22"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
 }

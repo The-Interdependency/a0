@@ -1,4 +1,23 @@
-# A0 acceptance record (issue #118 corrective rerun)
+# A0 acceptance record
+
+## Current phone evidence — 2026-11-03
+
+Owner-reported behavior and the screenshot supersede affected older passes.
+Public health and source baseline: `ef9f44b518087b9152240731a727ec0f3d531913`.
+
+| Gate | Current evidence | Standing |
+| --- | --- | --- |
+| A05 / RO02 | OpenAI rejects assistant history encoded as `input_text`; strict fixture reproduces the screenshot's 400 | Deployed defect; repaired adapter tested locally |
+| A15 / A17 | Owner cannot reliably see attachments; picker/app switching loses the visible active chat | Phone failure; recovery/upload UI repair tested locally |
+| A17 | Menu does not open history; original-source Chromium fixture raises `tools is not defined` | Phone failure reproduced; navigation repair tested locally |
+| A18 | Microphone/speaker appear inactive; original-source recognition error is hidden by its end event | Phone failure; UI/error handling tested with fake speech services |
+
+See [mobile-chat-repair.md](mobile-chat-repair.md) for current executable checks.
+Local browser fixtures establish UI behavior, not production authentication,
+actual Android audio output or live-provider acceptance. The repair is not yet
+deployed; no new full A01–A24 totals are claimed.
+
+## Historical issue #118 corrective rerun (2026-10-30)
 
 Source: deployed at https://35.212.252.101.nip.io on VM `a0-prod-1` (GCP project `cs-poc-ab8uzg6ej7vv4vwtyywhbwn`).
 Runner: `tests/acceptance/run.js` (updated for F01–F16). Date: 2026-10-30.

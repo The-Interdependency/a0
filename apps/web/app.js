@@ -1,4 +1,6 @@
-// A0 phone-first web client. Vanilla ES modules; same-origin API with cookies.
+// A0 phone-first web client. Served by apps/server; same-origin API with cookies.
+// Usage: Menu opens saved history; comparison layout applies to saved/live rounds.
+// Owner-scoped sessionStorage holds unsent drafts, never provider keys/transcripts.
 import { renderMarkdown } from './markdown.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -23,6 +25,15 @@ const state = {
   pendingProposals: null,
   pendingSwitch: null, // { participantIds }
   draft: null, // { content, attachmentIds, clientRequestId }
+  drafts: {},
+  pendingDrafts: {},
+  uploads: [],
+  messages: [],
+  ready: false,
+  navigation: 0,
+  sending: false,
+  comparisonLayout: 'carousel',
+  runs: {}, // In-memory stream controls keyed by conversation, never by visible pane.
 };
 
 function toast(message, isError = false) {
@@ -65,8 +76,64 @@ const api = {
   get: (path) => api.request('GET', path),
   post: (path, body) => api.request('POST', path, body),
   patch: (path, body) => api.request('PATCH', path, body),
+  put: (path, body) => api.request('PUT', path, body),
   del: (path) => api.request('DELETE', path),
 };
+
+// Persist drafts before Android hands control to its picker/another app. Saved
+// conversations are always fetched from the owner-authorized server on return.
+function recoveryKey() { return `a0.ui.v1:${state.me?.id}`; }
+function draftKey() { return state.currentConversationId || 'new'; }
+function persistSession() {
+  if (!state.me) return;
+  try {
+    sessionStorage.setItem(recoveryKey(), JSON.stringify({
+      conversationId: state.currentConversationId,
+      participants: state.selectedParticipantIds, mode: state.lastMode,
+      drafts: state.drafts, pending: state.pendingDrafts, uploads: state.uploads,
+    }));
+    if (state.currentConversationId) localStorage.setItem(`${recoveryKey()}:last`, state.currentConversationId);
+  } catch {
+    if (!state.storageWarning) {
+      state.storageWarning = true;
+      toast('Browser draft storage is unavailable. Keep this tab open until you send.', true);
+    }
+  }
+}
+function persistComposer() {
+  if (!state.ready) return;
+  state.drafts[draftKey()] = { content: $('#composerInput').value, attachments: state.attachments.map(a => ({ ...a })) };
+  persistSession();
+}
+function recoverSession() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(recoveryKey()) || '{}');
+    state.drafts = saved.drafts || {};
+    state.pendingDrafts = saved.pending || {};
+    state.uploads = (Array.isArray(saved.uploads) ? saved.uploads : []).map(upload => ({
+      ...upload, status: 'failed', error: upload.error || 'Upload interrupted. Select this file again.',
+    }));
+    state.selectedParticipantIds = Array.isArray(saved.participants) ? saved.participants : [];
+    state.lastMode = saved.mode;
+    return new URLSearchParams(location.hash.slice(1)).get('conversation') || saved.conversationId || localStorage.getItem(`${recoveryKey()}:last`);
+  } catch { return null; }
+}
+function showDraft() {
+  const draft = state.drafts[draftKey()] || {};
+  $('#composerInput').value = draft.content || '';
+  state.attachments = Array.isArray(draft.attachments) ? draft.attachments.map(a => ({ ...a })) : [];
+  state.draft = state.pendingDrafts[draftKey()] || null;
+  $('#retryBar').classList.toggle('hidden', !state.draft);
+  if (state.draft) $('#retryText').textContent = 'Previous delivery is unconfirmed. Retry checks saved history first.';
+  renderAttachmentChips();
+  autoGrow();
+}
+
+function setDrawer(open) {
+  $('#drawer').classList.toggle('open', open);
+  $('#menuBtn').setAttribute('aria-expanded', String(open));
+  $('#drawerBackdrop').classList.toggle('hidden', !open);
+}
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -74,15 +141,13 @@ function escapeHtml(s) {
 
 // ---------- Views ----------
 function showView(name) {
+  state.view = name;
   $$('.view').forEach((v) => v.classList.add('hidden'));
   $(`#view-${name}`)?.classList.remove('hidden');
-  $('#drawer')?.classList.remove('open');
+  setDrawer(false);
   if (name === 'chat') renderConversations();
-  if (name === 'providers') loadProviders();
-  if (name === 'participants') loadParticipants();
-  if (name === 'mcp') loadMcp();
-  if (name === 'projects') loadProjects();
-  if (name === 'about') loadAbout();
+  const loader = { providers: loadProviders, participants: loadParticipants, mcp: loadMcp, projects: loadProjects, about: loadAbout }[name];
+  if (loader) loader().catch(err => toast(err.message, true));
 }
 
 // ---------- Bootstrap / auth ----------
@@ -91,7 +156,7 @@ async function boot() {
     const me = await api.get('/api/me');
     state.me = me.user;
     state.csrf = me.csrfToken;
-    enterApp();
+    await enterApp();
   } catch (err) {
     if (err.status === 401) showAuth();
     else {
@@ -121,9 +186,14 @@ async function showAuth() {
 }
 
 async function enterApp() {
+  const savedId = recoverSession();
   showView('chat');
-  await Promise.all([loadConversations(), loadProjects(), loadParticipants(), loadProviders()]);
-  bindNav();
+  const results = await Promise.allSettled([loadConversations(), loadProjects(), loadParticipants(), loadProviders(), initOwnerPreferences()]);
+  for (const result of results) if (result.status === 'rejected') toast(result.reason.message, true);
+  state.ready = true;
+  showDraft();
+  const id = state.conversations.find(c => c.id === savedId)?.id || state.conversations[0]?.id;
+  if (id) await openConversation(id);
 }
 
 async function loadConversations() {
@@ -146,16 +216,23 @@ function renderConversations() {
     count.textContent = c.message_count;
     item.append(title, count);
     item.setAttribute('aria-label', `Open conversation ${c.title}`);
-    item.onclick = () => openConversation(c.id);
+    item.onclick = () => openConversation(c.id).catch(err => toast(err.message, true));
     list.appendChild(item);
   }
 }
 
-async function openConversation(id) {
+async function openConversation(id, { refresh = false } = {}) {
+  if (id !== state.currentConversationId && recognizing) recognition?.stop();
+  persistComposer();
+  const scroll = refresh ? $('.content').scrollTop : null;
+  const positions = refresh ? $$('.response-group .compare-wrap').map(track => track.scrollLeft) : [];
+  const navigation = ++state.navigation;
+  const data = await api.get(`/api/conversations/${id}`);
+  if (navigation !== state.navigation) return; // A late fetch must not hijack a newer selection.
   clearConversationView();
   state.currentConversationId = id;
-  const data = await api.get(`/api/conversations/${id}`);
   state.currentConversation = data.conversation;
+  state.activeRun = state.runs[id] || null;
   state.currentConversation.message_count = data.messageCount || 0; // C03 authoritative
   state.activeProjectId = data.conversation.project_id || null;
   renderMessages(data.messages);
@@ -163,7 +240,23 @@ async function openConversation(id) {
   renderContextPolicy(data.conversation.context_policy);
   renderChatProjectSelector();
   renderConversations();
+  showDraft();
+  history.replaceState(null, '', `#conversation=${encodeURIComponent(id)}`);
+  persistSession();
   showView('chat');
+  if (state.activeRun) {
+    showTyping(true);
+    $('#stopBtn').classList.remove('hidden');
+    if (state.activeRun.proposals) {
+      state.pendingProposals = state.activeRun.proposals;
+      showToolModal(state.activeRun.proposals);
+    }
+  }
+  if (refresh) requestAnimationFrame(() => {
+    if (state.currentConversationId !== id) return;
+    $('.content').scrollTop = scroll;
+    $$('.response-group .compare-wrap').forEach((track, i) => { track.scrollLeft = positions[i] || 0; });
+  });
 }
 
 function clearConversationView() {
@@ -178,9 +271,15 @@ function clearConversationView() {
 }
 
 async function newConversation() {
+  persistComposer();
+  const unsaved = !state.currentConversationId ? state.drafts.new : null;
   const body = { title: 'New conversation' };
   if (state.activeProjectId) body.projectId = state.activeProjectId;
   const data = await api.post('/api/conversations', body);
+  if (unsaved) {
+    state.drafts[data.conversation.id] = unsaved;
+    delete state.drafts.new;
+  }
   await loadConversations();
   await openConversation(data.conversation.id);
 }
@@ -264,10 +363,82 @@ function renderChatProjectSelector() {
 
 // ---------- Messages ----------
 function renderMessages(messages) {
+  state.messages = messages;
   const box = $('#messages');
   box.innerHTML = '';
-  for (const m of messages) box.appendChild(messageElement(m));
-  box.scrollTop = box.scrollHeight;
+  const rounds = new Map();
+  for (const m of messages) {
+    if (m.role === 'assistant' && m.round > 0) {
+      if (!rounds.has(m.round)) rounds.set(m.round, []);
+      rounds.get(m.round).push(m);
+    }
+  }
+  const rendered = new Set();
+  for (const m of messages) {
+    const round = rounds.get(m.round);
+    if (m.role === 'assistant' && round && new Set(round.map(r => r.participant_id)).size > 1) {
+      if (rendered.has(m.round)) continue;
+      rendered.add(m.round);
+      const group = createResponseGroup(`Round ${m.round}`);
+      const lanes = new Map();
+      for (const response of round) {
+        if (!lanes.has(response.participant_id)) {
+          const pane = document.createElement('div');
+          pane.className = 'compare-pane';
+          lanes.set(response.participant_id, pane);
+          group.track.appendChild(pane);
+        }
+        lanes.get(response.participant_id).appendChild(messageElement(response));
+      }
+      box.appendChild(group.section);
+      group.update();
+    } else box.appendChild(messageElement(m));
+  }
+}
+
+function createResponseGroup(label) {
+  const section = document.createElement('section');
+  section.className = 'response-group';
+  section.setAttribute('aria-label', `${label} answers`);
+  const controls = document.createElement('div');
+  controls.className = 'comparison-controls';
+  const previous = document.createElement('button');
+  const next = document.createElement('button');
+  const status = document.createElement('span');
+  status.className = 'muted';
+  status.setAttribute('aria-live', 'polite');
+  previous.type = next.type = 'button';
+  previous.className = next.className = 'chip';
+  previous.textContent = '←'; next.textContent = '→';
+  previous.setAttribute('aria-label', 'Previous answer');
+  next.setAttribute('aria-label', 'Next answer');
+  const track = document.createElement('div');
+  track.className = `compare-wrap ${state.comparisonLayout}`;
+  track.tabIndex = 0;
+  track.setAttribute('aria-label', 'Swipe between answers');
+  const update = () => {
+    const panes = [...track.children];
+    const index = panes.reduce((best, pane, i) => Math.abs(pane.offsetLeft - track.offsetLeft - track.scrollLeft) < Math.abs((panes[best]?.offsetLeft || 0) - track.offsetLeft - track.scrollLeft) ? i : best, 0);
+    status.textContent = track.scrollWidth <= track.clientWidth + 1 ? `${label} · ${panes.length} answers` : `${label} · ${index + 1} / ${panes.length}`;
+    previous.disabled = track.scrollLeft <= 1;
+    next.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 1;
+  };
+  const move = delta => {
+    const panes = [...track.children];
+    const position = track.scrollLeft + delta;
+    const target = delta > 0 ? panes.find(p => p.offsetLeft - track.offsetLeft > position) : panes.reverse().find(p => p.offsetLeft - track.offsetLeft < position);
+    if (target) track.scrollTo({ left: target.offsetLeft - track.offsetLeft, behavior: 'smooth' });
+  };
+  previous.onclick = () => move(-2);
+  next.onclick = () => move(2);
+  track.addEventListener('scroll', update, { passive: true });
+  track.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); move(e.key === 'ArrowLeft' ? -2 : 2); }
+  });
+  controls.append(previous, status, next);
+  section.append(controls, track);
+  requestAnimationFrame(update);
+  return { section, track, update };
 }
 
 function messageElement(m) {
@@ -337,6 +508,7 @@ function participantName(id) {
 async function loadParticipants() {
   const data = await api.get('/api/participants');
   state.participants = data.participants;
+  state.selectedParticipantIds = state.selectedParticipantIds.filter(id => state.participants.some(p => p.id === id));
   if (!state.selectedParticipantIds.length && state.participants.length) {
     const deepseek = state.participants.find((p) => p.provider === 'deepseek') || state.participants[0];
     state.selectedParticipantIds = [deepseek.id];
@@ -347,6 +519,7 @@ async function loadParticipants() {
 }
 
 function renderParticipantPicker() {
+  persistSession();
   const box = $('#participantPicker');
   box.innerHTML = '';
   for (const p of state.participants) {
@@ -384,7 +557,7 @@ function showSwitchModal(nextIds) {
     hideSwitchModal();
     state.selectedParticipantIds = nextIds.length ? nextIds : state.selectedParticipantIds;
     state.lastMode = 'new';
-    localStorage.setItem('a0.lastMode', 'new');
+    persistSession();
     renderParticipantPicker();
     await newConversation();
   };
@@ -395,7 +568,7 @@ function showSwitchModal(nextIds) {
     hideSwitchModal();
     state.selectedParticipantIds = [singleId];
     state.lastMode = 'continue';
-    localStorage.setItem('a0.lastMode', 'continue');
+    persistSession();
     renderParticipantPicker();
     toast('Continue with the selected participant (full intended context).');
   };
@@ -405,7 +578,7 @@ function showSwitchModal(nextIds) {
     hideSwitchModal();
     state.selectedParticipantIds = nextIds;
     state.lastMode = 'compare';
-    localStorage.setItem('a0.lastMode', 'compare');
+    persistSession();
     renderParticipantPicker();
     toast('Compare models with the selected participants.');
   };
@@ -516,7 +689,7 @@ function renderParticipantCards() {
       }
     };
     row.appendChild(del);
-    card.append(h, sub, status, tools, row);
+    card.append(h, sub, row);
     box.appendChild(card);
   }
 }
@@ -747,14 +920,31 @@ async function loadAbout() {
 
 // ---------- Attachments ----------
 async function uploadAttachment(file) {
+  const key = draftKey();
+  const upload = { key, filename: file.name, status: 'uploading' };
+  state.uploads.push(upload);
+  persistComposer();
+  renderAttachmentChips();
   try {
     const fd = new FormData();
     fd.append('file', file);
     const data = await api.request('POST', '/api/attachments', fd, { raw: true });
-    state.attachments.push(data.attachment);
-    renderAttachmentChips();
+    if (draftKey() === key) {
+      state.attachments.push(data.attachment);
+      persistComposer();
+    } else {
+      const draft = state.drafts[key] ||= { content: '', attachments: [] };
+      draft.attachments.push(data.attachment);
+      persistSession();
+    }
+    state.uploads = state.uploads.filter(item => item !== upload);
   } catch (err) {
+    upload.status = 'failed';
+    upload.error = err.message;
     toast(`Upload failed: ${err.message}`, true);
+  } finally {
+    persistSession();
+    renderAttachmentChips();
   }
 }
 
@@ -765,7 +955,7 @@ function renderAttachmentChips() {
     const chip = document.createElement('span');
     chip.className = 'chip';
     const label = document.createElement('span');
-    label.textContent = `${a.mime.startsWith('image/') ? '🖼️' : '📄'} ${a.filename}`;
+    label.textContent = `${a.mime?.startsWith('image/') ? '🖼️' : '📄'} ${a.filename || 'Attached file'} · Ready`;
     const rm = document.createElement('button');
     rm.type = 'button';
     rm.className = 'chip-x';
@@ -773,105 +963,165 @@ function renderAttachmentChips() {
     rm.setAttribute('aria-label', `Remove ${a.filename}`);
     rm.onclick = () => {
       state.attachments = state.attachments.filter((x) => x.id !== a.id);
+      persistComposer();
       renderAttachmentChips();
     };
     chip.append(label, rm);
     box.appendChild(chip);
   }
+  for (const upload of state.uploads.filter(u => u.key === draftKey())) {
+    const chip = document.createElement('span');
+    chip.className = 'chip' + (upload.status === 'failed' ? ' error' : '');
+    chip.textContent = `${upload.filename} · ${upload.status === 'uploading' ? 'Uploading…' : upload.error}`;
+    if (upload.status === 'failed') {
+      const remove = document.createElement('button');
+      remove.type = 'button'; remove.className = 'chip-x'; remove.textContent = '✕';
+      remove.setAttribute('aria-label', `Dismiss upload error for ${upload.filename}`);
+      remove.onclick = () => { state.uploads = state.uploads.filter(u => u !== upload); renderAttachmentChips(); };
+      chip.appendChild(remove);
+    }
+    box.appendChild(chip);
+  }
+  $('#sendBtn').disabled = state.sending || state.uploads.some(u => u.key === draftKey() && u.status === 'uploading');
 }
 
 // ---------- Draft preservation ----------
-function saveDraft(content) {
+function saveDraft(content, clientRequestId = crypto.randomUUID()) {
   state.draft = {
     content,
     // C13: preserve complete attachment descriptors, not bare ids.
     attachments: state.attachments.map((a) => ({ ...a })),
     attachmentIds: state.attachments.map((a) => a.id),
-    clientRequestId: crypto.randomUUID(),
+    clientRequestId,
   };
+  state.pendingDrafts[draftKey()] = state.draft;
+  persistSession();
 }
 
 function restoreDraft() {
   if (!state.draft) return;
-  $('#composerInput').value = state.draft.content;
-  autoGrow();
-  // C13: restore complete descriptors; tolerate legacy {id}-only drafts.
-  state.attachments = (state.draft.attachments || (state.draft.attachmentIds || []).map((id) => ({ id }))).map((a) => ({ ...a }));
+  // A new thought typed while waiting must not be overwritten by failed delivery.
+  if (!$('#composerInput').value && !state.attachments.length) {
+    $('#composerInput').value = state.draft.content;
+    state.attachments = (state.draft.attachments || (state.draft.attachmentIds || []).map((id) => ({ id }))).map((a) => ({ ...a }));
+    autoGrow();
+    persistComposer();
+  }
   renderAttachmentChips();
   const retry = $('#retryBar');
   retry.classList.remove('hidden');
-  $('#retryText').textContent = 'Your draft is preserved.';
+  $('#retryText').textContent = 'Previous delivery is unconfirmed. Retry checks saved history first.';
 }
 
-function clearDraft() {
-  state.draft = null;
-  $('#retryBar').classList.add('hidden');
+function clearDraft(conversationId = draftKey()) {
+  delete state.pendingDrafts[conversationId];
+  if (conversationId === draftKey()) {
+    state.draft = null;
+    $('#retryBar').classList.add('hidden');
+  }
+  persistSession();
 }
 
 // ---------- Streaming run ----------
-async function sendMessage(content) {
-  if (!state.currentConversationId) await newConversation();
-  const conversationId = state.currentConversationId;
+async function sendMessage(content, retry = null) {
+  if (state.sending || state.uploads.some(u => u.key === draftKey() && u.status === 'uploading')) return;
+  if (!retry && state.pendingDrafts[draftKey()]) {
+    toast('Use Retry to check the previous unconfirmed delivery before sending again.', true);
+    return;
+  }
   if (!state.selectedParticipantIds.length) {
     toast('Select a participant before sending.', true);
     return;
   }
-  const participantIds = [...state.selectedParticipantIds];
-  const savedMode = state.lastMode || localStorage.getItem('a0.lastMode') || null;
-  let mode = savedMode === 'compare' ? 'compare' : savedMode === 'continue' ? 'single' : (participantIds.length > 1 ? 'compare' : 'single');
-  if (mode === 'compare' && participantIds.length < 2) mode = 'single';
-  const clientRequestId = state.draft?.clientRequestId || crypto.randomUUID();
-  const body = {
-    mode,
-    participantIds,
-    message: { content, attachmentIds: state.attachments.map((a) => a.id), clientRequestId },
-  };
-  saveDraft(content);
-  $('#composerInput').value = '';
-  autoGrow();
-  renderAttachmentChips();
-
-  // Optimistic user message.
-  const box = $('#messages');
-  const userEl = document.createElement('div');
-  userEl.className = 'msg user';
-  const userBody = document.createElement('div');
-  userBody.className = 'msg-body';
-  userBody.innerHTML = renderMarkdown(content);
-  userEl.appendChild(userBody);
-  box.appendChild(userEl);
-  box.scrollTop = box.scrollHeight;
-
-  $('#compareWrap').classList.add('hidden');
-  $('#compareWrap').innerHTML = '';
-  state.pendingProposals = null;
-  hideToolModal();
-
-  showTyping(true);
-  let res;
+  state.sending = true;
+  let conversationId;
+  let submitted = false;
   try {
-    res = await fetch(`/api/conversations/${conversationId}/runs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-A0-CSRF': state.csrf },
-      body: JSON.stringify(body),
-      credentials: 'same-origin',
-    });
+    if (!state.currentConversationId) await newConversation();
+    conversationId = state.currentConversationId;
+    if (retry) {
+      const existing = await api.get(`/api/conversations/${conversationId}`);
+      if (existing.messages.some(m => m.meta?.clientRequestId === retry.clientRequestId)) {
+        clearDraft(conversationId);
+        await openConversation(conversationId);
+        toast('That message is already saved. Its response status is shown in history.');
+        return;
+      }
+    }
+    const participantIds = [...state.selectedParticipantIds];
+    const savedMode = state.lastMode || null;
+    let mode = savedMode === 'compare' ? 'compare' : savedMode === 'continue' ? 'single' : (participantIds.length > 1 ? 'compare' : 'single');
+    if (mode === 'compare' && participantIds.length < 2) mode = 'single';
+    const clientRequestId = retry?.clientRequestId || crypto.randomUUID();
+    const attachments = retry?.attachments || state.attachments.map(a => ({ ...a }));
+    const body = {
+      mode,
+      participantIds,
+      message: { content, attachmentIds: attachments.map((a) => a.id), clientRequestId },
+    };
+    if (!retry) saveDraft(content, clientRequestId);
+    // Clear the submitted composer only; typing after this point is a new draft.
+    if (!retry || ($('#composerInput').value === content && JSON.stringify(state.attachments.map(a => a.id)) === JSON.stringify(attachments.map(a => a.id)))) {
+      $('#composerInput').value = '';
+      state.attachments = [];
+    }
+    persistComposer();
+    autoGrow();
+    renderAttachmentChips();
+
+    // Optimistic user message.
+    const box = $('#messages');
+    const userEl = document.createElement('div');
+    userEl.className = 'msg user';
+    const userBody = document.createElement('div');
+    userBody.className = 'msg-body';
+    userBody.innerHTML = renderMarkdown(content);
+    userEl.appendChild(userBody);
+    box.appendChild(userEl);
+    box.scrollTop = box.scrollHeight;
+
+    $('#compareWrap').classList.add('hidden');
+    $('#compareWrap').innerHTML = '';
+    state.pendingProposals = null;
+    hideToolModal();
+
+    showTyping(true);
+    let res;
+    try {
+      res = await fetch(`/api/conversations/${conversationId}/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-A0-CSRF': state.csrf },
+        body: JSON.stringify(body),
+        credentials: 'same-origin',
+      });
+    } catch (err) {
+      showTyping(false);
+      restoreDraft();
+      toast(`Network error: ${err.message}`, true);
+      return;
+    }
+    if (!res.ok) {
+      showTyping(false);
+      restoreDraft();
+      const data = await res.json().catch(() => ({}));
+      toast(data.message || 'Run failed to start.', true);
+      return;
+    }
+    submitted = true;
+    await readSseStream(res, conversationId, mode);
+    if (state.currentConversationId === conversationId) {
+      await openConversation(conversationId);
+    }
+    await loadConversations();
   } catch (err) {
-    showTyping(false);
-    restoreDraft();
-    toast(`Network error: ${err.message}`, true);
-    return;
-  }
-  if (!res.ok) {
-    showTyping(false);
-    restoreDraft();
-    const data = await res.json().catch(() => ({}));
-    toast(data.message || 'Run failed to start.', true);
-    return;
-  }
-  await readSseStream(res, conversationId, mode);
-  if (state.currentConversationId === conversationId) {
-    await openConversation(conversationId);
+    if (conversationId === state.currentConversationId) {
+      showTyping(false);
+      restoreDraft();
+    }
+    toast(submitted ? `Connection interrupted: ${err.message}. Reopen history to check saved results.` : err.message, true);
+  } finally {
+    state.sending = false;
+    renderAttachmentChips();
   }
 }
 
@@ -882,12 +1132,17 @@ function showTyping(on) {
 }
 
 function setActiveRun(runId, conversationId) {
-  state.activeRun = { runId, conversationId };
-  $('#typingBar').classList.remove('hidden');
-  $('#stopBtn').classList.remove('hidden');
+  const run = { runId, conversationId };
+  state.runs[conversationId] = run;
+  if (state.currentConversationId === conversationId) {
+    state.activeRun = run;
+    $('#typingBar').classList.remove('hidden');
+    $('#stopBtn').classList.remove('hidden');
+  }
 }
 
 function clearActiveRun(runId) {
+  for (const [id, run] of Object.entries(state.runs)) if (run.runId === runId) delete state.runs[id];
   if (state.activeRun?.runId === runId) {
     state.activeRun = null;
     $('#stopBtn').classList.add('hidden');
@@ -901,6 +1156,8 @@ async function readSseStream(res, conversationId, mode) {
   let pendingEvent = 'message';
   const messageEls = new Map();
   const paneEls = new Map();
+  let group = null;
+  let terminal = false;
 
   const appendLiveMessage = (participantId, name) => {
     if (state.currentConversationId !== conversationId) return;
@@ -921,7 +1178,10 @@ async function readSseStream(res, conversationId, mode) {
   const ensurePane = (participantId, name) => {
     if (!paneEls.has(participantId)) {
       const wrap = $('#compareWrap');
-      if (state.currentConversationId === conversationId) wrap.classList.remove('hidden');
+      if (!group) {
+        group = createResponseGroup('Current round');
+        if (state.currentConversationId === conversationId) { wrap.classList.remove('hidden'); wrap.appendChild(group.section); }
+      }
       const pane = document.createElement('div');
       pane.className = 'compare-pane';
       const h = document.createElement('h4');
@@ -929,7 +1189,7 @@ async function readSseStream(res, conversationId, mode) {
       const body = document.createElement('div');
       body.className = 'pane-body';
       pane.append(h, body);
-      if (state.currentConversationId === conversationId) wrap.appendChild(pane);
+      if (state.currentConversationId === conversationId) { group.track.appendChild(pane); group.update(); }
       paneEls.set(participantId, body);
     }
     return paneEls.get(participantId);
@@ -952,10 +1212,12 @@ async function readSseStream(res, conversationId, mode) {
       if (!raw) { pendingEvent = 'message'; continue; }
       let payload;
       try { payload = JSON.parse(raw); } catch { continue; }
+      if (['run_complete', 'run_error', 'tools_cancelled'].includes(pendingEvent)) terminal = true;
       handleSseEvent(pendingEvent, payload, { conversationId, mode, appendLiveMessage, ensurePane, messageEls, paneEls });
       pendingEvent = 'message';
     }
   }
+  if (!terminal) throw new Error('The response stream ended before completion');
 }
 
 function handleSseEvent(event, payload, ctx) {
@@ -963,6 +1225,7 @@ function handleSseEvent(event, payload, ctx) {
   const isCurrent = state.currentConversationId === conversationId;
 
   if (event === 'run_start') {
+    clearDraft(conversationId); // Server acknowledgement; never resend automatically.
     setActiveRun(payload.runId, conversationId);
     if (!isCurrent) return;
     for (const p of payload.participants) {
@@ -1004,6 +1267,7 @@ function handleSseEvent(event, payload, ctx) {
     // C08: provider completion is NOT whole-run completion. Keep the active run
     // (and Stop) alive until run_complete/run_error/tools_cancelled.
   } else if (event === 'tool_proposals') {
+    if (state.runs[conversationId]) state.runs[conversationId].proposals = payload.proposals;
     if (!isCurrent) return;
     state.pendingProposals = payload.proposals;
     showToolModal(payload.proposals);
@@ -1016,9 +1280,11 @@ function handleSseEvent(event, payload, ctx) {
     box.appendChild(el);
   } else if (event === 'run_complete' || event === 'run_error' || event === 'tools_cancelled') {
     clearActiveRun(payload.runId || state.activeRun?.runId);
-    showTyping(false);
-    state.pendingProposals = null;
-    hideToolModal();
+    if (isCurrent) {
+      showTyping(false);
+      state.pendingProposals = null;
+      hideToolModal();
+    }
   }
 }
 
@@ -1055,6 +1321,7 @@ function showToolModal(proposals) {
 
 async function authorizeTools(ids) {
   await api.post(`/api/runs/${state.activeRun?.runId}/tool-authorize`, { actionIds: ids, cancel: false });
+  if (state.activeRun) state.activeRun.proposals = null;
   hideToolModal();
 }
 
@@ -1068,60 +1335,80 @@ let recognizing = false;
 
 function initVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    $('#voiceBtn').disabled = true;
-    $('#voiceBtn').title = 'Speech recognition is not available in this browser.';
-    return;
-  }
-  recognition = new SR();
+  $('#voiceBtn').onclick = () => {
+    if (!recognition) {
+      voiceMessage('Speech recognition is not available in this browser. You can use your keyboard’s microphone to dictate into the message box.', true);
+      return;
+    }
+    if (recognizing) { recognition.stop(); return; }
+    stopSpeech(false);
+    recognitionFailed = false;
+    recognitionKey = draftKey();
+    recognitionBase = $('#composerInput').value;
+    voiceMessage('Requesting microphone…');
+    $('#voiceBtn').textContent = '⏹';
+    $('#voiceBtn').setAttribute('aria-pressed', 'true');
+    recognizing = true;
+    persistComposer();
+    try { recognition.start(); }
+    catch (err) {
+      recognizing = false;
+      recognitionFailed = true;
+      voiceMessage(`Voice start failed: ${err.message}`, true);
+      $('#voiceBtn').textContent = '🎤';
+      $('#voiceBtn').setAttribute('aria-pressed', 'false');
+    }
+  };
+  if (!SR) return;
+  try { recognition = new SR(); }
+  catch { return; }
+  let recognitionBase = '';
+  let recognitionFailed = false;
+  let recognitionKey = null;
   recognition.lang = 'en-US';
   recognition.interimResults = true;
+  recognition.onstart = () => voiceMessage('Listening… speak now.');
   recognition.onresult = (event) => {
     let finalText = '';
     let interimText = '';
-    for (let i = event.resultIndex; i < event.results.length; i++) {
+    for (let i = 0; i < event.results.length; i++) {
       const res = event.results[i];
       if (res.isFinal) finalText += res[0].transcript;
       else interimText += res[0].transcript;
     }
     const input = $('#composerInput');
-    input.value = (input.dataset.dictated || '') + finalText + (interimText ? ' ' + interimText : '');
-    if (finalText) input.dataset.dictated = (input.dataset.dictated || '') + finalText;
-    autoGrow();
+    const content = recognitionBase + (recognitionBase && !/\s$/.test(recognitionBase) ? ' ' : '') + finalText + (interimText ? ' ' + interimText : '');
+    if (recognitionKey === draftKey()) {
+      input.value = content;
+      autoGrow();
+      persistComposer();
+    } else {
+      const draft = state.drafts[recognitionKey] ||= { content: '', attachments: [] };
+      draft.content = content;
+      persistSession();
+    }
   };
   recognition.onend = () => {
     recognizing = false;
-    $('#voiceStatus').classList.add('hidden');
+    if (!recognitionFailed) voiceMessage('Dictation stopped. Review your message, then send.');
     $('#voiceBtn').textContent = '🎤';
+    $('#voiceBtn').setAttribute('aria-pressed', 'false');
+    persistComposer();
   };
   recognition.onerror = (event) => {
     recognizing = false;
-    const status = $('#voiceStatus');
-    status.textContent = voiceErrorMessage(event.error);
-    status.classList.remove('hidden');
+    recognitionFailed = true;
+    voiceMessage(voiceErrorMessage(event.error), true);
     $('#voiceBtn').textContent = '🎤';
-    $('#voiceBtn').disabled = false;
+    $('#voiceBtn').setAttribute('aria-pressed', 'false');
   };
-  $('#voiceBtn').onclick = () => {
-    if (recognizing) {
-      recognition.stop();
-      return;
-    }
-    $('#composerInput').dataset.dictated = $('#composerInput').value;
-    const status = $('#voiceStatus');
-    status.textContent = 'Listening… speak now.';
-    status.classList.remove('hidden');
-    $('#voiceBtn').textContent = '⏹';
-    recognizing = true;
-    try {
-      recognition.start();
-    } catch (err) {
-      recognizing = false;
-      status.textContent = `Voice start failed: ${err.message}`;
-      status.classList.remove('hidden');
-      $('#voiceBtn').textContent = '🎤';
-    }
-  };
+}
+
+function voiceMessage(message, error = false) {
+  const status = $('#voiceStatus');
+  status.textContent = message;
+  status.classList.remove('hidden');
+  status.classList.toggle('error', error);
 }
 
 function voiceErrorMessage(code) {
@@ -1141,34 +1428,59 @@ function voiceErrorMessage(code) {
 }
 
 function speak(text) {
-  if (!('speechSynthesis' in window)) {
-    toast('Spoken answers are not supported in this browser.', true);
+  if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+    voiceMessage('Spoken answers are not supported in this browser.', true);
     return;
   }
   const clean = text.replace(/```[\s\S]*?```/g, ' code block omitted. ').replace(/[#*_`>]/g, '');
-  const token = ++state.speechToken;
-  speechSynthesis.cancel();
+  stopSpeech(false);
+  const token = state.speechToken;
   const chunks = splitForSpeech(clean, 200);
-  for (const chunk of chunks) {
+  voiceMessage('Starting spoken answer…');
+  const next = () => {
+    if (token !== state.speechToken) return;
+    const chunk = chunks.shift();
+    if (!chunk) {
+      state.speechUtterance = null;
+      $('#stopSpeechBtn').classList.add('hidden');
+      voiceMessage('Finished reading.');
+      return;
+    }
     const u = new SpeechSynthesisUtterance(chunk);
-    u.rate = state.voiceRate || 1.02; // C15: owner-persisted rate
-    u.onend = () => {
-      if (state.speechToken !== token) speechSynthesis.cancel();
+    state.speechUtterance = u; // Keep alive across mobile browser callbacks.
+    u.rate = state.voiceRate || 1.02;
+    u.onstart = () => { if (token === state.speechToken) voiceMessage('Reading answer…'); };
+    u.onend = next;
+    u.onerror = event => {
+      if (token !== state.speechToken) return;
+      stopSpeech(false);
+      voiceMessage(`Playback failed (${event.error || 'unknown'}). Check media volume and the browser’s speech voice, then tap the answer’s speaker to retry.`, true);
     };
-    speechSynthesis.speak(u);
-  }
+    $('#stopSpeechBtn').classList.remove('hidden');
+    try { speechSynthesis.resume(); speechSynthesis.speak(u); }
+    catch (err) { u.onerror({ error: err.message }); }
+  };
+  next();
+}
+
+function stopSpeech(feedback = true) {
+  state.speechToken += 1;
+  window.speechSynthesis?.cancel();
+  state.speechUtterance = null;
+  $('#stopSpeechBtn').classList.add('hidden');
+  if (feedback) voiceMessage('Reading stopped.');
 }
 
 function splitForSpeech(text, size) {
-  const sentences = text.match(/[^.!?\n]+[.!?\n]*/g) || [text];
   const chunks = [];
   let current = '';
-  for (const s of sentences) {
-    if ((current + s).length > size && current) {
+  for (let word of text.match(/\S+\s*/g) || []) {
+    if ((current + word).length > size && current) {
       chunks.push(current.trim());
       current = '';
     }
-    current += s;
+    while (word.length > size) { chunks.push(word.slice(0, size)); word = word.slice(size); }
+    current += word;
   }
   if (current.trim()) chunks.push(current.trim());
   return chunks;
@@ -1179,20 +1491,31 @@ function bindNav() {
   $$('.nav-btn').forEach((btn) => {
     btn.onclick = () => showView(btn.dataset.view);
   });
-  $('#menuBtn').onclick = () => $('#drawer').classList.toggle('open');
+  $('#menuBtn').onclick = () => setDrawer(!$('#drawer').classList.contains('open'));
+  $('#drawerBackdrop').onclick = () => setDrawer(false);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') setDrawer(false); });
   $('#logoutBtn').onclick = async () => {
     await api.post('/api/auth/logout', {});
+    try { sessionStorage.removeItem(recoveryKey()); localStorage.removeItem(`${recoveryKey()}:last`); } catch {}
+    stopSpeech(false);
     location.reload();
   };
-  $('#newChatBtn').onclick = newConversation;
+  $('#newChatBtn').onclick = () => newConversation().catch(err => toast(err.message, true));
   $('#voiceReadBtn').onclick = () => {
     state.spokenAnswers = !state.spokenAnswers;
+    $('#prefAutoSpeak').value = state.spokenAnswers ? 'on' : 'off';
     $('#voiceReadBtn').textContent = state.spokenAnswers ? '🔊' : '🔇';
-    if (!state.spokenAnswers && 'speechSynthesis' in window) {
-      state.speechToken += 1;
-      speechSynthesis.cancel();
+    $('#voiceReadBtn').setAttribute('aria-pressed', String(state.spokenAnswers));
+    api.put('/api/settings', { autoSpeak: state.spokenAnswers ? 'on' : 'off' }).catch(err => toast(`Could not save voice preference: ${err.message}`, true));
+    if (state.spokenAnswers) {
+      const last = [...state.messages].reverse().find(m => m.role === 'assistant' && m.status === 'complete' && m.content);
+      speak(last?.content || 'Spoken answers on.');
+    } else {
+      stopSpeech(false);
+      voiceMessage('Spoken answers off. You can still read any answer with its speaker button.');
     }
   };
+  $('#stopSpeechBtn').onclick = () => stopSpeech();
 }
 
 function autoGrow() {
@@ -1201,7 +1524,7 @@ function autoGrow() {
   ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
 }
 
-async function bindForms() {
+function bindForms() {
   $('#authForm').onsubmit = async (e) => {
     e.preventDefault();
     const username = $('#authUsername').value.trim();
@@ -1228,12 +1551,12 @@ async function bindForms() {
     sendMessage(content || '');
   };
   $('#composerInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && state.enterToSend) {
       e.preventDefault();
       $('#composerForm').requestSubmit();
     }
   });
-  $('#composerInput').addEventListener('input', autoGrow);
+  $('#composerInput').addEventListener('input', () => { autoGrow(); persistComposer(); });
   $('#stopBtn').onclick = async () => {
     if (state.activeRun?.runId) {
       await api.post(`/api/runs/${state.activeRun.runId}/stop`, {});
@@ -1241,15 +1564,19 @@ async function bindForms() {
     }
   };
   $('#retryBtn').onclick = async () => {
-    const content = $('#composerInput').value.trim();
-    if (!content && !state.attachments.length) return;
-    $('#retryBar').classList.add('hidden');
-    sendMessage(content || '');
+    if (state.draft) sendMessage(state.draft.content, { ...state.draft });
   };
-  $('#attachBtn').onclick = () => $('#fileInput').click();
+  $('#attachBtn').onclick = () => { persistComposer(); $('#fileInput').click(); };
   $('#fileInput').onchange = async () => {
-    for (const file of $('#fileInput').files) await uploadAttachment(file);
+    const files = [...$('#fileInput').files];
     $('#fileInput').value = '';
+    await Promise.all(files.map(uploadAttachment));
+  };
+  $('#comparisonLayout').onchange = async () => {
+    $('#prefLayout').value = $('#comparisonLayout').value;
+    applyOwnerPreferences();
+    try { await api.put('/api/settings', { comparisonLayout: state.comparisonLayout }); }
+    catch (err) { toast(`Could not save answer layout: ${err.message}`, true); }
   };
   $('#seedParticipantsBtn').onclick = async () => {
     try {
@@ -1328,9 +1655,9 @@ async function initOwnerPreferences() {
     if (!el) return;
     el.value = prefs[key] ?? el.querySelector('option[selected]')?.value ?? '';
     el.onchange = async () => {
-      await api.put('/api/settings', { [key]: el.value });
       applyOwnerPreferences();
-      toast('Preference saved.');
+      try { await api.put('/api/settings', { [key]: el.value }); toast('Preference saved.'); }
+      catch (err) { toast(`Could not save preference: ${err.message}`, true); }
     };
   };
   set('#prefTextSize', 'textSize');
@@ -1348,13 +1675,28 @@ function applyOwnerPreferences() {
   state.enterToSend = enter === 'on';
   state.voiceRate = parseFloat($('#prefVoiceRate')?.value || '1.0');
   state.spokenAnswers = ($('#prefAutoSpeak')?.value === 'on');
-  state.comparisonLayout = $('#prefLayout')?.value || 'stacked';
+  state.comparisonLayout = $('#prefLayout')?.value || 'carousel';
+  $('#comparisonLayout').value = state.comparisonLayout;
+  $('#voiceReadBtn').textContent = state.spokenAnswers ? '🔊' : '🔇';
+  $('#voiceReadBtn').setAttribute('aria-pressed', String(state.spokenAnswers));
+  $$('.response-group .compare-wrap').forEach(track => {
+    track.classList.remove('stacked', 'side', 'carousel');
+    track.classList.add(state.comparisonLayout);
+    requestAnimationFrame(() => track.dispatchEvent(new Event('scroll')));
+  });
 }
 
-boot().then(() => {
-  bindForms();
-  initVoice();
-  initOwnerPreferences().catch(() => {});
+// Controls must not depend on a settings/provider request completing successfully.
+bindNav();
+bindForms();
+initVoice();
+boot();
+window.addEventListener('pagehide', persistComposer);
+document.addEventListener('visibilitychange', () => {
+  persistComposer();
+  if (document.visibilityState === 'visible' && state.ready && state.view === 'chat' && !state.sending && state.currentConversationId && !$$('.modal').some(m => !m.classList.contains('hidden'))) {
+    openConversation(state.currentConversationId, { refresh: true }).catch(err => toast(`Could not refresh history: ${err.message}`, true));
+  }
 });
 
 // ---------- FR1 context editor ----------

@@ -23,6 +23,14 @@ const server = http.createServer((req, res) => {
     let parsed = {};
     try { parsed = JSON.parse(body); } catch {}
     const model = parsed.model || '';
+    // Reject the production regression: assistant history is output content,
+    // even when the answer originated with another provider.
+    if (parsed.input?.some(m => m.role === 'assistant' && Array.isArray(m.content) &&
+      m.content.some(c => !['output_text', 'refusal'].includes(c.type)))) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { message: 'Assistant content requires output_text or refusal' } }));
+      return;
+    }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
@@ -107,6 +115,16 @@ const BASE = `http://127.0.0.1:${PORT}`;
   const { instructions, input } = encodeResponsesInput('openai', 'gpt-6-luna', snapshot);
   check('RO02 text+image input preserved as typed content', Array.isArray(input) && input.length === 2 && input[0].content.some((c) => c.type === 'input_image' && c.image_url === 'data:image/png;base64,QUJD') && input[0].content.some((c) => c.type === 'input_text' && c.text === 'look'));
   check('RO02 system travels in instructions', instructions === 'A0 harness instructions');
+  check('RO02 assistant replay uses output_text', input[1].content[0]?.type === 'output_text' && input[1].content[0]?.text === 'seen');
+  try {
+    const result = await streamProvider({
+      provider: 'openai', model: 'fixture', apiKey: 'inert', snapshot,
+      tools: [], signal: new AbortController().signal, onChunk: () => {}, timeoutMs: 5000, baseUrl: BASE,
+    });
+    check('RO02 multi-turn history accepted by strict Responses endpoint', result.text === 'ok');
+  } catch (err) {
+    check('RO02 multi-turn history accepted by strict Responses endpoint', false, err.message);
+  }
 }
 
 // -- tool stream: complete call_id correlation ---------------------------

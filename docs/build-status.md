@@ -1,6 +1,28 @@
 # A0 build status — resumption record
 
-Last updated: 2026-10-30 (VM local time)
+Last updated: 2026-11-03 (America/Los_Angeles)
+
+## Mobile repair — current continuation
+
+The owner's phone report supersedes the earlier claims that navigation, draft
+recovery and voice feedback were fully repaired. Baseline source and public
+health identity: `ef9f44b518087b9152240731a727ec0f3d531913`.
+
+Work is on `fix/mobile-chat-continuity`: navigation startup, owner-scoped active
+chat/draft recovery, upload states, round-based carousel/side/stack layouts,
+voice feedback, settings persistence and valid OpenAI assistant-history encoding.
+See [mobile-chat-repair.md](mobile-chat-repair.md) for file ownership, test
+evidence, limits and the deployment procedure. No archive, database schema,
+provider key, model choice or vault configuration was changed.
+
+Next action: use the existing authorized VM connection to inspect and deploy the
+reviewed repair commit, restart only A0, verify `/api/health` reports that commit,
+then repeat the owner's actual Android history, picker and audio flows. This
+session has public HTTPS and repository access but no exposed VM execution
+connection or SSH identity; deployment and actual-phone acceptance remain open.
+
+The records below retain their original dates and evidence scopes. They are not
+a new acceptance claim for the repaired source or the current phone experience.
 
 ## Current state
 
