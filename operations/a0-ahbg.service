@@ -1,0 +1,15 @@
+[Unit]
+Description=A0 AHBG producer sidecar (pinned Stack runtime)
+After=network.target
+
+[Service]
+Type=simple
+User=a0app
+WorkingDirectory=/opt/a0
+Environment=A0_AHBG_STATE_DIR=/srv/a0/ahbg
+Environment=A0_AHBG_PORT=8792
+ExecStart=/usr/bin/python3 /opt/a0/operations/ahbg-sidecar.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
