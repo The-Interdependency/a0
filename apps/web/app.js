@@ -31,6 +31,8 @@ const state = {
   messages: [],
   ready: false,
   navigation: 0,
+  pendingNavigation: null,
+  historyRevisions: {}, // Terminal stream events invalidate in-flight snapshots.
   sending: false,
   comparisonLayout: 'carousel',
   runs: {}, // In-memory stream controls keyed by conversation, never by visible pane.
@@ -244,8 +246,20 @@ async function openConversation(id, { refresh = false, adoptNewDraft = false } =
   const scroll = refresh ? $('.content').scrollTop : null;
   const positions = refresh ? $$('.response-group .compare-wrap').map(track => track.scrollLeft) : [];
   const navigation = ++state.navigation;
-  const data = await api.get(`/api/conversations/${id}`);
-  if (navigation !== state.navigation) return; // A late fetch must not hijack a newer selection.
+  state.pendingNavigation = navigation;
+  let data;
+  try {
+    let revision;
+    do {
+      revision = state.historyRevisions[id] || 0;
+      data = await api.get(`/api/conversations/${id}`);
+      if (navigation !== state.navigation) return; // Never hijack a newer selection.
+      // A run may finish after this request took its snapshot. Read its final
+      // history before adopting the view, without starting a new navigation.
+    } while (revision !== (state.historyRevisions[id] || 0));
+  } finally {
+    if (state.pendingNavigation === navigation) state.pendingNavigation = null;
+  }
   persistComposer(); // Preserve edits made while the detail request was pending.
   if (adoptNewDraft && !state.currentConversationId) {
     // Migrate at the actual switch, after both creation and detail requests.
@@ -253,6 +267,7 @@ async function openConversation(id, { refresh = false, adoptNewDraft = false } =
     state.drafts[id] = state.drafts.new || { content: '', attachments: [] };
     delete state.drafts.new;
     for (const upload of state.uploads) if (upload.key === 'new') upload.key = id;
+    if (recognitionKey === 'new') recognitionKey = id;
   }
   clearConversationView();
   state.currentConversationId = id;
@@ -1164,7 +1179,7 @@ async function sendMessage(content, retry = null) {
     }
     submitted = true;
     await readSseStream(res, conversationId, mode);
-    if (state.currentConversationId === conversationId && state.navigation === navigation) {
+    if (state.currentConversationId === conversationId && state.pendingNavigation === null) {
       await openConversation(conversationId);
     }
     await loadConversations();
@@ -1340,6 +1355,7 @@ function handleSseEvent(event, payload, ctx) {
     el.innerHTML = renderMarkdown(`Tool ${payload.toolName}: ${payload.status}${payload.error ? ' — ' + payload.error : ''}${payload.text ? '\n' + payload.text : ''}`);
     box.appendChild(el);
   } else if (event === 'run_complete' || event === 'run_error' || event === 'tools_cancelled') {
+    state.historyRevisions[conversationId] = (state.historyRevisions[conversationId] || 0) + 1;
     clearActiveRun(payload.runId || state.runs[conversationId]?.runId);
     if (isCurrent) {
       showTyping(false);
@@ -1393,6 +1409,7 @@ function hideToolModal() {
 // ---------- Voice (dictation + spoken responses) ----------
 let recognition = null;
 let recognizing = false;
+let recognitionKey = null;
 
 function initVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1425,7 +1442,6 @@ function initVoice() {
   catch { return; }
   let recognitionBase = '';
   let recognitionFailed = false;
-  let recognitionKey = null;
   recognition.lang = 'en-US';
   recognition.interimResults = true;
   recognition.onstart = () => voiceMessage('Listening… speak now.');
@@ -1566,6 +1582,8 @@ function bindNav() {
       state.me = null;
       state.csrf = '';
       state.navigation += 1;
+      state.pendingNavigation = null;
+      state.historyRevisions = {};
       state.drafts = {};
       state.pendingDrafts = {};
       state.uploads = [];

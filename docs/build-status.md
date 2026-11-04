@@ -19,12 +19,16 @@ The five additional P2 findings at PR head `bf38c7f090951f3080810abd84ee24798580
 are repaired in this continuation: acknowledged retry cleanup, retry navigation
 generation checks, initial composer gating, disconnected-run invalidation and
 sign-out recovery revocation. Twelve new cases reproduced the original defects;
-the integrated suite passes **37 browser tests**, plus **13 Markdown and 17
+the integrated suite passes **40 browser tests**, plus **13 Markdown and 17
 Responses assertions**, locally. Main `f231aec5a7ed6d24ba564253b402d426247d20b6`
 is incorporated without changing its AHBG correction. Source work-graph inputs
 and archive identity remain unchanged. PR #121 carries remote CI/review receipts.
 Two additional tests reproduce and guard completion refreshes against a newer
 navigation request that has not finished loading.
+The b25406d review also reproduced late dictation missing the first adopted
+conversation and stale completed answers after returning to a stream. Both are
+repaired with three more regressions, including a history request spanning run
+completion. A pending selection retains priority; a completed return refreshes.
 
 Next action: verify the pushed head's CI/review state and reconcile GitHub's
 CodeQL default/advanced setup conflict before merge. The connected API cannot

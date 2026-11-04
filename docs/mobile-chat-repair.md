@@ -127,11 +127,20 @@ cases protect the initial-detail loading boundary and unsuccessful logout.
 
 Final integration review reproduced a related navigation race at stream
 completion: refreshing the old conversation could supersede a newer selection
-whose detail request was still pending. The same generation guard now protects
-completion refreshes. Two additional regressions fail on 08fa26f and pass after
-repair, for both first sends and retries.
+whose detail request was still pending. Two additional regressions fail on
+08fa26f and protect both first sends and retries.
 
-Integrated local verification: **37 browser tests passed**, zero failures,
+The review of b25406d found two further defects, both reproduced before repair.
+Late recognition now follows the first draft's adopted conversation identity,
+including final results delivered after the detail request. Stream completion
+refreshes a visible conversation after a completed return, while an outstanding
+selection keeps priority. If a terminal event arrives while a history request
+is pending, its older snapshot is refetched before display. Three regressions
+cover dictation/reload, a completed return and a pending return; all fail against
+b25406d. Navigation tests wait for the rendered selection rather than assuming
+that a previously idle network means a released fixture has finished rendering.
+
+Integrated local verification: **40 browser tests passed**, zero failures,
 skips or cancellations; **13 Markdown and 17 Responses assertions passed**.
 Node 24.22.1, Playwright 1.56.1, Chromium 141.0.7390.37; actual app/CSS,
 fixture APIs and speech, plus real loopback stream disconnection. Syntax and
@@ -140,6 +149,10 @@ The first repair commit 08fa26f passed 35 browser tests and both offline suites
 in [Web regressions](https://github.com/The-Interdependency/a0/actions/runs/41779243873);
 its [CodeQL workflow](https://github.com/The-Interdependency/a0/actions/runs/41779243878)
 still failed at SARIF processing because default setup was enabled.
+The follow-up b25406d passed 37 browser tests and both offline suites in
+[Web regressions](https://github.com/The-Interdependency/a0/actions/runs/41779684125).
+Its default CodeQL check passed, while the duplicate repository workflow
+[failed on the same configuration conflict](https://github.com/The-Interdependency/a0/actions/runs/41779684181).
 The workflow runs the same browser test file on PRs and main; the PR records the
 published commit, remote run and final review state rather than treating these
 local results as CI evidence.
@@ -156,7 +169,8 @@ GitHub rejected its SARIF processing because default setup was enabled.
 The repository's deliberately scoped advanced workflow remains unchanged.
 [GitHub documents the setup conflict and supported transition](https://docs.github.com/en/enterprise-cloud%40latest/code-security/reference/code-scanning/troubleshoot-analysis-errors/results-different-than-expected).
 The connected repository API cannot change that administrative setup, and
-branch-protection details return 403. The visible active ruleset preserves
+branch-protection details return 403. The settings browser is signed out, so it
+does not supply administrator access either. The visible active ruleset preserves
 deletion/force-push protection and requests Copilot review on push; it contains
 no required-status or approval rule. No bypass or security-policy change was made.
 

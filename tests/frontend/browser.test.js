@@ -713,7 +713,72 @@ for (const retry of [false, true]) test('stream completion preserves a pending n
   response.end('event: run_complete\ndata: {"runId":"disconnected-run","status":"complete"}\n\n');
   await page.waitForFunction(() => !document.querySelector('#sendBtn').disabled);
   release.resolve(); await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => document.querySelector('#chatTitle').textContent === 'Other conversation' &&
+    document.querySelector('#menuBtn').getAttribute('aria-expanded') === 'false');
   assert.equal(await page.locator('#chatTitle').innerText(), 'Other conversation');
   assert.equal(await page.locator('#messages').innerText(), '');
   assert.equal(await page.locator('#typingBar').isVisible(), false);
+});
+
+test('late dictation follows the first draft into its adopted conversation', async t => {
+  const { page, errors } = await fixture(t, { empty: true });
+  await page.locator('#composerInput').fill('Typed first.');
+  await page.locator('#voiceBtn').click();
+  await page.locator('#menuBtn').click();
+  await page.locator('#newChatBtn').click();
+  await page.waitForFunction(() => location.hash === '#conversation=c1');
+  await page.evaluate(() => __speech.recognition.onresult({ resultIndex: 0,
+    results: [Object.assign([{ transcript: 'Final dictated words.' }], { isFinal: true })] }));
+  assert.equal(await page.locator('#composerInput').inputValue(), 'Typed first. Final dictated words.');
+  assert.equal(await page.evaluate(() => Object.hasOwn(JSON.parse(sessionStorage.getItem('a0.ui.v1:owner1')).drafts, 'new')), false);
+  await page.reload(); await page.waitForLoadState('networkidle');
+  assert.equal(await page.locator('#composerInput').inputValue(), 'Typed first. Final dictated words.');
+  assert.deepEqual(errors, []);
+});
+
+for (const pendingReturn of [false, true]) test('returned streaming conversation displays its final history: pending=' + pendingReturn, async t => {
+  const stream = responseStream(t);
+  const waiting = deferred(), release = deferred();
+  t.after(() => release.resolve());
+  let delayReturn = false;
+  const { page, data, errors } = await fixture(t, { handle: async ({ path, req, route, json, data }) => {
+    if (path.endsWith('/runs')) { saveUnconfirmed(req, data); await route.continue({ url: origin + stream.path }); return true; }
+    if (path === '/api/conversations/c1' && delayReturn) {
+      delayReturn = false;
+      const snapshot = structuredClone({ conversation: data.conversations[0], messages: data.messages.c1, messageCount: data.messages.c1.length });
+      waiting.resolve(); await release.promise;
+      await json(snapshot); return true;
+    }
+  } });
+  await page.locator('#composerInput').fill('finish after I return');
+  await page.locator('#sendBtn').click();
+  const response = await stream.connected;
+  await page.waitForFunction(() => !document.querySelector('#stopBtn').classList.contains('hidden'));
+  const answer = { id: 'return-answer', participant_id: 'p1', role: 'assistant', content: 'Partial on return', status: 'streaming', round: 4, created_at: time };
+  data.messages.c1.push(answer);
+  await open(page, 'Other conversation');
+  if (pendingReturn) {
+    delayReturn = true;
+    await page.locator('#menuBtn').click();
+    await page.getByRole('button', { name: 'Open conversation Saved conversation', exact: true }).click();
+    await waiting.promise;
+  } else {
+    await open(page);
+    assert.match(await page.locator('#messages').innerText(), /Partial on return/);
+    await page.locator('#composerInput').fill('New thought while answering');
+  }
+  answer.content = 'Final answer after returning'; answer.status = 'complete';
+  response.end('event: chunk\ndata: {"participantId":"p1","text":"Final answer after returning"}\n\n' +
+    'event: run_complete\ndata: {"runId":"disconnected-run","status":"complete"}\n\n');
+  await page.waitForFunction(() => !document.querySelector('#sendBtn').disabled);
+  release.resolve(); await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => document.querySelector('#chatTitle').textContent === 'Saved conversation' &&
+    document.querySelector('#menuBtn').getAttribute('aria-expanded') === 'false');
+  assert.equal(await page.locator('#chatTitle').innerText(), 'Saved conversation');
+  assert.match(await page.locator('#messages').innerText(), /Final answer after returning/);
+  assert.doesNotMatch(await page.locator('#messages').innerText(), /Partial on return/);
+  assert.equal(await page.locator('#typingBar').isVisible(), false);
+  assert.equal(await page.locator('#stopBtn').isVisible(), false);
+  assert.equal(await page.locator('#composerInput').inputValue(), pendingReturn ? '' : 'New thought while answering');
+  assert.deepEqual(errors, []);
 });
