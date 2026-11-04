@@ -125,12 +125,22 @@ after tightening the harness's same-conversation navigation wait, and failed on
 the stale Working control as expected. All 12 passed after repair. Two further
 cases protect the initial-detail loading boundary and unsuccessful logout.
 
-Integrated local verification: **35 browser tests passed**, zero failures,
+Final integration review reproduced a related navigation race at stream
+completion: refreshing the old conversation could supersede a newer selection
+whose detail request was still pending. The same generation guard now protects
+completion refreshes. Two additional regressions fail on 08fa26f and pass after
+repair, for both first sends and retries.
+
+Integrated local verification: **37 browser tests passed**, zero failures,
 skips or cancellations; **13 Markdown and 17 Responses assertions passed**.
 Node 24.22.1, Playwright 1.56.1, Chromium 141.0.7390.37; actual app/CSS,
 fixture APIs and speech, plus real loopback stream disconnection. Syntax and
 whitespace checks pass. No archive change or archived test execution.
-The workflow runs this same test file on PRs and main; the PR records the
+The first repair commit 08fa26f passed 35 browser tests and both offline suites
+in [Web regressions](https://github.com/The-Interdependency/a0/actions/runs/41779243873);
+its [CodeQL workflow](https://github.com/The-Interdependency/a0/actions/runs/41779243878)
+still failed at SARIF processing because default setup was enabled.
+The workflow runs the same browser test file on PRs and main; the PR records the
 published commit, remote run and final review state rather than treating these
 local results as CI evidence.
 

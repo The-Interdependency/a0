@@ -1164,7 +1164,7 @@ async function sendMessage(content, retry = null) {
     }
     submitted = true;
     await readSseStream(res, conversationId, mode);
-    if (state.currentConversationId === conversationId) {
+    if (state.currentConversationId === conversationId && state.navigation === navigation) {
       await openConversation(conversationId);
     }
     await loadConversations();

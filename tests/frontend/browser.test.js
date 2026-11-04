@@ -685,3 +685,35 @@ test('failed sign-out reports the error and preserves the current recovery', asy
   assert.equal(await page.locator('#composerInput').inputValue(), 'keep until sign-out succeeds');
   assert.deepEqual(errors, []);
 });
+
+for (const retry of [false, true]) test('stream completion preserves a pending newer navigation: retry=' + retry, async t => {
+  const stream = responseStream(t);
+  const waiting = deferred(), release = deferred();
+  t.after(() => release.resolve());
+  let first = true;
+  const { page } = await fixture(t, { handle: async ({ path, route }) => {
+    if (path.endsWith('/runs')) {
+      if (retry && first) { first = false; await route.abort('failed'); return true; }
+      await route.continue({ url: origin + stream.path }); return true;
+    }
+    if (path === '/api/conversations/c2') { waiting.resolve(); await release.promise; }
+  } });
+  if (retry) {
+    await failedSend(page);
+    await page.locator('#retryBtn').click();
+  } else {
+    await page.locator('#composerInput').fill('navigation while answering');
+    await page.locator('#sendBtn').click();
+  }
+  const response = await stream.connected;
+  await page.waitForFunction(() => !document.querySelector('#stopBtn').classList.contains('hidden'));
+  await page.locator('#menuBtn').click();
+  await page.getByRole('button', { name: 'Open conversation Other conversation', exact: true }).click();
+  await waiting.promise;
+  response.end('event: run_complete\ndata: {"runId":"disconnected-run","status":"complete"}\n\n');
+  await page.waitForFunction(() => !document.querySelector('#sendBtn').disabled);
+  release.resolve(); await page.waitForLoadState('networkidle');
+  assert.equal(await page.locator('#chatTitle').innerText(), 'Other conversation');
+  assert.equal(await page.locator('#messages').innerText(), '');
+  assert.equal(await page.locator('#typingBar').isVisible(), false);
+});
