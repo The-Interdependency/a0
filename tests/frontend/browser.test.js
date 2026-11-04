@@ -10,8 +10,10 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 
 let browser, server, origin;
+const streamHandlers = new Map();
 before(async () => {
   server = http.createServer(async (req, res) => {
+    if (streamHandlers.has(req.url)) return streamHandlers.get(req.url)(res);
     const name = req.url === '/' ? 'index.html' : req.url.slice(1).split('?')[0];
     if (!['index.html', 'app.js', 'markdown.js', 'styles.css', 'manifest.json'].includes(name)) {
       res.writeHead(404).end(); return;
@@ -66,7 +68,7 @@ async function fixture(t, options = {}) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   const data = {
-    owner: 'owner1', settings: {}, calls: [], uploads: 0,
+    owner: 'owner1', settings: {}, calls: [], uploads: 0, signedOut: false,
     conversations: [
       { id: 'c1', title: 'Saved conversation', message_count: 3 },
       { id: 'c2', title: 'Other conversation', message_count: 0 },
@@ -80,7 +82,10 @@ async function fixture(t, options = {}) {
     data.calls.push({ path, method: req.method(), body: req.postData() });
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (options.handle && await options.handle({ path, req, route, json, data })) return;
-    if (path === '/api/me') return json({ user: { id: data.owner, username: 'fixture' }, csrfToken: 'fixture-csrf' });
+    if (path === '/api/me') return data.signedOut ? json({}, 401) : json({ user: { id: data.owner, username: 'fixture' }, csrfToken: 'fixture-csrf' });
+    if (path === '/api/bootstrap/status') return json({ ownerExists: true });
+    if (path === '/api/auth/logout') { data.signedOut = true; return json({}); }
+    if (path === '/api/auth/login') { data.signedOut = false; return json({}); }
     if (path === '/api/conversations' && req.method() === 'GET') return json({ conversations: data.conversations });
     if (path === '/api/conversations' && req.method() === 'POST') {
       const c = { id: `c${data.conversations.length + 1}`, title: 'New conversation', message_count: 0 };
@@ -116,15 +121,17 @@ async function fixture(t, options = {}) {
     }
     return json({});
   });
+  if (options.beforeLoad) await options.beforeLoad({ page, context, data });
   await page.goto(origin);
-  await page.waitForLoadState('networkidle');
+  if (options.waitForReady !== false) await page.waitForLoadState('networkidle');
   return { page, data, errors, context };
 }
 
 async function open(page, title = 'Saved conversation') {
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page.getByRole('button', { name: `Open conversation ${title}`, exact: true }).click();
-  await page.waitForFunction(title => document.querySelector('#chatTitle').textContent === title, title);
+  await page.waitForFunction(title => document.querySelector('#chatTitle').textContent === title &&
+    document.querySelector('#menuBtn').getAttribute('aria-expanded') === 'false', title);
 }
 
 test('menu/history initialize with saved participants and no uncaught errors', async t => {
@@ -437,4 +444,244 @@ test('new chat creation transfers text and uploads entered while the request is 
   await page.waitForFunction(() => location.hash.includes('conversation=c1'));
   assert.equal(await page.locator('#composerInput').inputValue(), 'latest thought');
   assert.match(await page.locator('#attachmentChips').innerText(), /notes.txt.*Ready/);
+});
+
+// Review regressions: synchronize on requests/events, not sleeps. All message
+// identities and saved history below are inert fixtures, independent of app state.
+function deferred() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function failedSend(page) {
+  await page.locator('#composerInput').fill('uncertain delivery');
+  await page.locator('#fileInput').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('fixture') });
+  await page.waitForFunction(() => /Ready/.test(document.querySelector('#attachmentChips').textContent));
+  await page.locator('#sendBtn').click();
+  await page.waitForFunction(() => !document.querySelector('#retryBar').classList.contains('hidden'));
+}
+
+function saveUnconfirmed(req, data) {
+  const message = req.postDataJSON().message;
+  data.messages.c1.push({
+    id: 'accepted-without-ack', role: 'user', content: message.content, round: 0,
+    created_at: time, meta: { clientRequestId: message.clientRequestId },
+    attachments: message.attachmentIds.map(id => ({ id, filename: 'notes.txt', mime: 'text/plain' })),
+  });
+}
+
+for (const edited of [false, true]) test('acknowledged retry clears sent content and preserves newer edits: ' + edited, async t => {
+  let first = true;
+  const { page, data } = await fixture(t, { handle: async ({ path, req, route, data }) => {
+    if (path.endsWith('/runs') && first) {
+      first = false; saveUnconfirmed(req, data); await route.abort('failed'); return true;
+    }
+  } });
+  await failedSend(page);
+  if (edited) {
+    await page.locator('#composerInput').fill('newer private thought');
+    await page.locator('#fileInput').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('new fixture') });
+    await page.waitForFunction(() => document.querySelectorAll('#attachmentChips .chip-x').length === 2);
+  }
+  await page.locator('#retryBtn').click();
+  await page.waitForFunction(() => document.querySelector('#retryBar').classList.contains('hidden'));
+  await page.waitForLoadState('networkidle');
+  assert.equal(await page.locator('#composerInput').inputValue(), edited ? 'newer private thought' : '');
+  assert.equal(await page.locator('#attachmentChips .chip-x').count(), edited ? 1 : 0);
+  await page.reload(); await page.waitForLoadState('networkidle');
+  assert.equal(await page.locator('#composerInput').inputValue(), edited ? 'newer private thought' : '');
+  await page.locator('#sendBtn').click();
+  await page.waitForLoadState('networkidle');
+  const sends = data.calls.filter(c => c.path.endsWith('/runs')).map(c => JSON.parse(c.body));
+  assert.equal(sends.length, edited ? 2 : 1);
+  if (edited) {
+    assert.equal(sends[1].message.content, 'newer private thought');
+    assert.deepEqual(sends[1].message.attachmentIds, ['a2']);
+    assert.notEqual(sends[1].message.clientRequestId, sends[0].message.clientRequestId);
+  }
+  assert.equal(data.messages.c1.filter(m => m.content === 'uncertain delivery').length, 1);
+});
+
+for (const accepted of [false, true]) for (const returnBeforeReply of [false, true]) {
+  test('delayed retry respects later navigation: accepted=' + accepted + ', return=' + returnBeforeReply, async t => {
+    let first = true, delayHistory = false;
+    const waiting = deferred(), release = deferred();
+    t.after(() => release.resolve());
+    const { page, data } = await fixture(t, { handle: async ({ path, req, route, data }) => {
+      if (path.endsWith('/runs') && first) {
+        first = false;
+        if (accepted) saveUnconfirmed(req, data);
+        await route.abort('failed'); return true;
+      }
+      if (path === '/api/conversations/c1' && delayHistory) {
+        delayHistory = false; waiting.resolve(); await release.promise;
+      }
+    } });
+    await failedSend(page);
+    delayHistory = true;
+    await page.locator('#retryBtn').click(); await waiting.promise;
+    await open(page, 'Other conversation');
+    await page.locator('#composerInput').fill('belongs to c2');
+    if (returnBeforeReply) {
+      await open(page);
+      await page.locator('#composerInput').fill('new c1 edit');
+    }
+    release.resolve(); await page.waitForLoadState('networkidle');
+    assert.equal(await page.locator('#chatTitle').innerText(), returnBeforeReply ? 'Saved conversation' : 'Other conversation');
+    assert.equal(await page.locator('#composerInput').inputValue(), returnBeforeReply ? 'new c1 edit' : 'belongs to c2');
+    assert.equal(await page.locator('#typingBar').isVisible(), false);
+    assert.equal(await page.locator('#stopBtn').isVisible(), false);
+    if (!returnBeforeReply) assert.equal(await page.locator('#messages').innerText(), '');
+    assert.equal(data.calls.filter(c => c.path.endsWith('/runs')).length, 1);
+    // The abandoned retry must keep its protected identity for a deliberate retry.
+    const pending = await page.evaluate(() => JSON.parse(sessionStorage.getItem('a0.ui.v1:owner1')).pending.c1);
+    assert.equal(pending.clientRequestId, JSON.parse(data.calls.find(c => c.path.endsWith('/runs')).body).message.clientRequestId);
+    await open(page, 'Other conversation');
+    assert.equal(await page.locator('#composerInput').inputValue(), 'belongs to c2');
+  });
+}
+
+for (const restored of [false, true]) test('initialization never discards editable text: recovered=' + restored, async t => {
+  const waiting = deferred(), release = deferred();
+  t.after(() => release.resolve());
+  const { page } = await fixture(t, {
+    waitForReady: false, empty: !restored,
+    beforeLoad: async ({ context }) => {
+      if (restored) await context.addInitScript(() => sessionStorage.setItem('a0.ui.v1:owner1', JSON.stringify({
+        conversationId: 'c1', drafts: { c1: { content: 'recovered thought', attachments: [] } },
+      })));
+    },
+    handle: async ({ path }) => { if (path === '/api/providers') { waiting.resolve(); await release.promise; } },
+  });
+  await waiting.promise;
+  const input = page.locator('#composerInput');
+  const editable = await input.isVisible() && await input.isEnabled();
+  if (editable) await input.fill('typed during initialization');
+  release.resolve(); await page.waitForLoadState('networkidle');
+  assert.equal(await input.inputValue(), editable ? 'typed during initialization' : restored ? 'recovered thought' : '');
+  assert.equal(await input.isEnabled(), true);
+  await input.fill('ready to compose');
+  assert.equal(await input.inputValue(), 'ready to compose');
+});
+
+// A real local HTTP stream can end without a terminal event or lose its socket.
+// This exercises the browser's fetch reader, not a replacement application parser.
+function responseStream(t) {
+  const path = '/fixture-stream/' + streamHandlers.size;
+  const connected = deferred();
+  let response;
+  streamHandlers.set(path, res => {
+    response = res;
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+    res.flushHeaders();
+    res.write('event: run_start\ndata: ' + JSON.stringify({
+      runId: 'disconnected-run', conversationId: 'c1',
+      participants: [{ id: 'p1', name: 'DeepSeek', model: 'deepseek-chat' }],
+    }) + '\n\n');
+    connected.resolve(res);
+  });
+  t.after(() => { response?.destroy(); streamHandlers.delete(path); });
+  return { path, connected: connected.promise };
+}
+
+for (const disconnect of ['eof', 'socket']) test('disconnected stream cannot revive Working or Stop: ' + disconnect, async t => {
+  const stream = responseStream(t);
+  const { page, data } = await fixture(t, { handle: async ({ path, req, route, data }) => {
+    if (path.endsWith('/runs')) { saveUnconfirmed(req, data); await route.continue({ url: origin + stream.path }); return true; }
+  } });
+  await page.locator('#composerInput').fill('uncertain delivery');
+  await page.locator('#sendBtn').click();
+  const response = await stream.connected;
+  await page.waitForFunction(() => !document.querySelector('#stopBtn').classList.contains('hidden'));
+  if (disconnect === 'socket') await open(page, 'Other conversation');
+  data.messages.c1.push({ id: 'completed-offline', role: 'assistant', content: 'Saved after disconnect', status: 'complete', round: 4, created_at: time });
+  if (disconnect === 'socket') response.destroy(); else response.end();
+  await page.waitForFunction(() => /Connection interrupted/.test(document.querySelector('#toast').textContent));
+  await open(page);
+  assert.match(await page.locator('#messages').innerText(), /Saved after disconnect/);
+  assert.equal(await page.locator('#typingBar').isVisible(), false);
+  assert.equal(await page.locator('#stopBtn').isVisible(), false);
+  assert.equal(await page.locator('#retryBar').isVisible(), false);
+  await open(page, 'Other conversation'); await open(page);
+  assert.equal(await page.locator('#typingBar').isVisible(), false);
+  assert.equal(await page.locator('#stopBtn').isVisible(), false);
+});
+
+test('Stop reconciles a run the server reports is no longer active', async t => {
+  const stream = responseStream(t);
+  const { page } = await fixture(t, { handle: async ({ path, route, json }) => {
+    if (path.endsWith('/runs')) { await route.continue({ url: origin + stream.path }); return true; }
+    if (path.endsWith('/stop')) { await json({ stopped: false }); return true; }
+  } });
+  await page.locator('#composerInput').fill('stop reconciliation');
+  await page.locator('#sendBtn').click();
+  const response = await stream.connected;
+  await page.waitForFunction(() => !document.querySelector('#stopBtn').classList.contains('hidden'));
+  await Promise.all([
+    page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/stop')),
+    page.locator('#stopBtn').click(),
+  ]);
+  assert.equal(await page.locator('#typingBar').isVisible(), false);
+  assert.equal(await page.locator('#stopBtn').isVisible(), false);
+  await open(page, 'Other conversation'); await open(page);
+  assert.equal(await page.locator('#typingBar').isVisible(), false);
+  response.end();
+});
+
+test('sign-out removes all recovery through pagehide and signing back into the same account', async t => {
+  const { page } = await fixture(t, { handle: async ({ path, route }) => {
+    if (path.endsWith('/runs')) { await route.abort('failed'); return true; }
+  } });
+  await failedSend(page);
+  await open(page, 'Other conversation');
+  await page.locator('#composerInput').fill('second private draft');
+  await page.locator('#logoutBtn').click();
+  await page.waitForFunction(() => !document.querySelector('#view-auth').classList.contains('hidden'));
+  assert.deepEqual(await page.evaluate(() => [
+    sessionStorage.getItem('a0.ui.v1:owner1'), localStorage.getItem('a0.ui.v1:owner1:last'),
+  ]), [null, null]);
+  await page.locator('#authUsername').fill('fixture');
+  await page.locator('#authPassword').fill('inert-fixture-password');
+  await page.locator('#authSubmit').click();
+  await page.waitForFunction(() => !document.querySelector('#view-chat').classList.contains('hidden'));
+  await page.waitForLoadState('networkidle');
+  for (const title of ['Saved conversation', 'Other conversation']) {
+    await open(page, title);
+    assert.equal(await page.locator('#composerInput').inputValue(), '');
+    assert.equal(await page.locator('#attachmentChips').innerText(), '');
+    assert.equal(await page.locator('#retryBar').isVisible(), false);
+  }
+});
+
+test('initial composer remains unavailable until saved conversation detail is restored', async t => {
+  const waiting = deferred(), release = deferred();
+  t.after(() => release.resolve());
+  const { page } = await fixture(t, {
+    waitForReady: false,
+    handle: async ({ path }) => { if (path === '/api/conversations/c1') { waiting.resolve(); await release.promise; } },
+  });
+  await waiting.promise;
+  for (const id of ['composerInput', 'attachBtn', 'voiceBtn', 'sendBtn']) {
+    assert.equal(await page.locator('#' + id).isDisabled(), true, id + ' must wait for draft recovery');
+  }
+  release.resolve(); await page.waitForLoadState('networkidle');
+  assert.equal(await page.locator('#composerInput').isEnabled(), true);
+  await page.locator('#composerInput').fill('written after recovery');
+  await open(page, 'Other conversation'); await open(page);
+  assert.equal(await page.locator('#composerInput').inputValue(), 'written after recovery');
+});
+
+test('failed sign-out reports the error and preserves the current recovery', async t => {
+  const { page, errors } = await fixture(t, { handle: async ({ path, json }) => {
+    if (path === '/api/auth/logout') { await json({ message: 'Fixture logout unavailable' }, 503); return true; }
+  } });
+  await page.locator('#composerInput').fill('keep until sign-out succeeds');
+  await page.locator('#logoutBtn').click();
+  await page.waitForFunction(() => /Could not sign out/.test(document.querySelector('#toast').textContent));
+  assert.equal(await page.locator('#composerInput').isEnabled(), true);
+  assert.equal(await page.locator('#composerInput').inputValue(), 'keep until sign-out succeeds');
+  await page.reload(); await page.waitForLoadState('networkidle');
+  assert.equal(await page.locator('#composerInput').inputValue(), 'keep until sign-out succeeds');
+  assert.deepEqual(errors, []);
 });

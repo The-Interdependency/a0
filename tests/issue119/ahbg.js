@@ -84,11 +84,24 @@ check('RG04 replay verification matches the live field', replay.status === 200 &
 const mechanics = (await api('GET', '/api/ahbg/mechanics')).data.mechanics;
 check('RG02 mechanic matrix exposed', Array.isArray(mechanics) && mechanics.some((m) => m.mechanic === 'relocate' && m.status === 'implemented') && mechanics.some((m) => m.status === 'NOT RUN'));
 
+// RG03: duplicate/racing turns commit at most once.
+{
+  const attempts = await Promise.all([
+    api('POST', `/api/ahbg/sessions/${created.session.id}/turn`),
+    api('POST', `/api/ahbg/sessions/${created.session.id}/turn`),
+  ]);
+  const ok = attempts.filter((a) => a.status === 200).length;
+  const denied = attempts.filter((a) => a.status === 400 || a.status === 409).length;
+  const final = (await api('GET', `/api/ahbg/sessions/${created.session.id}`)).data;
+  check('RG03 duplicate turns commit at most once', ok === 1 && denied === 1 && (final.session.records || []).length === 2, JSON.stringify({ ok, denied, records: (final.session.records || []).length, statuses: attempts.map((a) => a.status) }));
+}
+
 // RG05: swapping the agent module must not reset the AHBG session.
+const beforeSwap = (await api('GET', `/api/ahbg/sessions/${created.session.id}`)).data;
 const agentDetail = (await api('GET', `/api/agents/${agent.id}`)).data;
 await api('POST', `/api/agent-modules/${agentDetail.module.id}/swap`, { renderer: 'agent-stats' });
 const afterSwap = (await api('GET', `/api/ahbg/sessions/${created.session.id}`)).data;
-check('RG05 module swap preserves AHBG session state', afterSwap.session.turn === after.session.turn && (afterSwap.session.records || []).length === (after.session.records || []).length, JSON.stringify({ turn: afterSwap.session.turn, records: (afterSwap.session.records || []).length }));
+check('RG05 module swap preserves AHBG session state', afterSwap.session.turn === beforeSwap.session.turn && (afterSwap.session.records || []).length === (beforeSwap.session.records || []).length, JSON.stringify({ turn: afterSwap.session.turn, records: (afterSwap.session.records || []).length }));
 
 server.close();
 if (failures) {

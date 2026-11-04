@@ -85,7 +85,7 @@ const api = {
 function recoveryKey() { return `a0.ui.v1:${state.me?.id}`; }
 function draftKey() { return state.currentConversationId || 'new'; }
 function persistSession() {
-  if (!state.me) return;
+  if (!state.ready || !state.me) return;
   try {
     sessionStorage.setItem(recoveryKey(), JSON.stringify({
       conversationId: state.currentConversationId,
@@ -186,14 +186,31 @@ async function showAuth() {
 }
 
 async function enterApp() {
+  setComposerReady(false);
   const savedId = recoverSession();
+  const navigation = state.navigation;
   showView('chat');
   const results = await Promise.allSettled([loadConversations(), loadProjects(), loadParticipants(), loadProviders(), initOwnerPreferences()]);
+  if (!state.me) return; // Sign-out may complete while startup requests are pending.
   for (const result of results) if (result.status === 'rejected') toast(result.reason.message, true);
-  state.ready = true;
   showDraft();
   const id = state.conversations.find(c => c.id === savedId)?.id || state.conversations[0]?.id;
-  if (id) await openConversation(id);
+  if (id && navigation === state.navigation) await openConversation(id);
+  if (!state.me) return;
+  setComposerReady(true);
+  persistComposer();
+}
+
+// Restore the initial owner/conversation draft before accepting input. This also
+// gates attachments, dictation and submit while slow startup requests settle.
+function setComposerReady(ready) {
+  state.ready = ready;
+  $('#composerForm').setAttribute('aria-busy', String(!ready));
+  for (const id of ['composerInput', 'attachBtn', 'fileInput', 'voiceBtn', 'retryBtn']) {
+    $('#' + id).disabled = !ready;
+  }
+  $('#composerInput').placeholder = ready ? 'Message A0…' : 'Loading conversation…';
+  renderAttachmentChips();
 }
 
 async function loadConversations() {
@@ -229,6 +246,7 @@ async function openConversation(id, { refresh = false, adoptNewDraft = false } =
   const navigation = ++state.navigation;
   const data = await api.get(`/api/conversations/${id}`);
   if (navigation !== state.navigation) return; // A late fetch must not hijack a newer selection.
+  persistComposer(); // Preserve edits made while the detail request was pending.
   if (adoptNewDraft && !state.currentConversationId) {
     // Migrate at the actual switch, after both creation and detail requests.
     persistComposer();
@@ -987,7 +1005,7 @@ function renderAttachmentChips() {
     }
     box.appendChild(chip);
   }
-  $('#sendBtn').disabled = state.sending || state.uploads.some(u => u.key === draftKey() && u.status === 'uploading');
+  $('#sendBtn').disabled = !state.ready || state.sending || state.uploads.some(u => u.key === draftKey() && u.status === 'uploading');
 }
 
 // ---------- Draft preservation ----------
@@ -1044,8 +1062,18 @@ function clearDraft(conversationId = draftKey()) {
 }
 
 // ---------- Streaming run ----------
+function clearSubmittedComposer(content, attachments) {
+  // The matching text and attachment identities belong to the submitted draft.
+  // A different thought or newly uploaded file remains available for the next send.
+  if ($('#composerInput').value.trim() === content) $('#composerInput').value = '';
+  state.attachments = state.attachments.filter(a => !attachments.some(sent => sent.id === a.id));
+  persistComposer();
+  autoGrow();
+  renderAttachmentChips();
+}
+
 async function sendMessage(content, retry = null) {
-  if (state.sending || state.uploads.some(u => u.key === draftKey() && u.status === 'uploading')) return;
+  if (!state.ready || state.sending || state.uploads.some(u => u.key === draftKey() && u.status === 'uploading')) return;
   if (!retry && state.pendingDrafts[draftKey()] && !state.pendingDrafts[draftKey()].rejected) {
     toast('Use Retry to check the previous unconfirmed delivery before sending again.', true);
     return;
@@ -1064,9 +1092,14 @@ async function sendMessage(content, retry = null) {
       return;
     }
     conversationId = state.currentConversationId;
+    const navigation = state.navigation;
     if (retry) {
       const existing = await api.get(`/api/conversations/${conversationId}`);
+      // Even leaving and returning to this conversation invalidates this attempt.
+      // Leave the pending identity intact for a deliberate retry in the new view.
+      if (navigation !== state.navigation || conversationId !== state.currentConversationId) return;
       if (existing.messages.some(m => m.meta?.clientRequestId === retry.clientRequestId)) {
+        clearSubmittedComposer(retry.content, attachments);
         clearDraft(conversationId);
         await openConversation(conversationId);
         toast('That message is already saved. Its response status is shown in history.');
@@ -1085,11 +1118,7 @@ async function sendMessage(content, retry = null) {
     };
     if (!retry) saveDraft(content, clientRequestId, attachments);
     // Clear the submitted composer only; typing after this point is a new draft.
-    if ($('#composerInput').value.trim() === content) $('#composerInput').value = '';
-    state.attachments = state.attachments.filter(a => !attachments.some(sent => sent.id === a.id));
-    persistComposer();
-    autoGrow();
-    renderAttachmentChips();
+    clearSubmittedComposer(content, attachments);
 
     // Optimistic user message.
     const box = $('#messages');
@@ -1140,6 +1169,9 @@ async function sendMessage(content, retry = null) {
     }
     await loadConversations();
   } catch (err) {
+    // A cached run is a live stream control, not evidence the server still works.
+    // Losing the stream invalidates its controls even when another chat is visible.
+    if (submitted && state.runs[conversationId]) clearActiveRun(state.runs[conversationId].runId);
     if (conversationId === state.currentConversationId) {
       showTyping(false);
       restoreDraft(conversationId);
@@ -1168,10 +1200,13 @@ function setActiveRun(runId, conversationId) {
 }
 
 function clearActiveRun(runId) {
+  if (!runId) return;
   for (const [id, run] of Object.entries(state.runs)) if (run.runId === runId) delete state.runs[id];
   if (state.activeRun?.runId === runId) {
     state.activeRun = null;
-    $('#stopBtn').classList.add('hidden');
+    showTyping(false);
+    state.pendingProposals = null;
+    hideToolModal();
   }
 }
 
@@ -1305,7 +1340,7 @@ function handleSseEvent(event, payload, ctx) {
     el.innerHTML = renderMarkdown(`Tool ${payload.toolName}: ${payload.status}${payload.error ? ' — ' + payload.error : ''}${payload.text ? '\n' + payload.text : ''}`);
     box.appendChild(el);
   } else if (event === 'run_complete' || event === 'run_error' || event === 'tools_cancelled') {
-    clearActiveRun(payload.runId || state.activeRun?.runId);
+    clearActiveRun(payload.runId || state.runs[conversationId]?.runId);
     if (isCurrent) {
       showTyping(false);
       state.pendingProposals = null;
@@ -1395,6 +1430,7 @@ function initVoice() {
   recognition.interimResults = true;
   recognition.onstart = () => voiceMessage('Listening… speak now.');
   recognition.onresult = (event) => {
+    if (!state.ready || !state.me) return;
     let finalText = '';
     let interimText = '';
     for (let i = 0; i < event.results.length; i++) {
@@ -1521,10 +1557,32 @@ function bindNav() {
   $('#drawerBackdrop').onclick = () => setDrawer(false);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') setDrawer(false); });
   $('#logoutBtn').onclick = async () => {
-    await api.post('/api/auth/logout', {});
-    try { sessionStorage.removeItem(recoveryKey()); localStorage.removeItem(`${recoveryKey()}:last`); } catch {}
-    stopSpeech(false);
-    location.reload();
+    try {
+      await api.post('/api/auth/logout', {});
+      const key = recoveryKey();
+      // Revoke persistence before pagehide, late uploads or speech callbacks can
+      // recreate private recovery. A failed logout leaves the working draft intact.
+      setComposerReady(false);
+      state.me = null;
+      state.csrf = '';
+      state.navigation += 1;
+      state.drafts = {};
+      state.pendingDrafts = {};
+      state.uploads = [];
+      state.attachments = [];
+      state.draft = null;
+      state.runs = {};
+      state.messages = [];
+      state.currentConversationId = null;
+      state.currentConversation = null;
+      $('#composerInput').value = '';
+      clearConversationView();
+      try { sessionStorage.removeItem(key); localStorage.removeItem(`${key}:last`); } catch {}
+      recognition?.abort?.();
+      stopSpeech(false);
+      history.replaceState(null, '', location.pathname + location.search);
+      location.reload();
+    } catch (err) { toast(`Could not sign out: ${err.message}`, true); }
   };
   $('#newChatBtn').onclick = () => { setDrawer(false); newConversation().catch(err => toast(err.message, true)); };
   $('#voiceReadBtn').onclick = () => {
@@ -1584,10 +1642,17 @@ function bindForms() {
   });
   $('#composerInput').addEventListener('input', () => { autoGrow(); persistComposer(); });
   $('#stopBtn').onclick = async () => {
-    if (state.activeRun?.runId) {
-      await api.post(`/api/runs/${state.activeRun.runId}/stop`, {});
-      toast('Stopping the active run…');
-    }
+    const run = state.activeRun;
+    if (!run?.runId) return;
+    try {
+      const result = await api.post(`/api/runs/${run.runId}/stop`, {});
+      if (result.stopped === false) {
+        clearActiveRun(run.runId);
+        toast('That run is no longer active. Reopen history to check saved results.');
+      } else {
+        toast('Stopping the active run…');
+      }
+    } catch (err) { toast(`Could not stop the run: ${err.message}`, true); }
   };
   $('#retryBtn').onclick = async () => {
     if (state.draft) sendMessage(state.draft.content, { ...state.draft });
@@ -1716,6 +1781,7 @@ function applyOwnerPreferences() {
 bindNav();
 bindForms();
 initVoice();
+setComposerReady(false);
 boot();
 window.addEventListener('pagehide', persistComposer);
 document.addEventListener('visibilitychange', () => {

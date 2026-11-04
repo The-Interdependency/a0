@@ -182,3 +182,19 @@ Reuse ledger (source → successor destination):
 | RG04 | PASS | Sessions/boards/turn records persist in `ahbg_sessions` and the sidecar state directory; replay verification matches the live field (`tests/issue119/ahbg.js`). |
 | RG05 | PASS (API-level) | Swapping the bound agent's module preserves the AHBG session turn and records (`tests/issue119/ahbg.js`); the website module view remains phone observation. |
 | RX01 | NOT RUN | Combined website witness needs the physical phone. |
+
+## Issue #119 RG03/RU01 repair record (2026-11-04)
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| RG03 | PASS | AHBG turn endpoint takes a per-session row lock (`FOR UPDATE`) and marks the session `in_progress`; duplicate/racing turns commit at most once and the loser receives 409/400 (`tests/issue119/ahbg.js`). Malformed plans, unadvertised actions and game-text injection are rejected by the producer `parse_plan_payload` before any mutation; foreign sessions are 404 by owner scoping. |
+| RU01 | PASS (AHBG entry added) | Stack `ahbg/integration/a0_http.py` (retired API) → `apps/server/src/ahbg.js` + `operations/ahbg-sidecar.py` + `/api/ahbg/*` (successor harness); engine/UCNS geometry reused from pinned stack `9de81c67` unchanged. |
+
+## Phone-first witness runbook (owner action, not yet executed)
+
+For the physical Android gates (A17/A18/OC09/RX01), open https://35.212.252.101.nip.io in Chrome on Erin's Android device and record:
+1. Sign in as the owner; confirm the participant/model pills wrap without horizontal scroll (OC09/A17).
+2. Start a run with two participants; confirm side-by-side/stacked comparison is readable; stop it mid-stream; confirm the partial answer remains and Stop disappears (OC09).
+3. Dictate a message with the mic button; confirm the dictated text appears and an error is visible if speech is denied (A18 voice).
+4. Open a retained Forge agent, start an AHBG session, run one turn, then swap the module and confirm the board/turn do not reset (RX01/OC09).
+Record screen captures as evidence; these gates remain NOT RUN until that observation exists.

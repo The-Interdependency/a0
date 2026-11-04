@@ -104,6 +104,60 @@ Primary API references used for the repair:
 [recognition errors](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition/error_event),
 and [speech playback errors](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance/error_event).
 
+## Five additional P2 findings — repair receipt
+
+The November 3 review at 16:14 PST (November 4, 00:14 UTC) inspected
+PR #121 head bf38c7f090951f3080810abd84ee247985801b21. All five findings
+were reproduced as repository-owned DEFECTs in the actual Chromium client.
+The patch also incorporates main f231aec5a7ed6d24ba564253b402d426247d20b6,
+preserving its AHBG turn protection and acceptance record.
+
+| Review finding | Owning correction in apps/web/app.js | Browser regression |
+| --- | --- | --- |
+| Acknowledged retry leaves a duplicate ready to send | Reuse submitted-composer cleanup for saved acknowledgements; remove matching text/file IDs and preserve newer edits/uploads | Accepted-but-unacknowledged request, untouched/edited drafts, reload and subsequent Send; original identity remains single |
+| Delayed retry changes newer navigation | Recheck navigation generation and conversation after the history request, before UI or POST effects | Accepted/unaccepted requests, navigation away and away/back, original pending identity retained |
+| Startup erases early input | Disable composer, files, dictation and sends until owner recovery and initial conversation detail finish | Empty/recovered startup and delayed detail; composition available afterward |
+| Lost stream restores stale Working/Stop | Invalidate the conversation's cached run on stream loss; reconcile stopped:false; clear associated tool controls | Real local HTTP EOF and socket reset, including background conversation; reopen twice; Stop reports inactive |
+| Sign-out recreates private recovery on pagehide | Revoke persistence, clear owner/in-memory recovery and selection, then remove storage before reload | Actual logout reload and same-account sign-in; drafts/files/pending IDs absent; failed logout preserves recovery |
+
+The initial 12 new cases failed against bf38c7f. The EOF case was rerun
+after tightening the harness's same-conversation navigation wait, and failed on
+the stale Working control as expected. All 12 passed after repair. Two further
+cases protect the initial-detail loading boundary and unsuccessful logout.
+
+Integrated local verification: **35 browser tests passed**, zero failures,
+skips or cancellations; **13 Markdown and 17 Responses assertions passed**.
+Node 24.22.1, Playwright 1.56.1, Chromium 141.0.7390.37; actual app/CSS,
+fixture APIs and speech, plus real loopback stream disconnection. Syntax and
+whitespace checks pass. No archive change or archived test execution.
+The workflow runs this same test file on PRs and main; the PR records the
+published commit, remote run and final review state rather than treating these
+local results as CI evidence.
+
+Replay the targeted original failures by exporting apps/web from bf38c7f,
+setting A0_TEST_WEB_ROOT to that directory, then running:
+
+~~~sh
+node --test --test-name-pattern='acknowledged retry|delayed retry|initialization never|disconnected stream|Stop reconciles|sign-out removes' tests/frontend/browser.test.js
+~~~
+
+Release-gate investigation: CodeQL job 126295016629 completed analysis but
+GitHub rejected its SARIF processing because default setup was enabled.
+The repository's deliberately scoped advanced workflow remains unchanged.
+[GitHub documents the setup conflict and supported transition](https://docs.github.com/en/enterprise-cloud%40latest/code-security/reference/code-scanning/troubleshoot-analysis-errors/results-different-than-expected).
+The connected repository API cannot change that administrative setup, and
+branch-protection details return 403. The visible active ruleset preserves
+deletion/force-push protection and requests Copilot review on push; it contains
+no required-status or approval rule. No bypass or security-policy change was made.
+
+The public health response reports f231aec5a7ed6d24ba564253b402d426247d20b6
+(builtAt 2026-11-04T02:59:07.675186+00:00). Served app.js still hashes to
+28936795d4b63404358e75e096df088dc0bc156d2bd9aee496a15c500c2dbfbc,
+identical to main's unrepaired client. Thus this mobile repair is **not deployed**.
+No VM execution tool or SSH identity is exposed here. Use the existing
+authorized VM connection after merge admission succeeds; refresh build metadata,
+compare served JavaScript, then perform the actual Android flows.
+
 ## hmmm
 
 No VM execution connection or SSH identity is exposed in this session. Physical

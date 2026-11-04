@@ -15,14 +15,23 @@ See [mobile-chat-repair.md](mobile-chat-repair.md) for file ownership, test
 evidence, limits and the deployment procedure. No archive, database schema,
 provider key, model choice or vault configuration was changed.
 
-Next action: use the existing authorized VM connection to inspect and deploy the
-reviewed repair commit, restart only A0, verify `/api/health` reports that commit,
-then repeat the owner's actual Android history, picker and audio flows. This
-session has public HTTPS and repository access but no exposed VM execution
-connection or SSH identity; deployment and actual-phone acceptance remain open.
-The separate CodeQL workflow also has a default-setup/advanced-configuration
-conflict (analysis upload rejected); web regression CI passed. See the linked
-repair record for exact run identities. No scanning control was disabled.
+The five additional P2 findings at PR head `bf38c7f090951f3080810abd84ee247985801b21`
+are repaired in this continuation: acknowledged retry cleanup, retry navigation
+generation checks, initial composer gating, disconnected-run invalidation and
+sign-out recovery revocation. Twelve new cases reproduced the original defects;
+the integrated suite passes **35 browser tests**, plus **13 Markdown and 17
+Responses assertions**, locally. Main `f231aec5a7ed6d24ba564253b402d426247d20b6`
+is incorporated without changing its AHBG correction. Source work-graph inputs
+and archive identity remain unchanged. PR #121 carries remote CI/review receipts.
+
+Next action: verify the pushed head's CI/review state and reconcile GitHub's
+CodeQL default/advanced setup conflict before merge. The connected API cannot
+change that administrative setup; detailed branch protection returns 403.
+After merge admission, use the existing authorized VM connection for app-only
+deployment, refresh build metadata, compare served JavaScript and repeat the
+actual Android history, picker and audio flows. No VM execution connection or
+SSH identity is exposed here. Public health reports `f231aec5`; served app.js
+still matches its unrepaired client. No deployment or phone pass is claimed.
 
 The records below retain their original dates and evidence scopes. They are not
 a new acceptance claim for the repaired source or the current phone experience.

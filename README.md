@@ -8,6 +8,11 @@ Status: **VM deployment exists; phone acceptance has reported failures** (2026-1
 
 Mobile repair usage, once deployed: **Menu → History** reopens saved chats. **Answers → Carousel / Side by side / Stacked** changes both saved and live comparisons. File chips show uploading, ready or failed; a successful send clears only the submitted files. The microphone shows dictation/error status; each answer's speaker reads that answer, **Stop reading** cancels playback, and the top speaker toggles automatic reading. Draft recovery is scoped to the signed-in owner and browser tab; sign-out clears it. A completed upload survives reload by its server file reference; an interrupted upload asks for file selection again.
 
+Retry checks saved history before dispatch and clears acknowledged content while
+keeping newer edits/files. Composition becomes available after initial draft
+recovery. A lost stream clears Working/Stop controls; reopen history to inspect
+saved results. Sign-out removes recovery before the page unloads.
+
 Isolated regression checks (no production credentials or provider calls):
 
 ```sh
