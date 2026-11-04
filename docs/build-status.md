@@ -20,6 +20,9 @@ reviewed repair commit, restart only A0, verify `/api/health` reports that commi
 then repeat the owner's actual Android history, picker and audio flows. This
 session has public HTTPS and repository access but no exposed VM execution
 connection or SSH identity; deployment and actual-phone acceptance remain open.
+The separate CodeQL workflow also has a default-setup/advanced-configuration
+conflict (analysis upload rejected); web regression CI passed. See the linked
+repair record for exact run identities. No scanning control was disabled.
 
 The records below retain their original dates and evidence scopes. They are not
 a new acceptance claim for the repaired source or the current phone experience.

@@ -65,6 +65,23 @@ These are results for the working tree committed with this record. The PR/CI
 head identifies the published revision; local passing results do not certify
 remote CI or deployment.
 
+The first published code revision `3dd39efc9f7fd331a472b0bf68712e6a421207dd`
+has a successful [GitHub Web regressions run](https://github.com/The-Interdependency/a0/actions/runs/41743383734).
+Its separate [CodeQL run](https://github.com/The-Interdependency/a0/actions/runs/41743383675)
+completed analysis but failed upload: GitHub rejects advanced configurations
+while default setup is enabled. That existing configuration conflict remains
+open; this UI repair does not disable or bypass scanning. The test workflow's
+actions were then updated to verified immutable v7 release commits to remove
+the deprecated Node 20 action-runtime dependency; the subsequent workflow run
+is the evidence for those pins.
+
+The deployed `app.js` SHA-256 is
+`28936795d4b63404358e75e096df088dc0bc156d2bd9aee496a15c500c2dbfbc`,
+identical to the baseline source. Deployment must refresh `/opt/a0/build-info.json`
+from the actual checked-out release; health reads that metadata file, so also
+compare served JavaScript with the reviewed release instead of trusting the
+reported commit alone.
+
 ### Usage and replay
 
 Run the commands in the root README. For screenshots and traces, set
