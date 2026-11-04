@@ -954,10 +954,24 @@ export async function start() {
   }));
 
   app.post('/api/ahbg/sessions/:id/turn', asyncRoute(async (req, res) => {
-    const session = await query('SELECT * FROM ahbg_sessions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
-    if (!session.rows.length) return res.status(404).json({ error: 'not_found', message: 'AHBG session not found.' });
-    const s = session.rows[0];
-    if (s.turn >= s.turns) return res.status(400).json({ error: 'validation', message: 'Session already reached its turn budget.' });
+    // Row lock makes duplicate/racing turns fail visibly: only one request
+    // can own the session at a time (RG03).
+    const owned = await withTransaction(async (client) => {
+      const session = await client.query('SELECT * FROM ahbg_sessions WHERE id = $1 AND user_id = $2 FOR UPDATE', [req.params.id, req.user.id]);
+      if (!session.rows.length) return { missing: true };
+      const s = session.rows[0];
+      if (s.turn >= s.turns) return { exhausted: true, s };
+      if (s.status === 'in_progress') return { busy: true, s };
+      await client.query(`UPDATE ahbg_sessions SET status = 'in_progress', updated_at = now() WHERE id = $1`, [s.id]);
+      return { s };
+    });
+    if (owned.missing) return res.status(404).json({ error: 'not_found', message: 'AHBG session not found.' });
+    if (owned.exhausted) return res.status(400).json({ error: 'validation', message: 'Session already reached its turn budget.' });
+    if (owned.busy) return res.status(409).json({ error: 'conflict', message: 'A turn is already in progress for this session.' });
+    const s = owned.s;
+    const releaseLock = async (status) => {
+      await query(`UPDATE ahbg_sessions SET status = $2, updated_at = now() WHERE id = $1`, [s.id, status]);
+    };
     const obs = await ahbg.observe(s.game_session_id);
     const observationText = `AHBG_OBSERVATION ${JSON.stringify(obs.observation)}`;
     const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [s.agent_id, req.user.id]);
@@ -968,21 +982,33 @@ export async function start() {
     const rev = await latestRevision(agent.rows[0].conversation_id, req.user.id);
     const assembled = await assembleBlocks((rev?.blocks || []), {});
     const snapshot = { ...assembled, messages: [...assembled.messages, { id: crypto.randomUUID(), role: 'user', content: AHBG_PROTOCOL_BOOST + '\n\n' + observationText, attachments: [] }] };
-    const result = await dispatchParticipant({
-      run: { id: crypto.randomUUID() },
-      participant: participant.rows[0],
-      snapshot,
-      connections: [],
-      vault,
-      signal: new AbortController().signal,
-      onChunk: () => {},
-    });
+    let result;
+    try {
+      result = await dispatchParticipant({
+        run: { id: crypto.randomUUID() },
+        participant: participant.rows[0],
+        snapshot,
+        connections: [],
+        vault,
+        signal: new AbortController().signal,
+        onChunk: () => {},
+      });
+    } catch (err) {
+      await releaseLock('ready');
+      return res.status(502).json({ error: 'agent_error', message: err.message });
+    }
     const plan = parsePlanPayload(result.text);
     if (!plan) {
-      await query(`UPDATE ahbg_sessions SET status = 'plan_invalid', updated_at = now() WHERE id = $1`, [s.id]);
+      await releaseLock('plan_invalid');
       return res.status(422).json({ error: 'plan_invalid', message: 'Agent reply did not contain a valid AHBG plan JSON.', reply: result.text.slice(0, 500) });
     }
-    const resolved = await ahbg.resolve(s.game_session_id, plan);
+    let resolved;
+    try {
+      resolved = await ahbg.resolve(s.game_session_id, plan);
+    } catch (err) {
+      await releaseLock('ready');
+      return res.status(400).json({ error: 'resolve_error', message: err.message });
+    }
     const records = [...(s.records || []), resolved.record];
     await query(
       `UPDATE ahbg_sessions SET turn = $2, status = $3, board = $4::jsonb, records = $5::jsonb, updated_at = now() WHERE id = $1`,
