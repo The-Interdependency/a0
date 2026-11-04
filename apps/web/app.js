@@ -124,7 +124,7 @@ function showDraft() {
   state.attachments = Array.isArray(draft.attachments) ? draft.attachments.map(a => ({ ...a })) : [];
   state.draft = state.pendingDrafts[draftKey()] || null;
   $('#retryBar').classList.toggle('hidden', !state.draft);
-  if (state.draft) $('#retryText').textContent = 'Previous delivery is unconfirmed. Retry checks saved history first.';
+  if (state.draft) $('#retryText').textContent = draftStatusText(state.draft);
   renderAttachmentChips();
   autoGrow();
 }
@@ -221,7 +221,7 @@ function renderConversations() {
   }
 }
 
-async function openConversation(id, { refresh = false } = {}) {
+async function openConversation(id, { refresh = false, adoptNewDraft = false } = {}) {
   if (id !== state.currentConversationId && recognizing) recognition?.stop();
   persistComposer();
   const scroll = refresh ? $('.content').scrollTop : null;
@@ -229,6 +229,13 @@ async function openConversation(id, { refresh = false } = {}) {
   const navigation = ++state.navigation;
   const data = await api.get(`/api/conversations/${id}`);
   if (navigation !== state.navigation) return; // A late fetch must not hijack a newer selection.
+  if (adoptNewDraft && !state.currentConversationId) {
+    // Migrate at the actual switch, after both creation and detail requests.
+    persistComposer();
+    state.drafts[id] = state.drafts.new || { content: '', attachments: [] };
+    delete state.drafts.new;
+    for (const upload of state.uploads) if (upload.key === 'new') upload.key = id;
+  }
   clearConversationView();
   state.currentConversationId = id;
   state.currentConversation = data.conversation;
@@ -272,16 +279,15 @@ function clearConversationView() {
 
 async function newConversation() {
   persistComposer();
-  const unsaved = !state.currentConversationId ? state.drafts.new : null;
+  const adoptNewDraft = !state.currentConversationId;
+  const navigation = state.navigation;
   const body = { title: 'New conversation' };
   if (state.activeProjectId) body.projectId = state.activeProjectId;
   const data = await api.post('/api/conversations', body);
-  if (unsaved) {
-    state.drafts[data.conversation.id] = unsaved;
-    delete state.drafts.new;
-  }
   await loadConversations();
-  await openConversation(data.conversation.id);
+  if (navigation !== state.navigation) return null;
+  await openConversation(data.conversation.id, { adoptNewDraft });
+  return state.currentConversationId === data.conversation.id ? data.conversation.id : null;
 }
 
 function renderContextPolicy(policy) {
@@ -418,7 +424,7 @@ function createResponseGroup(label) {
   track.setAttribute('aria-label', 'Swipe between answers');
   const update = () => {
     const panes = [...track.children];
-    const index = panes.reduce((best, pane, i) => Math.abs(pane.offsetLeft - track.offsetLeft - track.scrollLeft) < Math.abs((panes[best]?.offsetLeft || 0) - track.offsetLeft - track.scrollLeft) ? i : best, 0);
+    const index = panes.reduce((best, pane, i) => Math.abs(pane.offsetLeft - track.scrollLeft) < Math.abs((panes[best]?.offsetLeft || 0) - track.scrollLeft) ? i : best, 0);
     status.textContent = track.scrollWidth <= track.clientWidth + 1 ? `${label} · ${panes.length} answers` : `${label} · ${index + 1} / ${panes.length}`;
     previous.disabled = track.scrollLeft <= 1;
     next.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 1;
@@ -426,8 +432,8 @@ function createResponseGroup(label) {
   const move = delta => {
     const panes = [...track.children];
     const position = track.scrollLeft + delta;
-    const target = delta > 0 ? panes.find(p => p.offsetLeft - track.offsetLeft > position) : panes.reverse().find(p => p.offsetLeft - track.offsetLeft < position);
-    if (target) track.scrollTo({ left: target.offsetLeft - track.offsetLeft, behavior: 'smooth' });
+    const target = delta > 0 ? panes.find(p => p.offsetLeft > position) : panes.reverse().find(p => p.offsetLeft < position);
+    if (target) track.scrollTo({ left: target.offsetLeft, behavior: 'smooth' });
   };
   previous.onclick = () => move(-2);
   next.onclick = () => move(2);
@@ -920,8 +926,7 @@ async function loadAbout() {
 
 // ---------- Attachments ----------
 async function uploadAttachment(file) {
-  const key = draftKey();
-  const upload = { key, filename: file.name, status: 'uploading' };
+  const upload = { key: draftKey(), filename: file.name, status: 'uploading' };
   state.uploads.push(upload);
   persistComposer();
   renderAttachmentChips();
@@ -929,11 +934,11 @@ async function uploadAttachment(file) {
     const fd = new FormData();
     fd.append('file', file);
     const data = await api.request('POST', '/api/attachments', fd, { raw: true });
-    if (draftKey() === key) {
+    if (draftKey() === upload.key) {
       state.attachments.push(data.attachment);
       persistComposer();
     } else {
-      const draft = state.drafts[key] ||= { content: '', attachments: [] };
+      const draft = state.drafts[upload.key] ||= { content: '', attachments: [] };
       draft.attachments.push(data.attachment);
       persistSession();
     }
@@ -986,20 +991,36 @@ function renderAttachmentChips() {
 }
 
 // ---------- Draft preservation ----------
-function saveDraft(content, clientRequestId = crypto.randomUUID()) {
+function saveDraft(content, clientRequestId = crypto.randomUUID(), attachments = state.attachments) {
   state.draft = {
     content,
     // C13: preserve complete attachment descriptors, not bare ids.
-    attachments: state.attachments.map((a) => ({ ...a })),
-    attachmentIds: state.attachments.map((a) => a.id),
+    attachments: attachments.map((a) => ({ ...a })),
+    attachmentIds: attachments.map((a) => a.id),
     clientRequestId,
   };
   state.pendingDrafts[draftKey()] = state.draft;
   persistSession();
 }
 
-function restoreDraft() {
-  if (!state.draft) return;
+function draftStatusText(draft) {
+  return draft.rejected
+    ? 'Message rejected. Edit the draft and send again, or retry the saved version.'
+    : 'Previous delivery is unconfirmed. Retry checks saved history first.';
+}
+
+function restoreDraft(conversationId = draftKey()) {
+  const pending = state.pendingDrafts[conversationId];
+  if (!pending) return;
+  if (conversationId !== draftKey()) {
+    const draft = state.drafts[conversationId];
+    if (!draft?.content && !draft?.attachments?.length) {
+      state.drafts[conversationId] = { content: pending.content, attachments: pending.attachments.map(a => ({ ...a })) };
+    }
+    persistSession();
+    return;
+  }
+  state.draft = pending;
   // A new thought typed while waiting must not be overwritten by failed delivery.
   if (!$('#composerInput').value && !state.attachments.length) {
     $('#composerInput').value = state.draft.content;
@@ -1010,7 +1031,7 @@ function restoreDraft() {
   renderAttachmentChips();
   const retry = $('#retryBar');
   retry.classList.remove('hidden');
-  $('#retryText').textContent = 'Previous delivery is unconfirmed. Retry checks saved history first.';
+  $('#retryText').textContent = draftStatusText(pending);
 }
 
 function clearDraft(conversationId = draftKey()) {
@@ -1025,7 +1046,7 @@ function clearDraft(conversationId = draftKey()) {
 // ---------- Streaming run ----------
 async function sendMessage(content, retry = null) {
   if (state.sending || state.uploads.some(u => u.key === draftKey() && u.status === 'uploading')) return;
-  if (!retry && state.pendingDrafts[draftKey()]) {
+  if (!retry && state.pendingDrafts[draftKey()] && !state.pendingDrafts[draftKey()].rejected) {
     toast('Use Retry to check the previous unconfirmed delivery before sending again.', true);
     return;
   }
@@ -1034,10 +1055,14 @@ async function sendMessage(content, retry = null) {
     return;
   }
   state.sending = true;
+  const attachments = retry?.attachments || state.attachments.map(a => ({ ...a }));
   let conversationId;
   let submitted = false;
   try {
-    if (!state.currentConversationId) await newConversation();
+    if (!state.currentConversationId && !await newConversation()) {
+      toast('Conversation changed while creating the chat. Your draft is preserved.', true);
+      return;
+    }
     conversationId = state.currentConversationId;
     if (retry) {
       const existing = await api.get(`/api/conversations/${conversationId}`);
@@ -1053,18 +1078,15 @@ async function sendMessage(content, retry = null) {
     let mode = savedMode === 'compare' ? 'compare' : savedMode === 'continue' ? 'single' : (participantIds.length > 1 ? 'compare' : 'single');
     if (mode === 'compare' && participantIds.length < 2) mode = 'single';
     const clientRequestId = retry?.clientRequestId || crypto.randomUUID();
-    const attachments = retry?.attachments || state.attachments.map(a => ({ ...a }));
     const body = {
       mode,
       participantIds,
       message: { content, attachmentIds: attachments.map((a) => a.id), clientRequestId },
     };
-    if (!retry) saveDraft(content, clientRequestId);
+    if (!retry) saveDraft(content, clientRequestId, attachments);
     // Clear the submitted composer only; typing after this point is a new draft.
-    if (!retry || ($('#composerInput').value === content && JSON.stringify(state.attachments.map(a => a.id)) === JSON.stringify(attachments.map(a => a.id)))) {
-      $('#composerInput').value = '';
-      state.attachments = [];
-    }
+    if ($('#composerInput').value.trim() === content) $('#composerInput').value = '';
+    state.attachments = state.attachments.filter(a => !attachments.some(sent => sent.id === a.id));
     persistComposer();
     autoGrow();
     renderAttachmentChips();
@@ -1095,14 +1117,18 @@ async function sendMessage(content, retry = null) {
         credentials: 'same-origin',
       });
     } catch (err) {
-      showTyping(false);
-      restoreDraft();
+      if (conversationId === state.currentConversationId) showTyping(false);
+      restoreDraft(conversationId);
       toast(`Network error: ${err.message}`, true);
       return;
     }
     if (!res.ok) {
-      showTyping(false);
-      restoreDraft();
+      if (conversationId === state.currentConversationId) showTyping(false);
+      if ([400, 401, 403, 404, 413, 415, 422].includes(res.status) && state.pendingDrafts[conversationId]) {
+        state.pendingDrafts[conversationId].rejected = true;
+        persistSession();
+      }
+      restoreDraft(conversationId);
       const data = await res.json().catch(() => ({}));
       toast(data.message || 'Run failed to start.', true);
       return;
@@ -1116,7 +1142,7 @@ async function sendMessage(content, retry = null) {
   } catch (err) {
     if (conversationId === state.currentConversationId) {
       showTyping(false);
-      restoreDraft();
+      restoreDraft(conversationId);
     }
     toast(submitted ? `Connection interrupted: ${err.message}. Reopen history to check saved results.` : err.message, true);
   } finally {
@@ -1500,7 +1526,7 @@ function bindNav() {
     stopSpeech(false);
     location.reload();
   };
-  $('#newChatBtn').onclick = () => newConversation().catch(err => toast(err.message, true));
+  $('#newChatBtn').onclick = () => { setDrawer(false); newConversation().catch(err => toast(err.message, true)); };
   $('#voiceReadBtn').onclick = () => {
     state.spokenAnswers = !state.spokenAnswers;
     $('#prefAutoSpeak').value = state.spokenAnswers ? 'on' : 'off';

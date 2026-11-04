@@ -48,13 +48,19 @@ return to the prior commit; the repair changes no storage schema.
 ### Observed local results
 
 - Node 24.22.1, Playwright 1.56.1, Chromium 141.0.7390.37; phone viewport
-  393 × 820 and a 1280 × 900 layout check. `npm run test:browser`: **18 passed**,
+  393 × 820 and a 1280 × 900 layout check. `npm run test:browser`: **21 passed**,
   no failures or skips. Speech APIs and authenticated APIs are explicit fixtures.
 - `npm run test:offline`: **13 Markdown assertions and 17 Responses assertions
   passed**, including a strict endpoint that rejects invalid assistant content.
 - Against the unmodified baseline, the menu browser check fails with
   `tools is not defined`, the microphone check detects a hidden permission error,
   and both new assistant-history assertions fail (one reproduces HTTP 400).
+- Review regressions also reproduce and repair rejected-upload correction,
+  desktop navigation to a third answer, and typing/upload completion while new
+  chat creation is pending. Rejected requests can be edited and sent with a new
+  identity; uncertain deliveries retain their protected retry path. Uploads and
+  the latest draft migrate at the actual conversation switch, and informational
+  toasts do not intercept composer or attachment controls.
 - `node --check` for changed JavaScript and `git diff --check` passed.
 - Archive tree remains `573843696f7090e5164488f782e38eaccc5b64bd`.
 - `.github/workflows/web-regressions.yml` runs isolated checks on pull requests
@@ -73,7 +79,9 @@ while default setup is enabled. That existing configuration conflict remains
 open; this UI repair does not disable or bypass scanning. The test workflow's
 actions were then updated to verified immutable v7 release commits to remove
 the deprecated Node 20 action-runtime dependency; the subsequent workflow run
-is the evidence for those pins.
+is the evidence for those pins: [Web regressions passed at `e964bb4`](https://github.com/The-Interdependency/a0/actions/runs/41743812088).
+The review fixes above were tested locally afterward; PR #121 records CI at its
+latest published head separately.
 
 The deployed `app.js` SHA-256 is
 `28936795d4b63404358e75e096df088dc0bc156d2bd9aee496a15c500c2dbfbc`,

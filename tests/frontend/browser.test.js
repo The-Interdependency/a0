@@ -380,3 +380,61 @@ test('long spoken answers are fully queued in bounded chunks and Stop ends playb
   assert.equal(await page.locator('#stopSpeechBtn').isVisible(), false);
   assert.match(await page.locator('#voiceStatus').innerText(), /stopped/i);
 });
+
+test('definitively rejected attachments can be corrected and sent', async t => {
+  const { page, data } = await fixture(t, { handle: async ({ path, req, json }) => {
+    if (path.endsWith('/runs') && req.postDataJSON().message.attachmentIds.length > 1) {
+      await json({ message: 'Too many attachments (fixture max 1)' }, 400); return true;
+    }
+  } });
+  await open(page);
+  await page.locator('#composerInput').fill('correct this upload');
+  const file = { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('fixture') };
+  await page.locator('#fileInput').setInputFiles([file, file]);
+  await page.waitForFunction(() => document.querySelectorAll('#attachmentChips .chip-x').length === 2);
+  await page.locator('#sendBtn').click();
+  await page.waitForFunction(() => /Too many attachments/.test(document.querySelector('#toast').textContent));
+  await page.getByRole('button', { name: 'Remove notes.txt', exact: true }).first().click();
+  await page.reload(); await page.waitForLoadState('networkidle');
+  await page.locator('#sendBtn').click();
+  await page.waitForFunction(() => document.querySelectorAll('.response-group').length === 2);
+  const sends = data.calls.filter(c => c.path.endsWith('/runs')).map(c => JSON.parse(c.body));
+  assert.equal(sends.length, 2);
+  assert.equal(sends[1].message.attachmentIds.length, 1);
+  assert.notEqual(sends[0].message.clientRequestId, sends[1].message.clientRequestId);
+});
+
+test('desktop carousel Next reveals the third answer with the sidebar visible', async t => {
+  const { page, data } = await fixture(t);
+  data.messages.c1.push({ ...data.messages.c1[2], id: 'm3', participant_id: 'p3', provider: 'xai', model: 'grok-4-fast', content: 'Third answer' });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole('button', { name: 'Open conversation Saved conversation', exact: true }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.response-group .compare-pane').length === 3);
+  await page.getByRole('button', { name: 'Next answer', exact: true }).click();
+  await page.waitForFunction(() => {
+    const track = document.querySelector('.response-group .compare-wrap');
+    const last = track.lastElementChild.getBoundingClientRect();
+    return track.scrollLeft > 400 && last.right <= track.getBoundingClientRect().right + 2;
+  });
+});
+
+test('new chat creation transfers text and uploads entered while the request is pending', async t => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const { page } = await fixture(t, { empty: true, handle: async ({ path, req }) => {
+    if (path === '/api/conversations' && req.method() === 'POST') await gate;
+  } });
+  await page.locator('#composerInput').fill('early thought');
+  await page.locator('#menuBtn').click();
+  await Promise.all([
+    page.waitForRequest(req => new URL(req.url()).pathname === '/api/conversations' && req.method() === 'POST'),
+    page.getByRole('button', { name: '＋ New conversation', exact: true }).click(),
+  ]);
+  await page.locator('#composerInput').fill('latest thought');
+  await page.locator('#fileInput').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('fixture') });
+  await page.waitForFunction(() => /Ready/.test(document.querySelector('#attachmentChips').textContent));
+  release();
+  await page.waitForFunction(() => location.hash.includes('conversation=c1'));
+  assert.equal(await page.locator('#composerInput').inputValue(), 'latest thought');
+  assert.match(await page.locator('#attachmentChips').innerText(), /notes.txt.*Ready/);
+});

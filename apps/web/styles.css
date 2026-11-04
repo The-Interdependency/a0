@@ -180,6 +180,7 @@ body {
 .chat-head { flex-wrap: wrap; }
 #chatProjectSelect { max-width: 140px; }
 .toast {
+  pointer-events: none;
   position: fixed;
   left: 50%;
   bottom: 90px;
