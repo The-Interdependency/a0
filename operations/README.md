@@ -4,8 +4,8 @@ A0 runs natively on the VM under systemd: `a0.service` (Node app), `openbao.serv
 
 ## First setup (already performed on this VM)
 
-1. Install: `sudo operations/install.sh /path/to/a0-checkout` (idempotent).
-2. OpenBao bootstrap happens once: initialized with `recovery_shares=1,recovery_threshold=1`; root token + recovery key stored at `/etc/openbao/init.json` (root:openbao 0640). KV v2 mount `a0`, policy `a0-app`, scoped app token written to `/etc/a0/a0.env`.
+1. Existing store: `sudo operations/install.sh /path/to/a0-checkout`. A confirmed new store additionally requires `--initialize-vault`; transport failure never triggers initialization.
+2. OpenBao bootstrap happens once; new root/recovery material is root-only in `/etc/openbao/init.json` (legacy root:openbao 0640 is accepted). KV v2 mount `a0`; separate periodic `a0-app` and read-only `a0-cli` policies. App credentials use `/etc/a0/vault-app.token`; the config pins the cluster identity. The hourly renewal timer uses scoped credentials only. See [vault and Site activation](VAULT-SITE.md).
 3. Owner sign-in: open https://35.212.252.101.nip.io, choose username `erin`, use the one-time setup code from `/etc/a0/setup-code.txt` (root only), set a password. Change it later in About.
 
 ## Daily operations
@@ -74,10 +74,10 @@ sudo systemctl restart a0
 
 | Path | Purpose |
 | --- | --- |
-| `/etc/openbao/init.json` | root token + recovery key (root:openbao 0640) |
+| `/etc/openbao/init.json` | root token + recovery key (new: root 0600; legacy root:openbao 0640) |
 | `/etc/openbao/seal.key` | static auto-unseal key (root:openbao 0640) |
 | `/etc/a0/backup.key` | backup encryption key (root 0600) |
-| `/etc/a0/a0.env` | app DB URL, BAO token, session secret, setup code (root:a0app 0640) |
+| `/etc/a0/a0.env` | app DB URL, vault token-file path and cluster pin, session secret, setup code (root:a0app 0640) |
 | `/etc/a0/db-passwords.env` | PostgreSQL role passwords (root 0600) |
 | `/etc/a0/setup-code.txt` | one-time owner setup code copy (root 0600) |
 
@@ -85,3 +85,9 @@ sudo systemctl restart a0
 
 - The app runs as `a0app` with no capabilities, no Docker access, no shell execution; MCP servers are remote-only with loopback/private-network blocking unless explicitly enabled per connection.
 - OpenBao listens on 127.0.0.1:8200 only; PostgreSQL remains on 127.0.0.1:5432. Only Caddy publishes ports 80/443.
+
+## Private reliability Site
+
+[Activation and rollback](VAULT-SITE.md) cover VM provisioning, canonical `ai.sh`,
+owner pairing, status evidence and inert handoff delivery. This source update
+does not itself establish deployment or phone acceptance.
