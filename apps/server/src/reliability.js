@@ -1,6 +1,7 @@
 // Usage: mount /api/reliability before cookie auth. A separate bearer grants only
 // live status and an inert handoff inbox; it grants no chat, key or shell access.
 import express from 'express';
+import {rateLimit} from 'express-rate-limit';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -21,7 +22,7 @@ export function evidenceReceipts(value) {
 }
 
 export function createReliabilityRouter({vault, databaseCheck, tokenFile, siteOrigin,
-  directory, buildFile = '/opt/a0/build-info.json', now = () => new Date().toISOString()}) {
+  directory, buildFile = '/opt/a0/build-info.json', now = () => new Date().toISOString(), requestLimit = 120}) {
   const router = express.Router();
   const wrap = fn => (req, res) => Promise.resolve(fn(req, res)).catch(() =>
     res.status(503).json({error: 'bridge_unavailable', message: 'VM bridge storage or status is unavailable.'}));
@@ -36,6 +37,11 @@ export function createReliabilityRouter({vault, databaseCheck, tokenFile, siteOr
     if (req.get('origin') && req.get('origin') !== siteOrigin) return res.status(403).json({error: 'origin_denied'});
     next();
   });
+  // This bridge has one owner capability behind a server-side proxy. Count
+  // authenticated requests together, without trusting forwarding headers.
+  router.use(rateLimit({windowMs: 60000, limit: requestLimit, keyGenerator: () => 'owner',
+    standardHeaders: 'draft-7', legacyHeaders: false,
+    message: {error: 'bridge_rate_limited', message: 'Wait one minute before retrying.'}}));
   router.use(express.json({limit: '128kb'}));
   router.get('/status', wrap(async (_req, res) => {
     let build = {commit: 'unrecorded', dirty: null, builtAt: null};
@@ -108,8 +114,11 @@ export function createReliabilityRouter({vault, databaseCheck, tokenFile, siteOr
   }));
   router.get('/handoffs/:id', wrap(async (req, res) => {
     if (!/^[a-f0-9]{64}$/.test(req.params.id)) return res.status(400).json({error: 'invalid_id'});
+    const destination = path.resolve(inbox, req.params.id + '.json');
+    if (!destination.startsWith(path.resolve(inbox) + path.sep))
+      return res.status(400).json({error: 'invalid_id'});
     let receipt;
-    try { receipt = JSON.parse(await fs.readFile(path.join(inbox, req.params.id + '.json'), 'utf8')); }
+    try { receipt = JSON.parse(await fs.readFile(destination, 'utf8')); }
     catch (err) { if (err.code === 'ENOENT') return res.status(404).json({error: 'not_found'}); throw err; }
     res.json(receipt);
   }));

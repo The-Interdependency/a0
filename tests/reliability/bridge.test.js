@@ -62,3 +62,19 @@ test('vault requires exact cluster, authenticates token and blocks redirect forw
     cluster='wrong';await assert.rejects(vault.healthCheck(),/identity mismatch/);
   }finally{globalThis.fetch=original;}
 });
+
+test('authenticated bridge requests are bounded and malformed inbox paths never read files',async()=>{
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'a0-rate-'));
+ const token='d'.repeat(64), tokenFile=path.join(directory,'token');
+ await fs.writeFile(tokenFile,token,{mode:0o600});
+ const app=express();app.use('/api/reliability',createReliabilityRouter({tokenFile,directory,siteOrigin:'https://console.example',requestLimit:2}));
+ const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});
+ const base=`http://127.0.0.1:${server.address().port}/api/reliability`;
+ try{
+  for(let i=0;i<3;i++)assert.equal((await fetch(base+'/handoffs')).status,401);
+  const headers={Authorization:`Bearer ${token}`};
+  assert.equal((await fetch(base+'/handoffs/'+encodeURIComponent('../token'),{headers})).status,400);
+  assert.equal((await fetch(base+'/handoffs',{headers})).status,200);
+  const limited=await fetch(base+'/handoffs',{headers});assert.equal(limited.status,429);assert.ok(limited.headers.get('retry-after'));
+ }finally{await new Promise(resolve=>server.close(resolve));await fs.rm(directory,{recursive:true,force:true});}
+});

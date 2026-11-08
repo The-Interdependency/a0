@@ -273,6 +273,8 @@ def readiness(config):
                 print("A0 passed local HTTP readiness. External Site/phone acceptance remains separate.")
                 return
         except (OSError, ValueError, SetupError):
+            # Migrations and vault startup may delay HTTP readiness. Retry after
+            # the same one-second pause, without logging a private response body.
             pass
         time.sleep(1)
     raise SetupError("A0 did not become HTTP-ready within 60 seconds; inspect the service before claiming deployment.")
