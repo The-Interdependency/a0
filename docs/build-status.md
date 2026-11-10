@@ -143,3 +143,7 @@ The [updated DeepSeek handoff](handoffs/deepseek-gui/START-HERE.md) now carries 
 The fresh local baseline passed 40 browser tests plus 13 Markdown and 17 Responses assertions. Targeted witnesses reproduced context-selection omissions, cross-conversation dialog writes and other failures outside that baseline. The 19-check GUI script also passed an inert nonfunctional fixture; its served-source markers do not establish GUI completion or the full options contract. Exact-source regression CI stopped during Playwright setup before executing tests.
 
 Next: repair F01/F02 context integrity first, then follow the handoff queue and G01–G14 contract. Convert defect-recognition assertions into correct-behavior regression tests; retain the established mobile suite. This publication changes documentation and handoff artifacts; application repairs, candidate-bound release evidence and actual-phone acceptance remain open.
+
+## November 10 audit repair (F01–F14)
+
+Repaired per the updated DeepSeek handoff (`docs/handoffs/deepseek-gui/START-HERE.md` + `AUDIT-2026-11-10.md`): F01/F02 context integrity, F03 Continue target, F04 settings GUI, F05 agent context save, F06 AHBG lock recovery, F07 module presentation, F08 evidence honesty, F09 contrast, F10 MCP inspection, F11 AHBG selector refresh, F12 System resets, F13 non-vacuous GUI checks + `tests/gui/browser.test.js`, F14 CI runner pinned to ubuntu-22.04 and GUI browser cases wired into `npm run test:browser`. Local verification: 44/44 browser tests, offline suites, and issue119/issue120/OC07/OC03 suites pass.

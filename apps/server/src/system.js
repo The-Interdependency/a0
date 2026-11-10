@@ -78,8 +78,8 @@ export const SYSTEM_KNOWLEDGE = [
   { item: 'Owner preferences', held: true, usedIn: 'presentation/voice defaults', authority: 'user-selected in About', note: 'Persisted in the owner settings record.' },
   { item: 'Model/provider selections and usage', held: true, usedIn: 'participant records and usage observations', authority: 'user-configured participants', note: 'Historical attribution is retained per message.' },
   { item: 'Tool authorizations', held: true, usedIn: 'run-scoped tool approval', authority: 'user-approved per run', note: 'Approvals never outlive their run.' },
-  { item: 'Personal facts outside A0 (calendar, contacts, schedule)', held: false, usedIn: '—', authority: 'unknown / not collected', note: 'No such inventory exists; treat as not collected.' },
-  { item: 'Inferred owner intent', held: false, usedIn: '—', authority: 'inferred', note: 'Intentions in the System view are local and never execute.' },
+  { item: 'Personal facts outside A0 (calendar, contacts, schedule)', held: 'unknown', usedIn: '—', authority: 'not collected; cannot be judged', note: 'No inventory exists. Absence of an inventory is not evidence of absence of data.' },
+  { item: 'Inferred owner intent', held: 'unknown', usedIn: '—', authority: 'inferred', note: 'Intentions in the System view are local and never execute.' },
 ];
 
 export const DECISION_CONDITIONS = [
@@ -90,6 +90,17 @@ export const DECISION_CONDITIONS = [
 ];
 
 export function systemPayload(buildCommit) {
+  // F08: declarations are declarations. Objects carry their own observation
+  // scope; no object is presented as an observed fact without a scope.
+  const objects = SYSTEM_OBJECTS.map((o) => ({
+    ...o,
+    evidence: o.evidence || { reliability: 'F', credibility: 6, basis: 'Source declaration; no runtime observation recorded for this object.' },
+  }));
+  const knowledge = SYSTEM_KNOWLEDGE.map((k) => ({
+    ...k,
+    held: k.held === undefined ? 'unknown' : k.held,
+    authority: k.authority || 'not collected; cannot be judged',
+  }));
   return {
     provenance: {
       generatedBy: SYSTEM_BUILT_FROM,
@@ -97,10 +108,11 @@ export function systemPayload(buildCommit) {
       buildCommit,
       generatedAt: new Date().toISOString(),
       scopeNote: 'Application-relations inventory for the successor VM website. Not a UCNS geometry claim.',
+      observationScope: 'Public asset markers and service identities may be observed; authenticated runtime behavior is not observed by this inventory.',
     },
-    objects: SYSTEM_OBJECTS,
+    objects,
     relations: SYSTEM_RELATIONS,
-    knowledge: SYSTEM_KNOWLEDGE,
+    knowledge,
     decisionConditions: DECISION_CONDITIONS,
   };
 }

@@ -38,26 +38,22 @@ export async function loadIntendedContext(conversationId) {
     }
   }
   const policy = conv.context_policy || { mode: 'all', selectedMessageIds: [] };
-  let messages;
-  if (policy.mode === 'selected' && Array.isArray(policy.selectedMessageIds) && policy.selectedMessageIds.length) {
-    messages = await query(
-      `SELECT m.id, m.role, m.content, m.content_type, m.status, m.provider, m.model,
-              m.participant_id, m.round, m.meta
-         FROM messages m
-        WHERE m.conversation_id = $1 AND m.id = ANY($2::uuid[])
-        ORDER BY m.created_at ASC, m.round ASC`,
-      [conversationId, policy.selectedMessageIds],
-    );
-  } else {
-    messages = await query(
-      `SELECT m.id, m.role, m.content, m.content_type, m.status, m.provider, m.model,
-              m.participant_id, m.round, m.meta
-         FROM messages m
-        WHERE m.conversation_id = $1 AND m.included_in_context = true
-        ORDER BY m.created_at ASC, m.round ASC`,
-      [conversationId],
-    );
-  }
+  const selected = policy.mode === 'selected' ? new Set(policy.selectedMessageIds || []) : null;
+  // F01: user prompts and tool results always travel; selection only
+  // constrains assistant answers. New messages are never silently dropped.
+  const messages = await query(
+    `SELECT m.id, m.role, m.content, m.content_type, m.status, m.provider, m.model,
+            m.participant_id, m.round, m.meta
+       FROM messages m
+      WHERE m.conversation_id = $1
+      ORDER BY m.created_at ASC, m.round ASC`,
+    [conversationId],
+  );
+  messages.rows = messages.rows.filter((m) => {
+    if (m.included_in_context === false) return false;
+    if (selected === null) return true;
+    return m.role !== 'assistant' || selected.has(m.id);
+  });
   const withAttachments = [];
   for (const m of messages.rows) {
     const atts = await query(

@@ -29,11 +29,15 @@ const api = async (method, path, body) => {
   return { status: res.status, data };
 };
 
-// G02/G03/G04 system payload
+// G02/G03/G04 system payload (non-vacuous: the inert counterexample must fail)
 {
   const r = await api('GET', '/api/system');
   check('G02 /api/system served', r.status === 200 && Array.isArray(r.data?.objects), `status=${r.status}`);
   const d = r.data || {};
+  check('G02 nonempty semantic inventory', (d.objects || []).length >= 10 && (d.relations || []).length >= 5 && (d.knowledge || []).length >= 3);
+  check('G02 every object has nonempty identity fields', (d.objects || []).every((o) => o.id && o.label && o.kind && o.state && o.source && o.description));
+  check('G03 every next-step range is nonempty text', (d.objects || []).every((o) => typeof o.next?.minimal === 'string' && o.next.minimal.length > 0 && typeof o.next?.maximalFeasible === 'string' && o.next.maximalFeasible.length > 0 && typeof o.next?.maximalPotential === 'string' && o.next.maximalPotential.length > 0));
+  check('F08 every object has separated A-F/1-6 evidence', (d.objects || []).every((o) => o.evidence && typeof o.evidence.reliability === 'string' && Number.isInteger(o.evidence.credibility)));
   const ids = new Set((d.objects || []).map((o) => o.id));
   check('G02 object identities unique', ids.size === (d.objects || []).length, `ids=${ids.size}`);
   check('G02 every relation endpoint resolves', (d.relations || []).every((rel) => ids.has(rel.from) && ids.has(rel.to)), 'unresolved endpoint found');
@@ -41,17 +45,18 @@ const api = async (method, path, body) => {
   check('G03 every object has three next-step ranges', (d.objects || []).every((o) => o.next?.minimal && o.next?.maximalFeasible && o.next?.maximalPotential));
   check('G03 four action-decision conditions preserved', (d.decisionConditions || []).length === 4 && d.decisionConditions[0].includes('resources nearing depletion'));
   check('G04 knowledge entries have authority labels', (d.knowledge || []).length >= 8 && d.knowledge.every((k) => k.authority && k.usedIn));
-  check('G04 not-held/inferred knowledge labeled', d.knowledge.some((k) => k.held === false) && d.knowledge.some((k) => String(k.authority).includes('inferred')));
+  check('G04 unknown/inferred knowledge labeled', d.knowledge.some((k) => k.held === 'unknown') && d.knowledge.some((k) => String(k.authority).includes('inferred')));
   check('G02 state vocabulary distinct', (d.objects || []).every((o) => ['working', 'construction', 'broken', 'deprecated'].includes(o.state)));
   check('G02 provenance discloses freshness and scope', Boolean(d.provenance?.buildCommit) && /UCNS geometry/.test(d.provenance?.scopeNote || ''));
 }
 
-// G05/options inventory
+// G05/options inventory (non-vacuous full option contract)
 {
   const r = await api('GET', '/api/options');
-  check('Options inventory served', r.status === 200 && Array.isArray(r.data?.options), `status=${r.status}`);
+  check('Options inventory served', r.status === 200 && Array.isArray(r.data?.options) && r.data.options.length >= 15, `status=${r.status}`);
   const areas = new Set((r.data?.options || []).map((o) => o.area));
   check('Options cover model/context/tools/voice/agents/AHBG areas', ['Provider/model', 'Context', 'Tools/web', 'Voice', 'Forge/retained agents', 'Temporary modules/AHBG'].every((a) => areas.has(a)), [...areas].join(','));
+  check('F04 every option carries the full contract fields', (r.data?.options || []).every((o) => o.label && o.supportedValues !== undefined && o.default !== undefined && o.scope && o.persistence && o.validation && o.effect && o.owner));
 }
 
 // Served-source markers for the new views

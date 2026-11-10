@@ -246,11 +246,24 @@ button:disabled { opacity: .5; cursor: default; }
 .relation-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .next-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .next-cols div { background: #f4f7fa; border-radius: 10px; padding: 8px; }
-.next-cols p { margin: 4px 0 0; font-size: 13px; }
+.next-cols p { margin: 4px 0 0; font-size: 13px; color: #1f2a37; }
 .mini-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .mini-table th, .mini-table td { text-align: left; border-bottom: 1px solid #e3e8ee; padding: 5px 6px; vertical-align: top; }
-.context-preview { white-space: pre-wrap; word-break: break-word; background: #f4f7fa; border-radius: 8px; padding: 8px; max-height: 340px; overflow: auto; font-size: 12px; }
+.context-preview { white-space: pre-wrap; word-break: break-word; background: #f4f7fa; color: #1f2a37; border-radius: 8px; padding: 8px; max-height: 340px; overflow: auto; font-size: 12px; }
 .narrow { width: 90px; }
 @media (max-width: 640px) {
   .relation-cols, .next-cols { grid-template-columns: 1fr; }
+}
+
+/* ---- F04 settings editor, F07 stats module, F10 tool list ---- */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.settings-grid label { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 6px 0; }
+.stats-grid div { background: #f4f7fa; border-radius: 8px; padding: 6px; }
+.stats-grid p { margin: 2px 0 0; font-size: 12px; color: #1f2a37; }
+.tool-list { margin: 6px 0; }
+.tool-list details { margin: 4px 0; }
+.tool-list summary { cursor: pointer; font-size: 13px; }
+@media (max-width: 640px) {
+  .settings-grid, .stats-grid { grid-template-columns: 1fr 1fr; }
 }

@@ -198,3 +198,24 @@ For the physical Android gates (A17/A18/OC09/RX01), open https://35.212.252.101.
 3. Dictate a message with the mic button; confirm the dictated text appears and an error is visible if speech is denied (A18 voice).
 4. Open a retained Forge agent, start an AHBG session, run one turn, then swap the module and confirm the board/turn do not reset (RX01/OC09).
 Record screen captures as evidence; these gates remain NOT RUN until that observation exists.
+
+## November 10 audit repair record (F01–F14)
+
+Source: `docs/handoffs/deepseek-gui/AUDIT-2026-11-10.md`. Repair order from the updated START-HERE.md.
+
+| Finding | Repair | Evidence |
+| --- | --- | --- |
+| F01 P1 context selection | `contexts.js` applies response selection to assistant answers only; user/tool messages always travel. `mergeRevisionWithFresh` reconciles existing history inclusion with the fresh policy view before appending new messages. `loadIntendedContext` mirrors the same rule. | `tests/gui/run.js` non-vacuous semantics; dispatch snapshot fixtures (`tests/fr0-fr1/run.js`); targeted policy assertions pending browser run. |
+| F02 P1 delayed dialogs | Response-selection and full context editor capture conversationId + navigation counter before awaiting and discard stale reads; saves are bound to the captured conversation. Server validates selectedMessageIds ownership and rejects mismatched block `source` identity. | Delayed-navigation browser fixtures in `tests/gui/browser.test.js` (shipped with this repair); server 400 on foreign selected IDs. |
+| F03 Continue old model | `pendingSwitch.targetId` carries the tapped participant; Continue selects it. | Browser switch fixture pending run; frontend code path verified by syntax + issue120 suite. |
+| F04 settings GUI | Participants GET attaches current `capabilitiesForModel`; each card renders reasoning effort, max output tokens, timeout, tool scope (all/none/allowlist preserved) with a Save path. | `tests/issue120/settings-effect.js` (OC03) continues PASS. |
+| F05 agent save 400 | Context revision validation adds editable `agent:<id>` blocks derived from the conversation's bound agents. | `tests/issue119/agent-execution.js` (RD02) PASS. |
+| F06 AHBG busy lock | Every preparation step (observe, agent, participant, revision/assemble, dispatch) releases the lock on failure before any side effect. | `tests/issue119/ahbg.js` (RG03) PASS. |
+| F07 module presentation | `renderAgents` mounts a distinct stats presentation for `agent-stats` versus the chat panel for `agent-panel`. | Browser fixture pending run; server swap path unchanged (`tests/issue119/run.js` RM03 PASS). |
+| F08 evidence honesty | Objects carry separated A–F/1–6 `evidence` with basis text; no object claims observed behavior without a scope; knowledge rows use held/unknown and "absence of an inventory is not evidence of absence". | `tests/gui/run.js` evidence-contract assertions PASS. |
+| F09 contrast | `context-preview` and `next-cols` foreground set to `#1f2a37` on `#f4f7fa` (≈12.4:1). | Contrast measurement pending browser run; CSS served. |
+| F10 MCP inspection | MCP cards render a `<details>` per discovered tool with description and full input schema; nothing executes. | Served-source marker + browser fixture pending. |
+| F11 AHBG selector | `loadAhbg` always refreshes eligible non-retired agents and preserves a valid selection. | Browser fixture pending run. |
+| F12 System resets | All/All-categories reset buttons are bound and re-render the unfiltered inventory. | `tests/gui/browser.test.js` reset cases (pending run). |
+| F13 non-vacuous GUI checks | `tests/gui/run.js` asserts nonempty semantic inventory, nonempty next-step ranges, full option-contract fields; new `tests/gui/browser.test.js` exercises real DOM behavior and an empty-fixture counterexample. | Counterexample fails by construction; suite runs via `npm run test:browser` and CI. |
+| F14 CI runner | `web-regressions.yml` pinned to `ubuntu-22.04` (Playwright 1.56.1 supported) and now runs the GUI browser cases too. | Candidate CI run pending. |

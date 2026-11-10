@@ -83,7 +83,9 @@ export async function buildBlocks(conversationId, userId) {
       label: `${m.role === 'assistant' ? 'Assistant' : m.role === 'tool' ? 'Tool result' : 'User'} · ${m.provider || 'user'}${m.model ? ' · ' + m.model : ''} · ${new Date(m.created_at).toISOString()}`,
       content: m.content || '',
       editable: false,
-      included: m.included_in_context !== false && (selected === null || selected.has(m.id)),
+      // F01: response selection constrains assistant answers only. The newest
+      // user question and tool results always travel with the intended context.
+      included: m.included_in_context !== false && (selected === null || m.role !== 'assistant' || selected.has(m.id)),
       readonlyReason: m.role === 'tool' ? 'Tool results are part of shared history.' : null,
       meta: {
         messageId: m.id,
@@ -165,12 +167,22 @@ export async function latestRevision(conversationId, userId) {
 // blocks. Owner edits/exclusions stay effective; new messages join the tail.
 export function mergeRevisionWithFresh(latestBlocks, freshBlocks) {
   const blocks = Array.isArray(latestBlocks) && latestBlocks.length ? latestBlocks.map((b) => ({ ...b })) : [];
+  const freshById = new Map(freshBlocks.filter((b) => b.type === 'history').map((b) => [b.id, b]));
+  // F01: reconcile existing history blocks with the fresh policy-derived view,
+  // then append only brand-new history blocks. Saved non-history edits
+  // (harness/project/agent/memory/tool blocks) are preserved unchanged.
+  for (const block of blocks) {
+    if (block.type !== 'history') continue;
+    const fresh = freshById.get(block.id);
+    if (fresh) block.included = fresh.included;
+  }
   const existing = new Set(blocks.map((b) => b.id));
   const freshHistory = freshBlocks.filter((b) => b.type === 'history' && !existing.has(b.id));
-  if (!freshHistory.length) return blocks;
-  const toolsIdx = blocks.findIndex((b) => b.type === 'tool');
-  const insertAt = toolsIdx >= 0 ? toolsIdx : blocks.length;
-  blocks.splice(insertAt, 0, ...freshHistory);
+  if (freshHistory.length) {
+    const toolsIdx = blocks.findIndex((b) => b.type === 'tool');
+    const insertAt = toolsIdx >= 0 ? toolsIdx : blocks.length;
+    blocks.splice(insertAt, 0, ...freshHistory);
+  }
   return blocks;
 }
 

@@ -332,7 +332,12 @@ function renderContextPolicy(policy) {
 
 async function openContextSelection() {
   if (!state.currentConversationId) return;
-  const data = await api.get(`/api/conversations/${state.currentConversationId}`);
+  // F02: capture originating identity BEFORE awaiting; discard if navigation
+  // supersedes this read.
+  const conversationId = state.currentConversationId;
+  const navigation = state.navigation;
+  const data = await api.get(`/api/conversations/${conversationId}`);
+  if (state.currentConversationId !== conversationId || state.navigation !== navigation) return;
   const assistants = data.messages.filter((m) => m.role === 'assistant');
   const policy = data.conversation.context_policy || { mode: 'all', selectedMessageIds: [] };
   const modal = $('#contextModal');
@@ -357,8 +362,14 @@ async function openContextSelection() {
     list.appendChild(label);
   }
   $('#contextSaveBtn').onclick = async () => {
+    // F02: save only to the conversation this dialog was opened for.
+    if (state.currentConversationId !== conversationId) {
+      hideContextModal();
+      toast('Navigation changed while the dialog was open. Nothing was saved.', true);
+      return;
+    }
     const ids = [...list.querySelectorAll('input:checked')].map((i) => i.dataset.id);
-    await api.patch(`/api/conversations/${state.currentConversationId}`, {
+    await api.patch(`/api/conversations/${conversationId}`, {
       contextPolicy: { mode: 'selected', selectedMessageIds: ids },
     });
     state.currentConversation.context_policy = { mode: 'selected', selectedMessageIds: ids };
@@ -366,7 +377,12 @@ async function openContextSelection() {
     hideContextModal();
   };
   $('#contextAllBtn').onclick = async () => {
-    await api.patch(`/api/conversations/${state.currentConversationId}`, {
+    if (state.currentConversationId !== conversationId) {
+      hideContextModal();
+      toast('Navigation changed while the dialog was open. Nothing was saved.', true);
+      return;
+    }
+    await api.patch(`/api/conversations/${conversationId}`, {
       contextPolicy: { mode: 'all', selectedMessageIds: [] },
     });
     state.currentConversation.context_policy = { mode: 'all', selectedMessageIds: [] };
@@ -580,7 +596,9 @@ function toggleParticipant(id) {
   // C03: authoritative history presence from the conversation detail response.
   const conversationHasMessages = (state.currentConversation?.message_count ?? 0) > 0;
   if (state.currentConversationId && conversationHasMessages) {
-    state.pendingSwitch = { participantIds: next };
+    // F03: remember which participant the owner just tapped so Continue can
+    // carry the intended single-model target.
+    state.pendingSwitch = { participantIds: next, targetId: id };
     showSwitchModal(next);
     return;
   }
@@ -601,8 +619,8 @@ function showSwitchModal(nextIds) {
     await newConversation();
   };
   $('#switchContinueBtn').onclick = () => {
-    // C03: Continue is ONE selected model with full intended context.
-    const singleId = nextIds[0] || state.selectedParticipantIds[0] || (state.participants[0] && state.participants[0].id);
+    // C03/F03: Continue is the tapped single model with full intended context.
+    const singleId = state.pendingSwitch?.targetId || nextIds[0] || state.selectedParticipantIds[0] || (state.participants[0] && state.participants[0].id);
     if (!singleId) { toast('Select a participant first.', true); return; }
     hideSwitchModal();
     state.selectedParticipantIds = [singleId];
@@ -714,6 +732,100 @@ function renderParticipantCards() {
       };
       row.append(input, save);
     }
+    // F04: supported settings editor with actual write path and unavailable
+    // reasons rendered from the current capability view.
+    const settings = document.createElement('details');
+    settings.className = 'settings-editor';
+    const settingsSum = document.createElement('summary');
+    settingsSum.textContent = 'Settings (effective values)';
+    settings.appendChild(settingsSum);
+    const settingsGrid = document.createElement('div');
+    settingsGrid.className = 'settings-grid';
+    const caps = p.capabilities || {};
+    const eff = p.settings || {};
+    const effortLabel = document.createElement('label');
+    effortLabel.className = 'muted';
+    const effortSel = document.createElement('select');
+    effortSel.className = 'select';
+    const efforts = caps.reasoningEffort || [];
+    if (efforts.length) {
+      const none = document.createElement('option');
+      none.value = ''; none.textContent = 'reasoning effort: unset';
+      if (!eff.reasoningEffort) none.selected = true;
+      effortSel.appendChild(none);
+      for (const e of efforts) {
+        const opt = document.createElement('option');
+        opt.value = e; opt.textContent = `reasoning effort: ${e}`;
+        if (eff.reasoningEffort === e) opt.selected = true;
+        effortSel.appendChild(opt);
+      }
+      effortLabel.append(document.createTextNode('Reasoning effort '), effortSel);
+    } else {
+      effortLabel.textContent = 'reasoning effort: not supported by this model';
+    }
+    settingsGrid.appendChild(effortLabel);
+    const maxTok = document.createElement('label');
+    maxTok.className = 'muted';
+    maxTok.textContent = 'Max output tokens ';
+    const maxTokInput = document.createElement('input');
+    maxTokInput.type = 'number'; maxTokInput.min = '1'; maxTokInput.className = 'narrow';
+    maxTokInput.value = eff.maxOutputTokens || '';
+    maxTokInput.placeholder = 'default';
+    maxTok.appendChild(maxTokInput);
+    settingsGrid.appendChild(maxTok);
+    const timeout = document.createElement('label');
+    timeout.className = 'muted';
+    timeout.textContent = 'Timeout ms ';
+    const timeoutInput = document.createElement('input');
+    timeoutInput.type = 'number'; timeoutInput.min = '1000'; timeoutInput.className = 'narrow';
+    timeoutInput.value = eff.timeoutMs || '';
+    timeoutInput.placeholder = 'default';
+    timeout.appendChild(timeoutInput);
+    settingsGrid.appendChild(timeout);
+    const toolScope = document.createElement('label');
+    toolScope.className = 'muted';
+    toolScope.textContent = 'Tool scope ';
+    const toolSel = document.createElement('select');
+    toolSel.className = 'select';
+    for (const [val, label] of [['all', 'all discovered tools'], ['none', 'no tools']]) {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = label;
+      if (val === 'all' && !Array.isArray(eff.toolSelection)) opt.selected = true;
+      if (val === 'none' && Array.isArray(eff.toolSelection) && eff.toolSelection.length === 0) opt.selected = true;
+      toolSel.appendChild(opt);
+    }
+    if (Array.isArray(eff.toolSelection) && eff.toolSelection.length) {
+      const allow = document.createElement('option');
+      allow.value = 'allow'; allow.textContent = `allowlist (${eff.toolSelection.length})`; allow.selected = true;
+      toolSel.appendChild(allow);
+    }
+    toolScope.appendChild(toolSel);
+    settingsGrid.appendChild(toolScope);
+    const saveSettings = document.createElement('button');
+    saveSettings.type = 'button';
+    saveSettings.className = 'chip';
+    saveSettings.textContent = 'Save settings';
+    saveSettings.onclick = async () => {
+      const nextSettings = { ...eff };
+      if (effortSel.options?.length) {
+        if (effortSel.value) nextSettings.reasoningEffort = effortSel.value; else delete nextSettings.reasoningEffort;
+      }
+      const mt = Number(maxTokInput.value);
+      if (mt > 0) nextSettings.maxOutputTokens = mt; else delete nextSettings.maxOutputTokens;
+      const to = Number(timeoutInput.value);
+      if (to > 0) nextSettings.timeoutMs = to; else delete nextSettings.timeoutMs;
+      if (toolSel.value === 'none') nextSettings.toolSelection = [];
+      else if (toolSel.value === 'all') delete nextSettings.toolSelection;
+      try {
+        await api.patch(`/api/participants/${p.id}`, { settings: nextSettings });
+        toast(`Saved settings for ${p.name}. The next request uses them.`);
+        await loadParticipants();
+      } catch (err) { toast(err.message, true); }
+    };
+    settingsGrid.appendChild(saveSettings);
+    settings.appendChild(settingsGrid);
+    card.appendChild(settings);
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'chip danger';
@@ -772,6 +884,100 @@ function renderProviderCards() {
         toast(err.message, true);
       }
     };
+    // F04: supported settings editor with actual write path and unavailable
+    // reasons rendered from the current capability view.
+    const settings = document.createElement('details');
+    settings.className = 'settings-editor';
+    const settingsSum = document.createElement('summary');
+    settingsSum.textContent = 'Settings (effective values)';
+    settings.appendChild(settingsSum);
+    const settingsGrid = document.createElement('div');
+    settingsGrid.className = 'settings-grid';
+    const caps = p.capabilities || {};
+    const eff = p.settings || {};
+    const effortLabel = document.createElement('label');
+    effortLabel.className = 'muted';
+    const effortSel = document.createElement('select');
+    effortSel.className = 'select';
+    const efforts = caps.reasoningEffort || [];
+    if (efforts.length) {
+      const none = document.createElement('option');
+      none.value = ''; none.textContent = 'reasoning effort: unset';
+      if (!eff.reasoningEffort) none.selected = true;
+      effortSel.appendChild(none);
+      for (const e of efforts) {
+        const opt = document.createElement('option');
+        opt.value = e; opt.textContent = `reasoning effort: ${e}`;
+        if (eff.reasoningEffort === e) opt.selected = true;
+        effortSel.appendChild(opt);
+      }
+      effortLabel.append(document.createTextNode('Reasoning effort '), effortSel);
+    } else {
+      effortLabel.textContent = 'reasoning effort: not supported by this model';
+    }
+    settingsGrid.appendChild(effortLabel);
+    const maxTok = document.createElement('label');
+    maxTok.className = 'muted';
+    maxTok.textContent = 'Max output tokens ';
+    const maxTokInput = document.createElement('input');
+    maxTokInput.type = 'number'; maxTokInput.min = '1'; maxTokInput.className = 'narrow';
+    maxTokInput.value = eff.maxOutputTokens || '';
+    maxTokInput.placeholder = 'default';
+    maxTok.appendChild(maxTokInput);
+    settingsGrid.appendChild(maxTok);
+    const timeout = document.createElement('label');
+    timeout.className = 'muted';
+    timeout.textContent = 'Timeout ms ';
+    const timeoutInput = document.createElement('input');
+    timeoutInput.type = 'number'; timeoutInput.min = '1000'; timeoutInput.className = 'narrow';
+    timeoutInput.value = eff.timeoutMs || '';
+    timeoutInput.placeholder = 'default';
+    timeout.appendChild(timeoutInput);
+    settingsGrid.appendChild(timeout);
+    const toolScope = document.createElement('label');
+    toolScope.className = 'muted';
+    toolScope.textContent = 'Tool scope ';
+    const toolSel = document.createElement('select');
+    toolSel.className = 'select';
+    for (const [val, label] of [['all', 'all discovered tools'], ['none', 'no tools']]) {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = label;
+      if (val === 'all' && !Array.isArray(eff.toolSelection)) opt.selected = true;
+      if (val === 'none' && Array.isArray(eff.toolSelection) && eff.toolSelection.length === 0) opt.selected = true;
+      toolSel.appendChild(opt);
+    }
+    if (Array.isArray(eff.toolSelection) && eff.toolSelection.length) {
+      const allow = document.createElement('option');
+      allow.value = 'allow'; allow.textContent = `allowlist (${eff.toolSelection.length})`; allow.selected = true;
+      toolSel.appendChild(allow);
+    }
+    toolScope.appendChild(toolSel);
+    settingsGrid.appendChild(toolScope);
+    const saveSettings = document.createElement('button');
+    saveSettings.type = 'button';
+    saveSettings.className = 'chip';
+    saveSettings.textContent = 'Save settings';
+    saveSettings.onclick = async () => {
+      const nextSettings = { ...eff };
+      if (effortSel.options?.length) {
+        if (effortSel.value) nextSettings.reasoningEffort = effortSel.value; else delete nextSettings.reasoningEffort;
+      }
+      const mt = Number(maxTokInput.value);
+      if (mt > 0) nextSettings.maxOutputTokens = mt; else delete nextSettings.maxOutputTokens;
+      const to = Number(timeoutInput.value);
+      if (to > 0) nextSettings.timeoutMs = to; else delete nextSettings.timeoutMs;
+      if (toolSel.value === 'none') nextSettings.toolSelection = [];
+      else if (toolSel.value === 'all') delete nextSettings.toolSelection;
+      try {
+        await api.patch(`/api/participants/${p.id}`, { settings: nextSettings });
+        toast(`Saved settings for ${p.name}. The next request uses them.`);
+        await loadParticipants();
+      } catch (err) { toast(err.message, true); }
+    };
+    settingsGrid.appendChild(saveSettings);
+    settings.appendChild(settingsGrid);
+    card.appendChild(settings);
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'chip danger';
@@ -827,9 +1033,21 @@ function renderMcpCards() {
     const status = document.createElement('div');
     status.className = 'muted';
     status.textContent = `Status: ${c.status}${c.last_error ? ` · ${c.last_error}` : ''} · ${(c.tools || []).length} tools`;
+    // F10: expose discovered tool names, descriptions and input schemas
+    // without executing anything.
     const tools = document.createElement('div');
-    tools.className = 'muted context-preview';
-    tools.textContent = (c.tools || []).map((t) => `${t.name}: ${t.description || 'no description'}`).join(' · ') || 'No tools discovered yet.';
+    tools.className = 'tool-list';
+    for (const t of c.tools || []) {
+      const det = document.createElement('details');
+      const sum = document.createElement('summary');
+      sum.textContent = `${t.name} — ${t.description || 'no description'}`;
+      const schema = document.createElement('pre');
+      schema.className = 'context-preview';
+      schema.textContent = JSON.stringify(t.inputSchema || {}, null, 2);
+      det.append(sum, schema);
+      tools.appendChild(det);
+    }
+    if (!(c.tools || []).length) tools.textContent = 'No tools discovered yet.';
     const row = document.createElement('div');
     row.className = 'row';
     for (const [label, fn] of [
@@ -858,7 +1076,7 @@ function renderMcpCards() {
       b.onclick = fn;
       row.appendChild(b);
     }
-    card.append(h, sub, status, row);
+    card.append(h, sub, status, tools, row);
     box.appendChild(card);
   }
 }
@@ -911,6 +1129,100 @@ function renderProjects() {
         toast(err.message, true);
       }
     };
+    // F04: supported settings editor with actual write path and unavailable
+    // reasons rendered from the current capability view.
+    const settings = document.createElement('details');
+    settings.className = 'settings-editor';
+    const settingsSum = document.createElement('summary');
+    settingsSum.textContent = 'Settings (effective values)';
+    settings.appendChild(settingsSum);
+    const settingsGrid = document.createElement('div');
+    settingsGrid.className = 'settings-grid';
+    const caps = p.capabilities || {};
+    const eff = p.settings || {};
+    const effortLabel = document.createElement('label');
+    effortLabel.className = 'muted';
+    const effortSel = document.createElement('select');
+    effortSel.className = 'select';
+    const efforts = caps.reasoningEffort || [];
+    if (efforts.length) {
+      const none = document.createElement('option');
+      none.value = ''; none.textContent = 'reasoning effort: unset';
+      if (!eff.reasoningEffort) none.selected = true;
+      effortSel.appendChild(none);
+      for (const e of efforts) {
+        const opt = document.createElement('option');
+        opt.value = e; opt.textContent = `reasoning effort: ${e}`;
+        if (eff.reasoningEffort === e) opt.selected = true;
+        effortSel.appendChild(opt);
+      }
+      effortLabel.append(document.createTextNode('Reasoning effort '), effortSel);
+    } else {
+      effortLabel.textContent = 'reasoning effort: not supported by this model';
+    }
+    settingsGrid.appendChild(effortLabel);
+    const maxTok = document.createElement('label');
+    maxTok.className = 'muted';
+    maxTok.textContent = 'Max output tokens ';
+    const maxTokInput = document.createElement('input');
+    maxTokInput.type = 'number'; maxTokInput.min = '1'; maxTokInput.className = 'narrow';
+    maxTokInput.value = eff.maxOutputTokens || '';
+    maxTokInput.placeholder = 'default';
+    maxTok.appendChild(maxTokInput);
+    settingsGrid.appendChild(maxTok);
+    const timeout = document.createElement('label');
+    timeout.className = 'muted';
+    timeout.textContent = 'Timeout ms ';
+    const timeoutInput = document.createElement('input');
+    timeoutInput.type = 'number'; timeoutInput.min = '1000'; timeoutInput.className = 'narrow';
+    timeoutInput.value = eff.timeoutMs || '';
+    timeoutInput.placeholder = 'default';
+    timeout.appendChild(timeoutInput);
+    settingsGrid.appendChild(timeout);
+    const toolScope = document.createElement('label');
+    toolScope.className = 'muted';
+    toolScope.textContent = 'Tool scope ';
+    const toolSel = document.createElement('select');
+    toolSel.className = 'select';
+    for (const [val, label] of [['all', 'all discovered tools'], ['none', 'no tools']]) {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = label;
+      if (val === 'all' && !Array.isArray(eff.toolSelection)) opt.selected = true;
+      if (val === 'none' && Array.isArray(eff.toolSelection) && eff.toolSelection.length === 0) opt.selected = true;
+      toolSel.appendChild(opt);
+    }
+    if (Array.isArray(eff.toolSelection) && eff.toolSelection.length) {
+      const allow = document.createElement('option');
+      allow.value = 'allow'; allow.textContent = `allowlist (${eff.toolSelection.length})`; allow.selected = true;
+      toolSel.appendChild(allow);
+    }
+    toolScope.appendChild(toolSel);
+    settingsGrid.appendChild(toolScope);
+    const saveSettings = document.createElement('button');
+    saveSettings.type = 'button';
+    saveSettings.className = 'chip';
+    saveSettings.textContent = 'Save settings';
+    saveSettings.onclick = async () => {
+      const nextSettings = { ...eff };
+      if (effortSel.options?.length) {
+        if (effortSel.value) nextSettings.reasoningEffort = effortSel.value; else delete nextSettings.reasoningEffort;
+      }
+      const mt = Number(maxTokInput.value);
+      if (mt > 0) nextSettings.maxOutputTokens = mt; else delete nextSettings.maxOutputTokens;
+      const to = Number(timeoutInput.value);
+      if (to > 0) nextSettings.timeoutMs = to; else delete nextSettings.timeoutMs;
+      if (toolSel.value === 'none') nextSettings.toolSelection = [];
+      else if (toolSel.value === 'all') delete nextSettings.toolSelection;
+      try {
+        await api.patch(`/api/participants/${p.id}`, { settings: nextSettings });
+        toast(`Saved settings for ${p.name}. The next request uses them.`);
+        await loadParticipants();
+      } catch (err) { toast(err.message, true); }
+    };
+    settingsGrid.appendChild(saveSettings);
+    settings.appendChild(settingsGrid);
+    card.appendChild(settings);
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'chip danger';
@@ -1817,9 +2129,14 @@ async function openContextEditor() {
     toast('Create or open a conversation first.');
     return;
   }
-  const data = await api.get(`/api/conversations/${state.currentConversationId}/context`);
+  // F02: capture originating identity BEFORE awaiting.
+  const conversationId = state.currentConversationId;
+  const navigation = state.navigation;
+  const data = await api.get(`/api/conversations/${conversationId}/context`);
+  if (state.currentConversationId !== conversationId || state.navigation !== navigation) return;
   contextEditorState = {
-    conversationId: state.currentConversationId,
+    conversationId,
+    navigation,
     revision: data.revision || 0,
     blocks: data.blocks || [],
     editing: true,
@@ -1894,11 +2211,19 @@ $('#contextEditorCancelBtn').onclick = () => {
 };
 $('#contextEditorSaveBtn').onclick = async () => {
   if (!contextEditorState.editing) return;
+  // F02: a stale editor never writes another conversation's revision.
+  if (state.currentConversationId !== contextEditorState.conversationId || state.navigation !== contextEditorState.navigation) {
+    toast('Navigation changed while the editor was open. Nothing was saved.', true);
+    contextEditorState.editing = false;
+    $('#contextEditorModal').classList.add('hidden');
+    return;
+  }
   const blocks = contextEditorState.blocks.map((b) => {
     const textarea = document.querySelector(`#contextBlockList textarea[data-block-id="${CSS.escape(b.id)}"]`);
     const checkbox = document.querySelector(`#contextBlockList input[data-field="included"][data-block-id="${CSS.escape(b.id)}"]`);
     return {
       id: b.id,
+      source: b.source,
       content: textarea ? textarea.value : undefined,
       included: checkbox ? checkbox.checked : b.included,
     };
@@ -1946,11 +2271,28 @@ async function renderAgents() {
     const card = document.createElement('div');
     card.className = 'card';
     const h = document.createElement('h3');
-    h.textContent = `${a.name} · ${a.forge_template_id} · ${a.status}`;
-    const sub = document.createElement('div');
-    sub.className = 'muted';
     const rings = a.ptcna_summary || {};
-    sub.textContent = `task: ${a.task || '—'} · PTCNA φ=${rings.phi?.n ?? '?'} ψ=${rings.psi?.n ?? '?'} ω=${rings.omega?.n ?? '?'} ml=${rings.memory_l?.n ?? '?'} ms=${rings.memory_s?.n ?? '?'} · module ${a.renderer || 'none'}`;
+    // F07: the selected renderer is a distinct presentation, not a label.
+    if (a.renderer === 'agent-stats') {
+      h.textContent = `${a.name} · stats module`;
+      card.appendChild(h);
+      const stats = document.createElement('div');
+      stats.className = 'stats-grid';
+      stats.innerHTML = `<div><strong>φ</strong><p>n=${rings.phi?.n ?? '?'} coherence=${rings.phi?.coherence ?? '?'}</p></div>
+        <div><strong>ψ</strong><p>n=${rings.psi?.n ?? '?'} coherence=${rings.psi?.coherence ?? '?'}</p></div>
+        <div><strong>ω</strong><p>n=${rings.omega?.n ?? '?'} coherence=${rings.omega?.coherence ?? '?'}</p></div>
+        <div><strong>memory_l</strong><p>n=${rings.memory_l?.n ?? '?'} hub=${rings.memory_l?.hub_avg ?? '?'}</p></div>
+        <div><strong>memory_s</strong><p>n=${rings.memory_s?.n ?? '?'}</p></div>
+        <div><strong>module</strong><p>${escapeHtml(a.renderer || 'none')} · instance ${escapeHtml(a.module_id || '—').slice(0, 8)}</p></div>`;
+      card.appendChild(stats);
+    } else {
+      h.textContent = `${a.name} · ${a.forge_template_id} · ${a.status}`;
+      card.appendChild(h);
+      const sub = document.createElement('div');
+      sub.className = 'muted';
+      sub.textContent = `task: ${a.task || '—'} · PTCNA φ=${rings.phi?.n ?? '?'} ψ=${rings.psi?.n ?? '?'} ω=${rings.omega?.n ?? '?'} ml=${rings.memory_l?.n ?? '?'} ms=${rings.memory_s?.n ?? '?'} · module ${a.renderer || 'none'}`;
+      card.appendChild(sub);
+    }
     const row = document.createElement('div');
     row.className = 'row model-row';
     const open = document.createElement('button');
@@ -1999,7 +2341,7 @@ async function renderAgents() {
     pre.className = 'context-preview';
     pre.textContent = `ORIGINAL (${a.original_definition?.source || 'archive'}):\n${a.original_definition?.system_prompt || ''}\n\nEFFECTIVE:\n${a.effective_instructions || ''}`;
     orig.append(sum, pre);
-    card.append(h, sub, row, orig);
+    card.append(row, orig);
     box.appendChild(card);
   }
 }
@@ -2038,7 +2380,13 @@ async function loadSystem() {
   tabs.forEach((t) => t.classList.toggle('active', t.dataset.sysview === systemState.tab));
   const states = [...new Set(d.objects.map((o) => o.state))];
   const sf = $('#systemStateFilters');
-  sf.innerHTML = '<button class="chip" data-state="">All</button>';
+  sf.innerHTML = '';
+  const allStates = document.createElement('button');
+  allStates.className = 'chip' + (systemState.state === null ? ' active' : '');
+  allStates.textContent = 'All';
+  allStates.dataset.state = '';
+  allStates.onclick = () => { systemState.state = null; loadSystem(); };
+  sf.appendChild(allStates);
   for (const st of states) {
     const b = document.createElement('button');
     b.className = 'chip' + (systemState.state === st ? ' active' : '');
@@ -2049,7 +2397,13 @@ async function loadSystem() {
   }
   const cats = [...new Set(d.objects.flatMap((o) => o.categories))].sort();
   const cf = $('#systemCategoryFilters');
-  cf.innerHTML = '<button class="chip" data-cat="">All categories</button>';
+  cf.innerHTML = '';
+  const allCats = document.createElement('button');
+  allCats.className = 'chip' + (systemState.category === null ? ' active' : '');
+  allCats.textContent = 'All categories';
+  allCats.dataset.cat = '';
+  allCats.onclick = () => { systemState.category = null; loadSystem(); };
+  cf.appendChild(allCats);
   for (const c of cats) {
     const b = document.createElement('button');
     b.className = 'chip' + (systemState.category === c ? ' active' : '');
@@ -2087,7 +2441,8 @@ function showSystemDetail(id) {
     <h3>${escapeHtml(o.label)} <span class="muted">(${escapeHtml(o.id)})</span></h3>
     <p>${escapeHtml(o.description)}</p>
     <p class="muted">kind: ${escapeHtml(o.kind)} · categories: ${escapeHtml(o.categories.join(', '))} · state: ${escapeHtml(o.state)} · source: ${escapeHtml(o.source)}</p>
-    <p class="muted">freshness: ${escapeHtml(systemState.data.provenance.buildCommit)} · reliability: F2 (directly retrieved, internally consistent) · credibility: ${o.state === 'working' ? '2 (probably true; deployed behavior observed)' : '6 (cannot be judged; recorded gap)'}</p>
+    <p class="muted">freshness: ${escapeHtml(systemState.data.provenance.buildCommit)} · reliability: ${escapeHtml(o.evidence?.reliability || 'F')} · credibility: ${escapeHtml(String(o.evidence?.credibility ?? 6))}</p>
+    <p class="muted">${escapeHtml(o.evidence?.basis || 'Source declaration; no runtime observation recorded for this object.')}</p>
     <h4>Next steps</h4>
     <div class="next-cols">
       <div><strong>Minimal</strong><p>${escapeHtml(o.next.minimal)}</p></div>
@@ -2191,7 +2546,7 @@ function renderSystemMain() {
     const rows = d.knowledge.map((k) => `
       <div class="list-item">
         <span class="strong">${escapeHtml(k.item)}</span>
-        <span class="badge">${k.held ? 'held' : 'not held'}</span>
+        <span class="badge">${k.held === true ? 'held' : k.held === false ? 'not held' : 'unknown'}</span>
         <span>used in: ${escapeHtml(k.usedIn)}</span>
         <span class="muted">authority: ${escapeHtml(k.authority)}</span>
         <p class="muted">${escapeHtml(k.note)}</p>
@@ -2215,21 +2570,24 @@ $('#systemTabs').addEventListener('click', (e) => {
 // ---------- G14 AHBG view ----------
 async function loadAhbg() {
   const sel = $('#ahbgAgent');
-  if (!sel.options.length) {
-    const agents = await api.get('/api/agents');
-    sel.innerHTML = '';
-    for (const a of agents.agents) {
-      const opt = document.createElement('option');
-      opt.value = a.id;
-      opt.textContent = `${a.name} · ${a.forge_template_id} · ${a.status}`;
-      sel.appendChild(opt);
-    }
-    if (!sel.options.length) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = 'Create a Forge agent first';
-      sel.appendChild(opt);
-    }
+  // F11: refresh eligible agents on every entry; preserve a valid selection.
+  const previous = sel.value;
+  const agents = await api.get('/api/agents');
+  sel.innerHTML = '';
+  const eligible = (agents.agents || []).filter((a) => a.status !== 'retired');
+  for (const a of eligible) {
+    const opt = document.createElement('option');
+    opt.value = a.id;
+    opt.textContent = `${a.name} · ${a.forge_template_id} · ${a.status}`;
+    sel.appendChild(opt);
+  }
+  if (!eligible.length) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Create a Forge agent first';
+    sel.appendChild(opt);
+  } else if (previous && eligible.some((a) => a.id === previous)) {
+    sel.value = previous;
   }
   const box = $('#ahbgSessions');
   box.innerHTML = '';

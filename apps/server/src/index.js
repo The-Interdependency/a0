@@ -304,6 +304,16 @@ export async function start() {
     const { title, projectId, contextPolicy, archived } = req.body || {};
     const existing = await query('SELECT id FROM conversations WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
     if (!existing.rows.length) return res.status(404).json({ error: 'not_found', message: 'Conversation not found.' });
+    // F02: selected assistant answers must belong to THIS conversation.
+    if (contextPolicy && Array.isArray(contextPolicy.selectedMessageIds) && contextPolicy.selectedMessageIds.length) {
+      const owned = await query(
+        `SELECT COUNT(*)::int AS n FROM messages WHERE conversation_id = $1 AND id = ANY($2::uuid[])`,
+        [req.params.id, contextPolicy.selectedMessageIds],
+      );
+      if (owned.rows[0].n !== contextPolicy.selectedMessageIds.length) {
+        return res.status(400).json({ error: 'validation', message: 'One or more selected responses belong to another conversation.' });
+      }
+    }
     const { rows } = await query(
       `UPDATE conversations
           SET title = COALESCE($3, title),
@@ -326,7 +336,15 @@ export async function start() {
   // --- Participants --------------------------------------------------------------
   app.get('/api/participants', asyncRoute(async (req, res) => {
     const { rows } = await query('SELECT * FROM participants WHERE user_id = $1 ORDER BY created_at ASC', [req.user.id]);
-    res.json({ participants: rows });
+    // F04: attach the current capability view so the GUI can render supported
+    // controls and unavailable reasons from the actual catalogue.
+    res.json({
+      participants: rows.map((p) => ({
+        ...p,
+        capabilities: capabilitiesForModel(p.provider, p.model),
+        settings: p.settings || {},
+      })),
+    });
   }));
 
   app.post('/api/participants', asyncRoute(async (req, res) => {
@@ -986,22 +1004,42 @@ export async function start() {
     const releaseLock = async (status) => {
       await query(`UPDATE ahbg_sessions SET status = $2, updated_at = now() WHERE id = $1`, [s.id, status]);
     };
-    const obs = await ahbg.observe(s.game_session_id);
+    // F06: every preparation step after lock ownership releases the lock on
+    // failure. A failure before sidecar resolve means no effect was applied,
+    // so the session returns to ready for one valid retry.
+    let obs;
+    try {
+      obs = await ahbg.observe(s.game_session_id);
+    } catch (err) {
+      await releaseLock('ready');
+      return res.status(502).json({ error: 'ahbg_unavailable', message: err.message });
+    }
     const observationText = `AHBG_OBSERVATION ${JSON.stringify(obs.observation)}`;
-    const agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [s.agent_id, req.user.id]);
-    if (!agent.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent not found.' });
-    const participant = await query('SELECT * FROM participants WHERE id = $1 AND user_id = $2', [agent.rows[0].participant_id, req.user.id]);
-    if (!participant.rows.length) return res.status(404).json({ error: 'not_found', message: 'Agent participant not found.' });
-    // Assemble the frozen context and append the observation as the turn input.
-    const rev = await latestRevision(agent.rows[0].conversation_id, req.user.id);
-    const assembled = await assembleBlocks((rev?.blocks || []), {});
-    const snapshot = { ...assembled, messages: [...assembled.messages, { id: crypto.randomUUID(), role: 'user', content: AHBG_PROTOCOL_BOOST + '\n\n' + observationText, attachments: [] }] };
+    let agent;
+    try {
+      agent = await query('SELECT * FROM agents WHERE id = $1 AND user_id = $2', [s.agent_id, req.user.id]);
+      if (!agent.rows.length) throw Object.assign(new Error('Agent not found.'), { status: 404 });
+    } catch (err) {
+      await releaseLock('ready');
+      return res.status(err.status || 500).json({ error: err.status === 404 ? 'not_found' : 'agent_error', message: err.message });
+    }
+    let participant;
+    try {
+      participant = await query('SELECT * FROM participants WHERE id = $1 AND user_id = $2', [agent.rows[0].participant_id, req.user.id]);
+      if (!participant.rows.length) throw Object.assign(new Error('Agent participant not found.'), { status: 404 });
+      const rev = await latestRevision(agent.rows[0].conversation_id, req.user.id);
+      const assembled = await assembleBlocks((rev?.blocks || []), {});
+      participant.snapshot = { ...assembled, messages: [...assembled.messages, { id: crypto.randomUUID(), role: 'user', content: AHBG_PROTOCOL_BOOST + '\n\n' + observationText, attachments: [] }] };
+    } catch (err) {
+      await releaseLock('ready');
+      return res.status(err.status || 500).json({ error: err.status === 404 ? 'not_found' : 'agent_error', message: err.message });
+    }
     let result;
     try {
       result = await dispatchParticipant({
         run: { id: crypto.randomUUID() },
         participant: participant.rows[0],
-        snapshot,
+        snapshot: participant.snapshot,
         connections: [],
         vault,
         signal: new AbortController().signal,
@@ -1091,6 +1129,20 @@ export async function start() {
     if (!conv.rows.length) return res.status(404).json({ error: 'not_found', message: 'Conversation not found.' });
     // Validate against the canonical block identity set for this conversation.
     const canonical = await buildBlocks(req.params.id, req.user.id);
+    // F05: agents bound to this conversation own editable agent:<id> blocks.
+    const agents = await query('SELECT id, name, effective_instructions FROM agents WHERE conversation_id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    for (const a of agents.rows) {
+      canonical.blocks.splice(1, 0, {
+        id: `agent:${a.id}`,
+        type: 'agent',
+        source: `agent:${a.id}`,
+        label: `Agent instructions (${a.name})`,
+        content: a.effective_instructions || '',
+        editable: true,
+        included: true,
+        readonlyReason: null,
+      });
+    }
     const allowed = new Map(canonical.blocks.map((b) => [b.id, b]));
     const seen = new Set();
     for (const block of blocks) {
@@ -1102,6 +1154,11 @@ export async function start() {
       }
       seen.add(block.id);
       const original = allowed.get(block.id);
+      // F02: a block saved from another conversation's editor must not be
+      // accepted under this conversation's canonical identity.
+      if (block.source && original.source && block.source !== original.source) {
+        return res.status(400).json({ error: 'validation', message: `${block.id} source does not belong to this conversation.` });
+      }
       if (!original.editable && block.content !== undefined) {
         return res.status(400).json({ error: 'validation', message: `${block.id} is read-only (${original.readonlyReason || describeBlockType(original.type).readonlyReason}).` });
       }

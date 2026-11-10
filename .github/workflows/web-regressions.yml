@@ -11,7 +11,7 @@ permissions:
 jobs:
   mobile-chat:
     name: Mobile chat and provider history
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10 # Hang protection for fixtures; normal runtime is under a minute.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -27,7 +27,7 @@ jobs:
           A0_TEST_ARTIFACT_DIR: test-results
         run: |
           mkdir -p test-results
-          node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/browser.xml tests/frontend/browser.test.js
+          node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/browser.xml tests/frontend/browser.test.js tests/gui/browser.test.js
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
