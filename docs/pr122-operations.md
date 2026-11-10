@@ -4,7 +4,7 @@ GPT generated; context, prompt Erin Spencer. Prepared 2026-11-10.
 
 **A0 merge authorized on 2026-11-10; deployment and companion merge remain held.**
 The authorized A0 merge must pass current-head/base admission after reconciling
-main's documentation-only GUI audit. The provider receipt records execution.
+main's documentation-only GUI audit and G15 inspector contract. The provider receipt records execution.
 These are proposals for the existing authenticated VM shell and phone terminal.
 They do not establish host access, current runtime versions, available sudo,
 off-VM recovery or a successful deployment. Do not run the fresh installer.
@@ -13,7 +13,8 @@ off-VM recovery or a successful deployment. Do not run the fresh installer.
 
 A0 repair input: `6bbcf0f06713319f4f6bbfeaed735197033c4465`.
 Erin approved A0 #122 at `c9775eba868fd70854b105be4ec0bf823cee9b54`.
-Main then advanced through the documentation-only GUI audit (#124), requiring
+Main then advanced through the documentation-only GUI audit (#124) and G15
+MSDMD inspector contract (#125), requiring
 a canonical-record conflict resolution. `A0_RELEASE` is the resulting exact PR
 head after renewed CI/review admission; executable code remains byte-identical
 to the approved head. This reconciliation introduces no deployment authority.
@@ -21,7 +22,7 @@ The commit containing this document is its published output identity; inspect
 `git rev-parse HEAD`, never infer it from a moving branch name.
 
 Companion release: `46ba3e680c21434dd03e79c0cbf900881829701e`.
-Inspected current main bases: A0 `1ff211d309a42c69c4efca9ec4b1d4da4dd5ad28`,
+Inspected current main bases: A0 `d4f43edfdee0f8ce41f8bfdbe4d7d5a56ef38f4e`,
 skill-lib `8ee77a6630379e48844350d8666515389b94f4c8`.
 
 **Current admission:** A0's repaired branch incorporates current main. Companion

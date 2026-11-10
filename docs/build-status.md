@@ -13,7 +13,7 @@ VM deployment and the companion merge remain held for separate approval.**
 | Participant | Exact inspected input / role |
 | --- | --- |
 | A0 PR #122 | `6bbcf0f06713319f4f6bbfeaed735197033c4465`; branch `codex/a0-openbao-site-20261108`; first correction `c1a83ea614e1435bc8381a8c9be4b2d82cfe99e8`; current correction is the commit containing this record |
-| A0 current main integration base | `1ff211d309a42c69c4efca9ec4b1d4da4dd5ad28`; preserves System/AHBG and the subsequent GUI audit/handoff |
+| A0 current main integration base | `d4f43edfdee0f8ce41f8bfdbe4d7d5a56ef38f4e`; preserves System/AHBG, the GUI audit and G15 MSDMD inspector contract |
 | skill-lib PR #137 | `46ba3e680c21434dd03e79c0cbf900881829701e`; unchanged compatibility peer; owns `tools/ai.sh` and `tools/a0_vault.py` |
 | Build doctrine used / current recheck | Implementation used `6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57`; current main rechecked at `8ee77a6630379e48844350d8666515389b94f4c8` |
 | Private Site consumer | `7bbe73ba4e5e0ea99dd4f7e293eea309c77cfd0d`; local source identity verified; current hosted release not reverified here |
@@ -88,7 +88,9 @@ The PR branch incorporates those changes without changing their owning code;
 the only conflict was this canonical record. Both `/api/reliability` and
 `/api/system` remain present. After merge authorization, main advanced again to
 `1ff211d309a42c69c4efca9ec4b1d4da4dd5ad28` through the documentation-only
-GUI audit publication (#124). This reconciliation preserves that packet byte for
+GUI audit publication (#124), then to
+`d4f43edfdee0f8ce41f8bfdbe4d7d5a56ef38f4e` through the G15 MSDMD inspector
+contract (#125). This reconciliation preserves the latest packet byte for
 byte and combines its audit continuation with the vault record. Application,
 operations, dependency, test and CI files remain identical to the approved
 `c9775eba868fd70854b105be4ec0bf823cee9b54` head. Main was not changed by this
@@ -200,6 +202,12 @@ Next: repair F01/F02 context integrity first, then follow the handoff queue and 
 The GUI audit findings belong to the inherited application baseline and its
 separate repair queue. Merging the vault corrections does not close those
 findings or authorize deployment.
+
+## GUI self-description requirement — G15 (2026-11-10)
+
+The owner requires a place in the GUI to display its own MSDMD. [GUI-MSDMD.md](handoffs/deepseek-gui/GUI-MSDMD.md) specifies About this interface within About & harness, a current-view entry into the same inspector, source-owned schema-2 metadata, provenance/coverage/hmmm, and GM01–GM08 acceptance. The active handoff now covers G01–G15; the original fourteen-finding audit and G01–G14 reference graphic retain their historical scope. F01/F02 remain the first repairs.
+
+This update records the display contract and refreshes the packet. Metadata collection/delivery, the actual inspector and its acceptance remain implementation work. Inspection must preserve conversation/run state and keep GUI metadata separate from runtime harness/prompt content.
 
 hmmm: companion #137 generated collection conflict, companion/deployment approval,
 GUI context-integrity repairs, VM access/current inventory, off-VM recovery,

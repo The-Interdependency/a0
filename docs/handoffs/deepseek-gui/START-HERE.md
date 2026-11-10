@@ -6,17 +6,21 @@ GPT generated; context, prompt Erin Spencer.
 
 ## Assignment
 
-Repair the confirmed GUI failures, then complete G01–G14 through the existing authenticated VM website. Read this file and [the November 10 audit](AUDIT-2026-11-10.md) before implementation. The audit owns finding details, reproductions, source locations and acceptance checks; this entry point owns repair order and completion. Preserve working behavior and user data. The supplied graphic is a requirements map; the source contracts govern implementation.
+Repair the confirmed GUI failures, then complete G01–G15 through the existing authenticated VM website. Read this file, [the November 10 audit](AUDIT-2026-11-10.md) and the new [GUI self-description requirement](GUI-MSDMD.md) before implementation. The audit owns finding details, reproductions, source locations and acceptance checks; this entry point owns repair order and completion. Preserve working behavior and user data. The supplied graphic is a requirements map; the source contracts govern implementation.
 
 **FROM:** deployed successor commit `de66778dd1d9073f6a8b3d532e73514868f94e3c`, with working mobile regression coverage, implemented System/AHBG screens, and fourteen confirmed application/integration/evidence/CI findings. Two context-integrity defects have first priority.
 
 **TO:** a coherent phone-first workspace for system inspection, conversations, model comparison, context editing, retained agents, temporary modules and AHBG, with truthful evidence and durable state.
 
-**DONE WHEN:** the scoped flows work on the deployed release; each G01–G14 requirement and audit finding has a source/implementation/behavioral-evidence link; served assets match the candidate; and actual-phone acceptance is recorded. **FAILS IF:** the latest prompt is omitted, excluded answers still enter context, a delayed dialog changes another conversation, a control discards its chosen model or setting, state/history is lost, a module swap is only a label, or fixture/marker/merge evidence is presented as deployed behavior. Complete unblocked work; attach each external blocker to its exact gate.
+**DONE WHEN:** the scoped flows work on the deployed release; each G01–G15 requirement and audit finding has a source/implementation/behavioral-evidence link; served assets match the candidate; and actual-phone acceptance is recorded. **FAILS IF:** the latest prompt is omitted, excluded answers still enter context, a delayed dialog changes another conversation, a control discards its chosen model or setting, state/history is lost, a module swap is only a label, or fixture/marker/merge evidence is presented as deployed behavior. Complete unblocked work; attach each external blocker to its exact gate.
+
+## Owner addition — GUI metadata display
+
+G15 adds **About this interface (MSDMD)** to About & harness, with **About this view** opening the same inspector for the current view. Display the GUI’s source-owned living specification, structured metadata, provenance, coverage and hmmm without altering the chat or executing inspected content. [GUI-MSDMD.md](GUI-MSDMD.md) owns placement, source/collection boundaries and GM01–GM08 acceptance. This is a new requirement after the audit; the audit still has fourteen findings.
 
 ## Verified starting point
 
-The November 10 audit inspected GitHub main at `de66778dd1d9073f6a8b3d532e73514868f94e3c` (tree `8e83504f18173b56a4addcdcf8b4ef7b707c7eba`). Main still pointed there when this handoff update began. Resolve current main and the VM checkout again before editing; these identities are evidence, not reset instructions.
+The November 10 audit inspected GitHub main at `de66778dd1d9073f6a8b3d532e73514868f94e3c` (tree `8e83504f18173b56a4addcdcf8b4ef7b707c7eba`). The audit packet was subsequently published through PR #124 at `1ff211d309a42c69c4efca9ec4b1d4da4dd5ad28`; this G15 amendment starts from that publication. The deployed-source observation remains bound to the audited commit. Resolve current main and the VM checkout again before editing; these identities are evidence, not reset instructions.
 
 - **Website:** https://35.212.252.101.nip.io/. Around 09:34 UTC / 01:34 PST, public health reported the audited commit and the served HTML, JavaScript, CSS and Markdown renderer matched the checkout byte for byte. The signed-out live interface was observed. Backend source identity was reported by health; authenticated production flows were not exercised.
 - **Fresh local baseline:** 40 browser tests, 13 Markdown assertions and 17 Responses-adapter assertions passed on the audited source, using isolated API/speech/provider fixtures. Preserve those working repairs. [PR #121](https://github.com/The-Interdependency/a0/pull/121) is merged; its old five unresolved risks must not be reintroduced as current absence.
@@ -27,7 +31,7 @@ The November 10 audit inspected GitHub main at `de66778dd1d9073f6a8b3d532e735148
 
 ## Repair order — audit findings F01–F14
 
-These IDs belong to [AUDIT-2026-11-10.md](AUDIT-2026-11-10.md), not earlier issue-numbered finding ledgers. Keep the full G01–G14 scope after closing this queue.
+These IDs belong to [AUDIT-2026-11-10.md](AUDIT-2026-11-10.md), not earlier issue-numbered finding ledgers. Keep the full G01–G15 scope after closing this queue.
 
 | Order | Finding | Required result |
 | --- | --- | --- |
@@ -75,6 +79,7 @@ The October 29 instruction replaces Replit hosting and mandatory native APK deli
 | G12 Retained agents | Reuse actual PTCNA memory and Phi/Psi/Omega cores, and Forge's eight templates: sage, trickster, paladin, druid, engineer, diplomat, hacker, captain. Preserve exact archived originals with provenance and separately editable effective instructions. Bind provider/context/tools/budget and real numerical state to each instance. Exclude Jury, Bandit, Meta-13, and ZFAE from active registration/routing. |
 | G13 Temporary modules | Spawn creates and displays the instance-bound stats/chat module. Mount, swap, reconnect, and retire preserve agent identity, state, history and pending work. Invalid candidates retain the working renderer. Presentation changes must not spawn another engine or replay effects. |
 | G14 AHBG | Operate the actual retained A0 agent through the producer-owned game/runtime and successor adapter. Expose session/agent controls, implemented mechanics, plan validation, turn/result history and replay. Preserve sessions across module swaps; show unsupported/unverified mechanics explicitly. |
+| G15 GUI self-description | Provide About this interface (MSDMD) and a current-view entry into the same read-only inspector. Show source-owned living specs, typed/structured metadata, provenance, evidence scope, reader coverage/conflicts and hmmm. Preserve workflow state and disclose only authorized metadata. See [GUI-MSDMD.md](GUI-MSDMD.md) and GM01–GM08. |
 
 For **every supported option**, record: label → supported values → default → effective value → scope → persistence/reset → validation → actual request/state effect → unavailable reason. The complete options inventory is included. Do not expose controls that are ignored or silently coerce incompatible values.
 
@@ -84,7 +89,7 @@ The System view may show source-backed application relations while UCNS mapping 
 
 1. **Reconcile current source and deployment.** Inspect authorized VM access, checkout/dirty state, deployed revision, served assets, reviews and checks. Preserve newer work and unrelated services. Use current source as the integration base and the pinned audit revision for reproducing historical witnesses.
 2. **Close F01/F02 first.** Turn their defect witnesses into acceptance tests that assert correct dispatch contents and conversation binding. Reconcile context-policy and explicit-editor precedence without discarding edits or history. Verify both dialogs, not just general history navigation.
-3. **Complete connected flows.** Work through the remaining repair queue, then re-evaluate every G01–G14 requirement. Keep apps/web and the existing run/context/agent/module owners. Use declared schemas/capabilities; a historical React prototype does not require a framework rewrite.
+3. **Complete connected flows.** Work through the remaining repair queue, implement the G15 metadata inspector and GM01–GM08 checks, then re-evaluate every G01–G15 requirement. Keep apps/web and the existing run/context/agent/module owners. Use declared schemas/capabilities; a historical React prototype does not require a framework rewrite.
 4. **Verify effects and failures.** Retain the 40-test mobile baseline. Add isolated regressions for the newly exposed gaps, including a no-run-dispatched assertion for System intention selection, failed AHBG preparation recovery, actual renderer changes and settings-to-request effects. Repair current CI setup and evidence overclaims at their owners. Inspect every production-directed runner before use.
 5. **Release and hand over.** Update source-owned specs, work graph/pins when affected, coverage, acceptance, release and build-status records. Publish through the permitted workflow; merge/deploy within existing authority. Verify candidate-bound served assets, supported rollback and actual Android flows. Keep any external blocker attached to its precise gate.
 
@@ -100,6 +105,7 @@ Resource limits are part of execution: preflight dependencies/quotas, reuse pinn
 - **Agents and modules:** two agents remain isolated; effective instruction edits save and dispatch; hot swap/reconnect/invalid candidates preserve state and show a real presentation change without engine replay.
 - **AHBG:** transient observation/preparation errors recover; rejected/racing turns do not mutate twice; replay and module changes preserve the session. Identify the actual retained agent and producer mechanics exercised.
 - **Inspection is truthful:** missing/stale observations remain unknown or dated; failed refresh retains the last observation with age/error. Intention selection dispatches no work. Unknown personal-data coverage cannot become a claim of absence.
+- **GUI self-description:** native source facts reach the same inspector from global/current-view entry points; unsupported extraction and wrong-revision evidence remain visible; viewing metadata leaves chat/run state intact. Execute GM01–GM08.
 - **Usability:** normal text meets at least 4.5:1 contrast. Actual Android login, keyboard, attachments, voice, app-return/history, comparison, agent/module and AHBG flows are observed. Emulation and fake speech do not close handset gates.
 
 The existing isolated entry points are:
@@ -114,11 +120,11 @@ git diff --check
 
 Inspect scripts first and reuse supported installed dependencies/browser artifacts. The [audit reproduction bundle](evidence/2026-11-10/README.md) provides portable commands for the new witnesses. **Do not add defect-recognition assertions as green product gates:** invert/replace them with expected-behavior assertions when repairing. Root npm test invokes the separate production-directed acceptance runner; it is not an offline synonym. Inspect target, credentials, writes and cleanup before authorized integration execution.
 
-Return **CHANGED / PROOF / NEXT / hmmm**: working URL; exact implementation, merge and deployed identities; findings and G01–G14 outcomes with executable evidence; operating/rollback guidance; and precise remaining actions. A documentation/ZIP publication does not repair the app.
+Return **CHANGED / PROOF / NEXT / hmmm**: working URL; exact implementation, merge and deployed identities; findings and G01–G15 outcomes with executable evidence; operating/rollback guidance; and precise remaining actions. A documentation/ZIP publication does not repair the app.
 
 ## Packet usage and integrity
 
-Give DeepSeek the GitHub URL of this file and ask it to read the linked audit and evidence README. The [current ZIP](https://github.com/The-Interdependency/a0/raw/main/docs/handoffs/deepseek-gui/a0-gui-deepseek-handoff.zip) is the same packet for offline use. The original requirements graphic and dated sources remain intact; historical copied paths resolve in their original repository context. Use current source-owned contracts through the live links above.
+Give DeepSeek the GitHub URL of this file and ask it to read the linked audit and evidence README. The [current ZIP](https://github.com/The-Interdependency/a0/raw/main/docs/handoffs/deepseek-gui/a0-gui-deepseek-handoff.zip) is the same packet for offline use. The original requirements graphic maps G01–G14; the later G15 requirement is in GUI-MSDMD.md. The graphic and dated sources retain their original scope; historical copied paths resolve in their original repository context. Use current source-owned contracts through the live links above.
 
 From this directory, run python3 build-packet.py --check to verify the manifest, ZIP bytes and receipt. Maintainers update authored content, then run python3 build-packet.py --write and --check before publishing the whole packet atomically. SHA256SUMS covers authored packet content; the ZIP contains those files plus the manifest. PACKET-RECEIPT.json is outside the ZIP to avoid a self-reference and records exact inputs, generator identity and output hashes.
 
