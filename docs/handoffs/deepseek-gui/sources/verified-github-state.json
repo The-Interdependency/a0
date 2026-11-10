@@ -1,0 +1,73 @@
+{
+  "observed_at_utc": "2026-11-05T01:43:14Z",
+  "observed_at_local": "2026-11-04T17:43:14-08:00",
+  "timezone": "America/Los_Angeles",
+  "repository": "The-Interdependency/a0",
+  "main_sha": "4656cd3f841b896ad3a6a104a5c9caca2031ca51",
+  "skill_lib_sha": "6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57",
+  "pr": {
+    "number": 121,
+    "url": "https://github.com/The-Interdependency/a0/pull/121",
+    "state": "closed",
+    "merged": true,
+    "merged_at": "2026-11-04T22:47:35Z",
+    "merge_commit_sha": "4656cd3f841b896ad3a6a104a5c9caca2031ca51",
+    "head_sha": "4656cd3f841b896ad3a6a104a5c9caca2031ca51",
+    "body_warning": "PR description still says not merged; structured merged metadata supersedes that statement. Deployment not checked by this handoff."
+  },
+  "reviews": {
+    "count": 10,
+    "resolved": 10,
+    "unresolved": []
+  },
+  "ci": {
+    "url": "https://github.com/The-Interdependency/a0/actions/runs/41780891487",
+    "name": "Web regressions",
+    "event": "pull_request",
+    "head_sha": "4656cd3f841b896ad3a6a104a5c9caca2031ca51",
+    "attempt": 1,
+    "status": "completed",
+    "conclusion": "success",
+    "note": "API confirms run success. Counts and synthetic merge identity are reported by PR text; tests were not rerun here."
+  },
+  "source_files": [
+    {
+      "path": "AGENTS.md",
+      "blob_sha": "5dc0cee627cee16fc5bba3458499ed336e4b7bbb",
+      "commit": "4656cd3f841b896ad3a6a104a5c9caca2031ca51"
+    },
+    {
+      "path": "docs/a0-replacement-spec.md",
+      "blob_sha": "a0909b0413e2b9bbced8c385d5b361f097e493aa",
+      "commit": "4656cd3f841b896ad3a6a104a5c9caca2031ca51"
+    },
+    {
+      "path": "docs/deep-code-vm-handoff.md",
+      "blob_sha": "f400c658240163be954e547875ee6eabeae39c8b",
+      "commit": "4656cd3f841b896ad3a6a104a5c9caca2031ca51"
+    },
+    {
+      "path": "docs/build-status.md",
+      "blob_sha": "3fc92355a688a3b8f61565fd7e8260a60caf4f47",
+      "commit": "4656cd3f841b896ad3a6a104a5c9caca2031ca51"
+    },
+    {
+      "path": "docs/mobile-chat-repair.md",
+      "blob_sha": "d1c67e9087f498f59f72c7c0047a39b88ac2a315",
+      "commit": "4656cd3f841b896ad3a6a104a5c9caca2031ca51"
+    },
+    {
+      "path": "docs/acceptance.md",
+      "blob_sha": "3711ed792bddb9ea8109ca7f6deaf096963a82b2",
+      "commit": "4656cd3f841b896ad3a6a104a5c9caca2031ca51"
+    },
+    {
+      "path": "package.json",
+      "blob_sha": "2b2c978c08610fe2e4ee98f0967bd4da1e117100",
+      "commit": "4656cd3f841b896ad3a6a104a5c9caca2031ca51"
+    }
+  ],
+  "deployment": "NOT VERIFIED in this handoff",
+  "phone_acceptance": "NOT VERIFIED in this handoff"
+}
+
