@@ -15,11 +15,11 @@ before(async () => {
   server = http.createServer(async (req, res) => {
     if (streamHandlers.has(req.url)) return streamHandlers.get(req.url)(res);
     const name = req.url === '/' ? 'index.html' : req.url.slice(1).split('?')[0];
-    if (!['index.html', 'app.js', 'markdown.js', 'styles.css', 'manifest.json'].includes(name)) {
+    if (!['index.html', 'app.js', 'markdown.js', 'styles.css', 'gui-msdmd.mjs', 'manifest.json'].includes(name)) {
       res.writeHead(404).end(); return;
     }
     const body = await readFile(process.env.A0_TEST_WEB_ROOT ? join(process.env.A0_TEST_WEB_ROOT, name) : new URL(`../../apps/web/${name}`, import.meta.url));
-    res.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.html') ? 'text/html' : 'application/json');
+    res.setHeader('Content-Type', name.endsWith('.js') || name.endsWith('.mjs') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.html') ? 'text/html' : 'application/json');
     res.end(body);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
