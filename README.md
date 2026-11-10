@@ -40,6 +40,10 @@ documented environment; it is not the isolated regression command above.
 
 The old A0 implementation is deprecated at the owner's request and retained under archive/ for historical inspection and reproducibility. Its retirement does not prohibit building the fresh successor defined by the new specification. This repository remains active.
 
+## DeepSeek GUI handoff
+
+Give DeepSeek [the GUI handoff](docs/handoffs/deepseek-gui/README.md) to complete the ChatGPT-style phone interface. The packet includes the full G01–G14 requirements, reference graphic, dated source excerpts, and verification instructions. Continue the current implementation and recheck the deployed revision before changing it.
+
 ## Builder and VM handoff
 
 Give the builder [the Deep Code handoff](docs/deep-code-vm-handoff.md). Read [AGENTS.md](AGENTS.md) and [the spec](docs/a0-replacement-spec.md); the [source work graph](docs/work-graphs/a0-replacement-spec.json) records the inspected inputs. The assignment continues through a working VM deployment and acceptance, with exact external blockers recorded honestly.
@@ -90,4 +94,3 @@ Both results must equal the preserved tree identity above. Existing commit-pinne
 A source archive, GitHub's read-only repository archive flag, and hosted runtime shutdown are separate states. This documentation records source preservation and deprecation only. Database contents, runtime uploads, private checkpoints, credentials, and hosted configuration are outside the tracked-source preservation claim. Keep independent research repositories, shared hosts, and their dependencies intact.
 
 **hmmm:** Replacement implementation and deployment acceptance remain unfinished. Provider-level legacy runtime/data-retention receipts remain separate from this source handoff; repository read-only archival is not a requirement for the active successor workspace.
-

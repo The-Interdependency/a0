@@ -15,7 +15,7 @@ The commit containing this document is its published output identity; inspect
 `git rev-parse HEAD`, never infer it from a moving branch name.
 
 Companion release: `46ba3e680c21434dd03e79c0cbf900881829701e`.
-Inspected main bases: A0 `4656cd3f841b896ad3a6a104a5c9caca2031ca51`,
+Inspected current main bases: A0 `de66778dd1d9073f6a8b3d532e73514868f94e3c`,
 skill-lib `6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57`.
 
 Immediately before merging, re-read both head/base pairs, checks, effective

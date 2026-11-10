@@ -39,7 +39,9 @@
           <button class="nav-btn" data-view="participants">🧩 Participants</button>
           <button class="nav-btn" data-view="mcp">🔌 MCP tools</button>
           <button class="nav-btn" data-view="agents">⚒️ Forge agents</button>
+          <button class="nav-btn" data-view="ahbg">🎲 AHBG</button>
           <button class="nav-btn" data-view="projects">📁 Projects</button>
+          <button class="nav-btn" data-view="system">🗺️ System</button>
           <button class="nav-btn" data-view="about">ℹ️ About &amp; harness</button>
         </div>
       </nav>
@@ -166,6 +168,36 @@
             <button class="primary-btn" type="submit">Create</button>
           </form>
           <div id="projectCards" class="cards"></div>
+        </section>
+
+        <!-- AHBG -->
+        <section id="view-ahbg" class="view hidden">
+          <h2>AHBG sessions</h2>
+          <p class="muted">Operate the retained A0 agent through the producer-owned Stack game engine. Sessions are owner-scoped; turns are validated before they mutate the board.</p>
+          <form id="ahbgForm" class="inline-form model-row">
+            <select id="ahbgAgent" class="select"></select>
+            <label>Seed <input id="ahbgSeed" type="number" value="1" class="narrow"></label>
+            <label>Turns <input id="ahbgTurns" type="number" value="8" class="narrow"></label>
+            <button class="primary-btn" type="submit">Create session</button>
+          </form>
+          <div id="ahbgSessions" class="cards"></div>
+          <div id="ahbgDetail" class="card hidden"></div>
+        </section>
+
+        <!-- System -->
+        <section id="view-system" class="view hidden">
+          <h2>System explorer</h2>
+          <p class="muted">Tappable successor inventory: application relations only — no UCNS geometry is claimed. Selecting an intention never executes it.</p>
+          <div class="chip-row" id="systemTabs" role="tablist">
+            <button class="chip active" data-sysview="narrative">Narrative</button>
+            <button class="chip" data-sysview="relations">Relations</button>
+            <button class="chip" data-sysview="attention">Attention</button>
+            <button class="chip" data-sysview="knowledge">About you</button>
+          </div>
+          <div class="chip-row" id="systemStateFilters" role="group" aria-label="State filter"></div>
+          <div class="chip-row" id="systemCategoryFilters" role="group" aria-label="Category filter"></div>
+          <div id="systemMain" class="system-main"></div>
+          <div id="systemDetail" class="card hidden"></div>
         </section>
 
         <!-- About -->

@@ -45,6 +45,7 @@ import {
 import { FORGE_TEMPLATES, CORES, RETAINED_SOURCE, forgeTemplate, effectivePromptFor } from './retained/definitions.js';
 import { ptcna, ringSummary } from './ptcna.js';
 import { ahbg, AHBG_PROTOCOL_BOOST, parsePlanPayload } from './ahbg.js';
+import { systemPayload } from './system.js';
 import {
   insertRun,
   dispatchParticipant,
@@ -879,6 +880,16 @@ export async function start() {
     res.json({ ok: true, status: 'retired' });
   }));
 
+  // --- G02/G03/G04 system inventory -------------------------------------------------
+  app.get('/api/system', asyncRoute(async (req, res) => {
+    let build = null;
+    try {
+      const raw = await fs.promises.readFile('/opt/a0/build-info.json', 'utf8');
+      build = JSON.parse(raw);
+    } catch { build = null; }
+    res.json(systemPayload(build?.commit || 'unrecorded'));
+  }));
+
   // --- OC01 options inventory ------------------------------------------------------
   app.get('/api/options', asyncRoute(async (req, res) => {
     const options = [
@@ -904,6 +915,9 @@ export async function start() {
       { area: 'Projects', label: 'project association/instructions', supportedValues: 'project id; instructions text', default: 'no project', scope: 'conversation/project', persistence: 'projects/conversations', validation: 'owner', effect: 'project block in context', owner: 'index.js/contexts.js' },
       { area: 'Forge/retained agents', label: 'template', supportedValues: 'eight exact Forge ids', default: 'sage', scope: 'agent', persistence: 'agents.original_definition', validation: 'forgeTemplate', effect: 'effective instructions + module', owner: 'retained/definitions.js' },
       { area: 'Forge/retained agents', label: 'ptcna ops', supportedValues: ['infer', 'fork', 'absorb', 'converge'], default: 'infer', scope: 'agent', persistence: 'agents.ptcna_summary', validation: 'producer sidecar', effect: 'numerical ring state', owner: 'ptcna.js/sidecar' },
+      { area: 'Temporary modules/AHBG', label: 'module renderer', supportedValues: ['agent-panel', 'agent-stats'], default: 'agent-panel', scope: 'agent module', persistence: 'agent_modules', validation: 'enum', effect: 'displayed module view', owner: 'index.js/app.js' },
+      { area: 'Temporary modules/AHBG', label: 'AHBG session', supportedValues: 'owner agent + seed + turns', default: 'seed 1 / 8 turns', scope: 'session', persistence: 'ahbg_sessions', validation: 'producer sidecar', effect: 'board and turn records', owner: 'ahbg.js/sidecar' },
+      { area: 'Temporary modules/AHBG', label: 'AHBG mechanics', supportedValues: 'matrix entries with status', default: 'implemented/NOT RUN', scope: 'session', persistence: 'none (engine)', validation: 'producer parse_plan_payload', effect: 'displayed mechanic coverage', owner: 'ahbg.js/sidecar' },
     ];
     res.json({ options });
   }));

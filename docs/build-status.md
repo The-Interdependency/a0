@@ -11,8 +11,8 @@ deployment are held for Erin's explicit approval.**
 
 | Participant | Exact inspected input / role |
 | --- | --- |
-| A0 PR #122 | `6bbcf0f06713319f4f6bbfeaed735197033c4465`; branch `codex/a0-openbao-site-20261108`; corrections are the commit containing this record |
-| A0 main base | `4656cd3f841b896ad3a6a104a5c9caca2031ca51` |
+| A0 PR #122 | `6bbcf0f06713319f4f6bbfeaed735197033c4465`; branch `codex/a0-openbao-site-20261108`; first correction `c1a83ea614e1435bc8381a8c9be4b2d82cfe99e8`; current correction is the commit containing this record |
+| A0 current main integration base | `de66778dd1d9073f6a8b3d532e73514868f94e3c`; preserves the new System/AHBG GUI work |
 | skill-lib PR #137 | `46ba3e680c21434dd03e79c0cbf900881829701e`; unchanged compatibility peer; owns `tools/ai.sh` and `tools/a0_vault.py` |
 | Current build doctrine / skill-lib main | `6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57` |
 | Private Site consumer | `7bbe73ba4e5e0ea99dd4f7e293eea309c77cfd0d`; local source identity verified; current hosted release not reverified here |
@@ -74,6 +74,26 @@ checks and unresolved threads at merge admission; old green results do not
 certify a new head. GitHub's conflicting advanced CodeQL workflow was removed
 in the input PR; default analysis remains active. Do not repeat the obsolete
 mobile-repair instruction to resolve that old configuration conflict.
+
+## Current-main reconciliation
+
+Main advanced from `4656cd3f841b896ad3a6a104a5c9caca2031ca51` to
+`de66778dd1d9073f6a8b3d532e73514868f94e3c` through GUI handoff publication
+`75e5d8905dad87b869f0880fd41435a8951e80a6` and System/AHBG implementation.
+The PR branch incorporates those changes without changing their owning code;
+the only conflict was this canonical record. Both `/api/reliability` and
+`/api/system` remain present. Main itself was not changed by this repair.
+
+The inherited GUI record reports 19 production-directed GUI checks passing at
+its original deployment. That is prior-author evidence, not a live result from
+this session. `tests/gui/run.js` targets production and was deliberately not
+executed. See [GUI coverage](gui-coverage.md) and the
+[GUI handoff](handoffs/deepseek-gui/START-HERE.md). Physical-phone gates remain
+open. The reconciled tree passed the same 30 offline assertions, 40 browser
+tests, 17 provisioning/recovery tests, 3 bridge tests and producer/launcher
+compatibility fixture. Syntax, unchanged-main file identities and the work-graph
+digest also passed. These repeated results replace pre-integration results for
+current-head source evidence.
 
 ## Deployment prerequisites and configuration transition
 
