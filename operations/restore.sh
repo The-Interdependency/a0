@@ -5,15 +5,33 @@
 # started against the restored store to prove the original canary is readable.
 # Usage: sudo operations/restore.sh <backup.tar.gz.gpg> [suffix]
 set -euo pipefail
+set +x # DB credentials below must never reach shell traces.
+umask 077
 
 BACKUP_FILE="${1:?usage: restore.sh <backup.tar.gz.gpg> [suffix]}"
 SUFFIX="${2:-restore}"
+[[ "${SUFFIX}" =~ ^[a-z][a-z0-9_]{0,31}$ ]] || { echo 'Invalid isolated restore suffix.' >&2; exit 1; }
+ADMIN="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/configure-vault.py"
+# Validate before decryption, SQL, media changes, or starting a vault process.
+python3 "${ADMIN}" --check-recovery
 KEY_FILE="/etc/a0/backup.key"
 SEAL_KEY="/etc/openbao/seal.key"
 WORK="$(mktemp -d /tmp/a0-restore.XXXXXX)"
+RESTORED_BAO_PID=""
+cleanup() {
+  if [[ -n "${RESTORED_BAO_PID}" ]]; then
+    kill "${RESTORED_BAO_PID}" 2>/dev/null || true
+    wait "${RESTORED_BAO_PID}" 2>/dev/null || true
+  fi
+  rm -rf -- "${WORK}"
+}
+trap cleanup EXIT
 APP_DB="a0app_${SUFFIX}"
 BAO_DB="openbao_${SUFFIX}"
 RESTORE_BAO_PORT="${RESTORE_BAO_PORT:-8203}"
+[[ "${RESTORE_BAO_PORT}" =~ ^[0-9]{4,5}$ ]] &&
+  (( 10#${RESTORE_BAO_PORT} >= 1024 && 10#${RESTORE_BAO_PORT} <= 65535 && 10#${RESTORE_BAO_PORT} != 8200 )) ||
+  { echo 'Invalid isolated restore port.' >&2; exit 1; }
 
 if [[ ! -f "${KEY_FILE}" ]]; then
   echo "Backup passphrase ${KEY_FILE} is missing; recovery requires the applicable current/historical keys." >&2
@@ -28,7 +46,7 @@ echo "[restore] decrypting and unpacking (GnuPG integrity check)…"
 gpg --batch --yes --pinentry-mode loopback --passphrase-file "${KEY_FILE}" \
   -o "${WORK}/backup.tar.gz" -d "${BACKUP_FILE}"
 tar -C "${WORK}" -xzf "${WORK}/backup.tar.gz"
-chmod -R a+rX "${WORK}"
+chmod -R go-rwx "${WORK}"
 
 echo "[restore] verifying embedded integrity manifest…"
 (cd "${WORK}" && sha256sum -c manifest.sha256)
@@ -39,9 +57,9 @@ sudo -u postgres createdb -O a0_app "${APP_DB}"
 sudo -u postgres createdb -O openbao "${BAO_DB}"
 
 echo "[restore] loading application database…"
-sudo -u postgres psql -v ON_ERROR_STOP=1 -d "${APP_DB}" -f "${WORK}/a0app.sql" >/dev/null
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d "${APP_DB}" < "${WORK}/a0app.sql" >/dev/null
 echo "[restore] loading OpenBao database…"
-sudo -u postgres psql -v ON_ERROR_STOP=1 -d "${BAO_DB}" -f "${WORK}/openbao.sql" >/dev/null
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d "${BAO_DB}" < "${WORK}/openbao.sql" >/dev/null
 echo "[restore] reassigning restored object ownership to application/vault roles…"
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d "${APP_DB}" <<'SQL' >/dev/null
 DO $$ DECLARE r RECORD; BEGIN
@@ -105,29 +123,20 @@ log_level     = "error"
 EOF
 chmod 640 "${RESTORE_BAO_CFG}"
 chown root:openbao "${RESTORE_BAO_CFG}"
+# Only the vault account can traverse for its config; dumps remain root-only.
+chown root:openbao "${WORK}"
+chmod 710 "${WORK}"
 sudo -u openbao /opt/openbao/openbao server -config="${RESTORE_BAO_CFG}" >"${WORK}/restored-bao.log" 2>&1 &
 RESTORED_BAO_PID=$!
-cleanup_bao() { kill "${RESTORED_BAO_PID}" 2>/dev/null || true; wait "${RESTORED_BAO_PID}" 2>/dev/null || true; }
-trap cleanup_bao EXIT
 for i in $(seq 1 20); do
   if curl -fsS "http://127.0.0.1:${RESTORE_BAO_PORT}/v1/sys/seal-status" >/dev/null 2>&1; then break; fi
   sleep 1
   if [[ $i -eq 20 ]]; then
-    echo "[restore] restored Bao did not become ready; log:" >&2
-    tail -20 "${WORK}/restored-bao.log" >&2
+    echo "[restore] restored Bao did not become ready; no private process output is logged." >&2
     exit 1
   fi
 done
-SEALED=$(curl -fsS "http://127.0.0.1:${RESTORE_BAO_PORT}/v1/sys/seal-status" | python3 -c 'import sys,json; print(json.load(sys.stdin)["sealed"])')
-ROOT_TOKEN="$(grep '^root_token=' /etc/openbao/init.json | cut -d= -f2)"
-CANARY=$(curl -fsS -H "X-Vault-Token: ${ROOT_TOKEN}" "http://127.0.0.1:${RESTORE_BAO_PORT}/v1/a0/data/backup-canary" | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"]["data"]["value"])' 2>/dev/null || echo MISSING)
-EXPECTED_CANARY=$(grep '^canary=' "${WORK}/canary.txt" | cut -d= -f2-)
-if [[ "${SEALED}" == "False" && "${CANARY}" == "${EXPECTED_CANARY}" && "${CANARY}" != "MISSING" ]]; then
-  echo "[restore] CANARY_OK: restored Bao unsealed and read original canary '${CANARY}'."
-else
-  echo "[restore] CANARY_FAIL: sealed=${SEALED} canary=${CANARY} expected=${EXPECTED_CANARY}" >&2
-  exit 1
-fi
+python3 "${ADMIN}" --restore-canary "${WORK}" --restore-port "${RESTORE_BAO_PORT}"
 
 echo "[restore] isolated restore complete. Clean up with:"
 echo "  sudo -u postgres dropdb ${APP_DB}; sudo -u postgres dropdb ${BAO_DB}; sudo rm -rf ${RESTORE_MEDIA}"

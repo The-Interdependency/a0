@@ -30,6 +30,10 @@ export const config = {
   // OpenBao (pinned The-Interdependency fork) HTTP API.
   baoAddr: env.BAO_ADDR || 'http://127.0.0.1:8200',
   baoToken: env.BAO_TOKEN || '',
+  baoTokenFile: env.BAO_TOKEN_FILE || '',
+  baoClusterId: env.BAO_CLUSTER_ID || '',
+  bridgeTokenFile: env.A0_BRIDGE_TOKEN_FILE || '',
+  bridgeSiteOrigin: env.A0_BRIDGE_SITE_ORIGIN || '',
   baoKvMount: env.BAO_KV_MOUNT || 'a0',
   baoFailClosed: true, // missing/wrong token or unavailable store refuses startup
 

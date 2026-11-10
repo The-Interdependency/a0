@@ -3,11 +3,11 @@
     "python": "3.12.14",
     "zlib": "1.3.2"
   },
-  "freshness_key_sha256": "fda45af900943d2a0651462e8f4c2e4bc39c71d389a54f98684b5eef98bd38a7",
+  "freshness_key_sha256": "d7206d1675734c5f6b1c82acadec81b4e63b87d446b71dc27417b51eda6e9932",
   "generator": {
     "contract": "sorted UTF-8 paths; fixed ZIP timestamp/mode; deflate level 9",
     "path": "build-packet.py",
-    "sha256": "d16fa24912c3cad3bf2dd64158be886348a04ec08e7b7cfb41f83f7251f7092d"
+    "sha256": "2b6aa13cbfa7e66820acb81a507ca8a0445973218c8b6846cfc551eea804c4a9"
   },
   "hmmm": [],
   "inputs": [
@@ -17,19 +17,24 @@
       "sha256": "a136409882575b5725a8aa164d3b0f4e3f2d47ff3c85839d37d5a81afe8337f3"
     },
     {
-      "bytes": 3265,
+      "bytes": 9876,
+      "path": "GUI-MSDMD.md",
+      "sha256": "5aafb4bf35f455f37996ad576127d79a9c01659efb6397d94f82567b1dd131d1"
+    },
+    {
+      "bytes": 3698,
       "path": "README.md",
-      "sha256": "f9f2d5f7500bfb36636c64ce25189bd11eef996e89ffb737f45caa835ce72237"
+      "sha256": "83a9713a3f66c137d91d53cd2ce971eafe092c5bde86953d001fd95e38e87d34"
     },
     {
-      "bytes": 20861,
+      "bytes": 22376,
       "path": "START-HERE.md",
-      "sha256": "d1bcb1aa4e97c64719eb7f462f7d272c7206da2c1672cda6f9bab81930cb0498"
+      "sha256": "8ef87eed123ded2fe7bf81ea4fad9a56be6ecfb6d9aa01c5c7465216ca06ec3b"
     },
     {
-      "bytes": 8519,
+      "bytes": 8535,
       "path": "build-packet.py",
-      "sha256": "d16fa24912c3cad3bf2dd64158be886348a04ec08e7b7cfb41f83f7251f7092d"
+      "sha256": "2b6aa13cbfa7e66820acb81a507ca8a0445973218c8b6846cfc551eea804c4a9"
     },
     {
       "bytes": 8215,
@@ -179,14 +184,14 @@
   ],
   "outputs": [
     {
-      "bytes": 3307,
+      "bytes": 3386,
       "path": "SHA256SUMS",
-      "sha256": "1e01e084cbd98ab9291a9943777b66127f45c44262ef50ddb58bc72638ee7b3a"
+      "sha256": "d081dce24607bdb9f7e0e0934eebd3a16aa0096d0e627879e953812e4422f4ac"
     },
     {
-      "bytes": 870201,
+      "bytes": 875271,
       "path": "a0-gui-deepseek-handoff.zip",
-      "sha256": "b5884d25bd8808ce3e439e4ecbae99fd0af1cc379657b5d7a7e0869ac68bc206"
+      "sha256": "d589f987030a444fc5cba5e9825c4390b97d6ec3cafe82515c1339df54f621db"
     }
   ],
   "schema": "a0.deepseek-handoff-packet/v1",
@@ -201,6 +206,6 @@
   "verifier": {
     "command": "python3 build-packet.py --check",
     "path": "build-packet.py",
-    "sha256": "d16fa24912c3cad3bf2dd64158be886348a04ec08e7b7cfb41f83f7251f7092d"
+    "sha256": "2b6aa13cbfa7e66820acb81a507ca8a0445973218c8b6846cfc551eea804c4a9"
   }
 }

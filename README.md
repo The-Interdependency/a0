@@ -22,6 +22,19 @@ npm run test:offline
 npm run test:browser
 ```
 
+Vault/recovery/bridge checks for PR #122:
+
+```sh
+python3 -m unittest discover -s tests/reliability -p 'test_*.py'
+node --test tests/reliability/bridge.test.js
+# Use skill-lib PR #137 at 46ba3e680c21434dd03e79c0cbf900881829701e:
+python3 tests/reliability/check_launcher_compat.py ../skill-launcher
+```
+
+[Current source and acceptance gates](docs/build-status.md) and
+[proposed merge/deployment/rollback operations](docs/pr122-operations.md) record
+the recovery correction. Merge and deployment require explicit owner approval.
+
 The separate `npm test` command targets production acceptance and requires its
 documented environment; it is not the isolated regression command above.
 
@@ -29,7 +42,7 @@ The old A0 implementation is deprecated at the owner's request and retained unde
 
 ## DeepSeek GUI handoff
 
-Give DeepSeek [the updated GUI handoff](docs/handoffs/deepseek-gui/START-HERE.md) to repair and complete the ChatGPT-style phone interface. It includes the November 10 audit, fourteen findings with the two context-integrity failures first, portable reproduction witnesses, and the full G01–G14 contract. Recheck current source/deployment, preserve working mobile repairs, and close each finding with behavioral evidence.
+Give DeepSeek [the updated GUI handoff](docs/handoffs/deepseek-gui/START-HERE.md) to repair and complete the ChatGPT-style phone interface. It includes the November 10 audit, fourteen findings with the two context-integrity failures first, portable reproduction witnesses, and the full G01–G15 contract, including a source-backed inspector for the GUI’s own MSDMD. Recheck current source/deployment, preserve working mobile repairs, and close each finding with behavioral evidence.
 
 ## Builder and VM handoff
 

@@ -22,6 +22,7 @@ import {
   signSessionToken,
 } from './auth.js';
 import { makeVault, VaultError } from './vault.js';
+import { createReliabilityRouter } from './reliability.js';
 import {
   PROVIDER_DEFS,
   defaultModelFor,
@@ -105,6 +106,9 @@ export async function start() {
     req.cookies = parseCookies(req);
     next();
   });
+  app.use('/api/reliability', createReliabilityRouter({vault,
+    databaseCheck: () => query('SELECT 1'), tokenFile: config.bridgeTokenFile,
+    siteOrigin: config.bridgeSiteOrigin, directory: path.join(config.mediaRoot, 'reliability')}));
   app.use(express.json({ limit: '2mb' }));
 
   // --- Public bootstrap / auth -------------------------------------------------

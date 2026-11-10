@@ -6,13 +6,18 @@
 # restore.sh can prove the restored vault opens the correct store and reads it.
 # Usage: sudo operations/backup.sh [backup_dir]
 set -euo pipefail
+set +x # Administrative recovery material must never reach shell traces.
+umask 077
+ADMIN="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/configure-vault.py"
+# Validate before generating keys, writing a canary, or dumping any database.
+python3 "${ADMIN}" --check-recovery
 
 BACKUP_ROOT="${1:-/srv/a0/backups}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 WORK="$(mktemp -d /tmp/a0-backup.XXXXXX)"
+trap 'rm -rf -- "${WORK}"' EXIT
 OUT="${BACKUP_ROOT}/a0-backup-${STAMP}.tar.gz.gpg"
 KEY_FILE="/etc/a0/backup.key"
-BAO_ADDR="http://127.0.0.1:8200"
 
 if [[ ! -f "${KEY_FILE}" ]]; then
   umask 077
@@ -23,10 +28,8 @@ if [[ ! -f "${KEY_FILE}" ]]; then
 fi
 
 echo "[backup] writing nonsecret canary into OpenBao and app DB…"
-ROOT_TOKEN="$(grep '^root_token=' /etc/openbao/init.json | cut -d= -f2)"
 CANARY_VALUE="a0-backup-canary-${STAMP}"
-curl -fsS -X POST -H "X-Vault-Token: ${ROOT_TOKEN}" "${BAO_ADDR}/v1/a0/data/backup-canary" \
-  -d "{\"data\":{\"value\":\"${CANARY_VALUE}\"}}" >/dev/null
+python3 "${ADMIN}" --backup-canary "${CANARY_VALUE}" > "${WORK}/vault-identity.json"
 sudo -u postgres psql -d a0app -v ON_ERROR_STOP=1 -c \
   "INSERT INTO credential_references (user_id, provider, vault_path) SELECT id, 'canary', 'backup-canary' FROM users ORDER BY created_at LIMIT 1 ON CONFLICT (provider) DO UPDATE SET vault_path='backup-canary', updated_at=now();" >/dev/null
 echo "canary=${CANARY_VALUE}" > "${WORK}/canary.txt"
