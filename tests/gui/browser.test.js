@@ -24,9 +24,9 @@ const systemKnowledge = [
 before(async () => {
   server = http.createServer(async (req, res) => {
     const name = req.url === '/' ? 'index.html' : req.url.slice(1).split('?')[0];
-    if (!['index.html', 'app.js', 'markdown.js', 'styles.css'].includes(name)) { res.writeHead(404).end(); return; }
+    if (!['index.html', 'app.js', 'markdown.js', 'styles.css', 'gui-msdmd.mjs'].includes(name)) { res.writeHead(404).end(); return; }
     const body = await readFile(new URL(`../../apps/web/${name}`, import.meta.url));
-    res.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html');
+    res.setHeader('Content-Type', name.endsWith('.js') || name.endsWith('.mjs') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html');
     res.end(body);
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -40,6 +40,7 @@ async function pageFixture(t, options = {}) {
   t.after(() => context.close());
   const page = await context.newPage();
   page.setDefaultTimeout(2500);
+  page.on('pageerror', (error) => console.log(`[pageerror] ${error.message}`));
   const agents = options.agents ?? [];
   const system = options.system ?? { objects: systemObjects, relations: systemRelations, knowledge: systemKnowledge, decisionConditions: ['a', 'b', 'c', 'd'], provenance: { buildCommit: 'test', scopeNote: 'test', observationScope: 'test' } };
   await page.route('**/api/**', async (route) => {
@@ -120,6 +121,44 @@ test('AHBG agent selector refreshes after agents appear', async (t) => {
   await page.waitForSelector('#view-ahbg:not(.hidden)');
   // Route still serves zero agents; the selector must remain an explicit empty state.
   assert.match(await page.locator('#ahbgAgent option').first().textContent(), /Create a Forge agent first/);
+});
+
+test('GM01/GM05/GM06: MSDMD inspector opens subjects read-only and preserves state', async (t) => {
+  const page = await pageFixture(t);
+  const mutations = [];
+  page.on('request', (req) => {
+    const m = req.method();
+    if (m !== 'GET') mutations.push(`${m} ${req.url()}`);
+  });
+  await openView(page, 'about');
+  await page.waitForTimeout(200);
+  await page.click('#aboutMsdmdBtn');
+  await page.waitForSelector('#msdmdModal:not(.hidden)');
+  assert.match(await page.locator('#msdmdTitle').textContent(), /A0 GUI/);
+  // Subject selector keeps equally named scopes distinct via qualified ids.
+  const labels = await page.locator('#msdmdSubject option').allTextContents();
+  assert(labels.some((l) => l.includes('a0.gui:view-chat')));
+  await page.selectOption('#msdmdSubject', 'view-chat');
+  assert.match(await page.locator('#msdmdTitle').textContent(), /Chat workspace/);
+  // Structured detail retains nested, arrays and explicit null.
+  const detail = await page.locator('#msdmdBody details summary').first().textContent();
+  assert.match(detail, /Structured detail/);
+  await page.click('#msdmdCloseBtn');
+  await page.waitForSelector('#msdmdModal', { state: 'hidden' });
+  assert.deepEqual(mutations, []);
+});
+
+test('GM07: inspector preserves conversation and draft at phone viewport', async (t) => {
+  const page = await pageFixture(t);
+  await openView(page, 'chat');
+  await page.fill('#composerInput', 'keep me');
+  await page.click('#msdmdBtn');
+  await page.waitForSelector('#msdmdModal:not(.hidden)');
+  await page.selectOption('#msdmdSubject', 'view-chat');
+  await page.click('#msdmdCloseBtn');
+  await page.waitForSelector('#msdmdModal', { state: 'hidden' });
+  assert.equal(await page.inputValue('#composerInput'), 'keep me');
+  assert(await page.locator('#view-chat:not(.hidden)').count() === 1);
 });
 
 test('Empty System fixture must fail loudly', async (t) => {

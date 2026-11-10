@@ -14,6 +14,7 @@
       <button type="button" id="menuBtn" class="icon-btn" aria-label="Menu" aria-controls="drawer" aria-expanded="false">☰</button>
       <div class="topbar-title">A0</div>
       <div class="topbar-actions">
+        <button type="button" id="msdmdBtn" class="icon-btn" aria-label="About this view" title="About this view (MSDMD)">ℹ️</button>
         <button type="button" id="voiceReadBtn" class="icon-btn" aria-label="Toggle spoken answers" aria-pressed="false" title="Spoken answers">🔇</button>
         <button id="logoutBtn" class="icon-btn" aria-label="Sign out">⎋</button>
       </div>
@@ -203,6 +204,7 @@
         <!-- About -->
         <section id="view-about" class="view hidden">
           <h2>About &amp; harness</h2>
+          <button id="aboutMsdmdBtn" class="primary-btn" type="button">About this interface (MSDMD)</button>
           <div id="aboutBox" class="card">Loading…</div>
           <div class="card">
             <h3>Preferences (owner defaults)</h3>
@@ -261,6 +263,20 @@
       <div class="modal-actions">
         <button id="contextEditorSaveBtn" class="primary-btn">Save revision</button>
         <button id="contextEditorCancelBtn" class="chip">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="msdmdModal" class="modal hidden">
+    <div class="modal-card wide">
+      <h3 id="msdmdTitle">About this interface</h3>
+      <p class="muted hidden" id="msdmdStale"></p>
+      <label class="muted">Subject
+        <select id="msdmdSubject" class="select" aria-label="MSDMD subject"></select>
+      </label>
+      <div id="msdmdBody" class="scroll"></div>
+      <div class="modal-actions">
+        <button id="msdmdCloseBtn" class="chip">Close</button>
       </div>
     </div>
   </div>

@@ -2,6 +2,7 @@
 // Usage: Menu opens saved history; comparison layout applies to saved/live rounds.
 // Owner-scoped sessionStorage holds unsent drafts, never provider keys/transcripts.
 import { renderMarkdown } from './markdown.js';
+import { GUI_MSDMD } from './gui-msdmd.mjs';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -2660,3 +2661,79 @@ $('#ahbgForm').addEventListener('submit', async (e) => {
     await renderAhbgDetail(r.session.id);
   } catch (err) { toast(err.message, true); }
 });
+
+// ---------- G15 MSDMD inspector (read-only) ----------
+const msdmdState = { subjectId: 'gui', lastValid: null, lastError: null, loadedAt: null, healthCommit: null };
+
+function viewSubjectFor(name) {
+  return GUI_MSDMD.subjects.some((s) => s.id === name) ? name : 'gui';
+}
+
+async function openMsdmd(subjectId = 'gui') {
+  // GM05/GM06: read-only refresh; on failure keep the last valid payload.
+  const subject = viewSubjectFor(subjectId);
+  let healthCommit = null;
+  try {
+    const health = await api.get('/api/health');
+    healthCommit = health?.build?.commit || null;
+  } catch (err) {
+    msdmdState.lastError = err.message;
+  }
+  msdmdState.subjectId = subject;
+  msdmdState.healthCommit = healthCommit;
+  msdmdState.lastValid = GUI_MSDMD;
+  msdmdState.loadedAt = new Date().toISOString();
+  renderMsdmd();
+  $('#msdmdModal').classList.remove('hidden');
+}
+
+function renderMsdmd() {
+  const subjectId = msdmdState.subjectId;
+  const subject = msdmdState.lastValid?.subjects?.find((s) => s.id === subjectId) || msdmdState.lastValid?.subjects?.[0];
+  if (!subject) {
+    $('#msdmdBody').textContent = 'MSDMD collection unavailable.';
+    return;
+  }
+  $('#msdmdTitle').textContent = `${subject.identity.name} — ${subject.qualifiedId}`;
+  const stale = $('#msdmdStale');
+  stale.classList.add('hidden');
+  if (msdmdState.healthCommit && msdmdState.lastValid?.buildIdentity?.commit && msdmdState.healthCommit !== msdmdState.lastValid.buildIdentity.commit) {
+    stale.textContent = `Stale: served build ${msdmdState.healthCommit} differs from collection identity ${msdmdState.lastValid.buildIdentity.commit}.`;
+    stale.classList.remove('hidden');
+  } else if (msdmdState.lastError) {
+    stale.textContent = `Refresh failed: ${msdmdState.lastError}. Showing the last valid collection from ${msdmdState.loadedAt || 'unknown'}.`;
+    stale.classList.remove('hidden');
+  }
+  const sel = $('#msdmdSubject');
+  const prev = sel.value || subjectId;
+  sel.innerHTML = '';
+  for (const s of msdmdState.lastValid.subjects) {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.identity.name} (${s.qualifiedId})`;
+    sel.appendChild(opt);
+  }
+  sel.value = msdmdState.lastValid.subjects.some((s) => s.id === prev) ? prev : subjectId;
+
+  const esc = (v) => escapeHtml(String(v ?? ''));
+  const sections = [];
+  sections.push(`<h4>Identity and purpose</h4><p>${esc(subject.identity.name)} — v${esc(subject.identity.version)}</p><p>${esc(subject.identity.purpose)}</p><p class="muted">scope: ${esc(subject.identity.scope)}</p>`);
+  sections.push(`<h4>Structure</h4><p class="muted">parent: ${esc(subject.structure.parent || '—')} · children: ${esc(subject.structure.children.join(', ') || '—')}</p>`);
+  if (subject.structure.dependencies.length) {
+    sections.push('<ul>' + subject.structure.dependencies.map((d) => `<li><span class="badge">${esc(d.relationKind)}</span> ${esc(d.label)} → ${esc(d.to)} <span class="muted">(${esc(d.source)})</span></li>`).join('') + '</ul>');
+  }
+  sections.push('<h4>Contracts</h4>' + subject.contracts.map((c) => `<div class="list-item"><strong>${esc(c.label)}</strong><p>${esc(c.description)}</p><p class="muted">${esc(c.source)} · ${esc(c.state)}${c.editor ? ` · editor: ${esc(c.editor)}` : ''}</p></div>`).join(''));
+  sections.push(`<h4>Living specification</h4><p>${esc(subject.livingSpec.behavior)}</p><p class="muted">boundaries: ${esc(subject.livingSpec.boundaries)}</p>`);
+  if (subject.livingSpec.limitations.length) sections.push('<p class="muted">limitations: ' + subject.livingSpec.limitations.map(esc).join('; ') + '</p>');
+  if (subject.livingSpec.hmmm.length) sections.push('<p class="muted">hmmm: ' + subject.livingSpec.hmmm.map(esc).join('; ') + '</p>');
+  sections.push('<h4>Evidence</h4>' + subject.evidence.map((e) => `<div class="list-item"><span class="badge">${esc(e.state)}</span> ${esc(e.label)} · <code>${esc(e.command)}</code> · ${esc(e.outcome)}</div>`).join(''));
+  sections.push(`<h4>Provenance and freshness</h4><p class="muted">authority: ${esc(subject.provenance.authority)} · path: ${esc(subject.provenance.path)} · schema: ${esc(subject.provenance.collectionSchema)} · reader: ${esc(subject.provenance.reader)} · loaded: ${esc(msdmdState.loadedAt || '—')}</p>`);
+  sections.push('<h4>Coverage and conflicts</h4><p class="muted">required: ' + esc(subject.coverage.required.join(', ')) + '</p><p class="muted">eligible: ' + esc(subject.coverage.eligible.join(', ')) + '</p><p class="muted">unsupported: ' + esc(subject.coverage.unsupported.join(', ') || '—') + '</p><p class="muted">exclusions: ' + esc(subject.coverage.exclusions.join(', ') || '—') + '</p><p class="muted">unknown: ' + esc(subject.coverage.unknown.join(', ') || '—') + '</p>');
+  sections.push('<details><summary>Structured detail (typed, nested)</summary><pre class="context-preview">' + esc(JSON.stringify(subject.structured, null, 2)) + '</pre></details>');
+  $('#msdmdBody').innerHTML = sections.join('');
+}
+
+$('#msdmdBtn').onclick = () => openMsdmd(viewSubjectFor(state.view)).catch((e) => toast(e.message, true));
+$('#aboutMsdmdBtn').onclick = () => openMsdmd('gui').catch((e) => toast(e.message, true));
+$('#msdmdCloseBtn').onclick = () => $('#msdmdModal').classList.add('hidden');
+$('#msdmdSubject').onchange = () => { msdmdState.subjectId = $('#msdmdSubject').value; renderMsdmd(); };
