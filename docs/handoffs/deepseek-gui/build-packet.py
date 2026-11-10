@@ -34,7 +34,7 @@ SOURCE_PINS = {
     "handoff_instruction_skill_lib_commit": "8ee77a6630379e48844350d8666515389b94f4c8",
 }
 REQUIRED = {
-    "START-HERE.md", "README.md", "AUDIT-2026-11-10.md",
+    "START-HERE.md", "README.md", "AUDIT-2026-11-10.md", "GUI-MSDMD.md",
     "reference/a0-gui-specification.png",
     "reference/a0-gui-specification.pdf",
     "evidence/2026-11-10/README.md",

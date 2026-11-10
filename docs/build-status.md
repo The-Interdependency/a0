@@ -143,3 +143,10 @@ The [updated DeepSeek handoff](handoffs/deepseek-gui/START-HERE.md) now carries 
 The fresh local baseline passed 40 browser tests plus 13 Markdown and 17 Responses assertions. Targeted witnesses reproduced context-selection omissions, cross-conversation dialog writes and other failures outside that baseline. The 19-check GUI script also passed an inert nonfunctional fixture; its served-source markers do not establish GUI completion or the full options contract. Exact-source regression CI stopped during Playwright setup before executing tests.
 
 Next: repair F01/F02 context integrity first, then follow the handoff queue and G01–G14 contract. Convert defect-recognition assertions into correct-behavior regression tests; retain the established mobile suite. This publication changes documentation and handoff artifacts; application repairs, candidate-bound release evidence and actual-phone acceptance remain open.
+
+
+## GUI self-description requirement — G15 (2026-11-10)
+
+The owner requires a place in the GUI to display its own MSDMD. [GUI-MSDMD.md](handoffs/deepseek-gui/GUI-MSDMD.md) specifies About this interface within About & harness, a current-view entry into the same inspector, source-owned schema-2 metadata, provenance/coverage/hmmm, and GM01–GM08 acceptance. The active handoff now covers G01–G15; the original fourteen-finding audit and G01–G14 reference graphic retain their historical scope. F01/F02 remain the first repairs.
+
+This update records the display contract and refreshes the packet. Metadata collection/delivery, the actual inspector and its acceptance remain implementation work. Inspection must preserve conversation/run state and keep GUI metadata separate from runtime harness/prompt content.
