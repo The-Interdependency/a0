@@ -1,40 +1,61 @@
-# DeepSeek handoff: complete A0's GUI
+# DeepSeek handoff: repair and complete A0's GUI
 
-Prepared November 4, 2026, America/Los_Angeles.
+Updated November 10, 2026, America/Los_Angeles. Original requirement sources: November 4 packet and its cited September/October instructions.
 
 GPT generated; context, prompt Erin Spencer.
 
 ## Assignment
 
-Audit the existing A0 successor against the recovered GUI requirements, close the confirmed gaps, and deliver the integrated interface through the existing authenticated VM website. Preserve working behavior and user data. The supplied graphic is a requirements map; the source contracts below govern implementation.
+Repair the confirmed GUI failures, then complete G01–G14 through the existing authenticated VM website. Read this file and [the November 10 audit](AUDIT-2026-11-10.md) before implementation. The audit owns finding details, reproductions, source locations and acceptance checks; this entry point owns repair order and completion. Preserve working behavior and user data. The supplied graphic is a requirements map; the source contracts govern implementation.
 
-**FROM:** an implemented successor with merged mobile repairs, dated acceptance records, and GUI requirements spread across conversations.
+**FROM:** deployed successor commit `de66778dd1d9073f6a8b3d532e73514868f94e3c`, with working mobile regression coverage, implemented System/AHBG screens, and fourteen confirmed application/integration/evidence/CI findings. Two context-integrity defects have first priority.
 
-**TO:** a coherent phone-first workspace for system inspection, conversations, model comparison, context editing, retained agents, temporary modules, and AHBG, with inspectable evidence and durable state.
+**TO:** a coherent phone-first workspace for system inspection, conversations, model comparison, context editing, retained agents, temporary modules and AHBG, with truthful evidence and durable state.
 
-**DONE WHEN:** the scoped flows work on the deployed release, each requirement has a source/implementation/evidence link, and actual-phone acceptance is recorded. **FAILS IF:** controls discard choices, context or drafts disappear, effects cross conversation/agent boundaries, a module swap resets state, evidence is overstated, or a mockup/merge is presented as a deployed result. Complete all unblocked work; an external blocker remains attached to its specific gate.
+**DONE WHEN:** the scoped flows work on the deployed release; each G01–G14 requirement and audit finding has a source/implementation/behavioral-evidence link; served assets match the candidate; and actual-phone acceptance is recorded. **FAILS IF:** the latest prompt is omitted, excluded answers still enter context, a delayed dialog changes another conversation, a control discards its chosen model or setting, state/history is lost, a module swap is only a label, or fixture/marker/merge evidence is presented as deployed behavior. Complete unblocked work; attach each external blocker to its exact gate.
 
-## Starting state: use this to avoid restarting finished work
+## Verified starting point
 
-Verified through GitHub at 2026-11-04 17:43 PST:
+The November 10 audit inspected GitHub main at `de66778dd1d9073f6a8b3d532e73514868f94e3c` (tree `8e83504f18173b56a4addcdcf8b4ef7b707c7eba`). Main still pointed there when this handoff update began. Resolve current main and the VM checkout again before editing; these identities are evidence, not reset instructions.
 
-- Repository: [The-Interdependency/a0](https://github.com/The-Interdependency/a0).
-- Main: `4656cd3f841b896ad3a6a104a5c9caca2031ca51`.
-- [PR #121](https://github.com/The-Interdependency/a0/pull/121) is **merged**, at 14:47:35 PST on November 4. All ten returned review threads are resolved. Its body and some build records still say the integration is held; those statements are stale relative to the merge record.
-- [Web regressions run 41780891487](https://github.com/The-Interdependency/a0/actions/runs/41780891487) is successful for that PR head. The PR reports 40 browser tests, 13 Markdown assertions and 17 Responses assertions. These tests were not rerun while preparing this handoff.
-- Later entries in `docs/acceptance.md` report retained agents, module lifecycle, and an AHBG integration slice. Earlier FR2-FR4 "pending" entries and issue-body snapshots do not establish current absence. Verify the latest scoped evidence and implementation before replacing anything.
-- Deployed source/assets, physical-phone behavior, and current security-check configuration were **not inspected here**. Merge does not resolve those observations. Full active-stream reattachment after page destruction remains an explicit gap in the mobile repair record.
+- **Website:** https://35.212.252.101.nip.io/. Around 09:34 UTC / 01:34 PST, public health reported the audited commit and the served HTML, JavaScript, CSS and Markdown renderer matched the checkout byte for byte. The signed-out live interface was observed. Backend source identity was reported by health; authenticated production flows were not exercised.
+- **Fresh local baseline:** 40 browser tests, 13 Markdown assertions and 17 Responses-adapter assertions passed on the audited source, using isolated API/speech/provider fixtures. Preserve those working repairs. [PR #121](https://github.com/The-Interdependency/a0/pull/121) is merged; its old five unresolved risks must not be reintroduced as current absence.
+- **Confirmed failures:** nine targeted browser witnesses plus actual context modules/exact route callbacks reproduced the failures below. Their assertions recognize defects: a diagnostic PASS means the defect occurred. See the [portable reproduction bundle](evidence/2026-11-10/README.md).
+- **Evidence limitation:** the unchanged new GUI script produced 19 PASS against a nonfunctional inert fixture. Its labels and API/source markers cannot close interaction, option-effect or safety gates. The audit explains the specific false-positive conditions.
+- **CI:** the [exact-source Web regressions run](https://github.com/The-Interdependency/a0/actions/runs/42784382390) failed during Playwright setup on Ubuntu 26.04.1, before tests ran. Repair runner/browser compatibility and preserve the distinction between local passes and remote CI. Do not bypass protections.
+- **Open observations:** authenticated live flows, real provider/media/MCP effects, physical Android acceptance and scoped producer/AHBG mechanics were not newly verified. Full stream reattachment after page destruction remains a recorded implementation gap.
 
-Re-resolve heads and inspect the real VM checkout before mutation. Preserve newer or uncommitted work. The recorded SHA is a starting observation, not a reset instruction.
+## Repair order — audit findings F01–F14
+
+These IDs belong to [AUDIT-2026-11-10.md](AUDIT-2026-11-10.md), not earlier issue-numbered finding ledgers. Keep the full G01–G14 scope after closing this queue.
+
+| Order | Finding | Required result |
+| --- | --- | --- |
+| 1 | **F01 P1 — selected context drops prompts and retains excluded answers** | With saved history U1/A1/A2, selecting A1 and sending U2 produces U1/A1/U2 for every participant. Returning to all restores applicable history. Preserve deliberate context edits under a defined inclusion policy. |
+| 2 | **F02 P1 — delayed dialogs write the wrong conversation** | Both answer selection and full context editing capture originating identity before awaiting. Delayed A reads followed by navigation to B cannot change B; validate message and project/block ownership server-side. |
+| 3 | F03 — Continue retains the old model | Choosing model P2 then Continue dispatches to P2, with intended history and stable participant identity. |
+| 4 | F04 — supported options lack GUI controls | Expose effective values, scope, persistence/reset, validation and unavailable reasons; prove each supported change reaches its provider request or owned state. Keep tool scope independent. |
+| 5 | F05 — agent context saves return 400 | Owned agent blocks validate and save; effective instruction edits reach the next snapshot while originals and other agents remain unchanged. |
+| 6 | F06 — AHBG errors leave sessions busy | Every failed preparation path reconciles turn ownership. Recovery permits one valid turn; uncertain completed effects are reconciled before retry. |
+| 7 | F07 — module swap changes only a label | Mount a distinct validated stats/chat renderer against the existing agent/conversation/run; preserve state and reject invalid candidates without replay. |
+| 8 | F08 — System claims observations/absence without evidence | Distinguish declarations, observations and unknowns; separate A–F/1–6 assessments; inspect actual owned information, use and authority. |
+| 9 | F09 — previews/next steps have 1.10:1 contrast | Repair shared foreground/background tokens and verify readable context, agent, AHBG and System surfaces. |
+| 10 | F10 — MCP names and schemas are hidden | Show discovered tool names, descriptions and input schemas without executing tools. |
+| 11 | F11 — AHBG agent list stays stale | Create/retire agents and return to AHBG without page reload; choices refresh and valid selection persists. |
+| 12 | F12 — System All resets do nothing | State and category resets work independently and together; the unfiltered inventory returns. |
+| 13 | F13 — new GUI checks accept a nonfunctional interface | Replace marker-only acceptance with discoverable behavioral checks and non-vacuous fixtures; the inert counterexample must fail. |
+| 14 | F14 — remote regression setup prevents testing | Use a supported runner/Playwright combination and obtain candidate-bound CI results that actually execute the required cases. |
+
+F01/F02 are release-blocking data-integrity repairs for the affected context flows. F03–F13 remain incomplete product or evidence requirements; F14 is an environment/CI configuration defect. Backend API receipts remain useful within their actual scope.
 
 ## Read before editing
 
-1. Current [skill-lib AGENTS.md](https://github.com/The-Interdependency/skill-lib/blob/main/AGENTS.md) and applicable skills. Observed skill-lib head: `6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57`. Apply WDLL, structure preservation, native-first MSDMD and the relevant frontend, audit, test, and VM contracts. Consult METAPAT only for an unresolved conceptual/architectural choice. Resolve producer authority before UCNS/PTCNA/AHBG changes.
-2. Current A0 `AGENTS.md`, `docs/a0-replacement-spec.md`, `docs/deep-code-vm-handoff.md`, and `docs/work-graphs/a0-replacement-spec.json`. Read the reactivation amendment and [issues #119](https://github.com/The-Interdependency/a0/issues/119) / [#120](https://github.com/The-Interdependency/a0/issues/120).
-3. `sources/september-system-explorer-excerpt.md`, `sources/october-interface-build-brief.md`, and `sources/options-contract-excerpt.md` in this packet. Preserve the accepted September interaction model within the current successor. Its old implementation is historical reference.
-4. Current `docs/build-status.md`, `docs/acceptance.md`, `docs/mobile-chat-repair.md`, and `operations/README.md`. Resolve chronology and evidence scope: requirements, historical proposals, fixture/API checks, deployment, and actual-phone results are distinct.
+1. Current [skill-lib AGENTS.md](https://github.com/The-Interdependency/skill-lib/blob/main/AGENTS.md) and applicable skills. Resolved during this update: `8ee77a6630379e48844350d8666515389b94f4c8`. Apply WDLL where scope/proof needs resolution, structure preservation, native-first MSDMD, and relevant frontend, agent-ops, audit, test and VM contracts. Resolve producer authority before UCNS/PTCNA/AHBG changes.
+2. Current A0 [AGENTS.md](https://github.com/The-Interdependency/a0/blob/main/AGENTS.md), [replacement specification](https://github.com/The-Interdependency/a0/blob/main/docs/a0-replacement-spec.md), [VM handoff](https://github.com/The-Interdependency/a0/blob/main/docs/deep-code-vm-handoff.md), and source work graph. Read the reactivation amendment and [issues #119](https://github.com/The-Interdependency/a0/issues/119) / [#120](https://github.com/The-Interdependency/a0/issues/120).
+3. [The audit](AUDIT-2026-11-10.md) and [reproduction bundle](evidence/2026-11-10/README.md), then sources/september-system-explorer-excerpt.md, sources/october-interface-build-brief.md and sources/options-contract-excerpt.md. Keep the accepted September interaction model inside the current successor; its old runtime is historical reference.
+4. Current docs/build-status.md, docs/acceptance.md, docs/gui-coverage.md, docs/mobile-chat-repair.md and operations/README.md. Resolve chronology: source presence, historical receipts, fixture/API checks, deployment and handset observations are different evidence. Correct contradicted current claims when their owning repairs land.
 
-The October 29 instruction replaces Replit hosting and mandatory native APK delivery with the existing VM and authenticated responsive HTTPS website. Do not let obsolete delivery choices re-enter the plan.
+The October 29 instruction replaces Replit hosting and mandatory native APK delivery with the existing VM and authenticated responsive HTTPS website. Preserve that delivery decision.
 
 ## GUI contract to preserve
 
@@ -61,41 +82,46 @@ The System view may show source-backed application relations while UCNS mapping 
 
 ## Execution sequence
 
-1. **Reconcile source and deployment.** Inspect authorized VM access, checkout/dirty state, deployed revision, served assets, current reviews and checks. Determine whether the merged mobile repair is already deployed. Reuse the supported app-only rollout when it is needed. Verify served JavaScript as well as health/build metadata.
-2. **Make a coverage matrix.** Map G01-G14 and the options inventory to active source owners, tests, observed behavior and remaining gaps. Preserve useful existing work. Distinguish source defects, missing integration, stale documentation and unavailable external evidence.
-3. **Complete the connected flows.** Extend the current frontend/backend and existing run/context/agent/module owners. Known frontend owners are `apps/web/app.js`, `index.html`, `styles.css`, `markdown.js`; core server owners include `apps/server/src/index.js`, `providers.js`, `contexts.js`, `harness.js`, `ptcna.js`, and `ahbg.js`. Confirm actual ownership before edits. Use declared schemas/capabilities for controls and read-only reasons; a historical React prototype does not require a framework rewrite.
-4. **Verify meaningful failures.** Repair owning layers and exercise real interfaces with isolated fixtures before authorized live checks. Preserve the merged mobile regression protection. Resolve current test/security failures without bypassing policy. Complete the appropriate R/A, FR/OC and integration gates; record one scoped outcome per gate.
-5. **Release and hand over.** Update source-owned specifications, source pins/work graph when affected, acceptance, release and build-status records. Commit and publish through the permitted workflow; merge/deploy within existing authority. Verify the actual HTTPS release, compatible rollback, and phone flows. Preserve unrelated VM services and durable data.
+1. **Reconcile current source and deployment.** Inspect authorized VM access, checkout/dirty state, deployed revision, served assets, reviews and checks. Preserve newer work and unrelated services. Use current source as the integration base and the pinned audit revision for reproducing historical witnesses.
+2. **Close F01/F02 first.** Turn their defect witnesses into acceptance tests that assert correct dispatch contents and conversation binding. Reconcile context-policy and explicit-editor precedence without discarding edits or history. Verify both dialogs, not just general history navigation.
+3. **Complete connected flows.** Work through the remaining repair queue, then re-evaluate every G01–G14 requirement. Keep apps/web and the existing run/context/agent/module owners. Use declared schemas/capabilities; a historical React prototype does not require a framework rewrite.
+4. **Verify effects and failures.** Retain the 40-test mobile baseline. Add isolated regressions for the newly exposed gaps, including a no-run-dispatched assertion for System intention selection, failed AHBG preparation recovery, actual renderer changes and settings-to-request effects. Repair current CI setup and evidence overclaims at their owners. Inspect every production-directed runner before use.
+5. **Release and hand over.** Update source-owned specs, work graph/pins when affected, coverage, acceptance, release and build-status records. Publish through the permitted workflow; merge/deploy within existing authority. Verify candidate-bound served assets, supported rollback and actual Android flows. Keep any external blocker attached to its precise gate.
 
-Resource limits are part of execution: preflight dependencies/quotas, reuse pinned artifacts and completed evidence, and checkpoint exact state before context/session limits. Missing credentials block their live witnesses, not unrelated implementation. Keep secrets out of prompts, logs, source, browser bundles and evidence. Inspect tests before any production-directed execution. Preserve `archive/`; do not boot it or run its suites as successor gates.
+Resource limits are part of execution: preflight dependencies/quotas, reuse pinned artifacts and completed evidence, and checkpoint exact source, running jobs, results and next action before session limits. Missing live credentials block their witnesses, not unrelated implementation. Keep secrets and private content out of prompts, logs, source, browser bundles and public evidence. Preserve archive/; do not boot it or run its suites as successor gates.
 
 ## Proof that must be capable of failing
 
-- A three-participant comparison preserves the intended history, order, attribution and attachments; selected-history exclusion changes every next request consistently without authorizing tools.
-- An option changed in the GUI survives its declared persistence boundary and changes the captured provider request or owned state. Unsupported choices fail visibly.
-- Accepted-but-unacknowledged retry, late navigation/dictation/upload, initialization, stream EOF/reset and logout cannot duplicate effects, lose newer input or restore stale controls/private recovery.
-- Tool approval and Stop remain tied to the complete run, including later tool rounds. Cancelling prevents new dispatch and reports already-dispatched effects accurately.
-- Two agents remain isolated. Hot swap, reconnect and invalid module candidates preserve the correct state; malicious rendered content stays inert and private APIs enforce ownership.
-- AHBG rejected/racing turns do not mutate twice; replay and module swapping preserve the session. Evidence identifies the actual A0 agent and the producer mechanics exercised.
-- Failed source refresh retains the last observation with its age and error. Inspection cannot silently execute work or promote an inferred relation into verified fact.
-- Actual Android login, keyboard, attachment, voice, app-return/history, comparison, agent/module and AHBG flows are observed. Emulation or fake speech alone cannot close physical-phone gates.
+- **Context semantics:** exact snapshot/provider inputs preserve the latest user prompt and applicable user/tool history, include only the intended assistant responses, preserve attachment references and apply equally to every comparison participant. Test before/after a saved revision and after returning to Include all.
+- **Conversation boundaries:** delayed reads for both context dialogs cannot apply A's IDs or text to B. Server validation rejects foreign message/block identities and preserves revision conflicts.
+- **Choices have effects:** selecting P2 actually dispatches to P2; each supported GUI option survives its declared persistence boundary and changes a captured request or owned state; unsupported combinations fail visibly.
+- **Existing continuity survives:** accepted-but-unacknowledged retry, late navigation/dictation/upload, initialization, stream EOF/reset and logout cannot duplicate effects, lose newer input or restore stale controls/private recovery.
+- **Tools remain independent:** concrete proposals precede executor choice; Stop covers later tool rounds; cancellation prevents new dispatch and accurately reports already-dispatched effects. MCP schemas are inspectable without execution.
+- **Agents and modules:** two agents remain isolated; effective instruction edits save and dispatch; hot swap/reconnect/invalid candidates preserve state and show a real presentation change without engine replay.
+- **AHBG:** transient observation/preparation errors recover; rejected/racing turns do not mutate twice; replay and module changes preserve the session. Identify the actual retained agent and producer mechanics exercised.
+- **Inspection is truthful:** missing/stale observations remain unknown or dated; failed refresh retains the last observation with age/error. Intention selection dispatches no work. Unknown personal-data coverage cannot become a claim of absence.
+- **Usability:** normal text meets at least 4.5:1 contrast. Actual Android login, keyboard, attachments, voice, app-return/history, comparison, agent/module and AHBG flows are observed. Emulation and fake speech do not close handset gates.
 
-At the observed revision, the isolated entry points are:
+The existing isolated entry points are:
 
 ```sh
-npm ci
+npm ci --ignore-scripts --no-audit --no-fund
 npx playwright install chromium
 npm run test:offline
 npm run test:browser
 git diff --check
 ```
 
-Use the existing supported Node/runtime and browser installation when available. Recheck scripts and setup first. Root `npm test` invokes `tests/acceptance/run.js`; it is not an interchangeable offline test command. Inspect its target, credentials, writes and cleanup before using the authorized integration lane. Select additional tests from changed behavior rather than repeatedly rerunning everything.
+Inspect scripts first and reuse supported installed dependencies/browser artifacts. The [audit reproduction bundle](evidence/2026-11-10/README.md) provides portable commands for the new witnesses. **Do not add defect-recognition assertions as green product gates:** invert/replace them with expected-behavior assertions when repairing. Root npm test invokes the separate production-directed acceptance runner; it is not an offline synonym. Inspect target, credentials, writes and cleanup before authorized integration execution.
 
-Return **CHANGED / PROOF / NEXT / hmmm**: working URL, exact deployed source/assets, requirement/gate evidence, useful operating/rollback guidance, and only the precise unresolved actions. Preserve implementation, merge, deployment and handset acceptance as separate facts.
+Return **CHANGED / PROOF / NEXT / hmmm**: working URL; exact implementation, merge and deployed identities; findings and G01–G14 outcomes with executable evidence; operating/rollback guidance; and precise remaining actions. A documentation/ZIP publication does not repair the app.
 
-## Packet usage and hmmm
+## Packet usage and integrity
 
-Upload the ZIP to DeepSeek, ask it to read this file first, and provide the existing authorized repository/VM connection. The bundle contains the graphic, dated source texts, source snapshots at the observed A0 head, and `sources/verified-github-state.json`; `SHA256SUMS` checks package integrity. The standalone handoff can also be pasted; use the live links and repository paths for its supporting material.
+Give DeepSeek the GitHub URL of this file and ask it to read the linked audit and evidence README. The [current ZIP](https://github.com/The-Interdependency/a0/raw/main/docs/handoffs/deepseek-gui/a0-gui-deepseek-handoff.zip) is the same packet for offline use. The original requirements graphic and dated sources remain intact; historical copied paths resolve in their original repository context. Use current source-owned contracts through the live links above.
 
-hmmm: this preparation verified GitHub merge/review/run metadata and read source records; it did not operate the VM or rerun application tests. Current deployment, physical-phone observations, live provider/MCP grants, off-VM recovery and complete GUI coverage must be established by execution. Existing records contain partial and superseded statuses. Keep their valid evidence, correct stale summaries, and do not turn uncertainty into a new prerequisite for unrelated work.
+From this directory, run python3 build-packet.py --check to verify the manifest, ZIP bytes and receipt. Maintainers update authored content, then run python3 build-packet.py --write and --check before publishing the whole packet atomically. SHA256SUMS covers authored packet content; the ZIP contains those files plus the manifest. PACKET-RECEIPT.json is outside the ZIP to avoid a self-reference and records exact inputs, generator identity and output hashes.
+
+## hmmm
+
+The November 10 audit established public deployment/frontend identity and isolated failures, not authenticated production or physical-phone acceptance. Full active-stream reattachment remains a recorded implementation gap. Live provider/media/MCP effects and retained-engine/AHBG mechanics still need scoped execution. Preserve verified existing repairs, close unblocked failures, and carry these boundaries into the final evidence rather than converting them into a blanket PASS.
