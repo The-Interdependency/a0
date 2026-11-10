@@ -148,7 +148,7 @@ function showView(name) {
   $(`#view-${name}`)?.classList.remove('hidden');
   setDrawer(false);
   if (name === 'chat') renderConversations();
-  const loader = { providers: loadProviders, participants: loadParticipants, mcp: loadMcp, projects: loadProjects, about: loadAbout }[name];
+  const loader = { providers: loadProviders, participants: loadParticipants, mcp: loadMcp, projects: loadProjects, about: loadAbout, system: loadSystem, ahbg: loadAhbg }[name];
   if (loader) loader().catch(err => toast(err.message, true));
 }
 
@@ -2025,3 +2025,280 @@ showView = function (name) {
   _origShowView(name);
   if (name === 'agents') renderAgents().catch((e) => toast(e.message, true));
 };
+
+// ---------- G02/G03/G04 System explorer + personal knowledge ----------
+const systemState = { data: null, tab: 'narrative', state: null, category: null, selected: null };
+
+async function loadSystem() {
+  if (!systemState.data) {
+    systemState.data = await api.get('/api/system');
+  }
+  const d = systemState.data;
+  const tabs = $$('#systemTabs .chip');
+  tabs.forEach((t) => t.classList.toggle('active', t.dataset.sysview === systemState.tab));
+  const states = [...new Set(d.objects.map((o) => o.state))];
+  const sf = $('#systemStateFilters');
+  sf.innerHTML = '<button class="chip" data-state="">All</button>';
+  for (const st of states) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (systemState.state === st ? ' active' : '');
+    b.textContent = st;
+    b.dataset.state = st;
+    b.onclick = () => { systemState.state = st === systemState.state ? null : st; loadSystem(); };
+    sf.appendChild(b);
+  }
+  const cats = [...new Set(d.objects.flatMap((o) => o.categories))].sort();
+  const cf = $('#systemCategoryFilters');
+  cf.innerHTML = '<button class="chip" data-cat="">All categories</button>';
+  for (const c of cats) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (systemState.category === c ? ' active' : '');
+    b.textContent = c;
+    b.dataset.cat = c;
+    b.onclick = () => { systemState.category = c === systemState.category ? null : c; loadSystem(); };
+    cf.appendChild(b);
+  }
+  renderSystemMain();
+}
+
+function filteredObjects() {
+  let objs = systemState.data.objects;
+  if (systemState.state) objs = objs.filter((o) => o.state === systemState.state);
+  if (systemState.category) objs = objs.filter((o) => o.categories.includes(systemState.category));
+  return objs;
+}
+
+function systemObjectRow(o) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'list-item';
+  btn.innerHTML = `<span class="badge state-${escapeHtml(o.state)}">${escapeHtml(o.state)}</span><span class="strong">${escapeHtml(o.label)}</span><span class="muted">${escapeHtml(o.kind)} · ${escapeHtml(o.categories.join(', '))}</span>`;
+  btn.onclick = () => showSystemDetail(o.id);
+  return btn;
+}
+
+function showSystemDetail(id) {
+  const o = systemState.data.objects.find((x) => x.id === id);
+  if (!o) return;
+  systemState.selected = id;
+  const detail = $('#systemDetail');
+  detail.classList.remove('hidden');
+  detail.innerHTML = `
+    <h3>${escapeHtml(o.label)} <span class="muted">(${escapeHtml(o.id)})</span></h3>
+    <p>${escapeHtml(o.description)}</p>
+    <p class="muted">kind: ${escapeHtml(o.kind)} · categories: ${escapeHtml(o.categories.join(', '))} · state: ${escapeHtml(o.state)} · source: ${escapeHtml(o.source)}</p>
+    <p class="muted">freshness: ${escapeHtml(systemState.data.provenance.buildCommit)} · reliability: F2 (directly retrieved, internally consistent) · credibility: ${o.state === 'working' ? '2 (probably true; deployed behavior observed)' : '6 (cannot be judged; recorded gap)'}</p>
+    <h4>Next steps</h4>
+    <div class="next-cols">
+      <div><strong>Minimal</strong><p>${escapeHtml(o.next.minimal)}</p></div>
+      <div><strong>Maximal feasible</strong><p>${escapeHtml(o.next.maximalFeasible)}</p></div>
+      <div><strong>Maximal potential</strong><p>${escapeHtml(o.next.maximalPotential)}</p></div>
+    </div>
+    <div class="row">
+      <button class="chip" id="intentBtn">Select intention (does not execute)</button>
+      <button class="chip" id="systemBackBtn">← Back</button>
+    </div>
+    <p class="muted" id="intentNote"></p>
+    <h4>Related</h4>
+    <div id="systemRelations"></div>`;
+  const rels = systemState.data.relations.filter((r) => r.from === id || r.to === id);
+  const relBox = $('#systemRelations');
+  relBox.innerHTML = '';
+  if (!rels.length) relBox.textContent = 'No recorded relations.';
+  for (const r of rels) {
+    const other = r.from === id ? r.to : r.from;
+    const otherObj = systemState.data.objects.find((x) => x.id === other);
+    const line = document.createElement('button');
+    line.type = 'button';
+    line.className = 'list-item';
+    line.innerHTML = `<span class="badge">${escapeHtml(r.kind)}</span>${escapeHtml(r.label)} <span class="strong">${escapeHtml(otherObj?.label || other)}</span>`;
+    line.onclick = () => showSystemDetail(other);
+    relBox.appendChild(line);
+  }
+  $('#intentBtn').onclick = () => {
+    $('#intentNote').textContent = 'Intention recorded locally for this view. It is not dispatched; reload discards it.';
+  };
+  $('#systemBackBtn').onclick = () => renderSystemMain();
+  detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderSystemMain() {
+  const main = $('#systemMain');
+  const d = systemState.data;
+  $('#systemDetail').classList.add('hidden');
+  if (systemState.tab === 'narrative') {
+    main.innerHTML = '<p class="muted">System + nested narrative contexts. Tap objects to inspect their connections.</p>';
+    const kinds = ['view', 'skill', 'data', 'boundary', 'operation', 'attention'];
+    for (const kind of kinds) {
+      const items = filteredObjects().filter((o) => o.kind === kind);
+      if (!items.length) continue;
+      const sec = document.createElement('div');
+      sec.className = 'card';
+      const h = document.createElement('h3');
+      h.textContent = kind[0].toUpperCase() + kind.slice(1) + 's';
+      sec.appendChild(h);
+      const list = document.createElement('div');
+      list.className = 'list';
+      for (const o of items) list.appendChild(systemObjectRow(o));
+      sec.appendChild(list);
+      main.appendChild(sec);
+    }
+  } else if (systemState.tab === 'relations') {
+    main.innerHTML = '<p class="muted">Skills require tools; tools expose operations. Recorded relations are source-backed; inferred relations are labeled.</p>';
+    const skills = filteredObjects().filter((o) => o.kind === 'skill' || o.kind === 'view');
+    const ops = filteredObjects().filter((o) => o.kind === 'operation' || o.kind === 'boundary' || o.kind === 'data');
+    const cols = document.createElement('div');
+    cols.className = 'relation-cols';
+    const colA = document.createElement('div');
+    colA.innerHTML = '<h3>Skills / views</h3>';
+    const listA = document.createElement('div'); listA.className = 'list';
+    for (const o of skills) listA.appendChild(systemObjectRow(o));
+    colA.appendChild(listA);
+    const colB = document.createElement('div');
+    colB.innerHTML = '<h3>Tools / operations / data</h3>';
+    const listB = document.createElement('div'); listB.className = 'list';
+    for (const o of ops) listB.appendChild(systemObjectRow(o));
+    colB.appendChild(listB);
+    cols.append(colA, colB);
+    main.appendChild(cols);
+    const rel = document.createElement('div');
+    rel.className = 'card';
+    rel.innerHTML = '<h3>Relation edges</h3>';
+    const list = document.createElement('div'); list.className = 'list';
+    for (const r of d.relations) {
+      const line = document.createElement('button');
+      line.type = 'button';
+      line.className = 'list-item';
+      const from = d.objects.find((x) => x.id === r.from);
+      const to = d.objects.find((x) => x.id === r.to);
+      line.innerHTML = `<span class="badge">${escapeHtml(r.kind)}</span><span class="strong">${escapeHtml(from?.label || r.from)}</span> → ${escapeHtml(r.label)} → <span class="strong">${escapeHtml(to?.label || r.to)}</span>`;
+      line.onclick = () => showSystemDetail(r.from);
+      list.appendChild(line);
+    }
+    rel.appendChild(list);
+    main.appendChild(rel);
+  } else if (systemState.tab === 'attention') {
+    main.innerHTML = '<p class="muted">Matters needing attention: broken, under construction, or explicitly recorded gaps.</p>';
+    const items = filteredObjects().filter((o) => o.state === 'broken' || o.state === 'construction' || o.kind === 'attention');
+    const list = document.createElement('div'); list.className = 'list';
+    for (const o of items) list.appendChild(systemObjectRow(o));
+    main.appendChild(list);
+    if (!items.length) main.innerHTML += '<p class="muted">No attention items for the selected filters.</p>';
+  } else if (systemState.tab === 'knowledge') {
+    main.innerHTML = '<p class="muted">What information A0 has about you, what it actually uses, and the authority for that use. Inferred and unknown items are labeled.</p>';
+    const table = document.createElement('div');
+    table.className = 'card';
+    const rows = d.knowledge.map((k) => `
+      <div class="list-item">
+        <span class="strong">${escapeHtml(k.item)}</span>
+        <span class="badge">${k.held ? 'held' : 'not held'}</span>
+        <span>used in: ${escapeHtml(k.usedIn)}</span>
+        <span class="muted">authority: ${escapeHtml(k.authority)}</span>
+        <p class="muted">${escapeHtml(k.note)}</p>
+      </div>`).join('');
+    table.innerHTML = rows;
+    main.appendChild(table);
+    const cond = document.createElement('div');
+    cond.className = 'card';
+    cond.innerHTML = '<h3>Action-decision conditions</h3><p class="muted">The System view returns an action for your decision when it involves any of:</p>' + d.decisionConditions.map((c) => `<div class="list-item">• ${escapeHtml(c)}</div>`).join('');
+    main.appendChild(cond);
+  }
+}
+
+$('#systemTabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-sysview]');
+  if (!btn) return;
+  systemState.tab = btn.dataset.sysview;
+  loadSystem();
+});
+
+// ---------- G14 AHBG view ----------
+async function loadAhbg() {
+  const sel = $('#ahbgAgent');
+  if (!sel.options.length) {
+    const agents = await api.get('/api/agents');
+    sel.innerHTML = '';
+    for (const a of agents.agents) {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      opt.textContent = `${a.name} · ${a.forge_template_id} · ${a.status}`;
+      sel.appendChild(opt);
+    }
+    if (!sel.options.length) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'Create a Forge agent first';
+      sel.appendChild(opt);
+    }
+  }
+  const box = $('#ahbgSessions');
+  box.innerHTML = '';
+  const data = await api.get('/api/ahbg/sessions');
+  for (const s of data.sessions) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<h3>${escapeHtml(s.game_session_id)} <span class="muted">· seed ${escapeHtml(s.seed)} · ${escapeHtml(s.status)} · turn ${escapeHtml(s.turn)}/${escapeHtml(s.turns)}</span></h3>`;
+    const row = document.createElement('div');
+    row.className = 'row';
+    const inspect = document.createElement('button');
+    inspect.type = 'button'; inspect.className = 'primary-btn'; inspect.textContent = 'Inspect';
+    inspect.onclick = () => renderAhbgDetail(s.id);
+    const turn = document.createElement('button');
+    turn.type = 'button'; turn.className = 'chip'; turn.textContent = 'Next turn';
+    turn.disabled = s.status === 'complete';
+    turn.onclick = async () => {
+      try {
+        const r = await api.post(`/api/ahbg/sessions/${s.id}/turn`);
+        toast(`Turn ${r.turn?.turn ?? '?'} resolved (digest ${String(r.turn?.state_digest || '').slice(0, 8)}).`);
+        await loadAhbg();
+        await renderAhbgDetail(s.id);
+      } catch (err) { toast(err.message, true); }
+    };
+    const replay = document.createElement('button');
+    replay.type = 'button'; replay.className = 'chip'; replay.textContent = 'Replay';
+    replay.onclick = async () => {
+      try {
+        const r = await api.get(`/api/ahbg/sessions/${s.id}/replay`);
+        toast(r.match ? 'Replay matches the live field.' : 'Replay mismatch — inspect the session.', !r.match);
+      } catch (err) { toast(err.message, true); }
+    };
+    row.append(inspect, turn, replay);
+    card.appendChild(row);
+    box.appendChild(card);
+  }
+}
+
+async function renderAhbgDetail(id) {
+  const d = await api.get(`/api/ahbg/sessions/${id}`);
+  const s = d.session;
+  const live = d.live;
+  const detail = $('#ahbgDetail');
+  detail.classList.remove('hidden');
+  detail.innerHTML = `<h3>${escapeHtml(s.game_session_id)}</h3>
+    <p class="muted">seed ${escapeHtml(s.seed)} · turns ${escapeHtml(s.turn)}/${escapeHtml(s.turns)} · status ${escapeHtml(s.status)}</p>
+    <div id="ahbgBoard" class="context-preview"></div>
+    <h4>Records</h4>
+    <div id="ahbgRecords" class="context-preview"></div>
+    <h4>Mechanics</h4>
+    <div id="ahbgMechanics"></div>`;
+  $('#ahbgBoard').textContent = JSON.stringify({ turn: live?.board?.turn ?? s.turn, field: live?.board?.field ?? (s.board?.field || null), legalActionCount: live?.board?.legal?.length ?? '—' }, null, 2);
+  $('#ahbgRecords').textContent = JSON.stringify(s.records || [], null, 2);
+  const mech = await api.get('/api/ahbg/mechanics');
+  $('#ahbgMechanics').innerHTML = '<table class="mini-table"><tr><th>Mechanic</th><th>Implementation</th><th>Status</th></tr>' +
+    mech.mechanics.map((m) => `<tr><td>${escapeHtml(m.mechanic)}</td><td class="muted">${escapeHtml(m.implementation)}</td><td>${escapeHtml(m.status)}</td></tr>`).join('') + '</table>';
+}
+
+$('#ahbgForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    const r = await api.post('/api/ahbg/sessions', {
+      agentId: $('#ahbgAgent').value,
+      seed: Number($('#ahbgSeed').value) || 1,
+      turns: Number($('#ahbgTurns').value) || 8,
+    });
+    toast(`AHBG session created (turn ${r.summary?.board?.turn ?? 0}, ${r.summary?.board?.legal?.length ?? 0} legal actions).`);
+    $('#ahbgForm').reset();
+    await loadAhbg();
+    await renderAhbgDetail(r.session.id);
+  } catch (err) { toast(err.message, true); }
+});

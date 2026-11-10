@@ -127,3 +127,10 @@ Remaining OC gates: OC01/OC03/OC07 PARTIAL, OC09 (physical phone) NOT RUN, OC10 
 - Retained PTCNA: pinned producer runtime runs as a loopback sidecar (`a0-ptcna.service`, `operations/ptcna-sidecar.py`, ptcna c5fa9a59 + ucns b7b6f35 vendored at /opt/a0/vendor). Per-agent phi/psi/omega/memory_l/memory_s state is created, inferred and independent; fork is producer deep-copy, merge algebra not yet wired.
 - Temporary modules: spawn creates one module; hot swap changes renderer without resetting agent/state; retire closes the view and keeps history.
 - FR4 AHBG remains NOT RUN (successor adapter + durable owner-scoped sessions pending). See docs/acceptance.md for the gate record.
+
+## DeepSeek GUI handoff execution (2026-11-10)
+
+- Handoff: `docs/handoffs/deepseek-gui/START-HERE.md`; packet integrity checked via `sha256sum --check SHA256SUMS` is outside this edit but sources were read from the live tree.
+- Added `/api/system` (G02/G03/G04 successor inventory), System view (Narrative/Relations/Attention/About-you, state + category filters, evidence, next-step ranges, intention-without-execution), AHBG view (G14: sessions, board, turns, replay, mechanics matrix), and options rows for Temporary modules/AHBG.
+- `tests/gui/run.js` (19 checks) PASS against the deployment. Offline + issue119/issue120/OC07/OC03 suites remain PASS.
+- Coverage matrix: `docs/gui-coverage.md`. Physical phone gates remain attached to A17/A18/OC09/RX01.
