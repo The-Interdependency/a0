@@ -3,7 +3,7 @@
     "python": "3.12.14",
     "zlib": "1.3.2"
   },
-  "freshness_key_sha256": "d7206d1675734c5f6b1c82acadec81b4e63b87d446b71dc27417b51eda6e9932",
+  "freshness_key_sha256": "9e5dcf91a6b54fba38b8e80ebf728eb2bb6dd76385db58aaad743ca38a3f8453",
   "generator": {
     "contract": "sorted UTF-8 paths; fixed ZIP timestamp/mode; deflate level 9",
     "path": "build-packet.py",
@@ -17,19 +17,24 @@
       "sha256": "a136409882575b5725a8aa164d3b0f4e3f2d47ff3c85839d37d5a81afe8337f3"
     },
     {
+      "bytes": 4548,
+      "path": "CONTEXT-INTEGRITY-REPAIR.md",
+      "sha256": "966c62fd017615cc67635f3c3082c2aecacc630fb69c025fe7a97bfb6df399fe"
+    },
+    {
       "bytes": 9876,
       "path": "GUI-MSDMD.md",
       "sha256": "5aafb4bf35f455f37996ad576127d79a9c01659efb6397d94f82567b1dd131d1"
     },
     {
-      "bytes": 3698,
+      "bytes": 4132,
       "path": "README.md",
-      "sha256": "83a9713a3f66c137d91d53cd2ce971eafe092c5bde86953d001fd95e38e87d34"
+      "sha256": "5ec3b8ad2e7fd62ebd308ffbc51d6e70603318f8b592b90767acc3f4714d9cf3"
     },
     {
-      "bytes": 22376,
+      "bytes": 23253,
       "path": "START-HERE.md",
-      "sha256": "8ef87eed123ded2fe7bf81ea4fad9a56be6ecfb6d9aa01c5c7465216ca06ec3b"
+      "sha256": "6c115c32aaac23616b124400c4930458c68a0e418659046c7803abb0f0138c7d"
     },
     {
       "bytes": 8535,
@@ -184,14 +189,14 @@
   ],
   "outputs": [
     {
-      "bytes": 3386,
+      "bytes": 3480,
       "path": "SHA256SUMS",
-      "sha256": "d081dce24607bdb9f7e0e0934eebd3a16aa0096d0e627879e953812e4422f4ac"
+      "sha256": "310649f5bb32b1c9c7429fc6db6b906ddef8ba2e59aa70331a000fb97a7fd476"
     },
     {
-      "bytes": 875271,
+      "bytes": 878027,
       "path": "a0-gui-deepseek-handoff.zip",
-      "sha256": "d589f987030a444fc5cba5e9825c4390b97d6ec3cafe82515c1339df54f621db"
+      "sha256": "14bf722183b4d33877478b81da19a7c03576c3c7104c35fc0c1bfe6cfecf6d0e"
     }
   ],
   "schema": "a0.deepseek-handoff-packet/v1",

@@ -44,6 +44,8 @@ The old A0 implementation is deprecated at the owner's request and retained unde
 
 Give DeepSeek [the updated GUI handoff](docs/handoffs/deepseek-gui/START-HERE.md) to repair and complete the ChatGPT-style phone interface. It includes the November 10 audit, fourteen findings with the two context-integrity failures first, portable reproduction witnesses, and the full G01–G15 contract, including a source-backed inspector for the GUI’s own MSDMD. Recheck current source/deployment, preserve working mobile repairs, and close each finding with behavioral evidence.
 
+The [owner's F01/F02 repair directive](docs/handoffs/deepseek-gui/CONTEXT-INTEGRITY-REPAIR.md) requires verifying the latest source before further edits: main already reports audit repairs. Preserve correct behavior and intentional context edits, prove conversation isolation, and show the proposed deployment/restart operation to Erin for separate approval before production changes.
+
 ## Builder and VM handoff
 
 Give the builder [the Deep Code handoff](docs/deep-code-vm-handoff.md). Read [AGENTS.md](AGENTS.md) and [the spec](docs/a0-replacement-spec.md); the [source work graph](docs/work-graphs/a0-replacement-spec.json) records the inspected inputs. The assignment continues through a working VM deployment and acceptance, with exact external blockers recorded honestly.
