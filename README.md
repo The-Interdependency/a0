@@ -42,7 +42,7 @@ The old A0 implementation is deprecated at the owner's request and retained unde
 
 ## DeepSeek GUI handoff
 
-Give DeepSeek [the GUI handoff](docs/handoffs/deepseek-gui/README.md) to complete the ChatGPT-style phone interface. The packet includes the full G01–G14 requirements, reference graphic, dated source excerpts, and verification instructions. Continue the current implementation and recheck the deployed revision before changing it.
+Give DeepSeek [the updated GUI handoff](docs/handoffs/deepseek-gui/START-HERE.md) to repair and complete the ChatGPT-style phone interface. It includes the November 10 audit, fourteen findings with the two context-integrity failures first, portable reproduction witnesses, and the full G01–G14 contract. Recheck current source/deployment, preserve working mobile repairs, and close each finding with behavioral evidence.
 
 ## Builder and VM handoff
 

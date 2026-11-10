@@ -2,7 +2,9 @@
 
 GPT generated; context, prompt Erin Spencer. Prepared 2026-11-10.
 
-**NOT EXECUTED. Both merge and deployment require Erin's explicit approval.**
+**A0 merge authorized on 2026-11-10; deployment and companion merge remain held.**
+The authorized A0 merge must pass current-head/base admission after reconciling
+main's documentation-only GUI audit. The provider receipt records execution.
 These are proposals for the existing authenticated VM shell and phone terminal.
 They do not establish host access, current runtime versions, available sudo,
 off-VM recovery or a successful deployment. Do not run the fresh installer.
@@ -10,12 +12,16 @@ off-VM recovery or a successful deployment. Do not run the fresh installer.
 ## Frozen inputs and merge operations
 
 A0 repair input: `6bbcf0f06713319f4f6bbfeaed735197033c4465`.
-The final approval message supplies `A0_RELEASE`, the exact corrected PR head.
+Erin approved A0 #122 at `c9775eba868fd70854b105be4ec0bf823cee9b54`.
+Main then advanced through the documentation-only GUI audit (#124), requiring
+a canonical-record conflict resolution. `A0_RELEASE` is the resulting exact PR
+head after renewed CI/review admission; executable code remains byte-identical
+to the approved head. This reconciliation introduces no deployment authority.
 The commit containing this document is its published output identity; inspect
 `git rev-parse HEAD`, never infer it from a moving branch name.
 
 Companion release: `46ba3e680c21434dd03e79c0cbf900881829701e`.
-Inspected current main bases: A0 `de66778dd1d9073f6a8b3d532e73514868f94e3c`,
+Inspected current main bases: A0 `1ff211d309a42c69c4efca9ec4b1d4da4dd5ad28`,
 skill-lib `8ee77a6630379e48844350d8666515389b94f4c8`.
 
 **Current admission:** A0's repaired branch incorporates current main. Companion
@@ -33,8 +39,9 @@ Use provider enforcement; no administrator bypass, force push, auto-merge or
 branch deletion. Merge producer A0 first, then the companion:
 
 ```bash
-# Only after approval; A0_RELEASE is the exact SHA named in that approval.
+# A0 authorization granted; bind A0_RELEASE to the newly admitted exact head.
 gh pr merge 122 --repo The-Interdependency/a0 --merge --match-head-commit "$A0_RELEASE"
+# BLOCKED: separate companion repair, review and explicit approval still required.
 gh pr merge 137 --repo The-Interdependency/skill-lib --merge --match-head-commit 46ba3e680c21434dd03e79c0cbf900881829701e
 ```
 

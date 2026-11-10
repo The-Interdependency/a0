@@ -6,13 +6,14 @@ GPT generated; context, prompt Erin Spencer.
 ## Current work and source identities
 
 **PR #122: scoped OpenBao credentials, renewal, private reliability bridge and
-recovery compatibility. Source verification is complete locally; merge and VM
-deployment are held for Erin's explicit approval.**
+recovery compatibility. Erin authorized the A0 #122 merge on 2026-11-10.
+Re-admit the documentation reconciliation against the latest main before merging;
+VM deployment and the companion merge remain held for separate approval.**
 
 | Participant | Exact inspected input / role |
 | --- | --- |
 | A0 PR #122 | `6bbcf0f06713319f4f6bbfeaed735197033c4465`; branch `codex/a0-openbao-site-20261108`; first correction `c1a83ea614e1435bc8381a8c9be4b2d82cfe99e8`; current correction is the commit containing this record |
-| A0 current main integration base | `de66778dd1d9073f6a8b3d532e73514868f94e3c`; preserves the new System/AHBG GUI work |
+| A0 current main integration base | `1ff211d309a42c69c4efca9ec4b1d4da4dd5ad28`; preserves System/AHBG and the subsequent GUI audit/handoff |
 | skill-lib PR #137 | `46ba3e680c21434dd03e79c0cbf900881829701e`; unchanged compatibility peer; owns `tools/ai.sh` and `tools/a0_vault.py` |
 | Build doctrine used / current recheck | Implementation used `6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57`; current main rechecked at `8ee77a6630379e48844350d8666515389b94f4c8` |
 | Private Site consumer | `7bbe73ba4e5e0ea99dd4f7e293eea309c77cfd0d`; local source identity verified; current hosted release not reverified here |
@@ -68,8 +69,8 @@ at `46ba3e6` all completed successfully. The
 reports completed review with no findings at that exact head; its earlier PATH
 thread is resolved and outdated. This is not a policy-required APPROVED review.
 
-The integrated A0 source `da474c59417948abc7347dbc4b9136743a3fb1ee` passed
-[Web regressions run 42793516956](https://github.com/The-Interdependency/a0/actions/runs/42793516956),
+The pre-reconciliation A0 source `c9775eba868fd70854b105be4ec0bf823cee9b54` passed
+[Web regressions run 42794111218](https://github.com/The-Interdependency/a0/actions/runs/42794111218),
 including recovery and browser steps. Later documentation-only commits still
 require their own current-head CI/review receipt on
 [PR #122](https://github.com/The-Interdependency/a0/pull/122). Recheck head/base,
@@ -85,12 +86,19 @@ Main advanced from `4656cd3f841b896ad3a6a104a5c9caca2031ca51` to
 `75e5d8905dad87b869f0880fd41435a8951e80a6` and System/AHBG implementation.
 The PR branch incorporates those changes without changing their owning code;
 the only conflict was this canonical record. Both `/api/reliability` and
-`/api/system` remain present. Main itself was not changed by this repair.
+`/api/system` remain present. After merge authorization, main advanced again to
+`1ff211d309a42c69c4efca9ec4b1d4da4dd5ad28` through the documentation-only
+GUI audit publication (#124). This reconciliation preserves that packet byte for
+byte and combines its audit continuation with the vault record. Application,
+operations, dependency, test and CI files remain identical to the approved
+`c9775eba868fd70854b105be4ec0bf823cee9b54` head. Main was not changed by this
+branch reconciliation; the provider merge receipt owns the eventual merge state.
 
 The inherited GUI record reports 19 production-directed GUI checks passing at
-its original deployment. That is prior-author evidence, not a live result from
-this session. `tests/gui/run.js` targets production and was deliberately not
-executed. See [GUI coverage](gui-coverage.md) and the
+its original deployment. The later audit below demonstrates that this script
+also passes a nonfunctional fixture; those markers do not establish GUI completion.
+`tests/gui/run.js` targets production and was deliberately not executed.
+See [GUI coverage](gui-coverage.md) and the
 [GUI handoff](handoffs/deepseek-gui/START-HERE.md). Physical-phone gates remain
 open. The reconciled tree passed the same 30 offline assertions, 40 browser
 tests, 17 provisioning/recovery tests, 3 bridge tests and producer/launcher
@@ -156,7 +164,7 @@ transition; it does not restore vault policies, tokens, timer or launcher state.
 | Gate | Current evidence status |
 | --- | --- |
 | Corrected A0 CI and terminal review | Read the corrected-head PR receipt before merge |
-| Merge A0 #122 then skill-lib #137 | NOT PERFORMED; explicit approval required; #137 additionally blocked by generated collection conflict |
+| Merge A0 #122 then skill-lib #137 | A0 merge AUTHORIZED; execute only after current-head/base admission. #137 remains unapproved and blocked by generated collection conflict |
 | Current VM inventory, runtime compatibility and checkpoint | NOT OBSERVED in this task |
 | Real GPG/PostgreSQL/Bao isolated restore and independent off-VM retrieval (A13) | NOT RUN for this release; local fixtures do not close it |
 | VM deployment, exact served-source/build identity and authenticated HTTPS (A24) | NOT PERFORMED; separate explicit approval required |
@@ -168,9 +176,10 @@ transition; it does not restore vault policies, tokens, timer or launcher state.
 
 ## Next action / running work
 
-Finish current-head CI/review and present the frozen merge and deployment
-operations for Erin's approval. No merge, deployment, token provisioning,
-service restart or production recovery was performed by this source repair.
+Finish current-head/base CI and review, then execute the authorized A0 #122
+merge with an expected-head guard. Record the resulting merge and main CI
+separately. Deployment, token provisioning, service restart and production
+recovery remain unperformed and require separate approval.
 There are no local background tests remaining at handoff; remote CI/review
 status belongs to the PR receipt, not an inferred running VM state.
 
@@ -180,6 +189,18 @@ Previous mobile/issue #118/#119/#120 receipts remain in Git history at
 and [release.md](release.md). Their dated live claims do not establish this
 release's deployment or current phone behavior.
 
-hmmm: companion #137 generated collection conflict, merge/deployment approval,
-VM access/current inventory, off-VM recovery,
+## GUI audit continuation — handoff update (2026-11-10)
+
+The [updated DeepSeek handoff](handoffs/deepseek-gui/START-HERE.md) now carries the [November 10 audit](handoffs/deepseek-gui/AUDIT-2026-11-10.md), fourteen findings, repair acceptance checks and portable isolated witnesses. Audited application commit: `de66778dd1d9073f6a8b3d532e73514868f94e3c`. Public health reported that revision and the served frontend files matched; authenticated production and handset behavior were not observed in this audit.
+
+The fresh local baseline passed 40 browser tests plus 13 Markdown and 17 Responses assertions. Targeted witnesses reproduced context-selection omissions, cross-conversation dialog writes and other failures outside that baseline. The 19-check GUI script also passed an inert nonfunctional fixture; its served-source markers do not establish GUI completion or the full options contract. Exact-source regression CI stopped during Playwright setup before executing tests.
+
+Next: repair F01/F02 context integrity first, then follow the handoff queue and G01–G14 contract. Convert defect-recognition assertions into correct-behavior regression tests; retain the established mobile suite. This publication changes documentation and handoff artifacts; application repairs, candidate-bound release evidence and actual-phone acceptance remain open.
+
+The GUI audit findings belong to the inherited application baseline and its
+separate repair queue. Merging the vault corrections does not close those
+findings or authorize deployment.
+
+hmmm: companion #137 generated collection conflict, companion/deployment approval,
+GUI context-integrity repairs, VM access/current inventory, off-VM recovery,
 sustained renewal, live provider and physical Android evidence remain open.
