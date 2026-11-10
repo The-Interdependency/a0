@@ -16,7 +16,14 @@ The commit containing this document is its published output identity; inspect
 
 Companion release: `46ba3e680c21434dd03e79c0cbf900881829701e`.
 Inspected current main bases: A0 `de66778dd1d9073f6a8b3d532e73514868f94e3c`,
-skill-lib `6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57`.
+skill-lib `8ee77a6630379e48844350d8666515389b94f4c8`.
+
+**Current admission:** A0's repaired branch incorporates current main. Companion
+#137 conflicts only in generated `skill-lib_msdmd.ts` after main's #138 addition.
+The second merge command below is a proposed operation, **blocked** until that
+collection is regenerated and the new head/base passes CI/review. Its head will
+then change: replace the old expected SHA only in a new explicit approval.
+Do not apply the current two-repository deployment sequence while it is blocked.
 
 Immediately before merging, re-read both head/base pairs, checks, effective
 reviews, unresolved threads, mergeability and branch protections. Any movement

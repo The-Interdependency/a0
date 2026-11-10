@@ -14,7 +14,7 @@ deployment are held for Erin's explicit approval.**
 | A0 PR #122 | `6bbcf0f06713319f4f6bbfeaed735197033c4465`; branch `codex/a0-openbao-site-20261108`; first correction `c1a83ea614e1435bc8381a8c9be4b2d82cfe99e8`; current correction is the commit containing this record |
 | A0 current main integration base | `de66778dd1d9073f6a8b3d532e73514868f94e3c`; preserves the new System/AHBG GUI work |
 | skill-lib PR #137 | `46ba3e680c21434dd03e79c0cbf900881829701e`; unchanged compatibility peer; owns `tools/ai.sh` and `tools/a0_vault.py` |
-| Current build doctrine / skill-lib main | `6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57` |
+| Build doctrine used / current recheck | Implementation used `6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57`; current main rechecked at `8ee77a6630379e48844350d8666515389b94f4c8` |
 | Private Site consumer | `7bbe73ba4e5e0ea99dd4f7e293eea309c77cfd0d`; local source identity verified; current hosted release not reverified here |
 | OpenBao selected fork | `4a8f475e88e4fa0c76ae1645a22faffe5596d361`; no binary/store/seal change in this correction |
 
@@ -68,7 +68,10 @@ at `46ba3e6` all completed successfully. The
 reports completed review with no findings at that exact head; its earlier PATH
 thread is resolved and outdated. This is not a policy-required APPROVED review.
 
-The corrected A0 head needs its own CI/review receipt on
+The integrated A0 source `da474c59417948abc7347dbc4b9136743a3fb1ee` passed
+[Web regressions run 42793516956](https://github.com/The-Interdependency/a0/actions/runs/42793516956),
+including recovery and browser steps. Later documentation-only commits still
+require their own current-head CI/review receipt on
 [PR #122](https://github.com/The-Interdependency/a0/pull/122). Recheck head/base,
 checks and unresolved threads at merge admission; old green results do not
 certify a new head. GitHub's conflicting advanced CodeQL workflow was removed
@@ -94,6 +97,23 @@ tests, 17 provisioning/recovery tests, 3 bridge tests and producer/launcher
 compatibility fixture. Syntax, unchanged-main file identities and the work-graph
 digest also passed. These repeated results replace pre-integration results for
 current-head source evidence.
+
+## Companion merge blocker discovered on final recheck
+
+skill-lib main is now `8ee77a6630379e48844350d8666515389b94f4c8`, containing
+PR #138's agent-ops addition. Read-only `git merge-tree --write-tree
+46ba3e680c21434dd03e79c0cbf900881829701e 8ee77a6630379e48844350d8666515389b94f4c8`
+reproduces one conflict: generated `skill-lib_msdmd.ts`. The launcher/helper
+sources are unchanged by main, so the pinned producer/consumer compatibility
+result remains valid. **PR #137 is not currently mergeable.** Its previous
+successful CI/completed review are exact-head evidence, not admission against
+the new base. No skill-lib source or PR was changed in this A0 repair.
+
+Before admitting #137, its owner must reconcile the current base, regenerate
+that collection with the canonical Python 3.13/native-reader toolchain, run its
+full gate and obtain a review of the resulting head/base pair. Do not hand-edit
+or choose one side of a generated collection. A0 #122 can be reviewed on its
+own; coordinated activation remains held until the companion is admitted.
 
 ## Deployment prerequisites and configuration transition
 
@@ -136,7 +156,7 @@ transition; it does not restore vault policies, tokens, timer or launcher state.
 | Gate | Current evidence status |
 | --- | --- |
 | Corrected A0 CI and terminal review | Read the corrected-head PR receipt before merge |
-| Merge A0 #122 then skill-lib #137 | NOT PERFORMED; explicit approval required |
+| Merge A0 #122 then skill-lib #137 | NOT PERFORMED; explicit approval required; #137 additionally blocked by generated collection conflict |
 | Current VM inventory, runtime compatibility and checkpoint | NOT OBSERVED in this task |
 | Real GPG/PostgreSQL/Bao isolated restore and independent off-VM retrieval (A13) | NOT RUN for this release; local fixtures do not close it |
 | VM deployment, exact served-source/build identity and authenticated HTTPS (A24) | NOT PERFORMED; separate explicit approval required |
@@ -160,5 +180,6 @@ Previous mobile/issue #118/#119/#120 receipts remain in Git history at
 and [release.md](release.md). Their dated live claims do not establish this
 release's deployment or current phone behavior.
 
-hmmm: merge/deployment approval, VM access/current inventory, off-VM recovery,
+hmmm: companion #137 generated collection conflict, merge/deployment approval,
+VM access/current inventory, off-VM recovery,
 sustained renewal, live provider and physical Android evidence remain open.

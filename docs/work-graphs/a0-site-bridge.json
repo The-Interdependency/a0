@@ -1,7 +1,7 @@
 {
   "schema": "the-interdependency.stack-manifest",
   "version": "1.0.0",
-  "work_graph_sha256": "e9bcd3b8f89b7b777fe8f11e1f3c4650a5cb8d91301d200967eaa5840c9f88e5",
+  "work_graph_sha256": "2eee9b3794a7879a05bd1c25cafb9ceddebc7068ac17c14d51aff4ed52a56f8e",
   "repositories": [
     {
       "repository": "The-Interdependency/skill-lib",
@@ -26,6 +26,12 @@
       "commit": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
       "authority": "current main System/AHBG implementation and GUI handoff",
       "relation": "integration-base; existing GUI code preserved"
+    },
+    {
+      "repository": "The-Interdependency/skill-lib",
+      "commit": "8ee77a6630379e48844350d8666515389b94f4c8",
+      "authority": "current build doctrine and agent-ops addition",
+      "relation": "companion integration-base; generated collection conflict blocks #137 merge"
     }
   ],
   "boundaries": {
@@ -36,7 +42,8 @@
     "agent_scope": "cross-repository-work-graph",
     "hmmm": [
       "This graph pins the repair inputs; its containing commit identifies the corrected A0 output.",
-      "Merge and deployment require explicit approval; live VM, sustained renewal, provider and physical-phone acceptance remain unverified."
+      "Merge and deployment require explicit approval; live VM, sustained renewal, provider and physical-phone acceptance remain unverified.",
+      "skill-lib #137 conflicts with current main in generated skill-lib_msdmd.ts; pinned launcher compatibility does not establish merge admission."
     ]
   }
 }
