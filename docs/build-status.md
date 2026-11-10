@@ -210,3 +210,11 @@ Repaired per the updated DeepSeek handoff (`docs/handoffs/deepseek-gui/START-HER
 ## GUI self-description requirement — G15 (2026-11-10)
 
 The owner requires a place in the GUI to display its own MSDMD. [GUI-MSDMD.md](handoffs/deepseek-gui/GUI-MSDMD.md) specifies About this interface within About & harness, a current-view entry into the same inspector, source-owned schema-2 metadata, provenance/coverage/hmmm, and GM01–GM08 acceptance. The active handoff now covers G01–G15. This records the display contract; the actual inspector and its acceptance remain implementation work. Inspection must preserve conversation/run state and keep GUI metadata separate from runtime harness/prompt content.
+
+## DeepSeek F01/F02 owner directive (2026-11-10)
+
+The [owner's directive](handoffs/deepseek-gui/CONTEXT-INTEGRITY-REPAIR.md) is published in the active handoff and downloadable packet. Preparation base: `12b64724145dac9591ca650f5d0fd3b573d4ae7d`. The audit-repair section above reports F01–F14 corrections; this documentation change preserves that report without treating it as independently verified closure.
+
+Next: DeepSeek must verify current F01/F02 behavior against the November 10 witnesses, retain already-correct behavior and intentional context edits, repair remaining defects in the application, and produce positive regressions with exact source/test evidence. Keep the mobile-chat behavior and G01–G15 requirements. Show Erin the proposed operation and obtain separate approval before deploying repairs or restarting production services.
+
+This publication changes documentation and regenerated packet artifacts only. Its review checks content fidelity, links, unchanged G01–G15 contracts and historical evidence, and packet consistency. No application tests or production operations are claimed by this publication; its merge and CI receipts belong to the publication PR. hmmm: current application closure remains the builder's verification task.
