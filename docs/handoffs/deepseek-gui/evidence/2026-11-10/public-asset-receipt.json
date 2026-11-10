@@ -1,0 +1,72 @@
+{
+  "audited_sha": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+  "public_origin": "https://35.212.252.101.nip.io",
+  "scope": "Read-only public health and asset observations; no authenticated behavior claim",
+  "observations": [
+    {
+      "path": "/api/health",
+      "observed_at": "2026-11-10T09:34:27.244488+00:00",
+      "status": 200,
+      "bytes": 230,
+      "sha256": "642e622de82dac41ec72363a6a5b140ea7b45a5e76d1ec238ceb5f607de9f3e7",
+      "content_type": "application/json; charset=utf-8",
+      "public_identity": {
+        "ok": true,
+        "name": "a0",
+        "harness": "a0-harness/1.0.0",
+        "time": "2026-11-10T09:34:31.128Z",
+        "build": {
+          "commit": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+          "dirty": "",
+          "builtAt": "2026-11-10T08:39:49.559421+00:00"
+        },
+        "servedFrom": "production"
+      }
+    },
+    {
+      "path": "/build-info.json",
+      "observed_at": "2026-11-10T09:34:31.182258+00:00",
+      "status": 200,
+      "bytes": 16042,
+      "sha256": "47f6ac382b8eb32331e342049c99f4d0cb37ae4203920c195297b46f1b9e984d",
+      "content_type": "text/html; charset=UTF-8",
+      "public_identity": "non-JSON"
+    },
+    {
+      "path": "/",
+      "observed_at": "2026-11-10T09:34:34.329051+00:00",
+      "status": 200,
+      "bytes": 16042,
+      "sha256": "47f6ac382b8eb32331e342049c99f4d0cb37ae4203920c195297b46f1b9e984d",
+      "content_type": "text/html; charset=UTF-8",
+      "matches_audited_source": true
+    },
+    {
+      "path": "/app.js",
+      "observed_at": "2026-11-10T09:34:37.190163+00:00",
+      "status": 200,
+      "bytes": 92534,
+      "sha256": "89945045c4acc5b535be62b57a1963e6430fe78a99afc92d92e9ebe0bf82739c",
+      "content_type": "application/javascript; charset=UTF-8",
+      "matches_audited_source": true
+    },
+    {
+      "path": "/styles.css",
+      "observed_at": "2026-11-10T09:34:40.324916+00:00",
+      "status": 200,
+      "bytes": 12867,
+      "sha256": "d22a45cf7663c5baf8bec4909f338aeb549dfe7d942e308942e141ba530e916b",
+      "content_type": "text/css; charset=UTF-8",
+      "matches_audited_source": true
+    },
+    {
+      "path": "/markdown.js",
+      "observed_at": "2026-11-10T09:34:43.973518+00:00",
+      "status": 200,
+      "bytes": 2486,
+      "sha256": "5476610264526ce3b041b12aecc07e7c01e389e25f5807ba5b107f3a5d333b93",
+      "content_type": "application/javascript; charset=UTF-8",
+      "matches_audited_source": true
+    }
+  ]
+}

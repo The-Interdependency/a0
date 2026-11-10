@@ -1,0 +1,32 @@
+{
+  "audited_sha": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+  "observation_date_utc": "2026-11-10",
+  "scope": "Local existing suites, not deployed or physical-phone acceptance",
+  "results": [
+    {
+      "lane": "offline",
+      "command": [
+        "npm",
+        "run",
+        "test:offline"
+      ],
+      "exit_code": 0,
+      "seconds": 1.14,
+      "checks": {
+        "markdown": 13,
+        "responses": 17
+      }
+    },
+    {
+      "lane": "browser",
+      "command": [
+        "npm",
+        "run",
+        "test:browser"
+      ],
+      "exit_code": 0,
+      "seconds": 68.177,
+      "checks": 40
+    }
+  ]
+}

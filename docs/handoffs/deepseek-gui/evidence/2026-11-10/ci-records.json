@@ -1,0 +1,67 @@
+{
+  "audited_sha": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+  "retrieved_date_utc": "2026-11-10",
+  "workflow_runs": [
+    {
+      "id": 42784382455,
+      "name": "CodeQL (repo)",
+      "event": "push",
+      "sha": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/The-Interdependency/a0/actions/runs/42784382455",
+      "created_at": "2026-11-10T08:39:45Z"
+    },
+    {
+      "id": 42784382390,
+      "name": "Web regressions",
+      "event": "push",
+      "sha": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/The-Interdependency/a0/actions/runs/42784382390",
+      "created_at": "2026-11-10T08:39:45Z"
+    },
+    {
+      "id": 42784382248,
+      "name": "Code Quality: Push on main",
+      "event": "dynamic",
+      "sha": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/The-Interdependency/a0/actions/runs/42784382248",
+      "created_at": "2026-11-10T08:39:45Z"
+    },
+    {
+      "id": 42784382015,
+      "name": "Push on main",
+      "event": "dynamic",
+      "sha": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/The-Interdependency/a0/actions/runs/42784382015",
+      "created_at": "2026-11-10T08:39:44Z"
+    }
+  ],
+  "log_excerpts": [
+    {
+      "job_id": 129721856701,
+      "lines": [
+        "2026-11-10T08:39:59.4937137Z BEWARE: your OS is not officially supported by Playwright; installing dependencies for ubuntu26.04-x64 as a fallback.",
+        "2026-11-10T08:39:59.4939681Z Cannot install dependencies for ubuntu26.04-x64 with Playwright 1.56.1!",
+        "2026-11-10T08:39:59.5000336Z Error: ERROR: Playwright does not support chromium on ubuntu26.04-x64",
+        "2026-11-10T08:39:59.5153662Z ##[error]Process completed with exit code 1.",
+        "2026-11-10T08:39:59.6662893Z ##[warning]No files were found with the provided path: test-results/. No artifacts will be uploaded."
+      ]
+    },
+    {
+      "job_id": 129721856641,
+      "lines": [
+        "2026-11-10T08:41:04.9009244Z ##[error]Code Scanning could not process the submitted SARIF file:",
+        "CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled",
+        "2026-11-10T08:41:07.6799823Z CodeQL job status was configuration error."
+      ]
+    }
+  ]
+}
+

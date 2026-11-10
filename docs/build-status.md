@@ -134,3 +134,12 @@ Remaining OC gates: OC01/OC03/OC07 PARTIAL, OC09 (physical phone) NOT RUN, OC10 
 - Added `/api/system` (G02/G03/G04 successor inventory), System view (Narrative/Relations/Attention/About-you, state + category filters, evidence, next-step ranges, intention-without-execution), AHBG view (G14: sessions, board, turns, replay, mechanics matrix), and options rows for Temporary modules/AHBG.
 - `tests/gui/run.js` (19 checks) PASS against the deployment. Offline + issue119/issue120/OC07/OC03 suites remain PASS.
 - Coverage matrix: `docs/gui-coverage.md`. Physical phone gates remain attached to A17/A18/OC09/RX01.
+
+
+## GUI audit continuation — handoff update (2026-11-10)
+
+The [updated DeepSeek handoff](handoffs/deepseek-gui/START-HERE.md) now carries the [November 10 audit](handoffs/deepseek-gui/AUDIT-2026-11-10.md), fourteen findings, repair acceptance checks and portable isolated witnesses. Audited application commit: `de66778dd1d9073f6a8b3d532e73514868f94e3c`. Public health reported that revision and the served frontend files matched; authenticated production and handset behavior were not observed in this audit.
+
+The fresh local baseline passed 40 browser tests plus 13 Markdown and 17 Responses assertions. Targeted witnesses reproduced context-selection omissions, cross-conversation dialog writes and other failures outside that baseline. The 19-check GUI script also passed an inert nonfunctional fixture; its served-source markers do not establish GUI completion or the full options contract. Exact-source regression CI stopped during Playwright setup before executing tests.
+
+Next: repair F01/F02 context integrity first, then follow the handoff queue and G01–G14 contract. Convert defect-recognition assertions into correct-behavior regression tests; retain the established mobile suite. This publication changes documentation and handoff artifacts; application repairs, candidate-bound release evidence and actual-phone acceptance remain open.

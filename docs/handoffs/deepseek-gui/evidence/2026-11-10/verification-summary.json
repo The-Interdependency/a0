@@ -1,0 +1,80 @@
+{
+  "audited_sha": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+  "node": "v24.22.1",
+  "syntax_checks": {
+    "scripts": 7,
+    "failures": 0
+  },
+  "diagnostics": [
+    {
+      "script": "gui-repro.mjs",
+      "command": [
+        "node",
+        "--test",
+        "gui-repro.mjs"
+      ],
+      "observed_at": "2026-11-10T09:53:24.513335+00:00",
+      "exit_code": 0,
+      "seconds": 6.511,
+      "polarity": "Exit 0 reproduces audited defect; not product acceptance"
+    },
+    {
+      "script": "context-selection-repro.mjs",
+      "command": [
+        "node",
+        "--experimental-vm-modules",
+        "context-selection-repro.mjs"
+      ],
+      "observed_at": "2026-11-10T09:53:24.513956+00:00",
+      "exit_code": 0,
+      "seconds": 0.163,
+      "polarity": "Exit 0 reproduces audited defect; not product acceptance"
+    },
+    {
+      "script": "advanced-routes.mjs",
+      "command": [
+        "node",
+        "advanced-routes.mjs"
+      ],
+      "observed_at": "2026-11-10T09:53:24.677468+00:00",
+      "exit_code": 0,
+      "seconds": 0.177,
+      "polarity": "Exit 0 reproduces audited defect; not product acceptance"
+    },
+    {
+      "script": "advanced-ui.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "advanced-ui.test.mjs"
+      ],
+      "observed_at": "2026-11-10T09:53:24.854479+00:00",
+      "exit_code": 0,
+      "seconds": 9.92,
+      "polarity": "Exit 0 reproduces audited defect; not product acceptance"
+    },
+    {
+      "script": "contrast.test.mjs",
+      "command": [
+        "node",
+        "--test",
+        "contrast.test.mjs"
+      ],
+      "observed_at": "2026-11-10T09:53:31.024582+00:00",
+      "exit_code": 0,
+      "seconds": 2.368,
+      "polarity": "Exit 0 reproduces audited defect; not product acceptance"
+    },
+    {
+      "script": "gui-gate-counterexample.mjs",
+      "command": [
+        "node",
+        "gui-gate-counterexample.mjs"
+      ],
+      "observed_at": "2026-11-10T09:53:33.392897+00:00",
+      "exit_code": 0,
+      "seconds": 0.113,
+      "polarity": "Exit 0 reproduces audited defect; not product acceptance"
+    }
+  ]
+}

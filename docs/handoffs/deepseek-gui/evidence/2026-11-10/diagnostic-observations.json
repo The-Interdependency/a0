@@ -1,0 +1,139 @@
+{
+  "audited_sha": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+  "polarity": "Successful defect reproduction, not product acceptance",
+  "results": [
+    {
+      "script": "gui-repro.mjs",
+      "exit_code": 0,
+      "test_summary": [
+        "\u2139 tests 3",
+        "\u2139 pass 3",
+        "\u2139 fail 0",
+        "\u2139 cancelled 0",
+        "\u2139 skipped 0",
+        "\u2139 todo 0"
+      ],
+      "observations": [
+        "G06 observation {\"target\":\"DeepSeek, OpenAI\",\"selected\":[\"DeepSeek \u00b7 deepseek-chat\"],\"request\":{\"mode\":\"single\",\"participantIds\":[\"p1\"],\"message\":{\"content\":\"Continue with the newly picked model\",\"attachmentIds\":[],\"clientRequestId\":\"834b4e9e-18b3-4102-8fe9-d813595cefef\"}},\"errors\":[]}",
+        "G10 observation {\"text\":\"Fixture MCP\\nhttps://fixture.invalid/mcp\\nStatus: connected \u00b7 1 tools\\nDiscover\\nDisable\\nDelete\",\"toolCount\":0,\"schemaCount\":0,\"errors\":[]}",
+        "G07/G09 observation {\"title\":\"Other conversation\",\"shown\":\"deepseek \u00b7 deepseek-chat \u00b7 DeepSeek \u00b7 11/3/2026, 3:00:00 PM\\n\\nFirst answer\\n\\nopenai \u00b7 gpt-4o-mini \u00b7 OpenAI \u00b7 11/3/2026, 3:00:00 PM\\n\\nSecond answer\",\"patch\":{\"path\":\"/api/conversations/c2\",\"method\":\"PATCH\",\"body\":\"{\\\"contextPolicy\\\":{\\\"mode\\\":\\\"selected\\\",\\\"selectedMessageIds\\\":[\\\"m1\\\",\\\"m2\\\"]}}\"},\"errors\":[]}"
+      ]
+    },
+    {
+      "script": "context-selection-repro.mjs",
+      "exit_code": 0,
+      "test_summary": [],
+      "observations": [
+        "Selected policy with no prior revision {\"messageIds\":[\"a1\"],\"blocks\":[{\"id\":\"msg:u1\",\"included\":false},{\"id\":\"msg:a1\",\"included\":true},{\"id\":\"msg:a2\",\"included\":false},{\"id\":\"msg:u2\",\"included\":false}]}",
+        "Selected policy after an existing all-responses revision {\"messageIds\":[\"u1\",\"a1\",\"a2\"],\"blocks\":[{\"id\":\"msg:u1\",\"included\":true},{\"id\":\"msg:a1\",\"included\":true},{\"id\":\"msg:a2\",\"included\":true},{\"id\":\"msg:u2\",\"included\":false}]}",
+        "Return to Include all after the selected-mode round {\"messageIds\":[\"u1\",\"a1\",\"a2\"]}",
+        "CONFIRMED: selected responses omit new user messages; saved revision also retains deselected prior answers. No network/provider/production calls."
+      ]
+    },
+    {
+      "script": "advanced-routes.mjs",
+      "exit_code": 0,
+      "test_summary": [],
+      "observations": [
+        {
+          "witness": "agent-context-rejected",
+          "status": 400,
+          "response": {
+            "error": "validation",
+            "message": "Unknown or unauthorized block: agent:a1"
+          }
+        },
+        {
+          "witness": "cross-conversation-project-save-accepted",
+          "status": 201,
+          "conversationId": "c2",
+          "project": {
+            "id": "project",
+            "type": "project",
+            "source": "project:project-b",
+            "label": "Project instructions (Project B)",
+            "content": "Private context from conversation A",
+            "editable": true,
+            "included": true,
+            "readonlyReason": null
+          }
+        },
+        {
+          "witness": "ahbg-error-sticks-lock",
+          "firstError": {
+            "message": "Synthetic transient sidecar outage",
+            "status": 502
+          },
+          "persistedStatus": "in_progress",
+          "retryStatus": 409,
+          "retryResponse": {
+            "error": "conflict",
+            "message": "A turn is already in progress for this session."
+          },
+          "observeCalls": 1
+        }
+      ]
+    },
+    {
+      "script": "advanced-ui.test.mjs",
+      "exit_code": 0,
+      "test_summary": [
+        "\u2139 tests 5",
+        "\u2139 pass 5",
+        "\u2139 fail 0",
+        "\u2139 cancelled 0",
+        "\u2139 skipped 0",
+        "\u2139 todo 0"
+      ],
+      "observations": [
+        "{\"witness\":\"system-reset\",\"fullCount\":33,\"filteredCount\":1,\"resetCount\":1}",
+        "{\"witness\":\"system-evidence\",\"evidence\":[\"freshness: audit-de66778 \u00b7 reliability: F2 (directly retrieved, internally consistent) \u00b7 credibility: 2 (probably true; deployed behavior observed)\"],\"absence\":\"Personal facts outside A0 (calendar, contacts, schedule)\\nnot held\\nused in: \u2014\\nauthority: unknown / not collected\\n\\nNo such inventory exists; treat as not collected.\"}",
+        "{\"witness\":\"ahbg-stale-selector\",\"agentsCreated\":1,\"options\":\"Create a Forge agent first\"}",
+        "{\"witness\":\"module-swap-label-only\",\"renderer\":\"agent-stats\",\"controls\":[\"Open chat\",\"PTCNA infer\",\"Swap module\",\"Retire\"]}",
+        "{\"witness\":\"context-navigation-misroute\",\"saved\":{\"path\":\"/api/conversations/c2/context-revisions\",\"body\":{\"blocks\":[{\"id\":\"harness\",\"included\":true},{\"id\":\"project\",\"content\":\"Private context from conversation A\",\"included\":true},{\"id\":\"tools\",\"included\":true}],\"note\":\"website context editor\",\"expectedRevision\":null}}}"
+      ]
+    },
+    {
+      "script": "contrast.test.mjs",
+      "exit_code": 0,
+      "test_summary": [
+        "\u2139 tests 1",
+        "\u2139 pass 1",
+        "\u2139 fail 0",
+        "\u2139 cancelled 0",
+        "\u2139 skipped 0",
+        "\u2139 todo 0"
+      ],
+      "observations": []
+    },
+    {
+      "script": "gui-gate-counterexample.mjs",
+      "exit_code": 0,
+      "test_summary": [],
+      "observations": [
+        "COUNTEREXAMPLE: zero system objects, zero relations, no DOM controls, no behavior, options missing every contract field except area. All fetches are local mocks.",
+        "[PASS] G02 /api/system served",
+        "[PASS] G02 object identities unique",
+        "[PASS] G02 every relation endpoint resolves",
+        "[PASS] G02 recorded/inferred relation kinds distinct",
+        "[PASS] G03 every object has three next-step ranges",
+        "[PASS] G03 four action-decision conditions preserved",
+        "[PASS] G04 knowledge entries have authority labels",
+        "[PASS] G04 not-held/inferred knowledge labeled",
+        "[PASS] G02 state vocabulary distinct",
+        "[PASS] G02 provenance discloses freshness and scope",
+        "[PASS] Options inventory served",
+        "[PASS] Options cover model/context/tools/voice/agents/AHBG areas",
+        "[PASS] G02 System view served",
+        "[PASS] G14 AHBG view served",
+        "[PASS] G02 narrative/relations/attention tabs served",
+        "[PASS] G04 knowledge tab served",
+        "[PASS] G03 intention never executes",
+        "[PASS] G14 mechanics matrix rendered",
+        "[PASS] System/AHBG styling present",
+        "GUI handoff checks: all passed.",
+        "Mocked fetches: [{\"path\":\"/api/auth/login\",\"method\":\"POST\"},{\"path\":\"/api/me\",\"method\":\"GET\"},{\"path\":\"/api/system\",\"method\":\"GET\"},{\"path\":\"/api/options\",\"method\":\"GET\"},{\"path\":\"/\",\"method\":\"GET\"},{\"path\":\"/app.js\",\"method\":\"GET\"},{\"path\":\"/styles.css\",\"method\":\"GET\"}]"
+      ]
+    }
+  ]
+}

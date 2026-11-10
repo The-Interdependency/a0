@@ -1,0 +1,36 @@
+{
+  "viewport": {
+    "width": 393,
+    "height": 820
+  },
+  "source": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+  "auditedSource": "de66778dd1d9073f6a8b3d532e73514868f94e3c",
+  "sourceDirty": false,
+  "step": {
+    "text": "Health check.",
+    "color": "rgb(232, 236, 246)",
+    "background": "rgb(244, 247, 250)",
+    "fontSize": "13px",
+    "rect": {
+      "x": 35,
+      "y": 1294.34375,
+      "width": 323,
+      "height": 18
+    },
+    "contrast": 1.0997316267966573
+  },
+  "preview": {
+    "text": "Context preview should be readable.",
+    "color": "rgb(232, 236, 246)",
+    "background": "rgb(244, 247, 250)",
+    "fontSize": "12px",
+    "rect": {
+      "x": 41,
+      "y": 368.71875,
+      "width": 311,
+      "height": 30
+    },
+    "contrast": 1.0997316267966573
+  },
+  "pageErrors": []
+}
