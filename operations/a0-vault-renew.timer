@@ -1,0 +1,11 @@
+[Unit]
+Description=Keep A0 application and CLI vault credentials renewed
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+Persistent=true
+Unit=a0-vault-renew.service
+
+[Install]
+WantedBy=timers.target
