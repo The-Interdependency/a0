@@ -28,11 +28,11 @@ sudo systemctl restart a0                    # app-only update
 
 ## Update
 
-```sh
-cd /opt/a0 && sudo git fetch origin && sudo git checkout <release-commit>
-sudo rsync -a --delete --exclude node_modules /opt/a0/ ... # or redeploy via install.sh
-sudo systemctl restart a0
-```
+For PR #122, follow the [approval-gated release operations](../docs/pr122-operations.md).
+They stage the exact approved source, preserve prior source/configuration,
+verify recovery, then provision and pair. Do not run the broad installer for an
+app-only update or initialize an existing vault. The prior inline token and new
+token-file configuration require compatible rollback, not a source-only revert.
 
 ## Key/provider setup
 
@@ -43,32 +43,42 @@ sudo systemctl restart a0
 
 ```sh
 sudo operations/backup.sh
-# Output: /srv/a0/backups/a0-backup-<stamp>.tar.gz.enc (AES-256-CBC, key /etc/a0/backup.key)
+# Output: /srv/a0/backups/a0-backup-<stamp>.tar.gz.gpg (GnuPG AES256, integrity-protected; key /etc/a0/backup.key)
 # Copy BOTH the encrypted file and /etc/a0/backup.key off-VM to an authorized destination.
 ```
+
+Both scripts accept JSON and historical `root_token=...` recovery files without
+sourcing or printing their contents. Root credentials remain in Python memory
+and authenticated vault transport, never command arguments. New backups include
+cluster/mount identity and a nonsecret canary. Quiesce app/media/vault writers
+for a consistent snapshot; copy the encrypted archive and separately protected
+recovery material off-VM before calling recovery available.
 
 ## Restore (isolated verification)
 
 ```sh
-sudo operations/restore.sh /srv/a0/backups/a0-backup-<stamp>.tar.gz.enc verify1
+sudo operations/restore.sh /srv/a0/backups/a0-backup-<stamp>.tar.gz.gpg verify1
 # Creates a0app_verify1 + openbao_verify1 + /srv/a0/restore-media-verify1 and verifies counts.
-# Full production restore = load those dumps into fresh a0app/openbao databases and
-# copy media back; the vault additionally needs /etc/openbao/seal.key + recovery material.
+# The suffix must be unused/disposable; these isolated targets are replaced.
+# Completion requires CANARY_OK for the restored cluster and original canary.
 ```
 
 ## Rollback
 
-```sh
-cd /opt/a0
-OLD=$(git rev-parse HEAD)
-sudo git fetch origin
-sudo git checkout <previous-good-commit>
-sudo systemctl restart a0
-# If the previous build is broken after a DB migration, restore the pre-update backup
-# with operations/restore.sh before restarting. Source rollback alone does not undo
-# database migrations or external tool effects.
-# To return to this release: sudo git checkout $OLD && sudo systemctl restart a0
-```
+`sudo operations/rollback.sh --check BACKUP.tar.gz.gpg` runs an isolated
+restore using the corrected reader. Its fixed `rollbackcheck` targets must be
+disposable. The [PR #122 rollback requirements](../docs/pr122-operations.md)
+own the configuration transition: preserve the prior release, dependencies,
+private config, original scoped credential and renewal state. Stop A0 if any
+compatibility gate fails; keep vault/data and the recovery shell available.
+Do not use `rollback.sh --apply` for this rollout. It restores app DB/media/source
+without reversing vault policies, token-file configuration or launcher state.
+
+Old archives without `vault-identity.json` require the independently configured
+`BAO_CLUSTER_ID`; missing or conflicting identity fails closed. The actual
+restore needs the applicable backup key, seal key, root/recovery authorization,
+DB role passwords, and available loopback ports 8203/8204. An isolated fixture
+pass does not establish real GPG, PostgreSQL, Bao or off-VM recovery.
 
 ## Recovery material (do not commit)
 

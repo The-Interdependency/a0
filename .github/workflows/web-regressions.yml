@@ -26,7 +26,9 @@ jobs:
         run: |
           node --test tests/reliability/bridge.test.js
           python3 -m unittest discover -s tests/reliability -p "test_*.py"
-          bash -n operations/install.sh operations/install-vault-tools.sh
+          for script in operations/install.sh operations/install-vault-tools.sh operations/backup.sh operations/restore.sh operations/rollback.sh; do
+            bash -n "$script"
+          done
       - name: Browser flows (fixture services only)
         env:
           A0_TEST_ARTIFACT_DIR: test-results

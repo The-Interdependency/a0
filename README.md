@@ -22,6 +22,19 @@ npm run test:offline
 npm run test:browser
 ```
 
+Vault/recovery/bridge checks for PR #122:
+
+```sh
+python3 -m unittest discover -s tests/reliability -p 'test_*.py'
+node --test tests/reliability/bridge.test.js
+# Use skill-lib PR #137 at 46ba3e680c21434dd03e79c0cbf900881829701e:
+python3 tests/reliability/check_launcher_compat.py ../skill-launcher
+```
+
+[Current source and acceptance gates](docs/build-status.md) and
+[proposed merge/deployment/rollback operations](docs/pr122-operations.md) record
+the recovery correction. Merge and deployment require explicit owner approval.
+
 The separate `npm test` command targets production acceptance and requires its
 documented environment; it is not the isolated regression command above.
 

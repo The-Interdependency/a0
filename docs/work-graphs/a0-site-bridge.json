@@ -1,23 +1,23 @@
 {
   "schema": "the-interdependency.stack-manifest",
   "version": "1.0.0",
-  "work_graph_sha256": "46ba84d57e84112a74ac4b531b1d414e092b274905ffdc59d87002e58a7bcf4a",
+  "work_graph_sha256": "2b026a3ade4f39996d719b8b39f1a1299927aa05eee0bb2259bafaa670783ef9",
   "repositories": [
     {
       "repository": "The-Interdependency/skill-lib",
-      "commit": "6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57",
+      "commit": "46ba3e680c21434dd03e79c0cbf900881829701e",
       "authority": "launcher and VM CLI credential consumer",
       "relation": "producer"
     },
     {
       "repository": "The-Interdependency/a0",
-      "commit": "4656cd3f841b896ad3a6a104a5c9caca2031ca51",
+      "commit": "6bbcf0f06713319f4f6bbfeaed735197033c4465",
       "authority": "vault provisioning, application status and handoff inbox",
       "relation": "producer"
     },
     {
       "repository": "Sites/a0-reliability-console",
-      "commit": "0e480ab541680cfa3baef3deb86ce322be209f00",
+      "commit": "7bbe73ba4e5e0ea99dd4f7e293eea309c77cfd0d",
       "authority": "owner-authenticated reliability presentation and evidence",
       "relation": "consumer"
     }
@@ -29,7 +29,8 @@
     "semantic_mapping": "external-provenance",
     "agent_scope": "cross-repository-work-graph",
     "hmmm": [
-      "VM deployment access and physical phone acceptance are not available in this session."
+      "This graph pins the repair inputs; its containing commit identifies the corrected A0 output.",
+      "Merge and deployment require explicit approval; live VM, sustained renewal, provider and physical-phone acceptance remain unverified."
     ]
   }
 }

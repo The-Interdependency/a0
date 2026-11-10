@@ -1,129 +1,144 @@
-# A0 build status — resumption record
+# A0 build status — canonical resumption record
 
-Last updated: 2026-11-03 (America/Los_Angeles)
+Updated: 2026-11-10 (America/Los_Angeles).
+GPT generated; context, prompt Erin Spencer.
 
-## Mobile repair — current continuation
+## Current work and source identities
 
-The owner's phone report supersedes the earlier claims that navigation, draft
-recovery and voice feedback were fully repaired. Baseline source and public
-health identity: `ef9f44b518087b9152240731a727ec0f3d531913`.
+**PR #122: scoped OpenBao credentials, renewal, private reliability bridge and
+recovery compatibility. Source verification is complete locally; merge and VM
+deployment are held for Erin's explicit approval.**
 
-Work is on `fix/mobile-chat-continuity`: navigation startup, owner-scoped active
-chat/draft recovery, upload states, round-based carousel/side/stack layouts,
-voice feedback, settings persistence and valid OpenAI assistant-history encoding.
-See [mobile-chat-repair.md](mobile-chat-repair.md) for file ownership, test
-evidence, limits and the deployment procedure. No archive, database schema,
-provider key, model choice or vault configuration was changed.
+| Participant | Exact inspected input / role |
+| --- | --- |
+| A0 PR #122 | `6bbcf0f06713319f4f6bbfeaed735197033c4465`; branch `codex/a0-openbao-site-20261108`; corrections are the commit containing this record |
+| A0 main base | `4656cd3f841b896ad3a6a104a5c9caca2031ca51` |
+| skill-lib PR #137 | `46ba3e680c21434dd03e79c0cbf900881829701e`; unchanged compatibility peer; owns `tools/ai.sh` and `tools/a0_vault.py` |
+| Current build doctrine / skill-lib main | `6a16302f0b7ad6e2ed5331ee1423fcc0939e1d57` |
+| Private Site consumer | `7bbe73ba4e5e0ea99dd4f7e293eea309c77cfd0d`; local source identity verified; current hosted release not reverified here |
+| OpenBao selected fork | `4a8f475e88e4fa0c76ae1645a22faffe5596d361`; no binary/store/seal change in this correction |
 
-The five additional P2 findings at PR head `bf38c7f090951f3080810abd84ee247985801b21`
-are repaired in this continuation: acknowledged retry cleanup, retry navigation
-generation checks, initial composer gating, disconnected-run invalidation and
-sign-out recovery revocation. Twelve new cases reproduced the original defects;
-the integrated suite passes **40 browser tests**, plus **13 Markdown and 17
-Responses assertions**, locally. Main `f231aec5a7ed6d24ba564253b402d426247d20b6`
-is incorporated without changing its AHBG correction. Source work-graph inputs
-and archive identity remain unchanged. PR #121 carries remote CI/review receipts.
-Two additional tests reproduce and guard completion refreshes against a newer
-navigation request that has not finished loading.
-The b25406d review also reproduced late dictation missing the first adopted
-conversation and stale completed answers after returning to a stream. Both are
-repaired with three more regressions, including a history request spanning run
-completion. A pending selection retains priority; a completed return refreshes.
+The updated [shared work graph](work-graphs/a0-site-bridge.json) pins these input
+participants and preserves their separate authority/evidence boundaries. The
+output commit and GitHub CI receipts bind the corrected source; obtain the full
+output SHA with `git rev-parse HEAD`. Public records contain no operational keys.
+No unrelated working-tree changes were included. No VM or provider job was started.
 
-Next action: verify the pushed head's CI/review state and reconcile GitHub's
-CodeQL default/advanced setup conflict before merge. The connected API cannot
-change that administrative setup; detailed branch protection returns 403.
-After merge admission, use the existing authorized VM connection for app-only
-deployment, refresh build metadata, compare served JavaScript and repeat the
-actual Android history, picker and audio flows. No VM execution connection or
-SSH identity is exposed here. Public health reports `f231aec5`; served app.js
-still matches its unrepaired client. No deployment or phone pass is claimed.
+## Repairs and preserved contracts
 
-The records below retain their original dates and evidence scopes. They are not
-a new acceptance claim for the repaired source or the current phone experience.
+- `configure-vault.py` now owns one recovery reader for JSON and historical
+  key/value material. It retains values containing `=`, rejects duplicate,
+  missing, empty, non-string, malformed and header-unsafe credentials, refuses
+  unsafe/nonregular/symlink files, and never evaluates shell syntax.
+- `backup.sh` and `restore.sh` validate material before side effects and call
+  administrative canary modes. Tokens stay inside Python, outside shell
+  arguments/environment/output. Redirects, failed authentication, bad JSON,
+  unavailable/sealed/uninitialized stores and identity mismatch fail closed.
+- New encrypted archives include a nonsecret cluster/mount receipt. Restoration
+  checks that identity and the original canary. Historical archives without a
+  receipt require the independently configured cluster pin; missing identity
+  cannot be guessed. Private temporary files are cleaned on failure and success.
+- Existing application/CLI token separation, root-owned renewal code,
+  `a0.cli-vault/1`, `a0.site-pairing/1`, bridge scope and provider dispatch remain
+  intact. The CLI reads only its selected provider; no root/app token is passed
+  to coding agents. The completed launcher PATH repair is preserved.
 
-## Current state
+## Executed source verification
 
-- **Source**: The-Interdependency/a0 checkout at `/home/wayseer_interdependentway_org/a0` and deployed at `/opt/a0`.
-- **Deployed HEAD**: see docs/release.md (matches `/opt/a0` `git rev-parse HEAD`).
-- **Deployment**: production A0 running on this VM. HTTPS URL: https://35.212.252.101.nip.io (and https://35.212.252.101.sslip.io).
-- **Issue #118**: all code-fixable findings (F01–F12, F15, F16 code portion, additional usability) implemented, verified, and committed; F13/F14 partial (provider + backup/restore evidence below); F16 publication completed via `gh` auth.
+Local environment: Node `v24.22.1`, Python `3.12.14`, Playwright `1.56.1`,
+Chromium `141.0.7390.37`. These results bind the code/test files committed with
+this record; documentation does not promote them to VM acceptance.
 
-## Issue #118 checklist status
+| Command / evidence | Observed result and limit |
+| --- | --- |
+| `python3 -m unittest discover -s tests/reliability -p 'test_*.py'` | 17 tests PASS: 6 provisioning + 11 recovery; real loopback HTTP and actual shell scripts; database/crypto/service boundaries are inert fixtures |
+| `node --test tests/reliability/bridge.test.js` | 3 tests PASS: auth separation, deduplicated inbox, rate/path controls, token rotation and cluster refusal |
+| `npm run test:offline` | 13 Markdown + 17 Responses assertions PASS; no live provider request |
+| `npm run test:browser` | 40 tests PASS, no skips/cancellations; real app/CSS with fixture APIs/speech; first attempt lacked Chromium, then the pinned browser was installed and the full suite passed |
+| `python3 tests/reliability/check_launcher_compat.py ../skill-launcher` | PASS: this A0 producer creates the CLI configuration consumed by skill-lib `46ba3e6`; real HTTP fixture plus child-process selected-key isolation |
+| In that skill-lib checkout: `python3 -m unittest discover -s tests -p 'test_a0_vault.py'` and `... -p 'test_ai_launcher.py'` | 6 + 7 PASS; includes the completed login executable/runtime PATH review regression |
+| Seeded historical `grep '^root_token='` reader | JSON shell regression FAILS as intended; this demonstrates regression sensitivity, not an outstanding repaired-source failure |
+| Shell syntax and `git diff --check` | PASS; CI now checks each affected shell script separately |
 
-| Finding | Status | Evidence |
-| --- | --- | --- |
-| F01 P1 Markdown/XSS | DONE | `apps/web/markdown.js` safe renderer + CSP header; `tests/frontend/run.js` adversarial fixtures all inert. |
-| F02 P1 Stop lifetime | DONE | Stop bound to `{runId, conversationId}`, visible until terminal event; cancellation verified (A23). |
-| F03 P1 switching choices | DONE | Switch modal with New conversation / One answer or continue / Compare models; served-source check passes. |
-| F04 P1 project flows | DONE | Project selection + conversation association + project instructions verified in model context (marker found). |
-| F05 P2 drafts | DONE | Draft/attachment preservation + retry + idempotent clientRequestId (1→1 user messages). |
-| F06 P2 run/conversation isolation | DONE | Panes/streams/approvals keyed to conversation/run; navigation no longer hijacked. |
-| F07 P2 About overflow | DONE | `#aboutBox pre` pre-wrap/anywhere CSS; real-phone confirmation still pending (A17). |
-| F08 P2 voice errors | DONE | `voiceErrorMessage()` visible feedback + capture reset. |
-| F09 P2 speech truncation | DONE | Chunked playback, no silent 1500-char limit, per-message speak, auto-speak only new completed responses. |
-| F10 P2 no-selection dispatch | DONE | Send blocked with visible error when nothing selected; documented DeepSeek default only on load. |
-| F11 P3 About numbering | DONE | Server emits unnumbered assembly order; `<ol>` owns numbering. |
-| F12 ledger | DONE | docs/acceptance.md rebuilt: one row per A01–A24, totals 21 PASS / 1 FAIL / 2 BLOCKED / 0 NOT RUN. |
-| F13 P1 live providers | PARTIAL | `/api/providers/:provider/test` diagnosis endpoint added. openai/xai/deepseek PASS real test requests; anthropic BLOCKED (no key) — operator action remains. |
-| F14 P1 off-VM recovery | PARTIAL | GnuPG integrity-protected backups + manifest + tamper-failure + restored-Bao canary verified. Off-VM copy remains operator action. |
-| F15 P1 rollback | DONE | `operations/rollback.sh --check` rehearsal passed; `--apply` documented. |
-| F16 P2 publication | DONE (after push) | Build identity in `/api/health`; commits pushed via `gh` (erinepshovel-code account). |
-| Additional usability | DONE | Attributed context-selection modal, MCP auth masked with reveal, visible mutation failures, keyboard semantics, voice privacy note in About. |
+Prior-head remote evidence: [A0 Web regressions](https://github.com/The-Interdependency/a0/actions/runs/42514050299)
+at `6bbcf0f`; [skill-lib CI](https://github.com/The-Interdependency/skill-lib/actions/runs/42514504885)
+and [hygiene](https://github.com/The-Interdependency/skill-lib/actions/runs/42514504884)
+at `46ba3e6` all completed successfully. The
+[skill-lib review receipt](https://github.com/The-Interdependency/skill-lib/pull/137#issuecomment-6725811515)
+reports completed review with no findings at that exact head; its earlier PATH
+thread is resolved and outdated. This is not a policy-required APPROVED review.
 
-## Gate results
+The corrected A0 head needs its own CI/review receipt on
+[PR #122](https://github.com/The-Interdependency/a0/pull/122). Recheck head/base,
+checks and unresolved threads at merge admission; old green results do not
+certify a new head. GitHub's conflicting advanced CodeQL workflow was removed
+in the input PR; default analysis remains active. Do not repeat the obsolete
+mobile-repair instruction to resolve that old configuration conflict.
 
-- Acceptance A01–A24 (final run): **21 PASS, 1 FAIL (A04), 2 BLOCKED (A17/A18), 0 NOT RUN** — see docs/acceptance.md.
-- A04 detail: openai PASS, xai PASS, deepseek PASS, anthropic BLOCKED (no key). OpenAI's earlier 401 was traced to a clobbered key (previous acceptance run overwrote it with a test placeholder); the real key was re-imported and now passes.
+## Deployment prerequisites and configuration transition
 
-## Selected decisions (issue #118)
+Use the [exact proposed operations](pr122-operations.md), including its approval
+holds, preflight and rollback gates. The historical application path is `/opt/a0`;
+actual host, source, schema, Node executable and services must be inspected before
+activation. Historical Node 18 does not meet the current Node >=22 contract.
 
-- Markdown: home-grown string renderer replaced with `apps/web/markdown.js` (escape text → validate protocols → escape attributes) plus Caddy CSP header.
-- Provider diagnosis: `/api/providers/:provider/test` makes one minimal real request and returns the provider's actual status/message (key value never returned).
-- Backup: switched from `openssl enc` to `gpg --symmetric --cipher-algo AES256` (integrity-protected); embedded SHA-256 manifest verified before SQL execution; restored-Bao usability proven by starting a second OpenBao against the restored store and reading the original canary.
-- Rollback: `operations/rollback.sh --check` (isolated rehearsal) and `--apply` (maintenance-state restore + redeploy recorded commit).
-- Acceptance hygiene: runner now emits exactly one row per case, uses a dedicated nonsecret vault canary (A12) and provider `/test` (A11), never overwrites real provider keys, and runs as a temporary owner (`a0test`) that is deleted afterward.
+The existing-store procedure installs root-owned administration files, then runs
+`sudo python3 /usr/local/lib/a0/configure-vault.py --cli-user <verified-account>`.
+It writes separate periodic `a0-app` and read-only `a0-cli` tokens, changes
+`BAO_TOKEN` to `BAO_TOKEN_FILE`, pins `BAO_CLUSTER_ID`, enables hourly renewal,
+restarts A0 and checks local readiness. **Do not initialize this existing vault.**
+First preserve configuration/recovery material, quiesce writers, create an
+encrypted backup, verify an isolated restore and verify the off-VM copy.
 
-## Running jobs
+Pair only after VM readiness and launcher installation. The owner downloads the
+pairing file from the private Site, then runs `ai.sh site pair FILE` over SSH
+stdin and deletes the download after success. Pairing requires the matching
+VM origin, CLI config, protected bridge-token files and private Site runtime
+credential. Provider keys remain on the VM. Existing coding panes require an
+explicit restart to replace their environment; preserve their work first.
 
-- `systemctl status a0 openbao a0-caddy` — all active.
-- Caddy certificate renewal automatic (Let's Encrypt).
+Durable paths: `/srv/a0/media` (uploads, reliability inbox/evidence), PostgreSQL
+`a0app` / `openbao`, `/etc/a0` (protected application/CLI/renewal configuration),
+`/etc/openbao` (seal/recovery material), `/srv/a0/backups` (encrypted archives).
+These are source-defined paths, not fresh observations of the VM.
 
-## Next action
+## Recovery and remaining acceptance gates
 
-- Operator (Erin): add an Anthropic key in Settings → Providers; open the site from the Android phone to close A17/A18; copy `/srv/a0/backups/*.gpg` + `/etc/a0/backup.key` off-VM.
+Use [operations/VAULT-SITE.md](../operations/VAULT-SITE.md) for recovery semantics
+and [pr122-operations.md](pr122-operations.md) for the proposed sequence.
+Keep the exact prior source/dependencies, private configuration and applicable
+current/historical keys independent of the app. Source rollback alone cannot
+reverse the `BAO_TOKEN_FILE` transition. If the prior scoped credential/config
+cannot be verified, stop A0 in maintenance while retaining vault/data and the
+recovery shell. `rollback.sh --apply` is not suitable for this configuration
+transition; it does not restore vault policies, tokens, timer or launcher state.
 
-## Outstanding hmmm
+| Gate | Current evidence status |
+| --- | --- |
+| Corrected A0 CI and terminal review | Read the corrected-head PR receipt before merge |
+| Merge A0 #122 then skill-lib #137 | NOT PERFORMED; explicit approval required |
+| Current VM inventory, runtime compatibility and checkpoint | NOT OBSERVED in this task |
+| Real GPG/PostgreSQL/Bao isolated restore and independent off-VM retrieval (A13) | NOT RUN for this release; local fixtures do not close it |
+| VM deployment, exact served-source/build identity and authenticated HTTPS (A24) | NOT PERFORMED; separate explicit approval required |
+| Site pairing / authorized evidence / denied unauthorized access | NOT RUN on the VM for this release |
+| Renewal across scheduled executions and original 24-hour token lifetime | NOT OBSERVED; instantaneous fixture renewal is insufficient |
+| Real provider success with isolated selected credentials (A04/A11) | NOT RUN for this release; stored-key presence is insufficient |
+| Physical Android recovery/comparison/files/microphone/speaker (A17/A18) | NOT RUN; browser emulation is a separate result |
+| Prior-release/config rollback and restart; shared-host reboot when authorized | NOT RUN for this release |
 
-- Anthropic key not configured (A04 cannot pass until all four providers succeed).
-- Real-phone browser/microphone observation (A17/A18).
-- Off-VM backup/key copy not yet performed by the operator.
-- Org hostname (a0.interdependentway.org) requires DNS A record to 35.212.252.101 plus Caddyfile hostname addition if a vanity URL is wanted.
+## Next action / running work
 
-## Issue #119 reactivation — in-progress record (2026-10-30)
+Finish current-head CI/review and present the frozen merge and deployment
+operations for Erin's approval. No merge, deployment, token provisioning,
+service restart or production recovery was performed by this source repair.
+There are no local background tests remaining at handoff; remote CI/review
+status belongs to the PR receipt, not an inferred running VM state.
 
-Scope amendment FR0–FR4 accepted. **FR0 and FR1 are implemented, verified, and live on this VM.** FR2–FR4 remain pending producer integrations (PTCNA/Forge/temp modules/AHBG) and are recorded honestly below; no scaffold is promoted as a pass.
+Previous mobile/issue #118/#119/#120 receipts remain in Git history at
+[the inspected input record](https://github.com/The-Interdependency/a0/blob/6bbcf0f06713319f4f6bbfeaed735197033c4465/docs/build-status.md),
+[mobile-chat-repair.md](mobile-chat-repair.md), [acceptance.md](acceptance.md)
+and [release.md](release.md). Their dated live claims do not establish this
+release's deployment or current phone behavior.
 
-| Area | Status | Evidence |
-| --- | --- | --- |
-| FR0 OpenAI calls | DONE (text path) | Current GPT-6 catalogue in providers.js; distinct `/v1/responses` streaming transport; complete output-item replay + `call_id` tool continuation; cache/reasoning usage columns; in-place participant model upgrade (UI + API); Settings Test uses the same adapter and exact selected model. `tests/fr0-fr1/run.js` all PASS; live `gpt-6-luna` text smoke PASS on the deployed site. |
-| FR1 context editor | DONE (backend + phone editor) | Structured source-attributed blocks (harness/project/history/tool), immutable revisions, single preview/dispatch assembler, conflict 409, forecast-labeled cache estimate, editor modal in the website. RC01/RC02/RC05 PASS; RC03/RC04 remain operator/live-observation. |
-| FR2 agents/tools + PTCNA/Forge | NOT RUN | Requires the retained PTCNA cores (`c5fa9a59…`), Forge eight-template catalogue, and excluded-component isolation (Jury/Bandit/Meta-13/ZFAE). No scaffold shipped. |
-| FR3 temporary modules | NOT RUN | Requires FR2's agent/module lifecycle. Archived form/schema is reference-only; no working hot-swap loader is claimed. |
-| FR4 AHBG | NOT RUN | Requires Stack `ahbg/` runtime + successor adapter + UCNS geometry pin reconciliation. |
-| RD/RP/RU/RA/RM/RG/RX gates | NOT RUN | Blocked on FR2–FR4; will be run when those features exist. |
-
-A01–A24 ledger after FR0/FR1: unchanged at **21 PASS / 1 FAIL (A04) / 2 BLOCKED / 0 NOT RUN** (see docs/acceptance.md). RO01/RO02 PASS; RO03 partial; RO04 partial (text smoke only); RC01/RC02/RC05 PASS; RC03/RC04 NOT RUN.
-
-## Issue #120 corrective record (2026-10-30)
-
-Audit defects C01–C16 repaired as listed in docs/acceptance.md. `tests/issue120/run.js` (static + API + fake-provider e2e) passes all checks; `tests/fr0-fr1/run.js` still passes after the C07/C12 adapter corrections. A01–A24 remains 21 PASS / 1 FAIL (A04 anthropic key) / 2 BLOCKED (A17/A18 phone) / 0 NOT RUN.
-
-Remaining OC gates: OC01/OC03/OC07 PARTIAL, OC09 (physical phone) NOT RUN, OC10 recorded. FR2–FR4 remain pending per issue #119.
-
-## Issue #119 FR2/FR3 live (2026-10-31)
-
-- Retained Forge agents: eight exact templates + Phi/Psi/Omega cores exposed with provenance; agent creation binds a durable conversation, participant, effective instructions and one temporary stats/chat module.
-- Retained PTCNA: pinned producer runtime runs as a loopback sidecar (`a0-ptcna.service`, `operations/ptcna-sidecar.py`, ptcna c5fa9a59 + ucns b7b6f35 vendored at /opt/a0/vendor). Per-agent phi/psi/omega/memory_l/memory_s state is created, inferred and independent; fork is producer deep-copy, merge algebra not yet wired.
-- Temporary modules: spawn creates one module; hot swap changes renderer without resetting agent/state; retire closes the view and keeps history.
-- FR4 AHBG remains NOT RUN (successor adapter + durable owner-scoped sessions pending). See docs/acceptance.md for the gate record.
+hmmm: merge/deployment approval, VM access/current inventory, off-VM recovery,
+sustained renewal, live provider and physical Android evidence remain open.

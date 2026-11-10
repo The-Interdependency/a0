@@ -6,6 +6,10 @@ The code supplies vault-backed coding CLI launch, authenticated VM observations,
 and an inert handoff inbox. Source, deployed VM, provider calls, and physical
 phone acceptance remain separate evidence scopes.
 
+The [current build record](../docs/build-status.md) pins source/test identities.
+The [proposed operations](../docs/pr122-operations.md) require explicit merge and
+deployment approval and own the exact sequence for this correction.
+
 ## Existing VM update
 
 Use the existing authenticated VM shell and a reviewed A0 release containing
@@ -38,10 +42,11 @@ has occurred.
 Update the existing canonical skill-lib checkout and its symlinks in Termux:
 
 ```bash
-git -C "$HOME/skill-lib" pull --ff-only &&
+# First verify clean state and that this approved commit is in merged main.
+git -C "$HOME/skill-lib" checkout --detach 46ba3e680c21434dd03e79c0cbf900881829701e &&
 bash "$HOME/skill-lib/tools/install_ai.sh"
 ai.sh vault install
-ai.sh vault setup
+# Run vault setup only if provisioning was not already completed on the VM.
 ai.sh keys
 ```
 
@@ -87,6 +92,17 @@ VM-reported evidence, not independent verification or phone acceptance.
 
 ## Recovery and rollback
 
+Backup and restore use the shared protected recovery reader in
+`configure-vault.py`. New JSON and historical key/value material are accepted;
+invalid, ambiguous, unsafe or missing credentials fail before recovery side
+effects. No token enters shell variables, process arguments or output. New
+archives bind cluster/mount identity; older archives need the independently
+pinned cluster in protected config. Run `sudo operations/backup.sh` with writers
+quiesced, then `sudo operations/restore.sh BACKUP.tar.gz.gpg UNUSED_SUFFIX` on
+unused isolated targets. Success requires the original canary and identity.
+Preserve applicable backup/seal keys and recovery authorization independently.
+
+
 - Sealed, unavailable, redirected, mismatched or unauthorized vault: agents fail
   closed; use the recovery shell. Never reinitialize or regenerate seal keys.
 - Renewal failure: inspect `systemctl status a0-vault-renew.timer` and
@@ -96,8 +112,12 @@ VM-reported evidence, not independent verification or phone acceptance.
 - Preserve inbox/evidence and vault data through rollback. The previous app
   expects `BAO_TOKEN`, so reverting app code also requires a reviewed private
   configuration migration; do not simply revert source and assume readiness.
-- Restore launcher behavior by a reviewed Git revert. Never restore stale
-  provider environment variables as a fallback to a failed vault.
+- Keep the vault-backed launcher or disable agent dispatch during rollback.
+  The pre-PR launcher copies provider environment values; reverting to that
+  behavior would violate credential isolation. The recovery shell stays usable.
+- Do not use `rollback.sh --apply` for this configuration transition; its app
+  data/source restore does not reverse vault policy/token/renewal/launcher state.
+  Use the checkpointed compatible rollback or maintenance procedure linked above.
 
 hmmm: live VM deployment, actual renewal across time, provider calls and physical
 Android acceptance need their own receipts. Local fixture passes do not close them.

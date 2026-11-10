@@ -5,6 +5,9 @@ Usage: sudo python3 operations/configure-vault.py --cli-user "$(id -un)"
 Fresh-store initialization requires --initialize and an observed uninitialized store.
 Pairing: sudo ... --pair-site --cli-user USER < a0-site-connection.json
 Renewal: the installed hourly timer runs --renew using scoped tokens, never root.
+Recovery: backup.sh/restore.sh use --check-recovery, --backup-canary VALUE and
+--restore-canary DIRECTORY [--restore-port PORT]. Only nonsecret receipts leave
+this process; recovery credentials never enter shell variables or arguments.
 """
 from __future__ import annotations
 
@@ -37,7 +40,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def read_private(path):
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         mode = os.fstat(fd)
         if not stat.S_ISREG(mode.st_mode) or mode.st_uid != 0 or mode.st_mode & 0o027:
@@ -149,11 +152,85 @@ def scoped_token(addr, root, role, path, group, previous=""):
 
 
 def root_material(path):
+    """Read JSON or historical key=value data, never executable shell syntax.
+
+    Reject ambiguous/empty/header-unsafe credentials with fixed redacted errors.
+    JSON-looking invalid data cannot fall back to a legacy root_token line.
+    """
     text = read_private(path)
-    if text.lstrip().startswith("{"):
-        return json.loads(text)
-    # Accept the historical key=value init.json without sourcing executable text.
-    return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise SetupError("Duplicate recovery field; refusing ambiguous credentials.")
+            result[key] = value
+        return result
+
+    if text.lstrip().startswith(("{", "[")):
+        material = json.loads(text, object_pairs_hook=unique)
+    else:
+        pairs = []
+        for line in text.splitlines():
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            if "=" not in line:
+                raise SetupError("Invalid recovery material; expected JSON or key=value data.")
+            key, value = line.split("=", 1)
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+                raise SetupError("Invalid recovery field; shell syntax is not supported.")
+            pairs.append((key, value))
+        material = unique(pairs)
+    token = material.get("root_token") if isinstance(material, dict) else None
+    if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9._~+/=-]{1,4096}", token):
+        raise SetupError("Recovery root token is missing or invalid; no credentials are logged.")
+    return material
+
+
+def recovery_canary(config, *, write=None, directory=None, port=8203):
+    """Write a backup witness or verify an isolated restored store, fail closed.
+
+    New archives carry a nonsecret cluster/mount receipt. Old archives require
+    the independently pinned BAO_CLUSTER_ID in protected configuration.
+    No initialization, unseal, provisioning, renewal or service mutation occurs.
+    """
+    root = root_material(Path("/etc/openbao/init.json"))["root_token"]
+    mount = config.get("BAO_KV_MOUNT", "a0")
+    expected = config.get("BAO_CLUSTER_ID")
+    addr = config.get("BAO_ADDR", "http://127.0.0.1:8200")
+    if directory is not None:
+        if not 1024 <= port <= 65535 or port == 8200:
+            raise SetupError("Restore requires a separate unprivileged loopback port.")
+        directory = Path(directory)
+        identity_file = directory / "vault-identity.json"
+        if identity_file.exists():
+            identity = json.loads(identity_file.read_text())
+            if expected and identity.get("cluster_id") != expected:
+                raise SetupError("Backup cluster differs from the configured vault; recovery stopped.")
+            expected, mount = identity.get("cluster_id"), identity.get("mount")
+        if not isinstance(expected, str) or not expected:
+            raise SetupError("Recovery requires a backup identity receipt or an independently pinned cluster.")
+        addr = f"http://127.0.0.1:{port}"
+        expected_canary = (directory / "canary.txt").read_text().strip()
+        if not re.fullmatch(r"canary=a0-backup-canary-[0-9-]+", expected_canary):
+            raise SetupError("Backup canary witness is missing or malformed.")
+        expected_canary = expected_canary.split("=", 1)[1]
+    elif not isinstance(write, str) or not re.fullmatch(r"a0-backup-canary-[0-9-]+", write):
+        raise SetupError("Invalid nonsecret backup canary.")
+    if not isinstance(mount, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", mount):
+        raise SetupError("Invalid recovery KV mount.")
+    seal = inspect_store(addr, expected)
+    if not seal["initialized"] or seal["sealed"] or not seal.get("cluster_id"):
+        raise SetupError("Recovery requires an initialized, unsealed, identified store.")
+    api(addr, "GET", "/auth/token/lookup-self", root)
+    path = f"/{mount}/data/backup-canary"
+    if directory is None:
+        api(addr, "POST", path, root, {"data": {"value": write}})
+        print(json.dumps({"cluster_id": seal["cluster_id"], "mount": mount}))
+    else:
+        value = api(addr, "GET", path, root).get("data", {}).get("data", {}).get("value")
+        if value != expected_canary:
+            raise SetupError("Restored vault canary mismatch; recovery stopped.")
+        print("[restore] CANARY_OK: restored cluster identity and original canary verified.")
 
 
 def provision(config, user, initialize=False):
@@ -284,16 +361,29 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cli-user")
     parser.add_argument("--initialize", action="store_true")
-    parser.add_argument("--renew", action="store_true")
-    parser.add_argument("--pair-site", action="store_true")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--renew", action="store_true")
+    modes.add_argument("--pair-site", action="store_true")
+    modes.add_argument("--check-recovery", action="store_true")
+    modes.add_argument("--backup-canary")
+    modes.add_argument("--restore-canary", type=Path)
+    parser.add_argument("--restore-port", type=int, default=8203)
     args = parser.parse_args()
     try:
         if os.geteuid() != 0:
             raise SetupError("Run this provisioning command through the VM's authorized sudo path.")
+        if args.check_recovery:
+            root_material(Path("/etc/openbao/init.json"))
+            print("Recovery material validated; no credentials are logged.")
+            return 0
         if args.renew:
             renew()
             return 0
         config = env_values(read_private(ETC / "a0.env"))
+        if args.backup_canary is not None or args.restore_canary is not None:
+            recovery_canary(config, write=args.backup_canary,
+                            directory=args.restore_canary, port=args.restore_port)
+            return 0
         if args.pair_site:
             raw = sys.stdin.read(8193)
             if len(raw) > 8192:
