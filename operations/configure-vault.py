@@ -4,6 +4,8 @@
 Usage: sudo python3 operations/configure-vault.py --cli-user "$(id -un)"
 Fresh-store initialization requires --initialize and an observed uninitialized store.
 Pairing: sudo ... --pair-site --cli-user USER < a0-site-connection.json
+GitHub: sudo ... --set-github-token --cli-user USER (hidden terminal input).
+For a protected input pipe, also pass --github-token-stdin; never use an argument.
 Renewal: the installed hourly timer runs --renew using scoped tokens, never root.
 Recovery: backup.sh/restore.sh use --check-recovery, --backup-canary VALUE and
 --restore-canary DIRECTORY [--restore-port PORT]. Only nonsecret receipts leave
@@ -21,6 +23,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import termios
 import time
 import urllib.error
 import urllib.parse
@@ -28,6 +31,8 @@ import urllib.request
 
 ETC = Path("/etc/a0")
 PROVIDERS = ("openai", "xai", "deepseek", "anthropic")
+GITHUB_PATH = "integration/github"
+MAX_GITHUB_TOKEN = 4096
 
 
 class SetupError(Exception):
@@ -36,7 +41,7 @@ class SetupError(Exception):
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise SetupError("OpenBao redirected the request; refusing credential forwarding.")
+        raise SetupError("Credential-bearing requests must not redirect.")
 
 
 def read_private(path):
@@ -120,6 +125,8 @@ def policy(mount, cli=False):
     if not re.fullmatch(r"[A-Za-z0-9_-]+", mount):
         raise SetupError("Invalid KV mount.")
     paths = [f"{mount}/data/provider/{p}" for p in PROVIDERS] if cli else [f"{mount}/data/*"]
+    if cli:
+        paths.append(f"{mount}/data/{GITHUB_PATH}")
     caps = '["read"]' if cli else '["create","read","update","delete"]'
     rules = [f'path "{path}" {{ capabilities = {caps} }}' for path in paths]
     if not cli:
@@ -284,6 +291,8 @@ def provision(config, user, initialize=False):
             previous = json.loads(read_private(config_file))
             if previous.get("bridge"):
                 cli["bridge"] = previous["bridge"]
+            if "github" in previous:
+                cli["github"] = previous["github"]
         atomic(config_file, json.dumps(cli) + "\n", account.pw_gid, 0o640)
     atomic(ETC / "a0.env", "".join(f"{k}={v}\n" for k, v in config.items()), app_group, 0o640)
     # A renewal target carries only non-secret file references and the pinned store.
@@ -306,6 +315,129 @@ def renew():
     if failures:
         raise SetupError(f"{failures} scoped credential renewal(s) failed; explicit reprovisioning may be required.")
     print("Scoped vault credentials renewed.")
+
+
+def github_input(from_stdin=False):
+    """Read bounded input without allowing getpass's echoing stdin fallback."""
+    if from_stdin:
+        raw = sys.stdin.buffer.read(MAX_GITHUB_TOKEN + 3)
+    else:
+        fd = None
+        saved = None
+        try:
+            fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
+            saved = termios.tcgetattr(fd)
+            hidden = saved.copy()
+            hidden[3] &= ~(termios.ECHO | termios.ECHONL)
+            hidden[3] |= termios.ICANON
+            termios.tcsetattr(fd, termios.TCSAFLUSH, hidden)
+            os.write(fd, b"New GitHub token (hidden): ")
+            raw = os.read(fd, MAX_GITHUB_TOKEN + 3)
+        except (OSError, termios.error):
+            raise SetupError("A private terminal with echo disabled is required; no token was read from stdin.") from None
+        finally:
+            if fd is not None:
+                try:
+                    if saved is not None:
+                        termios.tcsetattr(fd, termios.TCSAFLUSH, saved)
+                        os.write(fd, b"\n")
+                finally:
+                    os.close(fd)
+    # Permit a single terminal/pipe line ending, never whitespace inside a token.
+    raw = raw.removesuffix(b"\n").removesuffix(b"\r")
+    if not 1 <= len(raw) <= MAX_GITHUB_TOKEN or any(c < 33 or c > 126 for c in raw):
+        raise SetupError("GitHub token must be 1–4096 printable ASCII characters without whitespace.")
+    return raw.decode("ascii")
+
+
+def github_identity(candidate):
+    """Verify authentication at one fixed HTTPS origin, without logging its body."""
+    req = urllib.request.Request("https://api.github.com/user", headers={
+        "Authorization": "Bearer " + candidate,
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "a0-openbao-credential-rotation",
+        "X-GitHub-Api-Version": "2026-03-10",
+    })
+    try:
+        with urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({})).open(req, timeout=15) as response:
+            raw = response.read(65537)
+            if len(raw) > 65536:
+                raise SetupError("GitHub authentication response exceeds the protocol limit.")
+            data = json.loads(raw)
+    except urllib.error.HTTPError as err:
+        raise SetupError(f"GitHub authentication failed (HTTP {err.code}); the stored token was not changed.") from None
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        raise SetupError("GitHub authentication could not be verified; the stored token was not changed.") from None
+    if not isinstance(data, dict) or not isinstance(data.get("login"), str) or not data["login"]:
+        raise SetupError("GitHub authentication response is malformed; the stored token was not changed.")
+
+
+def github_scoped_token(addr, path, role):
+    value = read_private(path).strip()
+    if not value or any(ord(c) < 33 or ord(c) > 126 for c in value):
+        raise SetupError("Scoped vault credential is empty or malformed.")
+    info = api(addr, "GET", "/auth/token/lookup-self", value)
+    data = info.get("data") if isinstance(info, dict) else None
+    policies = data.get("policies") if isinstance(data, dict) else None
+    if policies != [role]:
+        raise SetupError(f"GitHub refresh requires the dedicated {role} credential; root and mixed-policy tokens are refused.")
+    return value
+
+
+def set_github_token(config, user, from_stdin=False):
+    """Rotate with scoped app authority; enable CLI retrieval only after readback.
+
+    The shared secret and these processes belong to one trusted VM account/admin
+    boundary. /user verifies authentication, not repository write permissions.
+    """
+    if not user:
+        raise SetupError("GitHub refresh requires --cli-user for the non-root coding account.")
+    account = pwd.getpwnam(user)
+    if account.pw_uid == 0:
+        raise SetupError("Select the non-root VM coding account.")
+    addr = config.get("BAO_ADDR", "http://127.0.0.1:8200")
+    mount, cluster = config.get("BAO_KV_MOUNT", "a0"), config.get("BAO_CLUSTER_ID")
+    if not isinstance(cluster, str) or not cluster or not isinstance(mount, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", mount):
+        raise SetupError("GitHub refresh requires the provisioned cluster identity and KV mount.")
+    health = inspect_store(addr, cluster)
+    if not health["initialized"] or health["sealed"]:
+        raise SetupError("GitHub refresh requires the existing initialized, unsealed vault.")
+    cli_file = ETC / "cli" / f"{account.pw_uid}.json"
+    cli = json.loads(read_private(cli_file))
+    if not isinstance(cli, dict) or cli.get("schema") != "a0.cli-vault/1" or any(
+        cli.get(k) != v for k, v in (("addr", addr), ("mount", mount), ("cluster_id", cluster))
+    ):
+        raise SetupError("CLI configuration must match the provisioned vault; run ai.sh vault setup.")
+    app_token = github_scoped_token(addr, config["BAO_TOKEN_FILE"], "a0-app")
+    cli_token = github_scoped_token(addr, cli["token_file"], "a0-cli")
+    path = f"/{mount}/data/{GITHUB_PATH}"
+    try:
+        api(addr, "GET", path, cli_token, missing=True)
+    except SetupError:
+        raise SetupError("CLI GitHub read preflight failed; verify the connection and run ai.sh vault setup to update its scoped policy.") from None
+    metadata = api(addr, "GET", f"/{mount}/metadata/{GITHUB_PATH}", app_token, missing=True)
+    details = metadata.get("data") if isinstance(metadata, dict) else None
+    version = 0 if metadata is None else details.get("current_version") if isinstance(details, dict) else None
+    if type(version) is not int or version < 0:
+        raise SetupError("GitHub vault version is malformed; replacement was not attempted.")
+    candidate = github_input(from_stdin)
+    github_identity(candidate)
+    # Compare-and-set also handles a soft-deleted latest version: its metadata
+    # version remains current even when reading its data returns HTTP 404.
+    api(addr, "POST", path, app_token, {"options": {"cas": version}, "data": {"token": candidate}})
+    saved = api(addr, "GET", path, cli_token)
+    outer = saved.get("data") if isinstance(saved, dict) else None
+    fields = outer.get("data") if isinstance(outer, dict) else None
+    receipt = outer.get("metadata") if isinstance(outer, dict) else None
+    if not isinstance(fields, dict) or fields.get("token") != candidate or not isinstance(receipt, dict) or type(receipt.get("version")) is not int or receipt["version"] != version + 1:
+        raise SetupError("GitHub replacement readback failed; inspect vault state before retrying. CLI configuration was not changed.")
+    cli["github"] = {"path": GITHUB_PATH, "agents": ["deepcode"]}
+    try:
+        atomic(cli_file, json.dumps(cli) + "\n", account.pw_gid, 0o640)
+    except OSError:
+        raise SetupError("GitHub token was stored and verified, but CLI activation failed; inspect its protected configuration before retrying.") from None
+    print("GitHub token authenticated, stored in OpenBao and verified through CLI read access. DeepCode uses it on its next launch.")
+    print("Repository permissions remain those granted to the token; active agents were not restarted.")
 
 
 def pair_site(config, user, raw):
@@ -364,11 +496,17 @@ def main():
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--renew", action="store_true")
     modes.add_argument("--pair-site", action="store_true")
+    modes.add_argument("--set-github-token", action="store_true")
     modes.add_argument("--check-recovery", action="store_true")
     modes.add_argument("--backup-canary")
     modes.add_argument("--restore-canary", type=Path)
     parser.add_argument("--restore-port", type=int, default=8203)
+    parser.add_argument("--github-token-stdin", action="store_true")
     args = parser.parse_args()
+    if args.github_token_stdin and not args.set_github_token:
+        parser.error("--github-token-stdin requires --set-github-token")
+    if args.initialize and args.set_github_token:
+        parser.error("GitHub refresh never initializes a vault")
     try:
         if os.geteuid() != 0:
             raise SetupError("Run this provisioning command through the VM's authorized sudo path.")
@@ -380,6 +518,9 @@ def main():
             renew()
             return 0
         config = env_values(read_private(ETC / "a0.env"))
+        if args.set_github_token:
+            set_github_token(config, args.cli_user, args.github_token_stdin)
+            return 0
         if args.backup_canary is not None or args.restore_canary is not None:
             recovery_canary(config, write=args.backup_canary,
                             directory=args.restore_canary, port=args.restore_port)
@@ -402,7 +543,9 @@ def main():
         return 0
     except SetupError as err:
         print(f"A0 setup: {err}", file=sys.stderr)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.CalledProcessError):
+    except (KeyboardInterrupt, EOFError):
+        print("A0 setup: operation interrupted; verify vault state before retrying a replacement.", file=sys.stderr)
+    except (OSError, termios.error, ValueError, KeyError, TypeError, AttributeError, subprocess.CalledProcessError):
         print("A0 setup: private configuration, account or service check failed; no credentials are logged.", file=sys.stderr)
     return 1
 

@@ -1,7 +1,55 @@
 # A0 build status — canonical resumption record
 
-Updated: 2026-11-10 (America/Los_Angeles).
+Updated: 2026-11-11 (America/Los_Angeles).
 GPT generated; context, prompt Erin Spencer.
+
+## GitHub/OpenBao repair — November 11
+
+Input identities: A0 `8df2a2acce916e1e3993089e9cdabd4266768939` and skill-lib
+`446a99d2fa283d5503c99666551e465b12c1a3e9`, on coordinated
+`codex/openbao-github-refresh-20261111` branches. A0 owns policy/protected
+credential writes; skill-lib owns runtime retrieval and launcher commands.
+The output revision is the commit containing this entry. This scoped update
+preserves the earlier vault, GUI and recovery records below as historical
+evidence; their former PR state does not describe this repair's current head.
+
+The companion consumer is skill-lib
+`c2002c0f6e24de26299324275da5a0800b0ef26d` ([PR #139](https://github.com/The-Interdependency/skill-lib/pull/139)).
+Both repositories consume the [shared work graph](https://github.com/The-Interdependency/skill-lib/blob/c2002c0f6e24de26299324275da5a0800b0ef26d/docs/work-graphs/github-openbao-refresh.md),
+SHA-256 `2e01a0ee2228fa80715fa93ea8ef5f814aada47fe2f4bb3bebada3e574b8cc28`.
+The A0 workflow checks out that exact consumer revision for the executable
+producer-to-consumer contract. This pin does not transfer repository authority
+or turn fixture evidence into live deployment evidence.
+
+The implemented A0 path adds read-only CLI access to `integration/github` and
+`--set-github-token --cli-user USER`. Routine replacement uses the scoped
+application credential, verifies the pinned store and GitHub authentication,
+performs KV metadata-version compare-and-set, verifies CLI readback, and only
+then enables the optional DeepCode configuration. Hidden terminal entry refuses
+echoing fallback; explicitly selected stdin is bounded. Reprovisioning retains
+the GitHub configuration. Rotation neither reads recovery/root material nor
+restarts services/agents. Authentication at GitHub `/user` does not establish
+repository write permissions.
+
+Local evidence: all 30 Python reliability tests PASS (20.701 seconds): 13 GitHub
+rotation/input, 6 provisioning and 11 recovery cases. The GitHub cases include a real
+PTY echo check, local HTTP CAS fixtures, stale/concurrent rejection, wrong
+store/scope refusal, readback activation gating and configuration preservation.
+The coordinated fixture PASS proves two scoped CAS replacements, fresh delivery
+through actual consumer child processes and refusal after deletion, with inert
+credentials. The 3 bridge tests, 30 offline assertions, five operations-shell
+syntax checks, Python compilation and `git diff --check` also PASS. Independent
+review found no supported P1/P2 finding in the reviewed source and contract.
+Browser and other remote gate results belong to the exact-head PR checks.
+
+Usage and rollout: [GitHub token operations](../operations/README.md#github-token-refresh-through-openbao).
+Next: admit the coordinated changes through current-head review and CI, then
+install the reviewed A0 tool and skill-lib launcher through the existing VM release path;
+the owner enters the replacement token using `ai.sh github set`. An active
+DeepCode process adopts it only after an explicit restart.
+
+`hmmm`: no live VM credential was read or changed by source repair. Deployment,
+GitHub repository permissions and actual DeepCode use require live receipts.
 
 ## Current work and source identities
 
