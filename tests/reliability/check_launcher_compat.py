@@ -15,13 +15,34 @@ import io
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 import tempfile
 import threading
 from types import SimpleNamespace
 from unittest.mock import patch
+
+
+def parse_policy(value):
+    """Parse complete producer declarations without discarding malformed lines."""
+    if not isinstance(value, str) or not value:
+        raise ValueError('Policy must be a nonempty string')
+    prefix, separator, suffix = 'path "', '" { capabilities = ', ' }'
+    rules = {}
+    for line in value.splitlines():
+        if not line.startswith(prefix) or not line.endswith(suffix):
+            raise ValueError('Malformed policy declaration')
+        path, found, encoded = line[len(prefix):-len(suffix)].partition(separator)
+        if not found or not path or '"' in path or path in rules:
+            raise ValueError('Malformed or duplicate policy path')
+        caps = json.loads(encoded)
+        if (not isinstance(caps, list) or not caps
+                or any(not isinstance(cap, str) or not cap for cap in caps)):
+            raise ValueError('Policy capabilities must be nonempty strings')
+        if len(set(caps)) != len(caps):
+            raise ValueError('Duplicate policy capability')
+        rules[path] = set(caps)
+    return rules
 
 
 def main():
@@ -95,7 +116,7 @@ def main():
                 data = {'data': {'current_version': github['version']}}
             else:
                 return self.reject('Unexpected fixture GET endpoint', 404)
-            self.respond(data)
+            return self.respond(data)
 
         def do_POST(self):
             self.record()
@@ -115,7 +136,7 @@ def main():
             writes.append((self.role(), data['options']['cas']))
             github['value'] = data['data']['token']
             github['version'] += 1
-            self.respond({'data': {'version': github['version']}})
+            return self.respond({'data': {'version': github['version']}})
 
         def do_PUT(self):
             self.record()
@@ -123,21 +144,23 @@ def main():
             if not self.path.startswith('/v1/sys/policies/acl/') or self.role() != 'root':
                 return self.reject('Policy writes require provisioning authority')
             role = self.path.rsplit('/', 1)[-1]
-            rules = {path: set(json.loads(caps)) for path, caps in re.findall(
-                r'path "([^"\n]+)" \{ capabilities = (\[[^\n]+\]) \}', data['policy'])}
+            try:
+                rules = parse_policy(data['policy'])
+            except (KeyError, TypeError, ValueError):
+                return self.reject('Malformed or duplicate policy declaration', 400)
             if role == 'a0-cli' and rules != expected_cli_policy:
                 return self.reject('CLI policy must contain only enumerated read paths and self operations', 400)
             if role not in ('a0-app', 'a0-cli'):
                 return self.reject('Unexpected policy role', 400)
             policies[role] = rules
-            self.respond({})
+            return self.respond({})
 
         def do_DELETE(self):
             self.record()
             if self.path != '/v1/a0/data/integration/github' or not self.allowed('delete'):
                 return self.reject('Secret deletion requires scoped application authority')
             github['value'] = None
-            self.respond({})
+            return self.respond({})
 
         def respond(self, data, status=200):
             self.send_response(status)

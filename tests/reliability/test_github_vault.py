@@ -250,12 +250,14 @@ class GitHubInputTests(unittest.TestCase):
     def test_actual_terminal_hides_input_and_restores_echo(self):
         pid, fd = pty.fork()
         if pid == 0:
+            exit_code = 1
             try:
                 answer = module.github_input()
                 os.write(1, b"VALUE_OK\n" if answer == CANDIDATE else b"WRONG_VALUE\n")
-                os._exit(0)
-            except BaseException:
-                os._exit(1)
+                exit_code = 0
+            finally:
+                # Control-flow exceptions must not return this child to unittest.
+                os._exit(exit_code)
         output = b""
         status = None
         try:
