@@ -15,6 +15,13 @@ jobs:
     timeout-minutes: 10 # Hang protection for fixtures; normal runtime is under a minute.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout the pinned coding-launcher contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: The-Interdependency/skill-lib
+          ref: c2002c0f6e24de26299324275da5a0800b0ef26d
+          path: contract-skill-lib
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
@@ -26,6 +33,7 @@ jobs:
         run: |
           node --test tests/reliability/bridge.test.js
           python3 -m unittest discover -s tests/reliability -p "test_*.py"
+          python3 tests/reliability/check_launcher_compat.py contract-skill-lib
           for script in operations/install.sh operations/install-vault-tools.sh operations/backup.sh operations/restore.sh operations/rollback.sh; do
             bash -n "$script"
           done

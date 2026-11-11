@@ -22,7 +22,12 @@ npm run test:offline
 npm run test:browser
 ```
 
-Vault/recovery/bridge checks for PR #122:
+The [GitHub token refresh through OpenBao](operations/README.md#github-token-refresh-through-openbao)
+repair adds private token entry, scoped vault storage and DeepCode launcher
+retrieval. Its live installation and credential entry are tracked separately
+from source verification in [the build record](docs/build-status.md).
+
+Vault/recovery/bridge checks:
 
 ```sh
 python3 -m unittest discover -s tests/reliability -p 'test_*.py'
