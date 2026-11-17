@@ -266,3 +266,24 @@ The [owner's directive](handoffs/deepseek-gui/CONTEXT-INTEGRITY-REPAIR.md) is pu
 Next: DeepSeek must verify current F01/F02 behavior against the November 10 witnesses, retain already-correct behavior and intentional context edits, repair remaining defects in the application, and produce positive regressions with exact source/test evidence. Keep the mobile-chat behavior and G01–G15 requirements. Show Erin the proposed operation and obtain separate approval before deploying repairs or restarting production services.
 
 This publication changes documentation and regenerated packet artifacts only. Its review checks content fidelity, links, unchanged G01–G15 contracts and historical evidence, and packet consistency. No application tests or production operations are claimed by this publication; its merge and CI receipts belong to the publication PR. hmmm: current application closure remains the builder's verification task.
+
+
+## Interface copy cleanup — November 16, 2026
+
+Owner screenshot: the Forge introduction displayed implementation bookkeeping
+and a list of removed components in the normal creation form.
+
+Preparation baseline: `c683e4c86894bf04257512f56a004d69e4ee40eb`.
+Changes: remove the Forge and AHBG introductory paragraphs; shorten Providers,
+MCP, Projects and System introductions to information relevant to using their
+controls. Root instructions now place engineering and migration commentary in
+developer documentation or explicitly opened diagnostic views.
+
+Validation: every existing HTML element ID and the complete contents of every
+form remain byte-identical. This patch changes copy and authoring guidance;
+existing Web regressions run on its pull request. No new tests duplicate text.
+Local executable checks could not run because this session's execution service
+disconnected. Do not count that as a test pass.
+
+hmmm: CI results belong to the exact pull-request head. The VM still requires
+a release of this change; no production deployment or restart occurred here.

@@ -103,7 +103,7 @@
         <!-- Providers -->
         <section id="view-providers" class="view hidden">
           <h2>Provider keys</h2>
-          <p class="muted">Keys are stored server-side in OpenBao and never returned. DeepSeek starts selected. "Test request" sends one minimal real request and reports the provider's actual response.</p>
+          <p class="muted">Store your keys in OpenBao. Test request sends a small request to the selected provider.</p>
           <div id="providerCards" class="cards"></div>
         </section>
 
@@ -129,7 +129,6 @@
         <!-- Forge agents -->
         <section id="view-agents" class="view hidden">
           <h2>Forge agents</h2>
-          <p class="muted">Create independently addressable agents from the exact eight-template Forge catalogue. Each agent gets a durable conversation, participant, retained PTCNA numerical state and a temporary stats/chat module. Jury, Bandit, Meta-13 and ZFAE are not active.</p>
           <form id="agentForm" class="inline-form model-row">
             <input id="agentName" placeholder="Agent name">
             <select id="agentTemplate" class="select"></select>
@@ -148,7 +147,7 @@
         <!-- MCP -->
         <section id="view-mcp" class="view hidden">
           <h2>MCP tools</h2>
-          <p class="muted">Configure remote MCP servers. Private/loopback endpoints are blocked unless explicitly allowed. Local shell execution is not exposed.</p>
+          <p class="muted">Connect A0 to your tools through an MCP server.</p>
           <form id="mcpForm" class="inline-form">
             <input id="mcpName" placeholder="Name">
             <input id="mcpUrl" placeholder="https://server.example/mcp" inputmode="url">
@@ -163,7 +162,7 @@
         <!-- Projects -->
         <section id="view-projects" class="view hidden">
           <h2>Projects</h2>
-          <p class="muted">Select a project in the sidebar to scope the next new conversation. Project instructions are shown to models verbatim with an inspectable marker; use the chat header selector to move a conversation between projects.</p>
+          <p class="muted">Group conversations and give them shared instructions.</p>
           <form id="projectForm" class="inline-form">
             <input id="projectName" placeholder="Project name">
             <button class="primary-btn" type="submit">Create</button>
@@ -174,7 +173,6 @@
         <!-- AHBG -->
         <section id="view-ahbg" class="view hidden">
           <h2>AHBG sessions</h2>
-          <p class="muted">Operate the retained A0 agent through the producer-owned Stack game engine. Sessions are owner-scoped; turns are validated before they mutate the board.</p>
           <form id="ahbgForm" class="inline-form model-row">
             <select id="ahbgAgent" class="select"></select>
             <label>Seed <input id="ahbgSeed" type="number" value="1" class="narrow"></label>
@@ -188,7 +186,7 @@
         <!-- System -->
         <section id="view-system" class="view hidden">
           <h2>System explorer</h2>
-          <p class="muted">Tappable successor inventory: application relations only — no UCNS geometry is claimed. Selecting an intention never executes it.</p>
+          <p class="muted">Explore A0’s components, connections and activity.</p>
           <div class="chip-row" id="systemTabs" role="tablist">
             <button class="chip active" data-sysview="narrative">Narrative</button>
             <button class="chip" data-sysview="relations">Relations</button>

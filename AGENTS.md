@@ -13,6 +13,7 @@ This repository contains the specification and VM build handoff for a fresh A0 a
 9. Check resource fit before expensive work; reuse completed evidence and pinned artifacts. Maintain docs/build-status.md with exact source state, decisions, running jobs, gate results, and next action so session/usage limits do not erase progress.
 10. Publishing, merging, building, deploying, and actual-phone acceptance are separate states. Honor granted authorization and current protections; do not bypass them or fabricate a URL, credential, permission, or live pass.
 11. Keep README.md and the source work graph current, preserve historical provenance, and finish with the actual website URL, deployed identities, evidence, operations guidance, and remaining hmmm.
+12. Write routine UI copy for the person using the controls: name the action and expected result. Put architecture, migration history, removed-component lists and proof/scope caveats in developer documentation. Reserve technical descriptions for explicitly opened About, MSDMD and diagnostic views. Preserve actionable errors, credential-handling information and effect-authorization decisions.
 
 ## Usage
 
