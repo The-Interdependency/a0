@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "description": "Minimum preservation fixtures for char-compress. These are not proof fixtures; they are executable guardrails against flattening, polarity loss, status drift, and hmmm deletion.",
+  "fixtures": [
+    {
+      "id": "negation_preserved",
+      "text": "a0 is not a supervisor.",
+      "expect": {
+        "frozen_bones": ["not"],
+        "flesh": ["a0", "supervisor"]
+      },
+      "forbid_anywhere": ["central coordinator", "manager"]
+    },
+    {
+      "id": "quantifier_preserved",
+      "text": "Only char-compress owns this context-compression procedure.",
+      "expect": {
+        "frozen_bones": ["only"],
+        "flesh": ["char-compress", "context-compression", "procedure"]
+      },
+      "forbid_anywhere": ["among others"]
+    },
+    {
+      "id": "order_preserved",
+      "text": "First fetch README.md, then update skills.json, last verify ORG_DISTRIBUTION.md.",
+      "expect": {
+        "frozen_bones": ["first", "then", "last"],
+        "flesh": ["README.md", "skills.json", "ORG_DISTRIBUTION.md"]
+      }
+    },
+    {
+      "id": "value_preserved",
+      "text": "Copy The-Interdependency/skill-lib to .agents/skills/char-compress/ on 2026-06-04.",
+      "expect": {
+        "flesh": ["The-Interdependency/skill-lib", ".agents/skills/char-compress/", "2026-06-04"]
+      }
+    },
+    {
+      "id": "status_preserved",
+      "text": "char-compress is EXPERIMENTAL and not DEFENDED.",
+      "expect": {
+        "frozen_bones": ["EXPERIMENTAL", "not", "DEFENDED"],
+        "flesh": ["char-compress"]
+      },
+      "forbid_anywhere": ["char-compress is DEFENDED"]
+    },
+    {
+      "id": "secret_preserved",
+      "text": "The carrier slot map is private secret material; do not publish it.",
+      "expect": {
+        "frozen_bones": ["private", "secret", "not"],
+        "flesh": ["carrier", "slot", "map", "material", "publish"]
+      },
+      "forbid_anywhere": ["publishable", "public"]
+    },
+    {
+      "id": "hmmm_preserved",
+      "text": "hmmm: no executable codec exists until the fixture runner lands.",
+      "expect": {
+        "hmmm": ["hmmm"],
+        "frozen_bones": ["no", "until"],
+        "flesh": ["executable", "codec", "fixture", "runner"]
+      }
+    },
+    {
+      "id": "no_ucns_transfer",
+      "text": "Theorem N does not validate char-compress; EDCM metric status is not claimed.",
+      "expect": {
+        "frozen_bones": ["not"],
+        "flesh": ["Theorem", "N", "char-compress", "EDCM", "metric", "status", "claimed"]
+      },
+      "forbid_anywhere": [
+        "UCNS proves char-compress",
+        "Theorem N validates char-compress",
+        "char-compress implements UCNS-A",
+        "EDCM metric status is claimed"
+      ]
+    }
+  ]
+}

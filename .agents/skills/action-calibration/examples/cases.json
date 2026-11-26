@@ -1,0 +1,67 @@
+{
+  "schema": "the-interdependency.action-calibration.cases",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "p7_length_four",
+      "prompt": "Should we compute one length-four Milnor invariant or complete every whole-link invariant first?",
+      "activate": true,
+      "expected_choice": "minimal",
+      "minimal": "Evaluate the unique algebraically split four-component sublink.",
+      "maximal": "Certify all crossings, Alexander ideals, all length-four invariants, and nilpotent quotients.",
+      "reason": "One exact integer can redirect the complete program."
+    },
+    {
+      "id": "spectral_before_topology",
+      "prompt": "Build the zeta spectral operator before the ribbon topology is certified.",
+      "activate": true,
+      "expected_choice": "prerequisite_repair",
+      "reason": "The operator would depend on an unclosed geometric and topological object."
+    },
+    {
+      "id": "production_migration",
+      "prompt": "Choose a small test or full plan for an irreversible user-data migration.",
+      "activate": true,
+      "expected_choice": "maximal",
+      "reason": "Irreversibility and user-data risk require complete due diligence even if a canary is included."
+    },
+    {
+      "id": "cross_repo_schema",
+      "prompt": "Which part of a cross-repository schema migration should execute first?",
+      "activate": true,
+      "expected_choice": "minimal_with_cross_load",
+      "cross_load": [
+        "interdependent-work-graph"
+      ],
+      "reason": "Action size and authority graph are separate decisions."
+    },
+    {
+      "id": "security_incident",
+      "prompt": "A credential is actively leaking; should we first compare minimal and maximal investigations?",
+      "activate": false,
+      "expected_choice": "immediate_containment",
+      "reason": "Contain harm first; calibrate investigation after."
+    },
+    {
+      "id": "fixed_typo",
+      "prompt": "Correct one misspelled heading in a fixed file.",
+      "activate": false,
+      "expected_choice": "fixed_scope",
+      "reason": "No meaningful evidence or escalation decision exists."
+    },
+    {
+      "id": "same_protocol_control",
+      "prompt": "A P7 result looks prime-specific. Should we interpret it now or run P5 under the same protocol?",
+      "activate": true,
+      "expected_choice": "minimal",
+      "reason": "A same-protocol control is the smallest action that can falsify prime specificity."
+    },
+    {
+      "id": "shared_setup_economy",
+      "prompt": "Ten checks require the same expensive one-time environment and together close one release gate.",
+      "activate": true,
+      "expected_choice": "maximal",
+      "reason": "Fragmenting the checks repeats nearly all setup and coordination."
+    }
+  ]
+}

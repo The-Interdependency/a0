@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/The-Interdependency/skill-lib/interdependent-work-graph/repository-plan-report.schema.json",
+  "title": "The Interdependency repository plan report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "repository",
+    "contract",
+    "source",
+    "authority",
+    "portfolio_role",
+    "status",
+    "delivered",
+    "active_frontier",
+    "next_actions",
+    "blocked",
+    "cross_repository_relations",
+    "machine_entrypoints",
+    "hmmm"
+  ],
+  "properties": {
+    "schema": {"const": "the-interdependency.repository-plan-report"},
+    "version": {"const": "1.0.0"},
+    "repository": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "path", "version", "blob_sha"],
+      "properties": {
+        "repository": {"const": "The-Interdependency/skill-lib"},
+        "path": {"const": "interdependent-work-graph/repository-plan-report.schema.json"},
+        "version": {"const": "1.0.0"},
+        "blob_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["branch", "commit", "generated_at", "note"],
+      "properties": {
+        "branch": {"type": "string", "minLength": 1},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "generated_at": {"type": "string", "format": "date"},
+        "note": {"type": "string", "minLength": 1}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owns", "does_not_own", "non_transfer"],
+      "properties": {
+        "owns": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+        "does_not_own": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "non_transfer": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+      }
+    },
+    "portfolio_role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "reports_to"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1},
+        "upstream_contract": {"type": "string"},
+        "downstream_contract": {"type": "string"},
+        "reports_to": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "skill", "relation"],
+          "properties": {
+            "repository": {"const": "The-Interdependency/skill-lib"},
+            "skill": {"const": "interdependent-work-graph"},
+            "relation": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["state", "current_claim"],
+      "properties": {
+        "state": {"type": "string", "minLength": 1},
+        "current_claim": {"type": "string", "minLength": 1}
+      }
+    },
+    "delivered": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["surface", "status", "boundary"],
+        "properties": {
+          "surface": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "minLength": 1},
+          "boundary": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "active_frontier": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "owner", "dependency"],
+        "properties": {
+          "action": {"type": "string", "minLength": 1},
+          "owner": {"type": "string", "minLength": 1},
+          "dependency": {"type": "string"}
+        }
+      }
+    },
+    "blocked": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "cross_repository_relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["repository", "relation", "authority_transfer"],
+        "properties": {
+          "repository": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+          "relation": {"type": "string", "minLength": 1},
+          "authority_transfer": {"const": false}
+        }
+      }
+    },
+    "machine_entrypoints": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "hmmm": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  }
+}

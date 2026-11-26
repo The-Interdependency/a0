@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Tests"
+  short_description: "Audit test evidence and GitHub CI gates"
+  default_prompt: "Use $github-tests to audit my repository test suites and explain what their CI gates verify."

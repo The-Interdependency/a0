@@ -1,0 +1,27 @@
+[Unit]
+Description=skill-lib VM MCP personal-console root broker
+After=local-fs.target
+Before=vm-mcp.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/vm-mcp
+Environment=VM_MCP_ADMIN_SOCKET=/run/vm-mcp/admin.sock
+Environment=VM_MCP_CALLER_USER=vmmcp
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/vm-mcp/.venv/bin/python /opt/vm-mcp/admin_broker.py
+Restart=on-failure
+RestartSec=2
+UMask=0077
+RuntimeDirectory=vm-mcp
+RuntimeDirectoryMode=0750
+StateDirectory=vm-mcp-admin
+StateDirectoryMode=0700
+RestrictAddressFamilies=AF_UNIX
+TasksMax=256
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

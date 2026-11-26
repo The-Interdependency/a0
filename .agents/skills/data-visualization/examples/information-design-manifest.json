@@ -1,0 +1,32 @@
+{
+  "message": "The reader can distinguish structural families from evidence states without relying on color alone.",
+  "semantic_dimensions": {
+    "component_family": "hue",
+    "evidence_state": "shape+label",
+    "authority": "border",
+    "flow": "line_direction"
+  },
+  "text_pairs": [
+    {"foreground": "#FFFFFF", "background": "#0B1020", "size": "normal"},
+    {"foreground": "#111827", "background": "#F7F9FC", "size": "normal"}
+  ],
+  "nontext_pairs": [
+    {"foreground": "#0072B2", "background": "#F7F9FC"}
+  ],
+  "states": [
+    {"name": "supported", "color": "#009E73", "redundancy": ["label", "solid_circle"]},
+    {"name": "falsified", "color": "#D55E00", "redundancy": ["label", "octagon"]},
+    {"name": "errored", "color": "#CC79A7", "redundancy": ["label", "diamond"]},
+    {"name": "unavailable", "color": "#F0E442", "redundancy": ["label", "hollow_square"]},
+    {"name": "historical", "color": "#6B7280", "redundancy": ["label", "dashed_enclosure"]},
+    {"name": "current", "color": "#0072B2", "redundancy": ["label", "double_border"]}
+  ],
+  "manual_gates": {
+    "grayscale": "hmmm",
+    "cvd": "hmmm",
+    "semantic": "pass"
+  },
+  "hmmm": [
+    "Image-level grayscale and CVD review must be performed on the rendered artifact."
+  ]
+}

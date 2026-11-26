@@ -1,0 +1,22 @@
+{
+  "schema": "the-interdependency.epac-selection-display-source-fixture",
+  "version": "1.0.0",
+  "source": {
+    "repository": "The-Interdependency/stack",
+    "commit": "5b24db9a7fe40df4b2791e1137ade5de01c78942",
+    "path": "research/epac/README.md",
+    "git_blob_sha": "a1f1dd6a50252349797806b2dc59897f1fb3a991"
+  },
+  "standing": "provisional stack-local EPAC research scaffold",
+  "boundaries": {
+    "authority_transfer": false,
+    "canon_status_transfer": false,
+    "proof_status_transfer": false,
+    "measurement_status_transfer": false,
+    "empirical_status_transfer": false
+  },
+  "usage": "Verify that the historical source identity cited by epac-selection-display is anchored to an exact stack commit, path, and Git blob before relying on it as provenance. Resolve the current live EPAC source separately on every use.",
+  "hmmm": [
+    "EPAC has no independent authoritative source repository at this historical source state."
+  ]
+}
