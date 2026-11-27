@@ -1,0 +1,47 @@
+{
+  "schema": "the-interdependency.distributed-publication",
+  "version": "1.0.0",
+  "publication_id": "interdependency-textbook-0-7",
+  "title": "The Interdependency — Chapters Zero Through Seven",
+  "order_is_load_bearing": true,
+  "sources": [
+    {
+      "position": 0,
+      "source_id": "chapter-zero",
+      "repository": "The-Interdependency/metapat",
+      "path": "CHAPTER_ZERO.md",
+      "expected_title": "Chapter Zero",
+      "commit": "hmmm",
+      "blob": "hmmm",
+      "content_sha256": "hmmm",
+      "authority": "Chapter Zero content, license, and source-local status",
+      "license": "hmmm",
+      "license_status": "human-review-required",
+      "status": "root ontology and theory",
+      "correction_target": "The-Interdependency/metapat:CHAPTER_ZERO.md",
+      "fallback": false
+    }
+  ],
+  "consumer": {
+    "repository": "The-Interdependency/The-Interdependency.github.io",
+    "commit": "hmmm",
+    "route_prefix": "/chapters/",
+    "renderer": "exact-markdown-static",
+    "fallback_policy": "fail-closed-production|explicit-retained-snapshot"
+  },
+  "boundaries": {
+    "authorship_transfer": false,
+    "ownership_transfer": false,
+    "license_transfer": false,
+    "canonical_status_transfer": false,
+    "proof_status_transfer": false,
+    "certification_status_transfer": false,
+    "measurement_status_transfer": false,
+    "empirical_status_transfer": false,
+    "digest_is_authentication": false,
+    "hmmm": [
+      "Example identities and source license are intentionally unresolved; a real publication manifest pins exact values and matching rules."
+    ]
+  },
+  "publication_sha256": "hmmm"
+}

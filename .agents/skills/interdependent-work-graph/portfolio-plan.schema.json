@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/The-Interdependency/skill-lib/interdependent-work-graph/portfolio-plan.schema.json",
+  "title": "The Interdependency portfolio plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "contract",
+    "generated_from",
+    "repositories",
+    "cross_repository_dependencies",
+    "active_frontier",
+    "next_actions",
+    "blocked",
+    "hmmm",
+    "portfolio_plan_sha256"
+  ],
+  "properties": {
+    "schema": {"const": "the-interdependency.portfolio-plan"},
+    "version": {"const": "1.0.0"},
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "report_schema_path", "report_schema_version", "report_schema_blob_sha"],
+      "properties": {
+        "repository": {"const": "The-Interdependency/skill-lib"},
+        "report_schema_path": {"const": "interdependent-work-graph/repository-plan-report.schema.json"},
+        "report_schema_version": {"const": "1.0.0"},
+        "report_schema_blob_sha": {"const": "9b347b2dff7692054b571602f30ee6d00c2e7265"}
+      }
+    },
+    "generated_from": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository", "source_commit", "report_sha256"],
+        "properties": {
+          "repository": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+          "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "repositories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository", "authority", "portfolio_role", "status", "delivered", "machine_entrypoints"],
+        "properties": {
+          "repository": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+          "authority": {"type": "object"},
+          "portfolio_role": {"type": "object"},
+          "status": {"type": "object"},
+          "delivered": {"type": "array"},
+          "machine_entrypoints": {"type": "object"}
+        }
+      }
+    },
+    "cross_repository_dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "relation", "authority_transfer"],
+        "properties": {
+          "from": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+          "to": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+          "relation": {"type": "string", "minLength": 1},
+          "authority_transfer": {"const": false}
+        }
+      }
+    },
+    "active_frontier": {"$ref": "#/$defs/repoItems"},
+    "blocked": {"$ref": "#/$defs/repoItems"},
+    "hmmm": {"$ref": "#/$defs/repoItems"},
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository", "action", "owner", "dependency"],
+        "properties": {
+          "repository": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+          "action": {"type": "string", "minLength": 1},
+          "owner": {"type": "string", "minLength": 1},
+          "dependency": {"type": "string"}
+        }
+      }
+    },
+    "portfolio_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "repoItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository", "item"],
+        "properties": {
+          "repository": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+          "item": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

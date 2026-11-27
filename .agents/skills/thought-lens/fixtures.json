@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "description": "Human/model review fixtures for thought-lens. They test claim recovery, context-gap reduction, status preservation, and refusal to invent bridges. They are not proof that a human audience will understand a rendering.",
+  "fixtures": [
+    {
+      "id": "topology-vs-authority",
+      "source": "A network gets called decentralized because there are many nodes, but if every node must ask the same service who is allowed to speak, the authority is still centralized. topology isn't authority.",
+      "audience": "context-light adult stranger",
+      "surface": "conversation",
+      "must_preserve": [
+        "many nodes do not by themselves imply distributed authority",
+        "a shared permission service can remain a central authority",
+        "topology and authority are distinct properties"
+      ],
+      "must_not_imply": [
+        "the system has only one physical node",
+        "all centralized permission systems are bad"
+      ],
+      "expected_claim_type": "distinction"
+    },
+    {
+      "id": "uncertainty-preservation",
+      "source": "I keep seeing the failures happen after the handoff. I suspect the handoff is where context is being lost, but I don't know whether the cause is compression, permissions, or the receiving agent.",
+      "audience": "engineer",
+      "surface": "technical",
+      "must_preserve": [
+        "failures are observed after handoff",
+        "handoff context loss is a suspicion rather than an established cause",
+        "three candidate causes remain unresolved"
+      ],
+      "must_not_imply": [
+        "handoff context loss has been proven",
+        "compression is the cause"
+      ],
+      "expected_claim_type": "observation_plus_hypothesis"
+    },
+    {
+      "id": "coined-term-after-meaning",
+      "source": "I call a durable unresolved constraint hmmm. It marks the place where delivered work ends without pretending the unfinished part vanished.",
+      "audience": "stranger",
+      "surface": "short_public_post",
+      "must_preserve": [
+        "the unresolved constraint remains visible",
+        "the marker separates delivered work from unfinished continuation",
+        "hmmm is the coined label"
+      ],
+      "must_not_imply": [
+        "hmmm means confusion in general",
+        "unfinished work is complete"
+      ],
+      "expected_claim_type": "definition"
+    },
+    {
+      "id": "operator-preservation",
+      "source": "No model may publish the result as measured unless an external evaluator actually ran; a self-check may only be labeled a self-check.",
+      "audience": "developer",
+      "surface": "technical",
+      "must_preserve": [
+        "external evaluation is required for the measured label",
+        "self-checks are allowed only under the self-check label"
+      ],
+      "must_not_imply": [
+        "self-checks are forbidden",
+        "a model self-check qualifies as external measurement"
+      ],
+      "expected_claim_type": "normative_constraint"
+    },
+    {
+      "id": "do-not-overrecover",
+      "source": "The current implementation rejects unsigned requests.",
+      "audience": "developer",
+      "surface": "technical",
+      "should_not_activate_deep_recovery": true,
+      "must_preserve": [
+        "the current implementation rejects unsigned requests"
+      ],
+      "must_not_imply": [
+        "a theory of identity",
+        "a general security guarantee",
+        "a reason why unsigned requests are rejected"
+      ],
+      "expected_claim_type": "implementation_observation"
+    }
+  ],
+  "review_questions": [
+    "Can a reader state the kernel without seeing the source?",
+    "Did any modal, negation, quantifier, actor, condition, exception, causal strength, or claim status change?",
+    "Did the rendering add a substantive claim that the source did not license?",
+    "Did a coined term carry argumentative weight before its ordinary-language referent was available?",
+    "Is every unresolved bridge still visible as hmmm rather than silently completed?"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "purpose": "Evidence-grounded defaults for information-bearing color and visual signaling.",
+  "wcag": {
+    "normal_text_min_contrast": 4.5,
+    "large_text_min_contrast": 3.0,
+    "essential_nontext_min_contrast": 3.0
+  },
+  "channels": {
+    "hue": "one categorical family or one semantic dimension",
+    "lightness": "emphasis or ordered magnitude",
+    "shape": "state class or category redundancy",
+    "position": "structural layer or reading order",
+    "line_direction": "processing, dependency, causal, or temporal flow",
+    "line_style": "current, provisional, historical, or unavailable",
+    "border": "authority, selection, or scope boundary",
+    "text": "exact semantic meaning",
+    "pattern": "color-independent redundancy"
+  },
+  "palette": {
+    "blue": {"hex": "#0072B2", "default_role": "stable structural or informational family"},
+    "bluish_green": {"hex": "#009E73", "default_role": "supported or continuous family"},
+    "orange": {"hex": "#E69F00", "default_role": "candidate, transformation, routing, or active transition"},
+    "vermillion": {"hex": "#D55E00", "default_role": "diagnostic tension, contradiction, interruption, or error boundary"},
+    "sky_blue": {"hex": "#56B4E9", "default_role": "secondary informational channel"},
+    "reddish_purple": {"hex": "#CC79A7", "default_role": "meta-level, recursive, semantic, or transformation family"},
+    "yellow": {"hex": "#F0E442", "default_role": "localized highlight or unresolved marker"},
+    "charcoal": {"hex": "#111827", "default_role": "primary ink or authoritative outline"},
+    "provenance_gray": {"hex": "#6B7280", "default_role": "historical or de-emphasized provenance"},
+    "dark_background": {"hex": "#0B1020", "default_role": "dark neutral substrate"},
+    "light_background": {"hex": "#F7F9FC", "default_role": "light neutral substrate"},
+    "bone": {"hex": "#E7E1D5", "default_role": "neutral continuity or historical material"}
+  },
+  "state_defaults": {
+    "supported": {"color": "#009E73", "redundancy": ["label", "solid_circle_or_line"]},
+    "falsified": {"color": "#D55E00", "redundancy": ["label", "octagon_or_cross"]},
+    "errored": {"color": "#CC79A7", "redundancy": ["label", "diamond_or_zigzag"]},
+    "unavailable": {"color": "#F0E442", "redundancy": ["label", "hollow_square_or_dotted_line"]},
+    "historical": {"color": "#6B7280", "redundancy": ["label", "dashed_enclosure"]},
+    "current": {"color": "#0072B2", "redundancy": ["label", "double_border"]}
+  },
+  "publication_gates": [
+    "grayscale",
+    "color_vision_deficiency",
+    "contrast",
+    "semantic"
+  ],
+  "principles": [
+    "color encodes structure rather than decoration",
+    "no critical state is conveyed by color alone",
+    "salience is relational and budgeted",
+    "exact meaning remains textual or otherwise explicit",
+    "hue does not carry two independent semantic dimensions in one local visual field",
+    "project branding may override hues but not contrast, redundancy, or semantic audit requirements"
+  ]
+}
